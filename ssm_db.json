@@ -1,0 +1,4167 @@
+{
+  "version": 2,
+  "createdAt": "2026-02-27T12:32:52.672Z",
+  "meets": [
+    {
+      "id": 1,
+      "meetName": "New Meet",
+      "date": "",
+      "trackLength": 100,
+      "lanes": 4,
+      "showMasters": false,
+      "relayEnabled": false,
+      "relayCostPerSkater": 0,
+      "raceDayStartTimes": {
+        "Day 1": "08:00",
+        "Day 2": "08:00",
+        "Day 3": "08:00"
+      },
+      "registrationOpen": true,
+      "registrationClosedAt": null,
+      "scheduleConfig": {
+        "warmupMinutes": 20,
+        "minutesPerRace": 2,
+        "blockTransitionMinutes": 5,
+        "lunchMinutes": 30,
+        "lunchAfterMinutesFromStart": 240
+      },
+      "generatedSchedule": null,
+      "groups": [
+        {
+          "id": "tiny_tot_girls",
+          "label": "Tiny Tot Girls",
+          "ages": "0–5",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "tiny_tot_boys",
+          "label": "Tiny Tot Boys",
+          "ages": "0–5",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "primary_girls_novice",
+          "label": "Primary Girls Novice",
+          "ages": "6–7",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "primary_girls_elite",
+          "label": "Primary Girls Elite",
+          "ages": "6–7",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "primary_boys_novice",
+          "label": "Primary Boys Novice",
+          "ages": "6–7",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "primary_boys_elite",
+          "label": "Primary Boys Elite",
+          "ages": "6–7",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "juvenile_girls_novice",
+          "label": "Juvenile Girls Novice",
+          "ages": "8–9",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "juvenile_girls_elite",
+          "label": "Juvenile Girls Elite",
+          "ages": "8–9",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "juvenile_boys_novice",
+          "label": "Juvenile Boys Novice",
+          "ages": "8–9",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "juvenile_boys_elite",
+          "label": "Juvenile Boys Elite",
+          "ages": "8–9",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "elementary_girls_novice",
+          "label": "Elementary Girls Novice",
+          "ages": "10–11",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "elementary_girls_elite",
+          "label": "Elementary Girls Elite",
+          "ages": "10–11",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "elementary_boys_novice",
+          "label": "Elementary Boys Novice",
+          "ages": "10–11",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "elementary_boys_elite",
+          "label": "Elementary Boys Elite",
+          "ages": "10–11",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "freshman_girls_novice",
+          "label": "Freshman Girls Novice",
+          "ages": "12–13",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "freshman_girls_elite",
+          "label": "Freshman Girls Elite",
+          "ages": "12–13",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "freshman_boys_novice",
+          "label": "Freshman Boys Novice",
+          "ages": "12–13",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "freshman_boys_elite",
+          "label": "Freshman Boys Elite",
+          "ages": "12–13",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "sophomore_girls_novice",
+          "label": "Sophomore Girls Novice",
+          "ages": "14–15",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "sophomore_girls_elite",
+          "label": "Sophomore Girls Elite",
+          "ages": "14–15",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "sophomore_boys_novice",
+          "label": "Sophomore Boys Novice",
+          "ages": "14–15",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "sophomore_boys_elite",
+          "label": "Sophomore Boys Elite",
+          "ages": "14–15",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "junior_women_novice",
+          "label": "Junior Women Novice",
+          "ages": "16–17",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "junior_women_elite",
+          "label": "Junior Women Elite",
+          "ages": "16–17",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "junior_men_novice",
+          "label": "Junior Men Novice",
+          "ages": "16–17",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "junior_men_elite",
+          "label": "Junior Men Elite",
+          "ages": "16–17",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "senior_women_novice",
+          "label": "Senior Women Novice",
+          "ages": "18+",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "senior_women_elite",
+          "label": "Senior Women Elite",
+          "ages": "18+",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "senior_men_novice",
+          "label": "Senior Men Novice",
+          "ages": "18+",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "senior_men_elite",
+          "label": "Senior Men Elite",
+          "ages": "18+",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "masters_women_25_34",
+          "label": "Masters Women 25–34",
+          "ages": "25–34",
+          "masters": true,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "masters_men_25_34",
+          "label": "Masters Men 25–34",
+          "ages": "25–34",
+          "masters": true,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "masters_women_35_44",
+          "label": "Masters Women 35–44",
+          "ages": "35–44",
+          "masters": true,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "masters_men_35_44",
+          "label": "Masters Men 35–44",
+          "ages": "35–44",
+          "masters": true,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "masters_women_45_54",
+          "label": "Masters Women 45–54",
+          "ages": "45–54",
+          "masters": true,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "masters_men_45_54",
+          "label": "Masters Men 45–54",
+          "ages": "45–54",
+          "masters": true,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "masters_women_55_64",
+          "label": "Masters Women 55–64",
+          "ages": "55–64",
+          "masters": true,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "masters_men_55_64",
+          "label": "Masters Men 55–64",
+          "ages": "55–64",
+          "masters": true,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "masters_women_65_74",
+          "label": "Masters Women 65–74",
+          "ages": "65–74",
+          "masters": true,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "masters_men_65_74",
+          "label": "Masters Men 65–74",
+          "ages": "65–74",
+          "masters": true,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "masters_women_75_plus",
+          "label": "Masters Women 75+",
+          "ages": "75+",
+          "masters": true,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "masters_men_75_plus",
+          "label": "Masters Men 75+",
+          "ages": "75+",
+          "masters": true,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "grand_masters_women",
+          "label": "Grand Masters Women",
+          "ages": "50+",
+          "masters": true,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "grand_masters_men",
+          "label": "Grand Masters Men",
+          "ages": "50+",
+          "masters": true,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "premier_women",
+          "label": "Premier Women",
+          "ages": "Masters",
+          "masters": true,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "premier_men",
+          "label": "Premier Men",
+          "ages": "Masters",
+          "masters": true,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "open_all",
+          "label": "Open All",
+          "ages": "All",
+          "masters": false,
+          "openOnly": true,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "skateability",
+          "label": "SkateAbility",
+          "ages": "All",
+          "masters": false,
+          "openOnly": true,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "time_trials_open",
+          "label": "Time Trials Open",
+          "ages": "All",
+          "masters": false,
+          "openOnly": true,
+          "isTimeTrial": true,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "challenge_up",
+          "label": "Challenge Up",
+          "ages": "All",
+          "masters": false,
+          "openOnly": true,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "novice_elite_combo",
+          "label": "Novice & Elite Combo",
+          "ages": "Varies",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        }
+      ],
+      "blocks": [],
+      "races": [],
+      "raceOrderGeneratedAt": null,
+      "registrations": [],
+      "nextCheckInNumber": 1,
+      "createdAt": "2026-02-27T12:36:22.668Z",
+      "updatedAt": "2026-02-27T12:36:22.668Z"
+    },
+    {
+      "id": 2,
+      "meetName": "New Meet",
+      "date": "",
+      "trackLength": 100,
+      "lanes": 4,
+      "showMasters": false,
+      "relayEnabled": false,
+      "relayCostPerSkater": 0,
+      "raceDayStartTimes": {
+        "Day 1": "08:00",
+        "Day 2": "08:00",
+        "Day 3": "08:00"
+      },
+      "registrationOpen": true,
+      "registrationClosedAt": null,
+      "scheduleConfig": {
+        "warmupMinutes": 20,
+        "minutesPerRace": 2,
+        "blockTransitionMinutes": 5,
+        "lunchMinutes": 30,
+        "lunchAfterMinutesFromStart": 240
+      },
+      "generatedSchedule": null,
+      "groups": [
+        {
+          "id": "tiny_tot_girls",
+          "label": "Tiny Tot Girls",
+          "ages": "0–5",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "tiny_tot_boys",
+          "label": "Tiny Tot Boys",
+          "ages": "0–5",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "primary_girls_novice",
+          "label": "Primary Girls Novice",
+          "ages": "6–7",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "primary_girls_elite",
+          "label": "Primary Girls Elite",
+          "ages": "6–7",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "primary_boys_novice",
+          "label": "Primary Boys Novice",
+          "ages": "6–7",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "primary_boys_elite",
+          "label": "Primary Boys Elite",
+          "ages": "6–7",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "juvenile_girls_novice",
+          "label": "Juvenile Girls Novice",
+          "ages": "8–9",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "juvenile_girls_elite",
+          "label": "Juvenile Girls Elite",
+          "ages": "8–9",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "juvenile_boys_novice",
+          "label": "Juvenile Boys Novice",
+          "ages": "8–9",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "juvenile_boys_elite",
+          "label": "Juvenile Boys Elite",
+          "ages": "8–9",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "elementary_girls_novice",
+          "label": "Elementary Girls Novice",
+          "ages": "10–11",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "elementary_girls_elite",
+          "label": "Elementary Girls Elite",
+          "ages": "10–11",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "elementary_boys_novice",
+          "label": "Elementary Boys Novice",
+          "ages": "10–11",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "elementary_boys_elite",
+          "label": "Elementary Boys Elite",
+          "ages": "10–11",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "freshman_girls_novice",
+          "label": "Freshman Girls Novice",
+          "ages": "12–13",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "freshman_girls_elite",
+          "label": "Freshman Girls Elite",
+          "ages": "12–13",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "freshman_boys_novice",
+          "label": "Freshman Boys Novice",
+          "ages": "12–13",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "freshman_boys_elite",
+          "label": "Freshman Boys Elite",
+          "ages": "12–13",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "sophomore_girls_novice",
+          "label": "Sophomore Girls Novice",
+          "ages": "14–15",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "sophomore_girls_elite",
+          "label": "Sophomore Girls Elite",
+          "ages": "14–15",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "sophomore_boys_novice",
+          "label": "Sophomore Boys Novice",
+          "ages": "14–15",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "sophomore_boys_elite",
+          "label": "Sophomore Boys Elite",
+          "ages": "14–15",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "junior_women_novice",
+          "label": "Junior Women Novice",
+          "ages": "16–17",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "junior_women_elite",
+          "label": "Junior Women Elite",
+          "ages": "16–17",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "junior_men_novice",
+          "label": "Junior Men Novice",
+          "ages": "16–17",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "junior_men_elite",
+          "label": "Junior Men Elite",
+          "ages": "16–17",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "senior_women_novice",
+          "label": "Senior Women Novice",
+          "ages": "18+",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "senior_women_elite",
+          "label": "Senior Women Elite",
+          "ages": "18+",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "senior_men_novice",
+          "label": "Senior Men Novice",
+          "ages": "18+",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "senior_men_elite",
+          "label": "Senior Men Elite",
+          "ages": "18+",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "masters_women_25_34",
+          "label": "Masters Women 25–34",
+          "ages": "25–34",
+          "masters": true,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "masters_men_25_34",
+          "label": "Masters Men 25–34",
+          "ages": "25–34",
+          "masters": true,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "masters_women_35_44",
+          "label": "Masters Women 35–44",
+          "ages": "35–44",
+          "masters": true,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "masters_men_35_44",
+          "label": "Masters Men 35–44",
+          "ages": "35–44",
+          "masters": true,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "masters_women_45_54",
+          "label": "Masters Women 45–54",
+          "ages": "45–54",
+          "masters": true,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "masters_men_45_54",
+          "label": "Masters Men 45–54",
+          "ages": "45–54",
+          "masters": true,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "masters_women_55_64",
+          "label": "Masters Women 55–64",
+          "ages": "55–64",
+          "masters": true,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "masters_men_55_64",
+          "label": "Masters Men 55–64",
+          "ages": "55–64",
+          "masters": true,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "masters_women_65_74",
+          "label": "Masters Women 65–74",
+          "ages": "65–74",
+          "masters": true,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "masters_men_65_74",
+          "label": "Masters Men 65–74",
+          "ages": "65–74",
+          "masters": true,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "masters_women_75_plus",
+          "label": "Masters Women 75+",
+          "ages": "75+",
+          "masters": true,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "masters_men_75_plus",
+          "label": "Masters Men 75+",
+          "ages": "75+",
+          "masters": true,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "grand_masters_women",
+          "label": "Grand Masters Women",
+          "ages": "50+",
+          "masters": true,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "grand_masters_men",
+          "label": "Grand Masters Men",
+          "ages": "50+",
+          "masters": true,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "premier_women",
+          "label": "Premier Women",
+          "ages": "Masters",
+          "masters": true,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "premier_men",
+          "label": "Premier Men",
+          "ages": "Masters",
+          "masters": true,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "open_all",
+          "label": "Open All",
+          "ages": "All",
+          "masters": false,
+          "openOnly": true,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "skateability",
+          "label": "SkateAbility",
+          "ages": "All",
+          "masters": false,
+          "openOnly": true,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "time_trials_open",
+          "label": "Time Trials Open",
+          "ages": "All",
+          "masters": false,
+          "openOnly": true,
+          "isTimeTrial": true,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "challenge_up",
+          "label": "Challenge Up",
+          "ages": "All",
+          "masters": false,
+          "openOnly": true,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "novice_elite_combo",
+          "label": "Novice & Elite Combo",
+          "ages": "Varies",
+          "masters": false,
+          "openOnly": false,
+          "isTimeTrial": false,
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        }
+      ],
+      "blocks": [],
+      "races": [],
+      "raceOrderGeneratedAt": null,
+      "registrations": [],
+      "nextCheckInNumber": 1,
+      "createdAt": "2026-03-01T19:45:40.227Z",
+      "updatedAt": "2026-03-01T19:45:40.227Z"
+    }
+  ],
+  "rinks": [
+    {
+      "id": 1,
+      "name": "Wichita Skate Center",
+      "city": "Wichita",
+      "state": "KS",
+      "team": "Midwest Racing",
+      "address": "",
+      "phone": "",
+      "notes": ""
+    }
+  ],
+  "pendingRinks": []
+}
