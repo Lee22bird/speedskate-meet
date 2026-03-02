@@ -1,476 +1,424 @@
 // ============================================================
-// SpeedSkateMeet – CLEAN REBUILD v7 – March 2026
-// Single-file Node.js + Express • JSON persistence
-//
-// v7 CHANGES (from our notes):
-// ✅ Remove distance dropdowns (D1–D4 are plain inputs)
-// ✅ Time Trials is a checkbox per division+classification
-// ✅ Add Meet-wide Time Trials config box (distances/format/timing)
-// ✅ Registration: input Age + checkboxes (challenge up, novice/elite/open, TT, relays)
-// ✅ Saved Meets (Templates): Save Meet As + Load Saved Meet (auto-populate)
-// ✅ Block Builder saves inside meet object
-// ✅ Fix Rinks: use Roller City Wichita (no fake Wichita Skate Center)
-//
+// SpeedSkateMeet — CLEAN REBUILD v8 (single-file server.js)
+// Node.js + Express • JSON persistence • safe sessions (no crash)
 // ============================================================
 
 const express = require("express");
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
+const cookieParser = require("cookie-parser");
 
 const app = express();
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
+app.use(cookieParser());
 
-// -------------------- CONFIG --------------------
-const PORT = process.env.PORT || 3000;
-const HOST = process.env.HOST || "0.0.0.0";
-const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, "ssm_db.json");
+// --------------------------
+// CONFIG
+// --------------------------
+const PORT = process.env.PORT || 10000;
+const HOST = "0.0.0.0";
 
-// -------------------- UTIL --------------------
-function uid(prefix = "") {
-  return prefix + crypto.randomBytes(8).toString("hex");
+// Render disk path: /opt/render/project/src
+const DATA_FILE =
+  process.env.SSM_DATA_FILE ||
+  path.join(process.cwd(), "ssm_db.json");
+
+// --------------------------
+// DB (JSON persistence)
+// --------------------------
+function safeReadJSON(file) {
+  try {
+    if (!fs.existsSync(file)) return null;
+    const raw = fs.readFileSync(file, "utf8");
+    if (!raw.trim()) return null;
+    return JSON.parse(raw);
+  } catch (e) {
+    return null;
+  }
 }
 
-function safeText(x) {
-  return String(x ?? "").replace(/[<>&"]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" }[c]));
+function safeWriteJSON(file, obj) {
+  const tmp = file + ".tmp";
+  fs.writeFileSync(tmp, JSON.stringify(obj, null, 2), "utf8");
+  fs.renameSync(tmp, file);
 }
 
-function parseIntSafe(v, fallback = null) {
-  const n = parseInt(v, 10);
-  return Number.isFinite(n) ? n : fallback;
-}
-
-function nowISO() {
-  return new Date().toISOString();
-}
-
-// -------------------- DB --------------------
-function defaultDb() {
+function newDB() {
   return {
-    version: 7,
-    users: [
-      { id: "u_director", username: "Lbird22", password: "Redline22", role: "director" },
-      { id: "u_judge", username: "JudgeLee", password: "Redline22", role: "judge" },
-      { id: "u_coach", username: "CoachLee", password: "Redline22", role: "coach" },
-    ],
+    version: 8,
+    users: {
+      // Demo users — passwords are NOT displayed publicly
+      Lbird22: { username: "Lbird22", role: "director", password: "Redline22" },
+      JudgeLee: { username: "JudgeLee", role: "judge", password: "Redline22" },
+      CoachLee: { username: "CoachLee", role: "coach", password: "Redline22" },
+    },
     sessions: {},
-
-    // Rinks (fixed Wichita rink)
+    meets: [],
+    meetTemplates: [], // saved meets/templates
     rinks: [
       {
-        id: "rink_roller_city_wichita",
+        id: "roller_city_wichita",
         name: "Roller City",
         city: "Wichita, KS",
         phone: "316-942-4555",
         address: "3234 S. Meridian Ave Wichita, KS 67217",
         website: "rollercitywichitaks.com",
-        team: "",
+        team: "Midwest Racing",
       },
     ],
-
-    meets: [], // active meets
-    meetTemplates: [], // saved meets (templates)
   };
 }
 
-function loadDb() {
-  try {
-    if (!fs.existsSync(DATA_FILE)) {
-      const db = defaultDb();
-      fs.writeFileSync(DATA_FILE, JSON.stringify(db, null, 2));
-      return db;
-    }
-    const raw = fs.readFileSync(DATA_FILE, "utf8");
-    const db = JSON.parse(raw);
+let db = safeReadJSON(DATA_FILE) || newDB();
 
-    // Minimal migration safety
-    if (!db.version || db.version < 7) {
-      db.version = 7;
-      db.meetTemplates = db.meetTemplates || [];
-      db.rinks = Array.isArray(db.rinks) ? db.rinks : [];
-      if (!db.rinks.find((r) => (r.name || "").toLowerCase().includes("roller city"))) {
-        db.rinks.push({
-          id: "rink_roller_city_wichita",
-          name: "Roller City",
-          city: "Wichita, KS",
-          phone: "316-942-4555",
-          address: "3234 S. Meridian Ave Wichita, KS 67217",
-          website: "rollercitywichitaks.com",
-          team: "",
-        });
-      }
-      // Remove fake Wichita Skate Center if present
-      db.rinks = db.rinks.filter((r) => (r.name || "").toLowerCase() !== "wichita skate center");
-      saveDb(db);
-    }
-    return db;
-  } catch (e) {
-    console.error("DB load error:", e);
-    const db = defaultDb();
-    try {
-      fs.writeFileSync(DATA_FILE, JSON.stringify(db, null, 2));
-    } catch {}
-    return db;
-  }
+// Ensure required keys exist (prevents crashes on old/blank DB)
+db.users = db.users || {};
+db.sessions = db.sessions || {};
+db.meets = db.meets || [];
+db.meetTemplates = db.meetTemplates || [];
+db.rinks = db.rinks || [];
+db.version = db.version || 8;
+
+function saveDB() {
+  safeWriteJSON(DATA_FILE, db);
 }
 
-function saveDb(db) {
-  fs.writeFileSync(DATA_FILE, JSON.stringify(db, null, 2));
+// --------------------------
+// UTIL
+// --------------------------
+function id(prefix = "id") {
+  return `${prefix}_${crypto.randomBytes(8).toString("hex")}`;
 }
 
-let db = loadDb();
-
-// -------------------- AUTH --------------------
-function createSession(userId) {
-  const token = crypto.randomBytes(24).toString("hex");
-  db.sessions[token] = { userId, createdAt: nowISO() };
-  saveDb(db);
-  return token;
+function escapeHtml(s) {
+  return String(s ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
 function getSession(req) {
-  const cookie = req.headers.cookie || "";
-  const m = cookie.match(/ssm_session=([a-f0-9]+)/);
-  if (!m) return null;
-  const token = m[1];
-  const sess = db.sessions[token];
-  if (!sess) return null;
-  const user = db.users.find((u) => u.id === sess.userId);
-  if (!user) return null;
-  return { token, user };
+  try {
+    const sid = req.cookies?.ssm_session || null;
+    if (!sid) return null;
+    const sessions = db.sessions || {};
+    return sessions[sid] || null;
+  } catch {
+    return null;
+  }
 }
 
-function requireRole(role) {
-  return (req, res, next) => {
-    const s = getSession(req);
-    if (!s) return res.redirect("/login");
-    if (role && s.user.role !== role) return res.status(403).send("Forbidden");
-    req.session = s;
-    next();
-  };
+function requireAuth(req, res, next) {
+  const s = getSession(req);
+  if (!s || !s.user) return res.redirect("/login");
+  const u = db.users?.[s.user];
+  if (!u) return res.redirect("/login");
+  req.user = u;
+  req.session = s;
+  next();
 }
 
-// -------------------- UI SHELL --------------------
-function css() {
+function nav(user) {
+  const isAuthed = !!user;
+  const right = isAuthed
+    ? `<div class="right">Signed in as <b>${escapeHtml(user.username)}</b> (${escapeHtml(
+        user.role
+      )}) · <a href="/portal">Portal</a> · <a href="/logout">Logout</a></div>`
+    : `<div class="right"><a href="/login">Admin Login</a></div>`;
+
   return `
-:root{
-  --bg:#f6f7fb; --card:#fff; --ink:#111827; --muted:#6b7280;
-  --line:#e5e7eb; --blue:#2563eb; --blue2:#1d4ed8; --green:#16a34a; --red:#dc2626;
-  --radius:18px;
-}
-*{box-sizing:border-box}
-body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; background:var(--bg); color:var(--ink);}
-a{color:inherit;text-decoration:none}
-.container{max-width:1100px;margin:0 auto;padding:22px;}
-.topbar{
-  position:sticky; top:0; z-index:10;
-  background:rgba(246,247,251,.85); backdrop-filter:saturate(1.2) blur(10px);
-  border-bottom:1px solid var(--line);
-}
-.brand{
-  display:flex;flex-direction:column;align-items:center;gap:10px;padding:14px 0;
-}
-.brand img{height:56px; max-width:92vw; object-fit:contain;}
-.brand h1{font-size:34px; margin:0; letter-spacing:-.02em;}
-.nav{
-  display:flex; gap:10px; flex-wrap:wrap; justify-content:center; padding-bottom:14px;
-}
-.btn{
-  display:inline-flex; align-items:center; justify-content:center;
-  padding:10px 14px; border-radius:14px; border:2px solid var(--blue);
-  font-weight:700; background:#fff; color:var(--blue);
-}
-.btn.primary{background:var(--blue); color:#fff;}
-.btn.green{border-color:var(--green); color:#fff; background:var(--green);}
-.btn.red{border-color:var(--red); color:#fff; background:var(--red);}
-.card{
-  background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
-  padding:18px; box-shadow:0 10px 30px rgba(17,24,39,.06);
-}
-.grid{display:grid; gap:16px;}
-.grid.two{grid-template-columns:repeat(2,minmax(0,1fr));}
-@media (max-width:900px){.grid.two{grid-template-columns:1fr;}}
-h2{margin:0 0 10px 0; font-size:26px; letter-spacing:-.02em;}
-h3{margin:18px 0 10px 0; font-size:20px;}
-label{display:block; font-weight:700; margin:10px 0 6px;}
-input[type="text"], input[type="number"], select, textarea{
-  width:100%; padding:10px 12px; border-radius:12px; border:1px solid var(--line);
-  outline:none; font-size:15px; background:#fff;
-}
-.row{display:flex; gap:12px; flex-wrap:wrap;}
-.row > *{flex:1 1 220px;}
-.muted{color:var(--muted); font-size:14px; line-height:1.4;}
-.pill{
-  display:inline-flex; align-items:center; gap:8px;
-  padding:6px 10px; border-radius:999px; background:#eef2ff; color:#1e3a8a;
-  font-weight:800; font-size:13px;
-}
-.hr{height:1px;background:var(--line); margin:14px 0;}
-.kbd{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;background:#111827;color:#fff;border-radius:10px;padding:2px 8px;font-size:12px;}
-.checkbox{display:flex; align-items:center; gap:10px; padding:10px 0;}
-.checkbox input{width:22px;height:22px;}
-.small{font-size:12px;color:var(--muted);}
-.table{width:100%; border-collapse:collapse;}
-.table td,.table th{padding:10px;border-bottom:1px solid var(--line);text-align:left;}
-.right{display:flex; justify-content:flex-end; gap:10px; flex-wrap:wrap;}
-.notice{background:#fef9c3;border:1px solid #fde68a;color:#92400e;border-radius:14px;padding:12px;font-weight:700;}
+  <div class="topbar">
+    <div class="brand">
+      <div class="logo">SpeedSkateMeet</div>
+    </div>
+    <div class="links">
+      <a class="pill" href="/">Home</a>
+      <a class="pill" href="/meets">Find a Meet</a>
+      <a class="pill" href="/rinks">Find a Rink</a>
+      <a class="pill" href="/live">Live Race Day</a>
+    </div>
+    ${right}
+  </div>
   `;
 }
 
-function pageShell({ title, user, bodyHtml }) {
-  const logoDataUri = ""; // If you want the logo embedded, we can do it next. For now: add a /public route or use a hosted image.
-  const nav = `
-    <div class="topbar">
-      <div class="container">
-        <div class="brand">
-          ${logoDataUri ? `<img src="${logoDataUri}" alt="SpeedSkateMeet logo">` : `<h1>SpeedSkateMeet</h1>`}
-        </div>
-        <div class="nav">
-          <a class="btn" href="/">Home</a>
-          <a class="btn" href="/meets">Find a Meet</a>
-          <a class="btn" href="/rinks">Find a Rink</a>
-          <a class="btn" href="/live">Live Race Day</a>
-          ${user ? `<a class="btn primary" href="/portal">Portal</a><a class="btn" href="/logout">Logout</a>` : `<a class="btn primary" href="/login">Admin Login</a>`}
-        </div>
-      </div>
-    </div>
-  `;
+function pageShell({ title, user, body }) {
   return `<!doctype html>
 <html>
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>${safeText(title)}</title>
-  <style>${css()}</style>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>${escapeHtml(title || "SpeedSkateMeet")}</title>
+  <style>
+    :root{
+      --bg:#f5f7fb;
+      --card:#ffffff;
+      --text:#111827;
+      --muted:#6b7280;
+      --blue:#2563eb;
+      --blue2:#1d4ed8;
+      --border:#e5e7eb;
+      --shadow: 0 10px 30px rgba(0,0,0,.07);
+      --radius: 18px;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      background: linear-gradient(#f7f8fc, #f2f4fb);
+      color:var(--text);
+    }
+    a{color:var(--blue);text-decoration:none}
+    a:hover{text-decoration:underline}
+
+    .wrap{max-width:1100px;margin:0 auto;padding:18px}
+    .topbar{
+      display:flex;gap:14px;align-items:center;justify-content:space-between;
+      background:#fff;border:1px solid var(--border);border-radius:22px;
+      padding:14px 16px;box-shadow: var(--shadow);
+      position:sticky;top:10px;z-index:10;
+    }
+    .brand{display:flex;align-items:center;gap:12px}
+    .logo{font-weight:900;letter-spacing:.2px}
+    .links{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+    .pill{
+      display:inline-block;
+      padding:10px 14px;
+      border:2px solid rgba(37,99,235,.35);
+      border-radius:18px;
+      background:#fff;
+      color:var(--blue2);
+      font-weight:700;
+    }
+    .pill.primary{
+      background:var(--blue);
+      border-color:var(--blue);
+      color:#fff;
+    }
+    .right{color:var(--muted);font-size:14px;white-space:nowrap}
+    .grid{display:grid;grid-template-columns:1fr;gap:16px;margin-top:16px}
+    @media(min-width:900px){ .grid.two{grid-template-columns:1fr 1fr} }
+
+    .card{
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:var(--radius);
+      box-shadow: var(--shadow);
+      padding:18px;
+    }
+    h1{margin:8px 0 12px;font-size:40px}
+    h2{margin:0 0 10px;font-size:26px}
+    h3{margin:14px 0 8px;font-size:18px}
+    p{margin:8px 0;color:var(--muted);line-height:1.35}
+    .btn{
+      display:inline-block;
+      padding:10px 14px;
+      border-radius:14px;
+      border:1px solid var(--border);
+      background:#fff;
+      font-weight:800;
+      cursor:pointer;
+    }
+    .btn.primary{
+      background:var(--blue);
+      border-color:var(--blue);
+      color:#fff;
+    }
+    .btn.danger{
+      background:#ef4444;
+      border-color:#ef4444;
+      color:#fff;
+    }
+    .btn:disabled{opacity:.55;cursor:not-allowed}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .field{display:flex;flex-direction:column;gap:6px;min-width:200px;flex:1}
+    label{font-size:13px;color:var(--muted);font-weight:700}
+    input, select, textarea{
+      width:100%;
+      padding:11px 12px;
+      border:1px solid var(--border);
+      border-radius:14px;
+      font-size:15px;
+      outline:none;
+      background:#fff;
+    }
+    textarea{min-height:80px}
+    .small{font-size:13px;color:var(--muted)}
+    .divider{height:1px;background:var(--border);margin:14px 0}
+    .badge{
+      display:inline-block;padding:4px 10px;border-radius:999px;border:1px solid var(--border);
+      color:var(--muted);font-weight:800;font-size:12px;background:#fff;
+    }
+    .sectionTitle{display:flex;align-items:center;justify-content:space-between;gap:10px}
+    .muted{color:var(--muted)}
+    .k{font-weight:900}
+    .table{width:100%;border-collapse:separate;border-spacing:0 10px}
+    .table td{padding:10px 12px;background:#fff;border:1px solid var(--border)}
+    .table tr td:first-child{border-top-left-radius:14px;border-bottom-left-radius:14px}
+    .table tr td:last-child{border-top-right-radius:14px;border-bottom-right-radius:14px}
+    .checkRow{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+    .checkRow label{display:flex;gap:8px;align-items:center;color:var(--text);font-weight:800}
+    .checkRow input{width:auto}
+  </style>
 </head>
 <body>
-${nav}
-<div class="container">
-  ${bodyHtml}
-</div>
+  <div class="wrap">
+    ${nav(user)}
+    <div class="grid">
+      ${body}
+    </div>
+    <div style="height:18px"></div>
+    <div class="small muted">Data persists to: <code>${escapeHtml(DATA_FILE)}</code></div>
+  </div>
 </body>
 </html>`;
 }
 
-// -------------------- DOMAIN HELPERS --------------------
-function defaultAgeDivisions() {
-  // Keep it simple; you can edit these in meet builder later if desired.
-  return [
-    { key: "tiny_tot_girls", label: "Tiny Tot Girls", minAge: 0, maxAge: 5, gender: "girls" },
-    { key: "tiny_tot_boys", label: "Tiny Tot Boys", minAge: 0, maxAge: 5, gender: "boys" },
-    { key: "primary_girls", label: "Primary Girls", minAge: 6, maxAge: 7, gender: "girls" },
-    { key: "primary_boys", label: "Primary Boys", minAge: 6, maxAge: 7, gender: "boys" },
-    { key: "juvenile_girls", label: "Juvenile Girls", minAge: 8, maxAge: 9, gender: "girls" },
-    { key: "juvenile_boys", label: "Juvenile Boys", minAge: 8, maxAge: 9, gender: "boys" },
-    { key: "junior_girls", label: "Junior Girls", minAge: 10, maxAge: 11, gender: "girls" },
-    { key: "junior_boys", label: "Junior Boys", minAge: 10, maxAge: 11, gender: "boys" },
-    { key: "cadet_girls", label: "Cadet Girls", minAge: 12, maxAge: 13, gender: "girls" },
-    { key: "cadet_boys", label: "Cadet Boys", minAge: 12, maxAge: 13, gender: "boys" },
-    { key: "youth_women", label: "Youth Women", minAge: 14, maxAge: 18, gender: "women" },
-    { key: "youth_men", label: "Youth Men", minAge: 14, maxAge: 18, gender: "men" },
-
-    // Adults
-    { key: "adult_women", label: "Adult Women", minAge: 19, maxAge: 24, gender: "women" },
-    { key: "adult_men", label: "Adult Men", minAge: 19, maxAge: 24, gender: "men" },
-
-    // Locked ages per your rules
-    { key: "classic_women", label: "Classic Women", minAge: 25, maxAge: 34, gender: "women", locked: true },
-    { key: "classic_men", label: "Classic Men", minAge: 25, maxAge: 34, gender: "men", locked: true },
-    { key: "masters_women", label: "Masters Women", minAge: 35, maxAge: 44, gender: "women", locked: true },
-    { key: "masters_men", label: "Masters Men", minAge: 35, maxAge: 44, gender: "men", locked: true },
-
-    // 45+ buckets (editable later)
-    { key: "esquire_women", label: "Esquire Women", minAge: 45, maxAge: 64, gender: "women" },
-    { key: "esquire_men", label: "Esquire Men", minAge: 45, maxAge: 64, gender: "men" },
-    { key: "senior_women", label: "Senior Women", minAge: 65, maxAge: 120, gender: "women" },
-    { key: "senior_men", label: "Senior Men", minAge: 65, maxAge: 120, gender: "men" },
-  ];
-}
-
-function newMeet() {
-  return {
-    id: uid("meet_"),
-    name: "New Meet",
-    date: "TBD",
-    status: "registration_open", // registration_open | locked
-    createdAt: nowISO(),
-    updatedAt: nowISO(),
-
-    // Meet Builder config:
-    ageDivisions: defaultAgeDivisions(),
-
-    classifications: [
-      { key: "novice", label: "Novice" },
-      { key: "elite", label: "Elite" },
-      { key: "open", label: "Open" },
-    ],
-
-    // Distances per division+classification (plain inputs D1–D4)
-    // structure: distances[divisionKey][classKey] = { enabled, cost, d1,d2,d3,d4, timeTrials }
-    distances: {},
-
-    // Meet-wide Time Trials config:
-    timeTrials: {
-      enabled: false, // if meet has any TT checked, we also flip this on
-      distancesCsv: "1 lap, 2 laps, 3 laps",
-      format: "solo", // solo | paired
-      timing: "manual", // manual | electronic
-      notes: "",
-    },
-
-    // Relays meet-wide config (light placeholder):
-    relays: {
-      enabled: false,
-      notes: "",
-    },
-
-    // Block Builder saved as part of meet:
-    blocks: [],
-
-    // Registrants:
-    registrants: [],
-
-    // Custom races placeholder:
-    customRaces: [],
-  };
-}
-
-function ensureMeetDistanceRow(meet, divisionKey, classKey) {
-  if (!meet.distances[divisionKey]) meet.distances[divisionKey] = {};
-  if (!meet.distances[divisionKey][classKey]) {
-    meet.distances[divisionKey][classKey] = {
-      enabled: false,
-      cost: 0,
-      d1: "",
-      d2: "",
-      d3: "",
-      d4: "",
-      timeTrials: false,
-    };
-  }
-  return meet.distances[divisionKey][classKey];
-}
-
-function findDivisionForAge(meet, age) {
-  if (!Number.isFinite(age)) return null;
-  return meet.ageDivisions.find((d) => age >= d.minAge && age <= d.maxAge) || null;
-}
-
-// -------------------- ROUTES --------------------
+// --------------------------
+// HOME
+// --------------------------
 app.get("/", (req, res) => {
-  const s = getSession(req);
+  const user = getSession(req)?.user ? db.users?.[getSession(req).user] : null;
+
   const body = `
-    <div class="card">
-      <h2>SpeedSkateMeet</h2>
-      <p class="muted">
-        Built by the speed skating community, for the speed skating community.
-        USARS-style inline meet software • web-based • works on any device
-      </p>
-      <div class="hr"></div>
-      <div class="right">
-        <a class="btn" href="/meets">Find a Meet</a>
-        <a class="btn" href="/rinks">Find a Rink</a>
-        <a class="btn green" href="/live">Live Race Day</a>
-        ${s ? `<a class="btn primary" href="/portal">Portal</a>` : `<a class="btn primary" href="/login">Admin Login</a>`}
+    <div class="card" style="text-align:center">
+      <div style="display:flex;justify-content:center;margin-top:6px">
+        <div style="font-size:40px;font-weight:1000;letter-spacing:.3px">SpeedSkateMeet</div>
       </div>
-      <div class="hr"></div>
-      <div class="muted">
-        <div>Data persists to <span class="kbd">${safeText(DATA_FILE)}</span></div>
-        <div>Adult ages locked: <b>Classic 25–34</b> • <b>Masters 35–44</b></div>
+      <p style="max-width:720px;margin:10px auto 0">
+        Meet software built for inline speed skating. Simple, mobile-friendly, and designed around how clubs actually run race day.
+      </p>
+
+      <div class="divider"></div>
+
+      <div class="row" style="justify-content:center">
+        <a class="btn primary" href="/meets">Find a Meet</a>
+        <a class="btn primary" href="/rinks">Find a Rink</a>
+        <a class="btn" href="/live">Live Race Day</a>
+        <a class="btn" href="/login">Admin Login</a>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="small muted">
+        Adult ages locked: <b>Classic 25–34</b> · <b>Masters 35–44</b>
       </div>
     </div>
   `;
-  res.send(pageShell({ title: "Home", user: s?.user, bodyHtml: body }));
+
+  res.send(pageShell({ title: "Home", user, body }));
 });
 
+// --------------------------
+// LOGIN / LOGOUT
+// --------------------------
 app.get("/login", (req, res) => {
   const body = `
-    <div class="grid two">
-      <div class="card">
-        <h2>Admin Login</h2>
-        <form method="POST" action="/login">
+    <div class="card" style="max-width:520px;margin:0 auto">
+      <h2>Admin Login</h2>
+      <form method="POST" action="/login">
+        <div class="field">
           <label>Username</label>
-          <input name="username" type="text" autocomplete="username" required>
-          <label>Password</label>
-          <input name="password" type="password" autocomplete="current-password" required>
-          <div class="hr"></div>
-          <button class="btn primary" type="submit">Login</button>
-        </form>
-        <div class="hr"></div>
-        <div class="muted">
-          <b>Demo usernames:</b><br>
-          Director: Lbird22<br>
-          Judge: JudgeLee<br>
-          Coach: CoachLee<br>
-          <span class="small">Passwords are never displayed on public pages.</span>
+          <input name="username" autocomplete="username" />
         </div>
-      </div>
-      <div class="card">
-        <h2>What’s inside</h2>
-        <ul class="muted">
-          <li>Meet Builder with Time Trials per division/classification</li>
-          <li>Registration: age + checkboxes (challenge up, classifications, TT, relays)</li>
-          <li>Saved Meet Templates: save/load and auto-populate</li>
-          <li>Blocks saved within the meet</li>
-        </ul>
-      </div>
+        <div style="height:10px"></div>
+        <div class="field">
+          <label>Password</label>
+          <input name="password" type="password" autocomplete="current-password" />
+        </div>
+        <div style="height:14px"></div>
+        <button class="btn primary" type="submit">Login</button>
+
+        <div class="divider"></div>
+        <div class="small muted">
+          Demo usernames:<br/>
+          Director: <b>Lbird22</b><br/>
+          Judge: <b>JudgeLee</b><br/>
+          Coach: <b>CoachLee</b><br/>
+          <br/>
+          Passwords are never displayed on public pages.
+        </div>
+      </form>
     </div>
   `;
-  res.send(pageShell({ title: "Login", user: null, bodyHtml: body }));
+  res.send(pageShell({ title: "Login", user: null, body }));
 });
 
 app.post("/login", (req, res) => {
-  const { username, password } = req.body || {};
-  const user = db.users.find((u) => u.username === username && u.password === password);
-  if (!user) {
-    return res.send(pageShell({
-      title: "Login",
-      user: null,
-      bodyHtml: `<div class="card"><h2>Login failed</h2><p class="muted">Wrong username or password.</p><a class="btn" href="/login">Try again</a></div>`
-    }));
+  const username = String(req.body.username || "").trim();
+  const password = String(req.body.password || "").trim();
+  const u = db.users?.[username];
+  if (!u || u.password !== password) {
+    return res.send(
+      pageShell({
+        title: "Login",
+        user: null,
+        body: `<div class="card" style="max-width:520px;margin:0 auto">
+          <h2>Admin Login</h2>
+          <p style="color:#ef4444;font-weight:900">Invalid username or password.</p>
+          <a class="btn" href="/login">Try again</a>
+        </div>`,
+      })
+    );
   }
-  const token = createSession(user.id);
-  res.setHeader("Set-Cookie", `ssm_session=${token}; Path=/; HttpOnly; SameSite=Lax`);
+
+  const sid = id("sess");
+  db.sessions[sid] = {
+    id: sid,
+    user: u.username,
+    role: u.role,
+    createdAt: Date.now(),
+  };
+  saveDB();
+
+  res.cookie("ssm_session", sid, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: !!process.env.RENDER, // ok on Render
+    maxAge: 1000 * 60 * 60 * 24 * 14,
+  });
+
   res.redirect("/portal");
 });
 
 app.get("/logout", (req, res) => {
-  const s = getSession(req);
-  if (s) {
-    delete db.sessions[s.token];
-    saveDb(db);
+  const sid = req.cookies?.ssm_session;
+  if (sid && db.sessions?.[sid]) {
+    delete db.sessions[sid];
+    saveDB();
   }
-  res.setHeader("Set-Cookie", `ssm_session=; Path=/; Max-Age=0`);
+  res.clearCookie("ssm_session");
   res.redirect("/");
 });
 
-app.get("/portal", requireRole(null), (req, res) => {
-  const u = req.session.user;
+// --------------------------
+// PORTAL / DIRECTOR DASHBOARD
+// --------------------------
+app.get("/portal", requireAuth, (req, res) => {
+  const user = req.user;
 
-  // Create meet button for director only
-  const canCreate = u.role === "director";
-
-  const meetCards = db.meets
+  const meetsList = db.meets
+    .slice()
+    .reverse()
     .map((m) => {
-      const regs = m.registrants?.length || 0;
-      const blocks = m.blocks?.length || 0;
-      const ttEnabled = Object.values(m.distances || {}).some((div) =>
-        Object.values(div || {}).some((row) => row?.timeTrials)
-      );
       return `
         <div class="card">
-          <div class="row">
+          <div class="sectionTitle">
             <div>
-              <div class="pill">${safeText(m.name)} <span class="small">(${safeText(m.id)})</span></div>
-              <div class="muted" style="margin-top:8px;">
-                Date: <b>${safeText(m.date)}</b> • Regs: <b>${regs}</b> • Blocks: <b>${blocks}</b> • Time Trials: <b>${ttEnabled ? "Yes" : "No"}</b>
+              <div style="font-size:18px;font-weight:1000">${escapeHtml(
+                m.name || "New Meet"
+              )} <span class="badge">${escapeHtml(m.id)}</span></div>
+              <div class="small muted">
+                Date: ${escapeHtml(m.date || "TBD")} · Regs: ${m.registrations?.length || 0}
               </div>
             </div>
-            <div class="right">
-              <a class="btn primary" href="/meet/${m.id}/builder">Meet Builder</a>
-              <a class="btn" href="/meet/${m.id}/blocks">Block Builder</a>
-              <a class="btn" href="/meet/${m.id}/register">Registration</a>
+            <div class="row">
+              <a class="btn primary" href="/meet/${encodeURIComponent(m.id)}/builder">Meet Builder</a>
+              <a class="btn" href="/meet/${encodeURIComponent(m.id)}/register">Registration</a>
             </div>
           </div>
         </div>
@@ -480,642 +428,624 @@ app.get("/portal", requireRole(null), (req, res) => {
 
   const body = `
     <div class="card">
-      <h2>Director Dashboard</h2>
-      <div class="muted">Logged in as <b>${safeText(u.username)}</b> (${safeText(u.role)})</div>
-      <div class="hr"></div>
-      ${canCreate ? `
-        <form method="POST" action="/meets/create" class="right">
+      <div class="sectionTitle">
+        <div>
+          <h2 style="margin:0">Director Dashboard</h2>
+          <p>Build meets, open registration, and manage meet settings.</p>
+        </div>
+        <form method="POST" action="/meet/new">
           <button class="btn primary" type="submit">Build New Meet</button>
         </form>
-        <div class="hr"></div>
-      ` : `<div class="notice">Your role is <b>${safeText(u.role)}</b>. Only directors can create meets.</div><div class="hr"></div>`}
-      <div class="grid" style="gap:14px;">
-        ${meetCards || `<div class="muted">No meets yet.</div>`}
       </div>
     </div>
+
+    ${meetsList || `<div class="card"><p>No meets yet. Click <b>Build New Meet</b>.</p></div>`}
   `;
-  res.send(pageShell({ title: "Portal", user: u, bodyHtml: body }));
+
+  res.send(pageShell({ title: "Portal", user, body }));
 });
 
-app.get("/meets", (req, res) => {
-  const items = db.meets.map((m) => `
-    <tr>
-      <td><b>${safeText(m.name)}</b></td>
-      <td>${safeText(m.date)}</td>
-      <td><a class="btn" href="/meet/${m.id}/register">Register</a></td>
-    </tr>
-  `).join("");
+app.post("/meet/new", requireAuth, (req, res) => {
+  const meet = {
+    id: id("meet"),
+    name: `New Meet`,
+    date: "TBD",
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
 
-  const body = `
-    <div class="card">
-      <h2>Meets</h2>
-      <table class="table">
-        <thead><tr><th>Meet</th><th>Date</th><th></th></tr></thead>
-        <tbody>
-          ${items || `<tr><td colspan="3" class="muted">No meets published yet.</td></tr>`}
-        </tbody>
-      </table>
-    </div>
-  `;
-  res.send(pageShell({ title: "Find a Meet", user: getSession(req)?.user, bodyHtml: body }));
+    // Meet Builder config
+    divisions: defaultDivisions(),
+    timeTrials: {
+      enabled: false,
+      notes: "",
+      needJudgesPanel: true,
+    },
+    relays: {
+      enabled: false,
+      notes: "",
+    },
+
+    registrations: [],
+  };
+  db.meets.push(meet);
+  saveDB();
+  res.redirect(`/meet/${encodeURIComponent(meet.id)}/builder`);
 });
 
-app.post("/meets/create", requireRole("director"), (req, res) => {
-  const meet = newMeet();
-  db.meets.unshift(meet);
-  saveDb(db);
-  res.redirect(`/meet/${meet.id}/builder`);
-});
+// --------------------------
+// DEFAULT DIVISIONS (simple + adjustable later)
+// --------------------------
+function defaultDivisions() {
+  // Keep it simple for now. You can edit these later in code or add UI.
+  // Ages are informational labels for now (registration is age input based).
+  return [
+    { key: "tiny_tot_girls", label: "Tiny Tot Girls", age: "0–5" },
+    { key: "tiny_tot_boys", label: "Tiny Tot Boys", age: "0–5" },
+    { key: "primary_girls", label: "Primary Girls", age: "6–7" },
+    { key: "primary_boys", label: "Primary Boys", age: "6–7" },
+    { key: "juvenile_girls", label: "Juvenile Girls", age: "8–9" },
+    { key: "juvenile_boys", label: "Juvenile Boys", age: "8–9" },
+    { key: "junior_girls", label: "Junior Girls", age: "10–11" },
+    { key: "junior_boys", label: "Junior Boys", age: "10–11" },
+    { key: "cadet_girls", label: "Cadet Girls", age: "12–13" },
+    { key: "cadet_boys", label: "Cadet Boys", age: "12–13" },
+    { key: "youth_women", label: "Youth Women", age: "14–15" },
+    { key: "youth_men", label: "Youth Men", age: "14–15" },
+    { key: "junior_women", label: "Junior Women", age: "16–17" },
+    { key: "junior_men", label: "Junior Men", age: "16–17" },
+    { key: "senior_women", label: "Senior Women", age: "18–24" },
+    { key: "senior_men", label: "Senior Men", age: "18–24" },
+    { key: "classic_women", label: "Classic Women", age: "25–34 (locked)" },
+    { key: "classic_men", label: "Classic Men", age: "25–34 (locked)" },
+    { key: "masters_women", label: "Masters Women", age: "35–44 (locked)" },
+    { key: "masters_men", label: "Masters Men", age: "35–44 (locked)" },
+    { key: "esquire_women", label: "Esquire Women", age: "55–64" },
+  ].map((d) => ({
+    ...d,
+    // per-division config:
+    novice: { enabled: true, cost: 0, d1: "", d2: "", d3: "", d4: "" },
+    elite: { enabled: true, cost: 0, d1: "", d2: "", d3: "", d4: "" },
+    open: { enabled: true, cost: 0, d1: "", d2: "", d3: "", d4: "" },
+  }));
+}
 
-// -------------------- MEET BUILDER --------------------
-app.get("/meet/:meetId/builder", requireRole(null), (req, res) => {
-  const { meetId } = req.params;
-  const meet = db.meets.find((m) => m.id === meetId);
+// --------------------------
+// MEET BUILDER
+// --------------------------
+app.get("/meet/:meetId/builder", requireAuth, (req, res) => {
+  const user = req.user;
+  const meet = db.meets.find((m) => m.id === req.params.meetId);
   if (!meet) return res.status(404).send("Meet not found");
 
-  // Saved templates dropdown
-  const tplOptions = db.meetTemplates
-    .map((t) => `<option value="${safeText(t.id)}">${safeText(t.templateName)} (from ${safeText(t.name)})</option>`)
+  const templates = db.meetTemplates
+    .slice()
+    .reverse()
+    .map((t) => `<option value="${escapeHtml(t.id)}">${escapeHtml(t.name)}</option>`)
     .join("");
 
-  // Build division cards
-  const divisionCards = meet.ageDivisions.map((d) => {
-    const rows = meet.classifications.map((c) => {
-      const row = ensureMeetDistanceRow(meet, d.key, c.key);
+  const divisionCards = (meet.divisions || [])
+    .map((d) => {
       return `
-        <div class="card" style="border-radius:14px; box-shadow:none;">
-          <div class="row">
-            <div style="flex:1 1 180px;">
-              <div class="checkbox">
-                <input type="checkbox" name="dist_${d.key}_${c.key}_enabled" ${row.enabled ? "checked" : ""}>
-                <div><b>${safeText(c.label)}</b></div>
-              </div>
-              <div class="checkbox" style="margin-top:-8px;">
-                <input type="checkbox" name="dist_${d.key}_${c.key}_tt" ${row.timeTrials ? "checked" : ""}>
-                <div><b>Time Trials</b> <span class="small">(opt-in for this classification)</span></div>
-              </div>
-            </div>
-            <div style="flex:1 1 180px;">
-              <label>Cost</label>
-              <input type="number" name="dist_${d.key}_${c.key}_cost" value="${safeText(row.cost ?? 0)}" min="0" step="1">
-            </div>
-          </div>
-
-          <div class="row">
-            <div>
-              <label>D1</label>
-              <input type="text" name="dist_${d.key}_${c.key}_d1" value="${safeText(row.d1)}" placeholder="ex: 1 lap / 500m / 2k points">
-            </div>
-            <div>
-              <label>D2</label>
-              <input type="text" name="dist_${d.key}_${c.key}_d2" value="${safeText(row.d2)}" placeholder="(optional)">
-            </div>
-            <div>
-              <label>D3</label>
-              <input type="text" name="dist_${d.key}_${c.key}_d3" value="${safeText(row.d3)}" placeholder="(optional)">
-            </div>
-            <div>
-              <label>D4</label>
-              <input type="text" name="dist_${d.key}_${c.key}_d4" value="${safeText(row.d4)}" placeholder="(optional)">
-            </div>
-          </div>
-          <div class="muted">Plain inputs (no dropdowns) — avoids the Safari/scrollbar glitch.</div>
-        </div>
-      `;
-    }).join("");
-
-    return `
       <div class="card">
-        <div class="row">
+        <div class="sectionTitle">
           <div>
-            <h3 style="margin:0;">${safeText(d.label)} <span class="pill">${safeText(d.minAge)}–${safeText(d.maxAge)}</span></h3>
-            <div class="muted">Division key: <span class="kbd">${safeText(d.key)}</span>${d.locked ? ` • <b>locked ages</b>` : ""}</div>
+            <div style="font-size:22px;font-weight:1000">${escapeHtml(d.label)} <span class="badge">${escapeHtml(d.age)}</span></div>
+            <div class="small muted">Configure distances + costs (no dropdowns — just type).</div>
           </div>
         </div>
-        <div class="hr"></div>
-        <div class="grid" style="gap:12px;">
-          ${rows}
-        </div>
+
+        ${classBox(meet.id, d.key, "novice", d.novice)}
+        ${classBox(meet.id, d.key, "elite", d.elite)}
+        ${classBox(meet.id, d.key, "open", d.open)}
       </div>
-    `;
-  }).join("");
+      `;
+    })
+    .join("");
 
   const body = `
     <div class="card">
-      <h2>Meet Builder</h2>
-      <div class="muted">${safeText(meet.name)} • ${safeText(meet.date)} • ${safeText(meet.id)}</div>
-      <div class="hr"></div>
-
-      <div class="grid two">
-        <div class="card" style="box-shadow:none;">
-          <h3 style="margin-top:0;">Load Saved Meet (Template)</h3>
-          <form method="POST" action="/meet/${safeText(meet.id)}/load-template">
-            <label>Saved meets</label>
-            <select name="templateId">
-              <option value="">— Select a saved meet —</option>
-              ${tplOptions}
-            </select>
-            <div class="hr"></div>
-            <button class="btn primary" type="submit">Load & Replace This Meet’s Setup</button>
-            <div class="muted" style="margin-top:8px;">This replaces divisions/distances/time trials/relays/blocks config (registrants are kept).</div>
-          </form>
+      <div class="sectionTitle">
+        <div>
+          <h2 style="margin:0">Meet Builder</h2>
+          <p class="muted"><span class="k">${escapeHtml(meet.name)}</span> · ${escapeHtml(meet.date)}</p>
         </div>
-
-        <div class="card" style="box-shadow:none;">
-          <h3 style="margin-top:0;">Meet Basics</h3>
-          <form method="POST" action="/meet/${safeText(meet.id)}/basics">
-            <div class="row">
-              <div>
-                <label>Meet Name</label>
-                <input name="name" type="text" value="${safeText(meet.name)}">
-              </div>
-              <div>
-                <label>Date</label>
-                <input name="date" type="text" value="${safeText(meet.date)}" placeholder="TBD or Mar 20, 2026">
-              </div>
-            </div>
-            <div class="hr"></div>
-            <button class="btn primary" type="submit">Save Basics</button>
-          </form>
+        <div class="row">
+          <a class="btn" href="/portal">Back to Portal</a>
+          <a class="btn primary" href="/meet/${escapeHtml(meet.id)}/register">Open Registration</a>
         </div>
       </div>
 
-      <div class="hr"></div>
+      <div class="divider"></div>
 
-      <div class="card" style="box-shadow:none;">
-        <h3 style="margin-top:0;">Meet-wide Time Trials</h3>
-        <form method="POST" action="/meet/${safeText(meet.id)}/time-trials">
-          <div class="checkbox">
-            <input type="checkbox" name="enabled" ${meet.timeTrials?.enabled ? "checked" : ""}>
-            <div><b>Time Trials at this meet</b> <span class="small">(enables TT config; you still pick who is eligible via per-division TT checkboxes)</span></div>
+      <form method="POST" action="/meet/${escapeHtml(meet.id)}/meta">
+        <div class="row">
+          <div class="field">
+            <label>Meet Name</label>
+            <input name="name" value="${escapeHtml(meet.name)}"/>
           </div>
-          <div class="row">
-            <div>
-              <label>Distances (comma-separated)</label>
-              <input type="text" name="distancesCsv" value="${safeText(meet.timeTrials?.distancesCsv || "")}" placeholder="1 lap, 2 laps, 3 laps">
-            </div>
-            <div>
-              <label>Format</label>
-              <select name="format">
-                <option value="solo" ${meet.timeTrials?.format === "solo" ? "selected" : ""}>Solo</option>
-                <option value="paired" ${meet.timeTrials?.format === "paired" ? "selected" : ""}>Paired</option>
-              </select>
-            </div>
-            <div>
-              <label>Timing</label>
-              <select name="timing">
-                <option value="manual" ${meet.timeTrials?.timing === "manual" ? "selected" : ""}>Manual</option>
-                <option value="electronic" ${meet.timeTrials?.timing === "electronic" ? "selected" : ""}>Electronic</option>
-              </select>
-            </div>
+          <div class="field">
+            <label>Meet Date</label>
+            <input name="date" value="${escapeHtml(meet.date)}" placeholder="TBD or 2026-05-10"/>
           </div>
-          <label>Notes</label>
-          <textarea name="notes" rows="2" placeholder="Optional">${safeText(meet.timeTrials?.notes || "")}</textarea>
-          <div class="hr"></div>
-          <button class="btn primary" type="submit">Save Time Trials Settings</button>
-        </form>
-      </div>
-
-      <div class="hr"></div>
-
-      <h3>Divisions & Classifications</h3>
-      <div class="muted">Enable divisions/classifications, set costs, and enter D1–D4 as plain text. Time Trials is a simple checkbox per classification.</div>
-      <div class="hr"></div>
-
-      <form method="POST" action="/meet/${safeText(meet.id)}/distances">
-        <div class="grid" style="gap:16px;">
-          ${divisionCards}
         </div>
-        <div class="hr"></div>
-        <div class="right">
-          <button class="btn primary" type="submit">Save Meet Builder</button>
-          <a class="btn" href="/portal">Back</a>
-        </div>
+        <div style="height:10px"></div>
+        <button class="btn primary" type="submit">Save Meet</button>
       </form>
 
-      <div class="hr"></div>
+      <div class="divider"></div>
 
-      <div class="card" style="box-shadow:none;">
-        <h3 style="margin-top:0;">Save Meet As (Template)</h3>
-        <form method="POST" action="/meet/${safeText(meet.id)}/save-template">
-          <label>Template name</label>
-          <input type="text" name="templateName" placeholder="ex: Kansas State Indoor Template" required>
-          <div class="hr"></div>
-          <button class="btn primary" type="submit">Save Template</button>
-          <div class="muted" style="margin-top:8px;">Saves builder setup + blocks. Does not include registrants.</div>
+      <h3>Saved Meets (Templates)</h3>
+      <div class="row">
+        <form method="POST" action="/meet/${escapeHtml(meet.id)}/save-template" class="row" style="width:100%">
+          <div class="field">
+            <label>Save meet as (template name)</label>
+            <input name="templateName" placeholder="Example: USARS Indoor Standard"/>
+          </div>
+          <div style="align-self:flex-end">
+            <button class="btn" type="submit">Save Template</button>
+          </div>
         </form>
       </div>
+      <div style="height:10px"></div>
+      <form method="POST" action="/meet/${escapeHtml(meet.id)}/load-template" class="row">
+        <div class="field">
+          <label>Load template (overwrites distances/costs/time trials/relays)</label>
+          <select name="templateId">
+            <option value="">Select a template…</option>
+            ${templates}
+          </select>
+        </div>
+        <div style="align-self:flex-end">
+          <button class="btn danger" type="submit">Load Template</button>
+        </div>
+      </form>
     </div>
-  `;
 
-  // Ensure rows exist before saving
-  saveDb(db);
-
-  res.send(pageShell({ title: "Meet Builder", user: req.session.user, bodyHtml: body }));
-});
-
-app.post("/meet/:meetId/basics", requireRole(null), (req, res) => {
-  const meet = db.meets.find((m) => m.id === req.params.meetId);
-  if (!meet) return res.status(404).send("Meet not found");
-  meet.name = String(req.body.name || meet.name);
-  meet.date = String(req.body.date || meet.date);
-  meet.updatedAt = nowISO();
-  saveDb(db);
-  res.redirect(`/meet/${meet.id}/builder`);
-});
-
-app.post("/meet/:meetId/time-trials", requireRole(null), (req, res) => {
-  const meet = db.meets.find((m) => m.id === req.params.meetId);
-  if (!meet) return res.status(404).send("Meet not found");
-
-  meet.timeTrials = meet.timeTrials || {};
-  meet.timeTrials.enabled = !!req.body.enabled;
-  meet.timeTrials.distancesCsv = String(req.body.distancesCsv || "");
-  meet.timeTrials.format = req.body.format === "paired" ? "paired" : "solo";
-  meet.timeTrials.timing = req.body.timing === "electronic" ? "electronic" : "manual";
-  meet.timeTrials.notes = String(req.body.notes || "");
-  meet.updatedAt = nowISO();
-
-  saveDb(db);
-  res.redirect(`/meet/${meet.id}/builder`);
-});
-
-app.post("/meet/:meetId/distances", requireRole(null), (req, res) => {
-  const meet = db.meets.find((m) => m.id === req.params.meetId);
-  if (!meet) return res.status(404).send("Meet not found");
-
-  // Loop all divisions/classes and persist
-  for (const div of meet.ageDivisions) {
-    for (const cls of meet.classifications) {
-      const row = ensureMeetDistanceRow(meet, div.key, cls.key);
-      row.enabled = !!req.body[`dist_${div.key}_${cls.key}_enabled`];
-      row.timeTrials = !!req.body[`dist_${div.key}_${cls.key}_tt`];
-      row.cost = parseIntSafe(req.body[`dist_${div.key}_${cls.key}_cost`], 0);
-      row.d1 = String(req.body[`dist_${div.key}_${cls.key}_d1`] || "");
-      row.d2 = String(req.body[`dist_${div.key}_${cls.key}_d2`] || "");
-      row.d3 = String(req.body[`dist_${div.key}_${cls.key}_d3`] || "");
-      row.d4 = String(req.body[`dist_${div.key}_${cls.key}_d4`] || "");
-    }
-  }
-
-  // Auto-enable meet timeTrials if any TT checkbox used
-  const anyTT = Object.values(meet.distances || {}).some((div) =>
-    Object.values(div || {}).some((row) => row?.timeTrials)
-  );
-  if (anyTT) meet.timeTrials = { ...(meet.timeTrials || {}), enabled: true };
-
-  meet.updatedAt = nowISO();
-  saveDb(db);
-  res.redirect(`/meet/${meet.id}/builder`);
-});
-
-app.post("/meet/:meetId/save-template", requireRole(null), (req, res) => {
-  const meet = db.meets.find((m) => m.id === req.params.meetId);
-  if (!meet) return res.status(404).send("Meet not found");
-
-  const templateName = String(req.body.templateName || "").trim();
-  if (!templateName) return res.redirect(`/meet/${meet.id}/builder`);
-
-  // Copy only builder config (no registrants)
-  const copy = JSON.parse(JSON.stringify(meet));
-  copy.templateId = uid("tpl_");
-  copy.templateName = templateName;
-  delete copy.registrants;
-  copy.registrants = [];
-  copy.savedAt = nowISO();
-
-  db.meetTemplates.unshift(copy);
-  saveDb(db);
-  res.redirect(`/meet/${meet.id}/builder`);
-});
-
-app.post("/meet/:meetId/load-template", requireRole(null), (req, res) => {
-  const meet = db.meets.find((m) => m.id === req.params.meetId);
-  if (!meet) return res.status(404).send("Meet not found");
-
-  const templateId = String(req.body.templateId || "");
-  const tpl = db.meetTemplates.find((t) => t.templateId === templateId || t.id === templateId);
-  if (!tpl) return res.redirect(`/meet/${meet.id}/builder`);
-
-  const keepRegistrants = meet.registrants || [];
-
-  // Replace config
-  meet.ageDivisions = JSON.parse(JSON.stringify(tpl.ageDivisions || defaultAgeDivisions()));
-  meet.classifications = JSON.parse(JSON.stringify(tpl.classifications || meet.classifications));
-  meet.distances = JSON.parse(JSON.stringify(tpl.distances || {}));
-  meet.timeTrials = JSON.parse(JSON.stringify(tpl.timeTrials || meet.timeTrials));
-  meet.relays = JSON.parse(JSON.stringify(tpl.relays || meet.relays));
-  meet.blocks = JSON.parse(JSON.stringify(tpl.blocks || []));
-
-  // Keep registrants
-  meet.registrants = keepRegistrants;
-
-  meet.updatedAt = nowISO();
-  saveDb(db);
-  res.redirect(`/meet/${meet.id}/builder`);
-});
-
-// -------------------- BLOCK BUILDER (saved in meet) --------------------
-app.get("/meet/:meetId/blocks", requireRole(null), (req, res) => {
-  const meet = db.meets.find((m) => m.id === req.params.meetId);
-  if (!meet) return res.status(404).send("Meet not found");
-
-  const blocks = (meet.blocks || []).map((b) => `
-    <tr>
-      <td><b>${safeText(b.name)}</b></td>
-      <td class="muted">${safeText(b.itemsCsv || "")}</td>
-      <td><form method="POST" action="/meet/${safeText(meet.id)}/blocks/delete" style="margin:0;">
-        <input type="hidden" name="blockId" value="${safeText(b.id)}">
-        <button class="btn red" type="submit">Delete</button>
-      </form></td>
-    </tr>
-  `).join("");
-
-  const body = `
     <div class="card">
-      <h2>Block Builder</h2>
-      <div class="muted">${safeText(meet.name)} • ${safeText(meet.id)}</div>
-      <div class="hr"></div>
+      <h3>Time Trials (Meet-wide)</h3>
+      <p class="muted">This tells the system your meet includes Time Trials so you can plan staffing (judges panel). Not per-division clutter.</p>
 
-      <div class="grid two">
-        <div class="card" style="box-shadow:none;">
-          <h3 style="margin-top:0;">Add Block</h3>
-          <form method="POST" action="/meet/${safeText(meet.id)}/blocks/add">
-            <label>Block name</label>
-            <input type="text" name="name" placeholder="ex: Morning Sprints" required>
-            <label>Items (CSV)</label>
-            <input type="text" name="itemsCsv" placeholder="ex: Primary Girls, Primary Boys, TT, Relays">
-            <div class="hr"></div>
-            <button class="btn primary" type="submit">Add Block</button>
-          </form>
-          <div class="muted" style="margin-top:10px;">Blocks are saved as part of the meet (and saved into templates too).</div>
+      <form method="POST" action="/meet/${escapeHtml(meet.id)}/time-trials">
+        <div class="checkRow">
+          <label><input type="checkbox" name="enabled" ${meet.timeTrials?.enabled ? "checked" : ""}/> Enable Time Trials at this meet</label>
+          <label><input type="checkbox" name="needJudgesPanel" ${meet.timeTrials?.needJudgesPanel ? "checked" : ""}/> Need judges panel</label>
+        </div>
+        <div style="height:10px"></div>
+        <div class="field">
+          <label>Notes (optional)</label>
+          <textarea name="notes" placeholder="Example: run TT before racing, 1 lap + 3 lap…">${escapeHtml(meet.timeTrials?.notes || "")}</textarea>
+        </div>
+        <div style="height:10px"></div>
+        <button class="btn primary" type="submit">Save Time Trials</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h3>Relays (Meet-wide)</h3>
+      <p class="muted">Simple toggle for now. We can build the full Relay Builder next.</p>
+
+      <form method="POST" action="/meet/${escapeHtml(meet.id)}/relays">
+        <div class="checkRow">
+          <label><input type="checkbox" name="enabled" ${meet.relays?.enabled ? "checked" : ""}/> Enable Relays at this meet</label>
+        </div>
+        <div style="height:10px"></div>
+        <div class="field">
+          <label>Notes (optional)</label>
+          <textarea name="notes" placeholder="Example: 2 divisions per relay, 4 skaters per team…">${escapeHtml(meet.relays?.notes || "")}</textarea>
+        </div>
+        <div style="height:10px"></div>
+        <button class="btn primary" type="submit">Save Relays</button>
+      </form>
+    </div>
+
+    ${divisionCards}
+  `;
+
+  res.send(pageShell({ title: "Meet Builder", user, body }));
+});
+
+function classBox(meetId, divisionKey, classKey, cfg) {
+  const c = cfg || { enabled: true, cost: 0, d1: "", d2: "", d3: "", d4: "" };
+  const label = classKey.toUpperCase();
+
+  return `
+    <div class="card" style="margin-top:14px;background:#fbfcff">
+      <form method="POST" action="/meet/${escapeHtml(meetId)}/division/${escapeHtml(
+        divisionKey
+      )}/${escapeHtml(classKey)}">
+        <div class="sectionTitle">
+          <div class="checkRow">
+            <label><input type="checkbox" name="enabled" ${c.enabled ? "checked" : ""}/> ${escapeHtml(label)}</label>
+          </div>
+          <div style="min-width:220px" class="field">
+            <label>Cost</label>
+            <input name="cost" value="${escapeHtml(c.cost)}" />
+          </div>
         </div>
 
-        <div class="card" style="box-shadow:none;">
-          <h3 style="margin-top:0;">Current Blocks</h3>
-          <table class="table">
-            <thead><tr><th>Name</th><th>Items</th><th></th></tr></thead>
-            <tbody>${blocks || `<tr><td colspan="3" class="muted">No blocks yet.</td></tr>`}</tbody>
-          </table>
-        </div>
-      </div>
+        <div style="height:10px"></div>
 
-      <div class="hr"></div>
-      <div class="right">
-        <a class="btn" href="/meet/${safeText(meet.id)}/builder">Back to Meet Builder</a>
-        <a class="btn" href="/portal">Portal</a>
-      </div>
+        <div class="row">
+          <div class="field"><label>D1</label><input name="d1" value="${escapeHtml(c.d1)}" placeholder="ex: 1 lap / 500m" /></div>
+          <div class="field"><label>D2</label><input name="d2" value="${escapeHtml(c.d2)}" placeholder="ex: 2 lap / 1000m" /></div>
+          <div class="field"><label>D3</label><input name="d3" value="${escapeHtml(c.d3)}" placeholder="ex: 3 lap / 1500m" /></div>
+          <div class="field"><label>D4</label><input name="d4" value="${escapeHtml(c.d4)}" placeholder="ex: 5 lap / 2500m" /></div>
+        </div>
+
+        <div style="height:10px"></div>
+        <button class="btn primary" type="submit">Save ${escapeHtml(label)}</button>
+      </form>
     </div>
   `;
-  res.send(pageShell({ title: "Block Builder", user: req.session.user, bodyHtml: body }));
-});
+}
 
-app.post("/meet/:meetId/blocks/add", requireRole(null), (req, res) => {
+app.post("/meet/:meetId/meta", requireAuth, (req, res) => {
   const meet = db.meets.find((m) => m.id === req.params.meetId);
   if (!meet) return res.status(404).send("Meet not found");
-  meet.blocks = meet.blocks || [];
-  meet.blocks.push({ id: uid("blk_"), name: String(req.body.name || "Block"), itemsCsv: String(req.body.itemsCsv || "") });
-  meet.updatedAt = nowISO();
-  saveDb(db);
-  res.redirect(`/meet/${meet.id}/blocks`);
+
+  meet.name = String(req.body.name || "New Meet").trim() || "New Meet";
+  meet.date = String(req.body.date || "TBD").trim() || "TBD";
+  meet.updatedAt = Date.now();
+  saveDB();
+  res.redirect(`/meet/${encodeURIComponent(meet.id)}/builder`);
 });
 
-app.post("/meet/:meetId/blocks/delete", requireRole(null), (req, res) => {
+app.post("/meet/:meetId/division/:divKey/:classKey", requireAuth, (req, res) => {
   const meet = db.meets.find((m) => m.id === req.params.meetId);
   if (!meet) return res.status(404).send("Meet not found");
-  const blockId = String(req.body.blockId || "");
-  meet.blocks = (meet.blocks || []).filter((b) => b.id !== blockId);
-  meet.updatedAt = nowISO();
-  saveDb(db);
-  res.redirect(`/meet/${meet.id}/blocks`);
+
+  const div = (meet.divisions || []).find((d) => d.key === req.params.divKey);
+  if (!div) return res.status(404).send("Division not found");
+
+  const ck = req.params.classKey;
+  if (!["novice", "elite", "open"].includes(ck)) return res.status(400).send("Bad classKey");
+
+  div[ck] = {
+    enabled: !!req.body.enabled,
+    cost: Number(req.body.cost || 0) || 0,
+    d1: String(req.body.d1 || "").trim(),
+    d2: String(req.body.d2 || "").trim(),
+    d3: String(req.body.d3 || "").trim(),
+    d4: String(req.body.d4 || "").trim(),
+  };
+
+  meet.updatedAt = Date.now();
+  saveDB();
+  res.redirect(`/meet/${encodeURIComponent(meet.id)}/builder`);
 });
 
-// -------------------- REGISTRATION --------------------
+app.post("/meet/:meetId/time-trials", requireAuth, (req, res) => {
+  const meet = db.meets.find((m) => m.id === req.params.meetId);
+  if (!meet) return res.status(404).send("Meet not found");
+
+  meet.timeTrials = {
+    enabled: !!req.body.enabled,
+    needJudgesPanel: !!req.body.needJudgesPanel,
+    notes: String(req.body.notes || "").trim(),
+  };
+
+  meet.updatedAt = Date.now();
+  saveDB();
+  res.redirect(`/meet/${encodeURIComponent(meet.id)}/builder`);
+});
+
+app.post("/meet/:meetId/relays", requireAuth, (req, res) => {
+  const meet = db.meets.find((m) => m.id === req.params.meetId);
+  if (!meet) return res.status(404).send("Meet not found");
+
+  meet.relays = {
+    enabled: !!req.body.enabled,
+    notes: String(req.body.notes || "").trim(),
+  };
+
+  meet.updatedAt = Date.now();
+  saveDB();
+  res.redirect(`/meet/${encodeURIComponent(meet.id)}/builder`);
+});
+
+app.post("/meet/:meetId/save-template", requireAuth, (req, res) => {
+  const meet = db.meets.find((m) => m.id === req.params.meetId);
+  if (!meet) return res.status(404).send("Meet not found");
+
+  const templateName = String(req.body.templateName || "").trim() || "Saved Template";
+  const t = {
+    id: id("tmpl"),
+    name: templateName,
+    createdAt: Date.now(),
+    divisions: JSON.parse(JSON.stringify(meet.divisions || [])),
+    timeTrials: JSON.parse(JSON.stringify(meet.timeTrials || {})),
+    relays: JSON.parse(JSON.stringify(meet.relays || {})),
+  };
+
+  db.meetTemplates.push(t);
+  saveDB();
+  res.redirect(`/meet/${encodeURIComponent(meet.id)}/builder`);
+});
+
+app.post("/meet/:meetId/load-template", requireAuth, (req, res) => {
+  const meet = db.meets.find((m) => m.id === req.params.meetId);
+  if (!meet) return res.status(404).send("Meet not found");
+
+  const templateId = String(req.body.templateId || "").trim();
+  const t = db.meetTemplates.find((x) => x.id === templateId);
+  if (!t) return res.redirect(`/meet/${encodeURIComponent(meet.id)}/builder`);
+
+  meet.divisions = JSON.parse(JSON.stringify(t.divisions || []));
+  meet.timeTrials = JSON.parse(JSON.stringify(t.timeTrials || { enabled: false, notes: "", needJudgesPanel: true }));
+  meet.relays = JSON.parse(JSON.stringify(t.relays || { enabled: false, notes: "" }));
+  meet.updatedAt = Date.now();
+  saveDB();
+  res.redirect(`/meet/${encodeURIComponent(meet.id)}/builder`);
+});
+
+// --------------------------
+// REGISTRATION (simplified like you asked)
+// age + checkboxes (challenge up / novice / elite / open / time trials / relays)
+// --------------------------
 app.get("/meet/:meetId/register", (req, res) => {
+  const user = getSession(req)?.user ? db.users?.[getSession(req).user] : null;
   const meet = db.meets.find((m) => m.id === req.params.meetId);
   if (!meet) return res.status(404).send("Meet not found");
 
   const body = `
-    <div class="card">
+    <div class="card" style="max-width:760px;margin:0 auto">
       <h2>Register</h2>
-      <div class="muted"><b>${safeText(meet.name)}</b> • ${safeText(meet.date)} • Registration ${meet.status === "locked" ? "<b>CLOSED</b>" : "<b>OPEN</b>"}</div>
-      <div class="hr"></div>
+      <p class="muted"><b>${escapeHtml(meet.name)}</b> · ${escapeHtml(meet.date)} · <span class="badge">Registration OPEN</span></p>
 
-      ${meet.status === "locked" ? `<div class="notice">Registration is closed for this meet.</div>` : `
-      <form method="POST" action="/meet/${safeText(meet.id)}/register">
+      <form method="POST" action="/meet/${escapeHtml(meet.id)}/register">
         <div class="row">
-          <div>
+          <div class="field">
             <label>First Name *</label>
-            <input type="text" name="firstName" required>
+            <input name="firstName" required />
           </div>
-          <div>
+          <div class="field">
             <label>Last Name *</label>
-            <input type="text" name="lastName" required>
+            <input name="lastName" required />
           </div>
         </div>
 
-        <label>Team *</label>
-        <input type="text" name="team" value="Independent" required>
-
-        <label>USARS Number (optional)</label>
-        <input type="text" name="usarsNumber" placeholder="Optional">
-
-        <div class="hr"></div>
+        <div style="height:10px"></div>
 
         <div class="row">
-          <div>
+          <div class="field">
+            <label>Team *</label>
+            <input name="team" value="Independent" required />
+          </div>
+          <div class="field">
+            <label>USARS Number (optional)</label>
+            <input name="usars" placeholder="Optional" />
+          </div>
+        </div>
+
+        <div style="height:10px"></div>
+
+        <div class="row">
+          <div class="field">
             <label>Age *</label>
-            <input type="number" name="age" min="0" max="120" required>
-            <div class="muted">Division is assigned automatically from age.</div>
-          </div>
-          <div>
-            <label>Gender (optional)</label>
-            <select name="gender">
-              <option value="">—</option>
-              <option value="girls">Girls</option>
-              <option value="boys">Boys</option>
-              <option value="women">Women</option>
-              <option value="men">Men</option>
-            </select>
-            <div class="muted">Used only if you later want gender-aware division rules.</div>
+            <input name="age" inputmode="numeric" placeholder="ex: 12" required />
           </div>
         </div>
 
-        <div class="hr"></div>
+        <div style="height:12px"></div>
 
-        <div class="checkbox">
-          <input type="checkbox" name="challengeUp">
-          <div>
-            <b>Challenge Up</b> <span class="small">(auto bumped per USARS rule)</span><br>
-            <span class="muted">This is a registration flag (does not add meet-builder clutter).</span>
+        <div class="card" style="background:#fbfcff">
+          <h3 style="margin:0 0 8px">Options</h3>
+          <div class="checkRow">
+            <label><input type="checkbox" name="challengeUp"/> Challenge Up (auto bumped per rule)</label>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="checkRow">
+            <label><input type="checkbox" name="novice"/> Novice</label>
+            <label><input type="checkbox" name="elite"/> Elite</label>
+            <label><input type="checkbox" name="open"/> Open</label>
+          </div>
+
+          <div style="height:8px"></div>
+
+          <div class="checkRow">
+            <label><input type="checkbox" name="timeTrials"/> Time Trials</label>
+            <label><input type="checkbox" name="relays"/> Relays</label>
+          </div>
+
+          <div class="small muted" style="margin-top:10px">
+            This assigns your check-in / skater number.
           </div>
         </div>
 
-        <h3>Select Classifications</h3>
-        <div class="muted">Check one or multiple: Novice + Elite, etc.</div>
-
-        <div class="row">
-          <div class="card" style="box-shadow:none;">
-            <div class="checkbox"><input type="checkbox" name="class_novice"><div><b>Novice</b></div></div>
-            <div class="checkbox"><input type="checkbox" name="class_elite"><div><b>Elite</b></div></div>
-            <div class="checkbox"><input type="checkbox" name="class_open"><div><b>Open</b></div></div>
-
-            <div class="hr"></div>
-
-            <div class="checkbox"><input type="checkbox" name="timeTrials"><div><b>Time Trials</b></div></div>
-            <div class="checkbox"><input type="checkbox" name="relays"><div><b>Relays</b></div></div>
-          </div>
-
-          <div class="card" style="box-shadow:none;">
-            <h3 style="margin-top:0;">How it works</h3>
-            <ul class="muted">
-              <li>We assign your <b>division</b> from your age.</li>
-              <li>Your checked classifications determine which groups you race.</li>
-              <li>Time Trials/Relays are opt-in flags.</li>
-            </ul>
-          </div>
-        </div>
-
-        <div class="hr"></div>
+        <div style="height:14px"></div>
         <button class="btn primary" type="submit">Register</button>
+        <a class="btn" href="/meets">Back</a>
       </form>
-      `}
     </div>
   `;
-  res.send(pageShell({ title: "Register", user: getSession(req)?.user, bodyHtml: body }));
+
+  res.send(pageShell({ title: "Register", user, body }));
 });
 
 app.post("/meet/:meetId/register", (req, res) => {
   const meet = db.meets.find((m) => m.id === req.params.meetId);
   if (!meet) return res.status(404).send("Meet not found");
-  if (meet.status === "locked") return res.status(400).send("Registration closed");
 
-  const age = parseIntSafe(req.body.age, NaN);
-  const division = findDivisionForAge(meet, age);
+  meet.registrations = meet.registrations || [];
 
-  const classes = [];
-  if (req.body.class_novice) classes.push("novice");
-  if (req.body.class_elite) classes.push("elite");
-  if (req.body.class_open) classes.push("open");
-
-  if (classes.length === 0) {
-    return res.send(pageShell({
-      title: "Register",
-      user: getSession(req)?.user,
-      bodyHtml: `<div class="card"><h2>Registration error</h2><p class="muted">Pick at least one classification (Novice/Elite/Open).</p><a class="btn" href="/meet/${safeText(meet.id)}/register">Back</a></div>`
-    }));
-  }
-
-  if (!division) {
-    return res.send(pageShell({
-      title: "Register",
-      user: getSession(req)?.user,
-      bodyHtml: `<div class="card"><h2>Registration error</h2><p class="muted">Could not assign a division for age <b>${safeText(age)}</b>.</p><a class="btn" href="/meet/${safeText(meet.id)}/register">Back</a></div>`
-    }));
-  }
-
-  // If user checked timeTrials, ensure their division/classification actually offers TT (optional enforcement).
-  // For now: store flag; judges/admin can filter later.
-  const registrant = {
-    id: uid("sk_"),
+  const regNum = meet.registrations.length + 1; // meet number / check-in number
+  const r = {
+    id: id("reg"),
+    regNum,
     firstName: String(req.body.firstName || "").trim(),
     lastName: String(req.body.lastName || "").trim(),
-    team: String(req.body.team || "Independent").trim(),
-    usarsNumber: String(req.body.usarsNumber || "").trim(),
-    age,
-    gender: String(req.body.gender || ""),
-    divisionKey: division.key,
-    divisionLabel: division.label,
-    classifications: classes,
-    challengeUp: !!req.body.challengeUp,
-    timeTrials: !!req.body.timeTrials,
-    relays: !!req.body.relays,
-    createdAt: nowISO(),
+    team: String(req.body.team || "").trim(),
+    usars: String(req.body.usars || "").trim(),
+    age: Number(req.body.age || 0) || null,
+
+    flags: {
+      challengeUp: !!req.body.challengeUp,
+      novice: !!req.body.novice,
+      elite: !!req.body.elite,
+      open: !!req.body.open,
+      timeTrials: !!req.body.timeTrials,
+      relays: !!req.body.relays,
+    },
+
+    createdAt: Date.now(),
   };
 
-  meet.registrants = meet.registrants || [];
-  meet.registrants.push(registrant);
-  meet.updatedAt = nowISO();
-  saveDb(db);
+  meet.registrations.push(r);
+  meet.updatedAt = Date.now();
+  saveDB();
 
-  res.send(pageShell({
-    title: "Registered",
-    user: getSession(req)?.user,
-    bodyHtml: `
-      <div class="card">
-        <h2>Registered ✅</h2>
-        <div class="muted">
-          ${safeText(registrant.firstName)} ${safeText(registrant.lastName)}<br>
-          Age: <b>${safeText(registrant.age)}</b> → Division: <b>${safeText(registrant.divisionLabel)}</b><br>
-          Classes: <b>${safeText(registrant.classifications.join(", "))}</b><br>
-          Time Trials: <b>${registrant.timeTrials ? "Yes" : "No"}</b> • Relays: <b>${registrant.relays ? "Yes" : "No"}</b>
+  res.send(
+    pageShell({
+      title: "Registered",
+      user: null,
+      body: `
+        <div class="card" style="max-width:760px;margin:0 auto">
+          <h2>Registered ✅</h2>
+          <p class="muted"><b>${escapeHtml(meet.name)}</b></p>
+          <div class="divider"></div>
+          <div class="row">
+            <div class="card" style="flex:1">
+              <div class="small muted">Skater</div>
+              <div style="font-size:22px;font-weight:1000">${escapeHtml(r.firstName)} ${escapeHtml(r.lastName)}</div>
+              <div class="small muted">Team: ${escapeHtml(r.team)}</div>
+            </div>
+            <div class="card" style="min-width:220px">
+              <div class="small muted">Meet #</div>
+              <div style="font-size:34px;font-weight:1000">${r.regNum}</div>
+              <div class="small muted">Use for check-in + number</div>
+            </div>
+          </div>
+
+          <div class="divider"></div>
+
+          <a class="btn primary" href="/meet/${escapeHtml(meet.id)}/register">Register another</a>
+          <a class="btn" href="/meets">Find a Meet</a>
         </div>
-        <div class="hr"></div>
-        <div class="right">
-          <a class="btn primary" href="/meet/${safeText(meet.id)}/register">Register Another</a>
-          <a class="btn" href="/meets">Back to Meets</a>
-        </div>
-      </div>
-    `
-  }));
+      `,
+    })
+  );
 });
 
-// -------------------- RINKS --------------------
+// --------------------------
+// MEETS LIST (public)
+// --------------------------
+app.get("/meets", (req, res) => {
+  const user = getSession(req)?.user ? db.users?.[getSession(req).user] : null;
+
+  const rows =
+    db.meets.length === 0
+      ? `<div class="card"><p>No meets yet.</p></div>`
+      : db.meets
+          .slice()
+          .reverse()
+          .map((m) => {
+            return `
+            <div class="card">
+              <div class="sectionTitle">
+                <div>
+                  <div style="font-size:20px;font-weight:1000">${escapeHtml(m.name)}</div>
+                  <div class="small muted">Date: ${escapeHtml(m.date)} · Regs: ${m.registrations?.length || 0}</div>
+                </div>
+                <div class="row">
+                  <a class="btn primary" href="/meet/${escapeHtml(m.id)}/register">Register</a>
+                  ${user ? `<a class="btn" href="/meet/${escapeHtml(m.id)}/builder">Meet Builder</a>` : ""}
+                </div>
+              </div>
+            </div>
+          `;
+          })
+          .join("");
+
+  res.send(
+    pageShell({
+      title: "Find a Meet",
+      user,
+      body: `
+        <div class="card">
+          <h2>Meets</h2>
+          <p class="muted">Choose a meet to register.</p>
+        </div>
+        ${rows}
+      `,
+    })
+  );
+});
+
+// --------------------------
+// RINKS
+// --------------------------
 app.get("/rinks", (req, res) => {
-  const cards = (db.rinks || []).map((r) => `
-    <div class="card">
-      <h2 style="margin-bottom:8px;">${safeText(r.name)}</h2>
-      <div class="muted">
-        <div><b>City:</b> ${safeText(r.city || "—")}</div>
-        <div><b>Phone:</b> ${safeText(r.phone || "—")}</div>
-        <div><b>Address:</b> ${safeText(r.address || "—")}</div>
-        <div><b>Website:</b> ${safeText(r.website || "—")}</div>
-      </div>
-    </div>
-  `).join("");
+  const user = getSession(req)?.user ? db.users?.[getSession(req).user] : null;
 
-  const body = `
-    <div class="card">
-      <h2>Rinks</h2>
-      <div class="muted">Community rink directory.</div>
-      <div class="hr"></div>
-      <div class="grid" style="gap:16px;">
-        ${cards || `<div class="muted">No rinks yet.</div>`}
+  const cards = (db.rinks || [])
+    .map((r) => {
+      return `
+      <div class="card">
+        <h2 style="margin:0 0 8px">${escapeHtml(r.name)}</h2>
+        <div class="small muted">${escapeHtml(r.city)} · Team: ${escapeHtml(r.team || "—")}</div>
+        <div class="divider"></div>
+        <div><b>Phone:</b> ${escapeHtml(r.phone || "—")}</div>
+        <div><b>Address:</b> ${escapeHtml(r.address || "—")}</div>
+        <div><b>Website:</b> ${r.website ? `<a href="https://${escapeHtml(r.website)}" target="_blank" rel="noreferrer">${escapeHtml(r.website)}</a>` : "—"}</div>
       </div>
-    </div>
-  `;
-  res.send(pageShell({ title: "Find a Rink", user: getSession(req)?.user, bodyHtml: body }));
+    `;
+    })
+    .join("");
+
+  res.send(
+    pageShell({
+      title: "Find a Rink",
+      user,
+      body: `
+        <div class="card">
+          <h2>Rinks</h2>
+          <p class="muted">Rinks and clubs.</p>
+        </div>
+        ${cards || `<div class="card"><p>No rinks yet.</p></div>`}
+      `,
+    })
+  );
 });
 
-// -------------------- LIVE (placeholder) --------------------
+// --------------------------
+// LIVE (placeholder)
+// --------------------------
 app.get("/live", (req, res) => {
-  const body = `
-    <div class="card">
-      <h2>Live Race Day</h2>
-      <div class="muted">Placeholder page (we’ll wire this to blocks, judges panel, and results next).</div>
-    </div>
-  `;
-  res.send(pageShell({ title: "Live Race Day", user: getSession(req)?.user, bodyHtml: body }));
+  const user = getSession(req)?.user ? db.users?.[getSession(req).user] : null;
+  res.send(
+    pageShell({
+      title: "Live Race Day",
+      user,
+      body: `
+        <div class="card">
+          <h2>Live Race Day</h2>
+          <p class="muted">Placeholder page. Next: wire this to blocks + judges panels.</p>
+        </div>
+      `,
+    })
+  );
 });
 
-// -------------------- START SERVER --------------------
+// --------------------------
+// START SERVER
+// --------------------------
 app.listen(PORT, HOST, () => {
-  console.log(
-    `
+  console.log(`
 ============================================================
-SpeedSkateMeet | CLEAN REBUILD v7
+SpeedSkateMeet — CLEAN REBUILD v8
 Data: ${DATA_FILE}
 
 Login page:
 - Demo usernames (passwords not displayed publicly)
 
 Time Trials:
-- Per division+classification checkbox
-- Meet-wide Time Trials config
+- Meet-wide config (no per-division clutter)
+Relays:
+- Meet-wide toggle + notes
 
 Local: http://localhost:${PORT}
-LAN:   http://<your-ip>:${PORT}
 ============================================================
-`.trim()
-  );
+`.trim());
 });
