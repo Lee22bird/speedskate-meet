@@ -1,20 +1,27 @@
 // ============================================================
-// SpeedSkateMeet – CLEAN REBUILD v4 – March 1, 2026
+// SpeedSkateMeet – CLEAN REBUILD v6 – March 1, 2026
 // Node.js + Express • single-file server.js • JSON persistence
 //
-// ✅ Multi-role login (Director/Judge/Coach) + role selection screen
-// ✅ Meet Builder: meet basics + divisions (Novice/Elite/Open)
-// ✅ Adult division chain HARD-CORRECT:
-//    Senior -> Classic -> Masters -> Veteran -> Esquire -> Grand Veteran
-//    Classic = 25–34 (NOT masters)
-//    Masters = 35–44
-// ✅ Distance input = datalist suggestions (meters/laps) + manual entry
-// ✅ Custom Races (including Time Trials) with explicit raceType: normal | time_trial
-// ✅ Block Builder supports BOTH Division items and Custom Race items
-// ✅ Race order generation STRICTLY follows: Day -> block.order -> block.items order -> distances
-// ✅ Live view shows schedule + race order; TT standings hook ready
-//
-// ✅ NEW: DB migration on startup to fix old meets where Classic/Masters ages got swapped
+// v6 FIXES:
+// ✅ Login page no longer shows passwords (only demo usernames; safe in prod)
+// ✅ Meet Builder headings are unified ("Primary Girls" once) — no split groups
+// ✅ Startup DB migration:
+//    - Rebuilds old split groups (primary_girls_novice/elite/open) into unified groups
+//    - Removes deprecated/ghost groups (challenge_up, novice_elite_combo, time_trials_open, etc.)
+//    - Locks Classic/Masters ages correctly
+// ✅ Safari datalist popup offset FIX:
+//    - Replaces native <datalist> with an anchored custom suggestions dropdown UI
+// ✅ SkateAbility rebuilt:
+//    - NO novice/elite/open
+//    - Manual age label per SkateAbility box
+//    - Add multiple SkateAbility boxes
+// ✅ Time Trials:
+//    - ONLY exist as Custom Races (raceType=time_trial). No “Time Trials Open” group.
+// ✅ Challenge Up:
+//    - Removed from Meet Builder.
+//    - Registration checkbox auto-adds the next class up (novice→elite, elite→open).
+// ✅ “Novice & Elite Combo” removed:
+//    - Registration can choose multiple classes; system places skater in both.
 //
 // ============================================================
 
@@ -35,7 +42,7 @@ app.use(express.json());
 // ============================================================
 
 const DATA_FILE = process.env.SSM_DATA_FILE || path.join(process.cwd(), "ssm_db.json");
-const DATA_VERSION = 4;
+const DATA_VERSION = 6;
 
 function atomicWriteJson(filePath, obj) {
   const tmp = `${filePath}.tmp`;
@@ -129,17 +136,34 @@ const ALL_DIVISIONS = [
   { id: "grand_veteran_men", label: "Grand Veteran Men", ages: "65+" }
 ];
 
+const DIV_KEYS = ["novice", "elite", "open"];
+function emptyDivisions() {
+  return {
+    novice: { enabled: false, cost: 0, distances: ["", "", "", ""] },
+    elite: { enabled: false, cost: 0, distances: ["", "", "", ""] },
+    open: { enabled: false, cost: 0, distances: ["", "", "", ""] }
+  };
+}
+
 function buildMeetGroups() {
   return ALL_DIVISIONS.map(div => ({
+    type: "age",
     id: div.id,
     label: div.label,
     ages: div.ages,
-    divisions: {
-      novice: { enabled: false, cost: 0, distances: ["", "", "", ""] },
-      elite: { enabled: false, cost: 0, distances: ["", "", "", ""] },
-      open: { enabled: false, cost: 0, distances: ["", "", "", ""] }
-    }
+    divisions: emptyDivisions()
   }));
+}
+
+function buildDefaultSkateAbilityBox() {
+  return {
+    id: 1,
+    label: "SkateAbility",
+    agesLabel: "Manual Age",
+    enabled: false,
+    cost: 0,
+    distances: ["", "", "", ""]
+  };
 }
 
 // ============================================================
@@ -205,7 +229,11 @@ function createNewMeet() {
     },
     generatedSchedule: null,
 
+    // unified age divisions
     groups: buildMeetGroups(),
+
+    // special category: SkateAbility boxes
+    skateAbilityBoxes: [buildDefaultSkateAbilityBox()],
 
     customRaces: [],
 
@@ -216,6 +244,7 @@ function createNewMeet() {
 
     results: {},
 
+    // registrations include division selections
     registrations: [],
     nextCheckInNumber: 1,
 
@@ -225,9 +254,10 @@ function createNewMeet() {
 }
 
 // ============================================================
-// 🔧 MIGRATION: Fix Classic/Masters ages/labels in existing meets
+// 🔧 MIGRATIONS
 // ============================================================
 
+// Fix Classic/Masters labels/ages
 function migrateMeetAdultAges(meet) {
   if (!meet || !Array.isArray(meet.groups)) return false;
 
@@ -240,7 +270,6 @@ function migrateMeetAdultAges(meet) {
 
   let changed = false;
 
-  // Ensure labels are correct (even if someone edited them)
   if (cw && cw.label !== "Classic Women") { cw.label = "Classic Women"; changed = true; }
   if (cm && cm.label !== "Classic Men")   { cm.label = "Classic Men"; changed = true; }
   if (mw && mw.label !== "Masters Women") { mw.label = "Masters Women"; changed = true; }
@@ -249,7 +278,6 @@ function migrateMeetAdultAges(meet) {
   const TARGET_CLASSIC = "25–34";
   const TARGET_MASTERS = "35–44";
 
-  // If either is missing, do not invent — but we can still correct what exists.
   if (cw && cw.ages !== TARGET_CLASSIC) { cw.ages = TARGET_CLASSIC; changed = true; }
   if (cm && cm.ages !== TARGET_CLASSIC) { cm.ages = TARGET_CLASSIC; changed = true; }
   if (mw && mw.ages !== TARGET_MASTERS) { mw.ages = TARGET_MASTERS; changed = true; }
@@ -258,19 +286,175 @@ function migrateMeetAdultAges(meet) {
   return changed;
 }
 
+// Convert old “split group ids” into unified base group model.
+// Example: primary_girls_novice -> primary_girls with divisions.novice enabled/cost/distances merged.
+function migrateSplitGroupsToUnified(meet) {
+  if (!meet || !Array.isArray(meet.groups)) return false;
+
+  const isSplit = (id) => /_(novice|elite|open)$/.test(String(id || ""));
+  const baseOf = (id) => String(id).replace(/_(novice|elite|open)$/, "");
+  const keyOf = (id) => String(id).match(/_(novice|elite|open)$/)?.[1] || null;
+
+  const split = meet.groups.filter(g => isSplit(g.id));
+  if (!split.length) return false;
+
+  let changed = false;
+
+  // Build a map of base groups (starting from a clean canonical list)
+  const canonical = buildMeetGroups();
+  const map = new Map(canonical.map(g => [g.id, g]));
+
+  for (const sg of split) {
+    const baseId = baseOf(sg.id);
+    const dk = keyOf(sg.id);
+    const target = map.get(baseId);
+    if (!target || !dk) continue;
+
+    // try to carry distances/cost/enabled from old split group
+    const oldDiv = sg.divisions?.[dk] || sg.divisions?.open || sg.divisions?.novice || sg.divisions?.elite || null;
+    if (oldDiv) {
+      target.divisions[dk].enabled = !!oldDiv.enabled;
+      target.divisions[dk].cost = Number(oldDiv.cost ?? 0);
+      target.divisions[dk].distances = Array.isArray(oldDiv.distances) ? oldDiv.distances.slice(0, 4) : ["", "", "", ""];
+      changed = true;
+    } else {
+      // sometimes split group stored as “distances/cost” directly
+      if (Array.isArray(sg.distances)) {
+        target.divisions[dk].distances = sg.distances.slice(0, 4);
+        changed = true;
+      }
+      if (sg.cost != null) {
+        target.divisions[dk].cost = Number(sg.cost ?? 0);
+        changed = true;
+      }
+      if (sg.enabled != null) {
+        target.divisions[dk].enabled = !!sg.enabled;
+        changed = true;
+      }
+    }
+  }
+
+  // Also merge any already-unified groups that exist (keep their settings)
+  for (const g of meet.groups) {
+    if (g && !isSplit(g.id) && map.has(g.id) && g.divisions) {
+      const target = map.get(g.id);
+      for (const k of DIV_KEYS) {
+        if (g.divisions?.[k]) {
+          target.divisions[k].enabled = !!g.divisions[k].enabled;
+          target.divisions[k].cost = Number(g.divisions[k].cost ?? 0);
+          target.divisions[k].distances = (g.divisions[k].distances || ["", "", "", ""]).slice(0, 4);
+          changed = true;
+        }
+      }
+    }
+  }
+
+  // Replace meet.groups with canonical unified list only
+  meet.groups = canonical.map(g => map.get(g.id) || g);
+  changed = true;
+
+  return changed;
+}
+
+// Remove deprecated groups that should never exist in v6
+function pruneDeprecatedGroups(meet) {
+  if (!meet || !Array.isArray(meet.groups)) return false;
+
+  const badIds = new Set([
+    "challenge_up",
+    "novice_elite_combo",
+    "time_trials_open",
+    "time_trials",
+    "skateability", // we store SkateAbility separately now
+    "skate_ability",
+  ]);
+
+  const before = meet.groups.length;
+
+  meet.groups = meet.groups.filter(g => {
+    if (!g) return false;
+    if (badIds.has(g.id)) return false;
+    if (/_novice$|_elite$|_open$/.test(String(g.id || ""))) return false; // any split leftovers
+    return true;
+  });
+
+  // ensure canonical order + completeness (we want ALL divisions always present)
+  const canonical = buildMeetGroups();
+  const byId = new Map(meet.groups.map(g => [g.id, g]));
+  meet.groups = canonical.map(c => {
+    const existing = byId.get(c.id);
+    if (!existing) return c;
+
+    existing.type = "age";
+    existing.label = c.label;
+    existing.ages = c.ages;
+
+    // ensure divisions exist
+    existing.divisions = existing.divisions || emptyDivisions();
+    for (const k of DIV_KEYS) {
+      if (!existing.divisions[k]) existing.divisions[k] = { enabled: false, cost: 0, distances: ["", "", "", ""] };
+      existing.divisions[k].enabled = !!existing.divisions[k].enabled;
+      existing.divisions[k].cost = Number(existing.divisions[k].cost ?? 0);
+      existing.divisions[k].distances = (existing.divisions[k].distances || ["", "", "", ""]).slice(0, 4);
+    }
+    return existing;
+  });
+
+  return before !== meet.groups.length;
+}
+
+function ensureSkateAbility(meet) {
+  if (!meet) return false;
+  if (!Array.isArray(meet.skateAbilityBoxes)) {
+    meet.skateAbilityBoxes = [buildDefaultSkateAbilityBox()];
+    return true;
+  }
+  if (!meet.skateAbilityBoxes.length) {
+    meet.skateAbilityBoxes = [buildDefaultSkateAbilityBox()];
+    return true;
+  }
+  // normalize
+  let changed = false;
+  meet.skateAbilityBoxes = meet.skateAbilityBoxes.map((b, idx) => {
+    const out = {
+      id: Number(b?.id || (idx + 1)),
+      label: String(b?.label || "SkateAbility"),
+      agesLabel: String(b?.agesLabel || "Manual Age"),
+      enabled: !!b?.enabled,
+      cost: Number(b?.cost ?? 0),
+      distances: (b?.distances || ["", "", "", ""]).slice(0, 4)
+    };
+    // fix missing fields
+    if (!b || b.id !== out.id) changed = true;
+    return out;
+  });
+  return changed;
+}
+
 function migrateDb() {
   let changed = false;
 
-  // bump version
   if (!db.version || db.version < DATA_VERSION) {
     db.version = DATA_VERSION;
     changed = true;
   }
 
-  // Fix old meets’ adult ages/labels
   for (const meet of (db.meets || [])) {
-    const c = migrateMeetAdultAges(meet);
-    if (c) {
+    let meetChanged = false;
+
+    // unify groups if old split model exists
+    meetChanged = migrateSplitGroupsToUnified(meet) || meetChanged;
+
+    // remove deprecated groups and force canonical list
+    meetChanged = pruneDeprecatedGroups(meet) || meetChanged;
+
+    // lock adult ages/labels
+    meetChanged = migrateMeetAdultAges(meet) || meetChanged;
+
+    // ensure skateability exists
+    meetChanged = ensureSkateAbility(meet) || meetChanged;
+
+    if (meetChanged) {
       meet.updatedAt = nowIso();
       changed = true;
     }
@@ -278,7 +462,7 @@ function migrateDb() {
 
   if (changed) {
     saveDb();
-    console.log("✅ DB migration applied (Classic/Masters ages locked).");
+    console.log("✅ DB migration applied (v6).");
   } else {
     console.log("✅ DB migration check: no changes needed.");
   }
@@ -419,6 +603,34 @@ function pageShell({ title = "SpeedSkateMeet", user = null, bodyHtml = "", extra
   .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
   .card { border:1px solid #e8e8e8; border-radius:16px; padding:16px; }
   .pill { display:inline-block; padding:2px 10px; border-radius:999px; font-size:12px; background:#f1f3f5; }
+  .subtle { color:#666; font-size:13px; }
+
+  /* Suggestions dropdown (replaces <datalist>) */
+  .ssm-suggest {
+    position: absolute;
+    z-index: 99999;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 12px;
+    box-shadow: 0 10px 24px rgba(0,0,0,0.12);
+    padding: 6px;
+    max-height: 220px;
+    overflow: auto;
+    min-width: 240px;
+    display: none;
+  }
+  .ssm-suggest button {
+    width: 100%;
+    text-align: left;
+    border: none;
+    background: transparent;
+    padding: 8px 10px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  .ssm-suggest button:hover { background: #f3f6ff; }
+  .ssm-suggest .muted { color:#666; font-size:12px; padding: 4px 10px 6px; }
 </style>
 </head>
 <body>
@@ -433,6 +645,7 @@ function pageShell({ title = "SpeedSkateMeet", user = null, bodyHtml = "", extra
   </div>
 </header>
 ${bodyHtml}
+<div id="ssmSuggest" class="ssm-suggest"></div>
 <script>${extraScript}</script>
 </body>
 </html>`;
@@ -453,7 +666,7 @@ function dayRank(day) {
 }
 
 // ============================================================
-// DISTANCE SUGGESTIONS (dropdown + manual via datalist)
+// DISTANCE SUGGESTIONS (custom dropdown + manual entry)
 // ============================================================
 
 function buildDistanceSuggestions(trackLength) {
@@ -480,16 +693,37 @@ function buildDistanceSuggestions(trackLength) {
 // ============================================================
 
 function getDistanceList(meet, groupId, divisionKey) {
+  // age groups
   const g = meet.groups.find(x => x.id === groupId);
-  if (!g) return [];
-  const d = g.divisions?.[divisionKey];
-  if (!d) return [];
-  return (d.distances || []).map(s => String(s || "").trim()).filter(Boolean);
+  if (g) {
+    const d = g.divisions?.[divisionKey];
+    if (!d) return [];
+    return (d.distances || []).map(s => String(s || "").trim()).filter(Boolean);
+  }
+
+  // skateability special boxes
+  if (String(groupId || "").startsWith("skateability::")) {
+    const boxId = Number(String(groupId).split("::")[1]);
+    const box = (meet.skateAbilityBoxes || []).find(b => Number(b.id) === boxId);
+    if (!box) return [];
+    return (box.distances || []).map(s => String(s || "").trim()).filter(Boolean);
+  }
+
+  return [];
 }
 
-function labelFor(meet, groupId) {
+function labelFor(meet, groupId, divisionKey) {
   const g = meet.groups.find(x => x.id === groupId);
-  return g ? g.label : groupId;
+  if (g) return `${g.label} – ${String(divisionKey).toUpperCase()}`;
+
+  if (String(groupId || "").startsWith("skateability::")) {
+    const boxId = Number(String(groupId).split("::")[1]);
+    const box = (meet.skateAbilityBoxes || []).find(b => Number(b.id) === boxId);
+    if (!box) return `SkateAbility`;
+    return `${box.label} (${box.agesLabel})`;
+  }
+
+  return groupId;
 }
 
 function findCustomRace(meet, customRaceId) {
@@ -523,7 +757,7 @@ function generateRaceOrderStrict(meet) {
             divisionKey: it.divisionKey,
             distanceIndex: i,
             distance: dists[i],
-            label: `${labelFor(meet, it.groupId)} – ${String(it.divisionKey).toUpperCase()}`,
+            label: labelFor(meet, it.groupId, it.divisionKey),
             status: "pending"
           });
           seq++;
@@ -659,6 +893,18 @@ function nextBlockId(meet) {
   return meet.blocks?.length ? Math.max(...meet.blocks.map(b => b.id)) + 1 : 1;
 }
 
+function nextSkateAbilityId(meet) {
+  const max = (meet.skateAbilityBoxes || []).reduce((m, b) => Math.max(m, Number(b.id || 0)), 0);
+  return max + 1;
+}
+
+// Challenge Up mapping: novice → elite, elite → open
+function nextClassUp(k) {
+  if (k === "novice") return "elite";
+  if (k === "elite") return "open";
+  return null;
+}
+
 // ============================================================
 // MAIN PAGES
 // ============================================================
@@ -696,6 +942,7 @@ app.get("/", (req, res) => {
 
 app.get("/login", (req, res) => {
   const s = getSession(req);
+  const isProd = process.env.NODE_ENV === "production";
   res.send(
     pageShell({
       title: "Login",
@@ -712,10 +959,11 @@ app.get("/login", (req, res) => {
           </form>
           <hr>
           <small class="hint">
-            <b>Demo:</b><br>
-            Director: Lbird22 / @Redline22 (director+judge+coach)<br>
-            Judge: JudgeLee / Redline22<br>
-            Coach: CoachLee / Redline22
+            <b>Demo usernames:</b><br>
+            Director: Lbird22<br>
+            Judge: JudgeLee<br>
+            Coach: CoachLee<br>
+            <span class="subtle">${isProd ? "Passwords are never displayed on public pages." : "Dev note: passwords intentionally not shown."}</span>
           </small>
         </div>
       `
@@ -852,7 +1100,7 @@ app.get("/portal", requireAuth(), (req, res) => {
 });
 
 // ============================================================
-// MEETS – PUBLIC LIST + REGISTER (simple)
+// MEETS – PUBLIC LIST + REGISTER (with class selections)
 // ============================================================
 
 app.get("/meets", (req, res) => {
@@ -888,6 +1136,8 @@ app.get("/register/:meetId", (req, res) => {
     ? `<span class="tag">Registration OPEN</span>`
     : `<span class="tag" style="border-color:#dc3545;color:#dc3545;">Registration CLOSED</span>`;
 
+  const divisionOptions = (meet.groups || []).map(g => `<option value="${safeText(g.id)}">${safeText(g.label)} (${safeText(g.ages)})</option>`).join("");
+
   res.send(pageShell({
     title: "Register",
     user: s,
@@ -920,11 +1170,42 @@ app.get("/register/:meetId", (req, res) => {
             </div>
           `}
 
+          <hr>
+
+          <div style="margin-top:10px;">
+            <div>Age Division *</div>
+            <select name="groupId" required>
+              <option value="">Select your age division…</option>
+              ${divisionOptions}
+            </select>
+          </div>
+
+          <div style="margin-top:10px;">
+            <div>Classifications *</div>
+            <label style="display:inline-flex; gap:8px; align-items:center; margin-right:14px;">
+              <input type="checkbox" name="class_novice" value="on"> Novice
+            </label>
+            <label style="display:inline-flex; gap:8px; align-items:center; margin-right:14px;">
+              <input type="checkbox" name="class_elite" value="on"> Elite
+            </label>
+            <label style="display:inline-flex; gap:8px; align-items:center;">
+              <input type="checkbox" name="class_open" value="on"> Open
+            </label>
+            <div class="subtle">You can pick one, or multiple (ex: Novice + Elite).</div>
+          </div>
+
+          <div style="margin-top:10px;">
+            <label style="display:inline-flex; gap:8px; align-items:center;">
+              <input type="checkbox" name="challengeUp" value="on"> Challenge Up
+            </label>
+            <div class="subtle">If checked, we automatically add the next class up (Novice→Elite, Elite→Open).</div>
+          </div>
+
           <div style="margin-top:14px;">
             <button class="btn" type="submit">Register</button>
             <a class="btn ghost" href="/meets">Back</a>
           </div>
-          <small class="hint">No payments in-app yet. This assigns your check-in / skater number.</small>
+          <small class="hint">This assigns your check-in / skater number.</small>
         </form>
         ` : `
           <p><b>This meet is no longer accepting registrations.</b></p>
@@ -945,16 +1226,46 @@ app.post("/register/:meetId/submit", (req, res) => {
   const lastName = (req.body.lastName || "").trim();
   const team = (req.body.team || "").trim();
   const usarsNumber = (req.body.usarsNumber || "").trim();
+  const groupId = (req.body.groupId || "").trim();
 
-  if (!firstName || !lastName || !team) return res.status(400).send("Missing fields");
+  if (!firstName || !lastName || !team || !groupId) return res.status(400).send("Missing fields");
   if (meet.requireUsarsNumber && !usarsNumber) return res.status(400).send("USARS number required");
 
+  const chosen = [];
+  if (req.body.class_novice === "on") chosen.push("novice");
+  if (req.body.class_elite === "on") chosen.push("elite");
+  if (req.body.class_open === "on") chosen.push("open");
+  if (!chosen.length) return res.status(400).send("Pick at least one classification");
+
+  const challengeUp = req.body.challengeUp === "on";
+  const finalClasses = new Set(chosen);
+
+  if (challengeUp) {
+    for (const k of chosen) {
+      const up = nextClassUp(k);
+      if (up) finalClasses.add(up);
+    }
+  }
+
   const checkInNumber = meet.nextCheckInNumber++;
-  meet.registrations.push({ checkInNumber, firstName, lastName, team, usarsNumber, timestamp: nowIso() });
+  meet.registrations.push({
+    checkInNumber,
+    firstName,
+    lastName,
+    team,
+    usarsNumber,
+    groupId,
+    classes: Array.from(finalClasses),
+    challengeUp,
+    timestamp: nowIso()
+  });
   meet.updatedAt = nowIso();
 
   generateRaceOrderStrict(meet);
   saveDb();
+
+  const group = (meet.groups || []).find(g => g.id === groupId);
+  const groupLabel = group ? `${group.label} (${group.ages})` : groupId;
 
   res.send(pageShell({
     title: "Registered!",
@@ -966,7 +1277,10 @@ app.post("/register/:meetId/submit", (req, res) => {
         <h2 style="margin-top:-6px;">#${fmtCheckIn(checkInNumber)}</h2>
         <p><b>Name:</b> ${safeText(firstName)} ${safeText(lastName)}<br>
            <b>Team:</b> ${safeText(team)}<br>
-           <b>USARS:</b> ${safeText(usarsNumber || "—")}</p>
+           <b>USARS:</b> ${safeText(usarsNumber || "—")}<br>
+           <b>Division:</b> ${safeText(groupLabel)}<br>
+           <b>Classes:</b> ${safeText(Array.from(finalClasses).map(x => x.toUpperCase()).join(", "))} ${challengeUp ? `<span class="tag">Challenge Up</span>` : ``}
+        </p>
         <a class="btn" href="/meets">Back to Meets</a>
         <a class="btn ghost" href="/live/${meet.id}">Live View</a>
       </div>
@@ -1027,15 +1341,18 @@ app.get("/admin/meet/:id", requireMode(["director"]), (req, res) => {
   const meet = findMeet(req.params.id);
   if (!meet) return res.status(404).send("Meet not found");
 
-  // safety: enforce migration per-meet too (in case JSON edited while running)
-  if (migrateMeetAdultAges(meet)) saveDb();
+  // safety: enforce canonical + locks
+  let changed = false;
+  changed = migrateSplitGroupsToUnified(meet) || changed;
+  changed = pruneDeprecatedGroups(meet) || changed;
+  changed = migrateMeetAdultAges(meet) || changed;
+  changed = ensureSkateAbility(meet) || changed;
+  if (changed) saveDb();
 
-  const distListId = `dist_${meet.id}`;
-  const distOptions = buildDistanceSuggestions(meet.trackLength)
-    .map(x => `<option value="${safeText(x)}"></option>`)
-    .join("");
+  const distSuggestions = buildDistanceSuggestions(meet.trackLength);
 
-  const groupsHtml = meet.groups.map(g => {
+  // Age groups (unified headings)
+  const groupsHtml = (meet.groups || []).map(g => {
     const entries = Object.entries(g.divisions).map(([k, d]) => `
       <div style="border:1px solid #e6e6e6; padding:10px; border-radius:14px; margin:10px 0;">
         <div class="row" style="justify-content:space-between;">
@@ -1047,7 +1364,7 @@ app.get("/admin/meet/:id", requireMode(["director"]), (req, res) => {
         </div>
         <div class="row" style="margin-top:8px;">
           ${(d.distances || []).map((v, i) =>
-            `D${i + 1}: <input list="${distListId}" name="${g.id}.${k}.d${i}" value="${safeText(v || "")}" style="width:180px;">`
+            `D${i + 1}: <input data-suggest="distance" name="${g.id}.${k}.d${i}" value="${safeText(v || "")}" style="width:180px;">`
           ).join(" ")}
         </div>
         <small class="hint">Pick a suggested distance or type your own.</small>
@@ -1057,10 +1374,43 @@ app.get("/admin/meet/:id", requireMode(["director"]), (req, res) => {
     return `
       <div class="section">
         <h3>${safeText(g.label)} <span class="tag">${safeText(g.ages)}</span></h3>
+        <div class="subtle">Choose which classifications you want to offer for this division.</div>
         ${entries}
       </div>
     `;
   }).join("");
+
+  // SkateAbility boxes
+  const saHtml = (meet.skateAbilityBoxes || []).map(b => `
+    <div style="border:1px solid #e6e6e6; padding:12px; border-radius:14px; margin:10px 0;">
+      <div class="row" style="justify-content:space-between;">
+        <div>
+          <b>${safeText(b.label)}</b> <span class="tag">${safeText(b.agesLabel)}</span>
+        </div>
+        <form method="POST" action="/admin/meet/${meet.id}/skateability/delete/${b.id}">
+          <button class="btn danger" type="submit">Delete</button>
+        </form>
+      </div>
+
+      <div class="row" style="margin-top:10px;">
+        <label style="display:flex; gap:8px; align-items:center;">
+          <input type="checkbox" name="skateability.${b.id}.enabled" ${b.enabled ? "checked" : ""}>
+          <b>Enabled</b>
+        </label>
+        <div>Label: <input name="skateability.${b.id}.label" value="${safeText(b.label)}" style="width:220px;"></div>
+        <div>Age Label: <input name="skateability.${b.id}.agesLabel" value="${safeText(b.agesLabel)}" style="width:220px;"></div>
+        <div>Cost: <input name="skateability.${b.id}.cost" value="${safeText(String(b.cost ?? 0))}" style="width:110px;"></div>
+      </div>
+
+      <div class="row" style="margin-top:10px;">
+        ${(b.distances || []).map((v, i) =>
+          `D${i + 1}: <input data-suggest="distance" name="skateability.${b.id}.d${i}" value="${safeText(v || "")}" style="width:180px;">`
+        ).join(" ")}
+      </div>
+      <small class="hint">SkateAbility has no novice/elite/open. Add multiple boxes if needed.</small>
+      <div class="subtle">To schedule SkateAbility, add it to Blocks (it appears as “SkateAbility (Age Label)”).</div>
+    </div>
+  `).join("");
 
   res.send(pageShell({
     title: `Meet Builder #${meet.id}`,
@@ -1140,16 +1490,181 @@ app.get("/admin/meet/:id", requireMode(["director"]), (req, res) => {
         <small class="hint">
           Complete Registration locks signups, regenerates race order from blocks, and generates day timelines.
         </small>
-
-        <datalist id="${distListId}">
-          ${distOptions}
-        </datalist>
       </div>
 
-      <h2>Divisions</h2>
+      <h2>SkateAbility</h2>
+      <div class="section">
+        <div class="subtle">SkateAbility is customizable per meet. Add as many boxes as you need. Manual age label.</div>
+        <form method="POST" action="/admin/meet/${meet.id}/skateability/add">
+          <button class="btn" type="submit">+ Add SkateAbility Box</button>
+        </form>
+        <hr>
+        <form method="POST" action="/admin/meet/${meet.id}/save">
+          ${saHtml}
+          <div class="row" style="margin-top:10px;">
+            <button class="btn" type="submit">Save Meet</button>
+          </div>
+        </form>
+      </div>
+
+      <h2>Age Divisions</h2>
       ${groupsHtml}
-    `
+    `,
+    extraScript: buildSuggestionsScript(distSuggestions)
   }));
+});
+
+function buildSuggestionsScript(distSuggestions) {
+  // Custom anchored suggestions dropdown to avoid Safari <datalist> offset bug.
+  // Uses single floating panel (#ssmSuggest) and anchors it to focused input.
+  const suggestionsJson = JSON.stringify(distSuggestions || []);
+  return `
+  (function(){
+    const SUGGESTIONS = ${suggestionsJson};
+
+    const panel = document.getElementById('ssmSuggest');
+    let activeInput = null;
+
+    function closePanel(){
+      panel.style.display = 'none';
+      panel.innerHTML = '';
+      activeInput = null;
+    }
+
+    function placePanelFor(input){
+      const r = input.getBoundingClientRect();
+      panel.style.left = (window.scrollX + r.left) + 'px';
+      panel.style.top  = (window.scrollY + r.bottom + 6) + 'px';
+      panel.style.minWidth = Math.max(240, r.width) + 'px';
+    }
+
+    function filterList(q){
+      const s = String(q||'').trim().toLowerCase();
+      if (!s) return SUGGESTIONS.slice(0, 10);
+      const starts = [];
+      const contains = [];
+      for (const item of SUGGESTIONS){
+        const low = String(item).toLowerCase();
+        if (low.startsWith(s)) starts.push(item);
+        else if (low.includes(s)) contains.push(item);
+        if (starts.length + contains.length >= 12) break;
+      }
+      return starts.concat(contains).slice(0, 12);
+    }
+
+    function openFor(input){
+      activeInput = input;
+      placePanelFor(input);
+
+      const q = input.value || '';
+      const items = filterList(q);
+
+      panel.innerHTML = '';
+      const hint = document.createElement('div');
+      hint.className = 'muted';
+      hint.textContent = 'Suggestions (click to fill)';
+      panel.appendChild(hint);
+
+      for (const v of items){
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = v;
+        btn.addEventListener('mousedown', (e) => {
+          // mousedown so it fires before input blur
+          e.preventDefault();
+          input.value = v;
+          input.dispatchEvent(new Event('input', {bubbles:true}));
+          closePanel();
+          input.focus();
+        });
+        panel.appendChild(btn);
+      }
+
+      if (!items.length){
+        const none = document.createElement('div');
+        none.className = 'muted';
+        none.textContent = 'No matches';
+        panel.appendChild(none);
+      }
+
+      panel.style.display = 'block';
+    }
+
+    function attach(input){
+      input.addEventListener('focus', () => openFor(input));
+      input.addEventListener('input', () => {
+        if (activeInput !== input) return;
+        openFor(input);
+      });
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closePanel();
+      });
+      input.addEventListener('blur', () => {
+        // allow click selection
+        setTimeout(() => {
+          if (document.activeElement !== input) closePanel();
+        }, 120);
+      });
+    }
+
+    function hookAll(){
+      document.querySelectorAll('input[data-suggest="distance"]').forEach(attach);
+    }
+
+    window.addEventListener('scroll', () => {
+      if (activeInput) placePanelFor(activeInput);
+    }, true);
+    window.addEventListener('resize', () => {
+      if (activeInput) placePanelFor(activeInput);
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!activeInput) return;
+      if (e.target === panel || panel.contains(e.target)) return;
+      if (e.target === activeInput) return;
+      closePanel();
+    });
+
+    hookAll();
+  })();
+  `;
+}
+
+app.post("/admin/meet/:id/skateability/add", requireMode(["director"]), (req, res) => {
+  const meet = findMeet(req.params.id);
+  if (!meet) return res.status(404).send("Meet not found");
+
+  ensureSkateAbility(meet);
+  meet.skateAbilityBoxes.push({
+    id: nextSkateAbilityId(meet),
+    label: "SkateAbility",
+    agesLabel: "Manual Age",
+    enabled: false,
+    cost: 0,
+    distances: ["", "", "", ""]
+  });
+
+  meet.updatedAt = nowIso();
+  saveDb();
+  res.redirect(`/admin/meet/${meet.id}`);
+});
+
+app.post("/admin/meet/:id/skateability/delete/:boxId", requireMode(["director"]), (req, res) => {
+  const meet = findMeet(req.params.id);
+  if (!meet) return res.status(404).send("Meet not found");
+
+  const boxId = Number(req.params.boxId);
+  meet.skateAbilityBoxes = (meet.skateAbilityBoxes || []).filter(b => Number(b.id) !== boxId);
+
+  // Also remove from blocks
+  (meet.blocks || []).forEach(b => {
+    b.items = (b.items || []).filter(it => !(it.type === "division" && String(it.groupId) === `skateability::${boxId}`));
+  });
+
+  meet.updatedAt = nowIso();
+  generateRaceOrderStrict(meet);
+  saveDb();
+  res.redirect(`/admin/meet/${meet.id}`);
 });
 
 app.post("/admin/meet/:id/save", requireMode(["director"]), (req, res) => {
@@ -1177,6 +1692,10 @@ app.post("/admin/meet/:id/save", requireMode(["director"]), (req, res) => {
     lunchAfterMinutesFromStart: Number(req.body.lunchAfterMinutesFromStart ?? meet.scheduleConfig?.lunchAfterMinutesFromStart ?? 240)
   };
 
+  // Ensure canonical groups exist
+  pruneDeprecatedGroups(meet);
+
+  // Save age groups divisions
   meet.groups.forEach(g => {
     Object.keys(g.divisions).forEach(k => {
       const d = g.divisions[k];
@@ -1184,6 +1703,18 @@ app.post("/admin/meet/:id/save", requireMode(["director"]), (req, res) => {
       d.cost = Number(req.body[`${g.id}.${k}.cost`] || 0);
       d.distances = (d.distances || ["", "", "", ""]).map((_, i) => (req.body[`${g.id}.${k}.d${i}`] || "").trim());
     });
+  });
+
+  // Save SkateAbility boxes
+  ensureSkateAbility(meet);
+  meet.skateAbilityBoxes = (meet.skateAbilityBoxes || []).map(b => {
+    const id = Number(b.id);
+    const enabled = req.body[`skateability.${id}.enabled`] === "on";
+    const label = (req.body[`skateability.${id}.label`] || b.label || "SkateAbility").trim();
+    const agesLabel = (req.body[`skateability.${id}.agesLabel`] || b.agesLabel || "Manual Age").trim();
+    const cost = Number(req.body[`skateability.${id}.cost`] || 0);
+    const distances = ["", "", "", ""].map((_, i) => (req.body[`skateability.${id}.d${i}`] || "").trim());
+    return { id, enabled, label, agesLabel, cost, distances };
   });
 
   // lock adult ages every save (so it can’t regress)
@@ -1229,10 +1760,7 @@ app.get("/admin/custom-races/:meetId", requireMode(["director"]), (req, res) => 
   const meet = findMeet(req.params.meetId);
   if (!meet) return res.status(404).send("Meet not found");
 
-  const distListId = `dist_custom_${meet.id}`;
-  const distOptions = buildDistanceSuggestions(meet.trackLength)
-    .map(x => `<option value="${safeText(x)}"></option>`)
-    .join("");
+  const distSuggestions = buildDistanceSuggestions(meet.trackLength);
 
   const list = (meet.customRaces || []).map(r => `
     <div class="section">
@@ -1265,7 +1793,7 @@ app.get("/admin/custom-races/:meetId", requireMode(["director"]), (req, res) => 
         <h2>Add Custom Race</h2>
         <form method="POST" action="/admin/custom-races/${meet.id}/add">
           <div>Race Name</div>
-          <input name="name" required placeholder="Example: 200m Time Trial (Elite)"><br><br>
+          <input name="name" required placeholder="Example: 200m Time Trial"><br><br>
 
           <div>Race Type</div>
           <select name="raceType">
@@ -1274,20 +1802,17 @@ app.get("/admin/custom-races/:meetId", requireMode(["director"]), (req, res) => 
           </select><br><br>
 
           <div>Distance</div>
-          <input list="${distListId}" name="distance" placeholder="Pick or type: 200m / 100m (1 lap) / etc"><br><br>
+          <input data-suggest="distance" name="distance" placeholder="Pick or type: 200m / 100m (1 lap) / etc"><br><br>
 
           <button class="btn" type="submit">Add Custom Race</button>
-
-          <datalist id="${distListId}">
-            ${distOptions}
-          </datalist>
         </form>
-        <small class="hint">Custom races do nothing until added to a Block.</small>
+        <small class="hint">Time Trials exist ONLY as Custom Races in v6.</small>
       </div>
 
       <h2>Existing Custom Races</h2>
       ${list}
-    `
+    `,
+    extraScript: buildSuggestionsScript(distSuggestions)
   }));
 });
 
@@ -1348,7 +1873,13 @@ app.get("/admin/blocks/:meetId", requireMode(["director"]), (req, res) => {
   const blocksHtml =
     blocks.map(b => {
       const items = (b.items || []).map(it => {
-        if (it.type === "division") return `${labelFor(meet, it.groupId)} – ${String(it.divisionKey).toUpperCase()}`;
+        if (it.type === "division") {
+          // skateability item
+          if (String(it.groupId || "").startsWith("skateability::")) {
+            return labelFor(meet, it.groupId, it.divisionKey);
+          }
+          return labelFor(meet, it.groupId, it.divisionKey);
+        }
         if (it.type === "custom") {
           const cr = findCustomRace(meet, it.customRaceId);
           return cr ? `[Custom] ${cr.name}` : `[Custom] #${it.customRaceId}`;
@@ -1388,7 +1919,7 @@ app.get("/admin/blocks/:meetId", requireMode(["director"]), (req, res) => {
           <a class="btn ghost" href="/admin/custom-races/${meet.id}">Custom Races</a>
           <a class="btn ghost" href="/live/${meet.id}">Live</a>
         </div>
-        <small class="hint">Blocks control the race day flow. Items can be Divisions or Custom Races.</small>
+        <small class="hint">Blocks control race day flow. Add Age Divisions, SkateAbility boxes, or Custom Races (Time Trials).</small>
       </div>
 
       <div class="section">
@@ -1499,26 +2030,31 @@ app.get("/admin/blocks/:meetId/edit/:blockId", requireMode(["director"]), (req, 
   if (!meet) return res.status(404).send("Meet not found");
   if (!block) return res.status(404).send("Block not found");
 
-  const divisionOptions = meet.groups.flatMap(g => {
+  const divisionOptions = (meet.groups || []).flatMap(g => {
     return Object.keys(g.divisions).map(k => ({
       value: `division::${g.id}::${k}`,
       label: `${g.label} – ${k.toUpperCase()}`
     }));
   });
 
+  const skateAbilityOptions = (meet.skateAbilityBoxes || []).map(b => ({
+    value: `division::skateability::${b.id}::single`,
+    label: `${b.label} (${b.agesLabel})`
+  }));
+
   const customOptions = (meet.customRaces || []).map(r => ({
     value: `custom::${r.id}`,
     label: `[Custom] ${r.name} ${r.raceType === "time_trial" ? "(Time Trial)" : ""}`
   }));
 
-  const options = [...divisionOptions, ...customOptions]
+  const options = [...divisionOptions, ...skateAbilityOptions, ...customOptions]
     .map(o => `<option value="${safeText(o.value)}">${safeText(o.label)}</option>`)
     .join("");
 
   const items = block.items || [];
   const itemsHtml = items.map((it, idx) => {
     let label = "Unknown";
-    if (it.type === "division") label = `${labelFor(meet, it.groupId)} – ${String(it.divisionKey).toUpperCase()}`;
+    if (it.type === "division") label = labelFor(meet, it.groupId, it.divisionKey);
     if (it.type === "custom") {
       const cr = findCustomRace(meet, it.customRaceId);
       label = cr ? `[Custom] ${cr.name}` : `[Custom] #${it.customRaceId}`;
@@ -1554,6 +2090,7 @@ app.get("/admin/blocks/:meetId/edit/:blockId", requireMode(["director"]), (req, 
         <div class="row">
           <a class="btn ghost" href="/admin/blocks/${meet.id}">Back to Blocks</a>
           <a class="btn ghost" href="/admin/custom-races/${meet.id}">Custom Races</a>
+          <a class="btn ghost" href="/admin/meet/${meet.id}">Meet Builder</a>
           <a class="btn ghost" href="/live/${meet.id}">Live</a>
         </div>
         <small class="hint">Order here directly controls race order preview.</small>
@@ -1563,7 +2100,7 @@ app.get("/admin/blocks/:meetId/edit/:blockId", requireMode(["director"]), (req, 
         <h3>Add an Item</h3>
         <form method="POST" action="/admin/blocks/${meet.id}/item/add/${block.id}">
           <select name="item" required>
-            <option value="">Select division or custom race…</option>
+            <option value="">Select division / SkateAbility / custom race…</option>
             ${options}
           </select>
           <button class="btn" type="submit">Add</button>
@@ -1586,10 +2123,17 @@ app.post("/admin/blocks/:meetId/item/add/:blockId", requireMode(["director"]), (
 
   block.items = block.items || [];
 
-  if (parts[0] === "division" && parts.length === 3) {
-    const groupId = parts[1];
-    const divisionKey = parts[2];
-    block.items.push({ type: "division", groupId, divisionKey });
+  if (parts[0] === "division") {
+    // age division: division::<groupId>::<divisionKey>
+    // skateability: division::skateability::<boxId>::single
+    if (parts[1] === "skateability" && parts.length === 4) {
+      const boxId = Number(parts[2]);
+      block.items.push({ type: "division", groupId: `skateability::${boxId}`, divisionKey: "single" });
+    } else if (parts.length === 3) {
+      const groupId = parts[1];
+      const divisionKey = parts[2];
+      block.items.push({ type: "division", groupId, divisionKey });
+    }
   } else if (parts[0] === "custom" && parts.length === 2) {
     const customRaceId = Number(parts[1]);
     block.items.push({ type: "custom", customRaceId });
@@ -1710,7 +2254,7 @@ app.get("/judge/:meetId", requireMode(["judge"]), (req, res) => {
           </thead>
           <tbody>${rows}</tbody>
         </table>
-        <small class="hint">Normal race scoring UI later. Time Trial entry will live here first.</small>
+        <small class="hint">Normal race scoring UI later. Time Trial entry lives here first.</small>
       </div>
     `
   }));
@@ -1907,7 +2451,11 @@ app.get("/live/:meetId", (req, res) => {
     .slice()
     .sort((a, b) => a.checkInNumber - b.checkInNumber)
     .slice(0, 30)
-    .map(r => `<li>#${fmtCheckIn(r.checkInNumber)} — ${safeText(r.firstName)} ${safeText(r.lastName)} (${safeText(r.team)})</li>`)
+    .map(r => {
+      const g = (meet.groups || []).find(x => x.id === r.groupId);
+      const div = g ? g.label : r.groupId;
+      return `<li>#${fmtCheckIn(r.checkInNumber)} — ${safeText(r.firstName)} ${safeText(r.lastName)} (${safeText(r.team)}) • ${safeText(div)} • ${safeText((r.classes||[]).map(x=>x.toUpperCase()).join(","))}${r.challengeUp ? " • Challenge Up" : ""}</li>`;
+    })
     .join("");
 
   res.send(pageShell({
@@ -1968,23 +2516,43 @@ app.get("/live/:meetId", (req, res) => {
 });
 
 // ============================================================
+// (Simple) Rinks pages (unchanged minimal stubs)
+// ============================================================
+
+app.get("/rinks", (req, res) => {
+  const s = getSession(req);
+  const cards = (db.rinks || []).map(r => `
+    <div class="section">
+      <h3>${safeText(r.name)}</h3>
+      <p>${safeText(r.city)}, ${safeText(r.state)} • Team: ${safeText(r.team || "—")}</p>
+    </div>
+  `).join("") || `<div class="section"><p>No rinks yet.</p></div>`;
+
+  res.send(pageShell({ title: "Find a Rink", user: s, bodyHtml: `<h1>Rinks</h1><div class="grid">${cards}</div>` }));
+});
+
+// ============================================================
 // START SERVER
 // ============================================================
 
 app.listen(PORT, HOST, () => {
   console.log(`
 ==========================================
-SpeedSkateMeet – CLEAN REBUILD v4
+SpeedSkateMeet – CLEAN REBUILD v6
 Data: ${DATA_FILE}
 
 Adult ages locked:
 - Classic: 25–34
 - Masters: 35–44
 
-Demo Users:
-- Lbird22 / @Redline22  (director + judge + coach)
-- JudgeLee / Redline22  (judge)
-- CoachLee / Redline22  (coach)
+Login page:
+- No passwords displayed
+
+Time Trials:
+- Custom races only (raceType=time_trial)
+
+SkateAbility:
+- Multiple boxes, manual age label, no novice/elite/open
 
 Local:  http://localhost:${PORT}
 LAN:    http://<your-ip>:${PORT}
