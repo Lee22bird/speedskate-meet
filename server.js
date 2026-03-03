@@ -2,13 +2,15 @@
 // SpeedSkateMeet – CLEAN REBUILD v8.0 – March 2026
 // Node.js + Express • single-file server.js • JSON persistence
 //
-// v8.0 GUARANTEES / FIXES:
-// ✅ RINKS: forces Wichita to REAL rink: Roller City (no "Wichita Skate Center" ever)
-// ✅ Stable sessions + safe rendering (prevents common 500s)
-// ✅ Meet Builder FULL division list (Tiny Tot -> Grand Veteran) in correct order
-// ✅ Distances are plain inputs (NO datalist / dropdown glitches)
-// ✅ Meet-wide Time Trials + Relays + SkateAbility (SkateAbility supports multiple boxes)
-// ✅ No passwords shown on public pages (login page shows usernames only)
+// FIXES / FEATURES:
+// ✅ No “default meet” created automatically (nothing appears until you build one)
+// ✅ Full USARS-style division list restored (Tiny Tot -> Grand Veteran, correct order)
+// ✅ Rinks default: Roller City (Wichita Skate Center removed forever)
+// ✅ Director-only Add/Edit/Delete rinks restored
+// ✅ Registration: Age + checkboxes + Teams dropdown (team list restored, alphabetical)
+// ✅ Plain distance inputs (no datalist dropdown glitches)
+// ✅ Meet-wide SkateAbility boxes + Time Trials config + Relays config (meet-wide flags)
+// ✅ Robust sessions (no undefined crashes)
 //
 // ============================================================
 
@@ -17,44 +19,35 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 
-// -------------------- APP CONFIG --------------------
 const app = express();
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-const PORT = Number(process.env.PORT || 10000);
-const HOST = process.env.HOST || "0.0.0.0";
+// -------------------- DEPLOY --------------------
+const PORT = Number(process.env.PORT || 3000);
+const HOST = "0.0.0.0";
+
+// -------------------- DATA --------------------
 const DATA_FILE = process.env.DATA_FILE || path.join(process.cwd(), "ssm_db.json");
 
 // -------------------- HELPERS --------------------
-function uid(bytes = 12) {
-  return crypto.randomBytes(bytes).toString("hex");
-}
 function nowIso() {
   return new Date().toISOString();
+}
+function uid(n = 12) {
+  return crypto.randomBytes(n).toString("hex");
 }
 function safeText(x) {
   return String(x ?? "").replace(/[&<>"']/g, (c) => {
     switch (c) {
-      case "&":
-        return "&amp;";
-      case "<":
-        return "&lt;";
-      case ">":
-        return "&gt;";
-      case '"':
-        return "&quot;";
-      case "'":
-        return "&#039;";
-      default:
-        return c;
+      case "&": return "&amp;";
+      case "<": return "&lt;";
+      case ">": return "&gt;";
+      case '"': return "&quot;";
+      case "'": return "&#039;";
+      default: return c;
     }
   });
-}
-function atomicWrite(filePath, content) {
-  const tmp = `${filePath}.${uid(6)}.tmp`;
-  fs.writeFileSync(tmp, content, "utf8");
-  fs.renameSync(tmp, filePath);
 }
 function parseCookies(req) {
   const header = req.headers.cookie || "";
@@ -65,244 +58,264 @@ function parseCookies(req) {
     const k = pair.slice(0, idx).trim();
     const v = pair.slice(idx + 1).trim();
     if (!k) return;
-    out[k] = decodeURIComponent(v || "");
+    out[k] = decodeURIComponent(v);
   });
   return out;
 }
-function clampStr(s, max = 200) {
-  return String(s ?? "").slice(0, max);
+function atomicWriteJson(filePath, obj) {
+  const tmp = `${filePath}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(obj, null, 2), "utf8");
+  fs.renameSync(tmp, filePath);
 }
-function nOr0(x) {
-  const n = Number(x);
-  return Number.isFinite(n) ? n : 0;
+function readJsonIfExists(filePath) {
+  if (!fs.existsSync(filePath)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(filePath, "utf8"));
+  } catch (e) {
+    console.error("❌ Failed to parse JSON DB:", e);
+    return null;
+  }
 }
 
-// -------------------- CANONICAL RINKS (FORCED) --------------------
-function canonicalRinks() {
-  // This is the ONLY Wichita rink we keep.
-  return [
-    {
-      id: "rink_roller_city_wichita",
-      name: "Roller City",
-      city: "Wichita",
-      state: "KS",
-      phone: "316-942-4555",
-      address: "3234 S. Meridian Ave, Wichita, KS 67217",
-      website: "rollercitywichitaks.com",
-      notes: "",
+// -------------------- TEAMS (alphabetical) --------------------
+const TEAM_LIST = [
+  "Independent",
+  "CCN Inline",
+  "Good Vibes Skate Company",
+  "JKL Racing",
+  "Mean Girls Racing",
+  "National Speed Skating Circuit",
+  "Precision Inline",
+  "Simmons Racing / Simmons Rana",
+  "TCK Skate Supply",
+  "Weber's Racing",
+  "Weber's Skateway",
+  "Midwest Racing",
+  "Infinity Racing",
+  "Team Velocity",
+  "Star Skate Speed",
+  "Tulsa Surge Speed Skating",
+  "Bell's Speed Skating Team",
+  "Badger State Racing",
+  "Rollaire Speed Team",
+  "Aurora Speed Club",
+  "Capital City Racing",
+  "Astro Speed",
+  "Central Florida Speed Team",
+  "FAST Speed Team",
+  "Ocala Speed Inline Racing Team",
+  "Stardust Inline Speed Skating Team",
+  "SobeRollers",
+  "Carolina Gold Rush",
+  "High Point Speed Skating",
+  "Rocket City Speed",
+  "Champions Speed Skating Team",
+  "CC Speed",
+  "Dairy Ashford Speed Team",
+  "DFW Speed",
+  "Inside Edge Racing",
+  "Classic Speed Skate Club",
+  "North Idaho Elite",
+  "Stallions Racing",
+  "Synergy Speed Skating",
+  "Team Oaks",
+  "Team Xtreme",
+  "North Coast Inline Racing",
+  "Pac West Inline Racing",
+  "Roller King Speed",
+  "Triad Racing",
+  "Ashland Speedskating of Virginia",
+  "CW SpeedTeam",
+  "Fast Forward Racing",
+  "Frenchtown Speed Team",
+  "Middlesex Racing Team",
+  "Olympic Speed",
+  "Omni Speed",
+  "Phantom Racing",
+  "SOS Racing",
+  "Warrior Racing",
+  "West Michigan Wolverines Speed Team",
+  "Midland Rockets",
+  "Diamond State Racing",
+  "GT Speed",
+  "Mach Racing",
+  "Precision Racing",
+  "Kentucky Speed",
+  "Cobras Speed Skating",
+  "Front Range Speed Team",
+  "Tennessee Speed",
+].slice().sort((a, b) => a.localeCompare(b));
+
+// -------------------- DIVISIONS (full list, correct order) --------------------
+const ALL_DIVISIONS = [
+  { id: "tiny_tot_girls", label: "Tiny Tot Girls", ages: "0–5" },
+  { id: "tiny_tot_boys", label: "Tiny Tot Boys", ages: "0–5" },
+
+  { id: "primary_girls", label: "Primary Girls", ages: "6–7" },
+  { id: "primary_boys", label: "Primary Boys", ages: "6–7" },
+
+  { id: "juvenile_girls", label: "Juvenile Girls", ages: "8–9" },
+  { id: "juvenile_boys", label: "Juvenile Boys", ages: "8–9" },
+
+  { id: "elementary_girls", label: "Elementary Girls", ages: "10–11" },
+  { id: "elementary_boys", label: "Elementary Boys", ages: "10–11" },
+
+  { id: "freshman_girls", label: "Freshman Girls", ages: "12–13" },
+  { id: "freshman_boys", label: "Freshman Boys", ages: "12–13" },
+
+  { id: "sophomore_girls", label: "Sophomore Girls", ages: "14–15" },
+  { id: "sophomore_boys", label: "Sophomore Boys", ages: "14–15" },
+
+  { id: "junior_women", label: "Junior Women", ages: "16–17" },
+  { id: "junior_men", label: "Junior Men", ages: "16–17" },
+
+  // Adult chain (fixed)
+  { id: "senior_women", label: "Senior Women", ages: "18–24" },
+  { id: "senior_men", label: "Senior Men", ages: "18–24" },
+
+  { id: "classic_women", label: "Classic Women", ages: "25–34" },
+  { id: "classic_men", label: "Classic Men", ages: "25–34" },
+
+  { id: "masters_women", label: "Masters Women", ages: "35–44" },
+  { id: "masters_men", label: "Masters Men", ages: "35–44" },
+
+  { id: "veteran_women", label: "Veteran Women", ages: "45–54" },
+  { id: "veteran_men", label: "Veteran Men", ages: "45–54" },
+
+  { id: "esquire_women", label: "Esquire Women", ages: "55–64" },
+  { id: "esquire_men", label: "Esquire Men", ages: "55–64" },
+
+  { id: "grand_veteran_women", label: "Grand Veteran Women", ages: "65+" },
+  { id: "grand_veteran_men", label: "Grand Veteran Men", ages: "65+" },
+];
+
+function buildMeetGroups() {
+  return ALL_DIVISIONS.map((div) => ({
+    id: div.id,
+    label: div.label,
+    ages: div.ages,
+    divisions: {
+      novice: { enabled: false, cost: 0, distances: ["", "", "", ""] },
+      elite: { enabled: false, cost: 0, distances: ["", "", "", ""] },
+      open: { enabled: false, cost: 0, distances: ["", "", "", ""] },
     },
-  ];
+  }));
 }
 
-// -------------------- DIVISIONS (FULL LIST) --------------------
-function buildDefaultDivisions() {
-  const mk = (id, label, ages) => ({
-    id,
-    label,
-    ages,
-    classes: {
-      novice: { enabled: false, cost: 0, d: ["", "", "", ""] },
-      elite: { enabled: false, cost: 0, d: ["", "", "", ""] },
-      open: { enabled: false, cost: 0, d: ["", "", "", ""] },
-    },
-  });
+// -------------------- DB --------------------
+const DATA_VERSION = "8.0";
 
-  // USARS-style order (as you’ve been using)
-  return [
-    mk("tiny_tot_girls", "Tiny Tot Girls", "0–5"),
-    mk("tiny_tot_boys", "Tiny Tot Boys", "0–5"),
-
-    mk("primary_girls", "Primary Girls", "6–7"),
-    mk("primary_boys", "Primary Boys", "6–7"),
-
-    mk("juvenile_girls", "Juvenile Girls", "8–9"),
-    mk("juvenile_boys", "Juvenile Boys", "8–9"),
-
-    mk("elementary_girls", "Elementary Girls", "10–11"),
-    mk("elementary_boys", "Elementary Boys", "10–11"),
-
-    mk("freshman_girls", "Freshman Girls", "12–13"),
-    mk("freshman_boys", "Freshman Boys", "12–13"),
-
-    mk("sophomore_girls", "Sophomore Girls", "14–15"),
-    mk("sophomore_boys", "Sophomore Boys", "14–15"),
-
-    mk("junior_women", "Junior Women", "16–17"),
-    mk("junior_men", "Junior Men", "16–17"),
-
-    // Adult chain (locked order)
-    mk("senior_women", "Senior Women", "18–24 (or 18+ per meet)"),
-    mk("senior_men", "Senior Men", "18–24 (or 18+ per meet)"),
-
-    mk("classic_women", "Classic Women", "25–34"),
-    mk("classic_men", "Classic Men", "25–34"),
-
-    mk("masters_women", "Masters Women", "35–44"),
-    mk("masters_men", "Masters Men", "35–44"),
-
-    mk("veteran_women", "Veteran Women", "45–54"),
-    mk("veteran_men", "Veteran Men", "45–54"),
-
-    mk("esquire_women", "Esquire Women", "55–64"),
-    mk("esquire_men", "Esquire Men", "55–64"),
-
-    mk("grand_veteran_women", "Grand Veteran Women", "65+"),
-    mk("grand_veteran_men", "Grand Veteran Men", "65+"),
-  ];
-}
-
-// -------------------- DB DEFAULTS --------------------
-function defaultMeet() {
+function defaultDb() {
+  // IMPORTANT: no default meets created here.
   return {
-    id: "meet_" + uid(6),
-    name: "New Meet",
-    date: "",
-    registrationOpen: true,
-    createdAt: nowIso(),
-    updatedAt: nowIso(),
+    meta: { version: DATA_VERSION, createdAt: nowIso(), updatedAt: nowIso() },
 
-    divisions: buildDefaultDivisions(),
+    // Demo users (hashed)
+    users: [
+      { id: "u_director", username: "Lbird22", role: "director", passHash: "" },
+      { id: "u_judge", username: "JudgeLee", role: "judge", passHash: "" },
+      { id: "u_coach", username: "CoachLee", role: "coach", passHash: "" },
+    ],
 
-    skateAbilityBoxes: [
+    rinks: [
       {
-        id: "sa_" + uid(6),
-        enabled: false,
-        label: "Box 1",
-        manualAgeLabel: "Manual Age",
-        cost: 0,
-        d: ["", "", "", ""],
+        id: "rink_roller_city_wichita",
+        name: "Roller City",
+        city: "Wichita",
+        state: "KS",
+        phone: "316-942-4555",
+        address: "3234 S. Meridian Ave, Wichita, KS 67217",
+        website: "rollercitywichitaks.com",
+        notes: "",
       },
     ],
 
-    timeTrials: {
-      enabled: false,
-      notes: "",
-      judgesRequired: true,
-    },
+    meets: [],
 
-    relays: {
-      enabled: false,
-      notes: "",
-    },
-
-    // Block builder stored in meet
-    blocks: [],
-
-    // Registrations
-    registrants: [],
-    nextCheckIn: 1,
+    // keep for later expansion
+    teamList: TEAM_LIST,
   };
 }
 
-function defaultDb() {
-  return {
-    meta: { version: "8.0", createdAt: nowIso(), updatedAt: nowIso() },
+let db = readJsonIfExists(DATA_FILE) || defaultDb();
 
-    // DEMO USERS (passwords stored, but NEVER displayed on public pages)
-    // Change these later. Keep simple for now.
-    users: [
-      { id: "u_director", username: "Lbird22", role: "director", password: "Redline22" },
-      { id: "u_judge", username: "JudgeLee", role: "judge", password: "Redline22" },
-      { id: "u_coach", username: "CoachLee", role: "coach", password: "Redline22" },
-    ],
-
-    rinks: canonicalRinks(),
-    meets: [defaultMeet()],
-  };
+function saveDb() {
+  db.meta = db.meta || {};
+  db.meta.version = DATA_VERSION;
+  db.meta.updatedAt = nowIso();
+  atomicWriteJson(DATA_FILE, db);
 }
 
-function loadDb() {
-  try {
-    if (!fs.existsSync(DATA_FILE)) {
-      const db = defaultDb();
-      atomicWrite(DATA_FILE, JSON.stringify(db, null, 2));
-      return db;
+// -------------------- PASSWORD HASHING (no plaintext) --------------------
+const SSM_SALT = crypto.createHash("sha256").update("ssm_salt_speedskatemeet").digest("hex");
+function passHash(password) {
+  return crypto.pbkdf2Sync(String(password || ""), SSM_SALT, 120000, 32, "sha256").toString("hex");
+}
+function ensureUserHashes() {
+  // If db came from older versions that stored plaintext "password", convert once.
+  for (const u of (db.users || [])) {
+    if (u.passHash && typeof u.passHash === "string" && u.passHash.length > 20) continue;
+
+    if (u.password) {
+      u.passHash = passHash(u.password);
+      delete u.password;
     }
-    const parsed = JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
+  }
 
-    // harden shape
-    if (!parsed.meta) parsed.meta = { version: "8.0", createdAt: nowIso(), updatedAt: nowIso() };
-    if (!Array.isArray(parsed.users)) parsed.users = defaultDb().users;
-    if (!Array.isArray(parsed.meets)) parsed.meets = [];
-    if (!Array.isArray(parsed.rinks)) parsed.rinks = [];
-
-    // FORCE rink truth: remove any fake / old rinks and apply canonical list
-    parsed.rinks = canonicalRinks();
-
-    // ensure at least one meet
-    if (parsed.meets.length === 0) parsed.meets.push(defaultMeet());
-
-    // ensure each meet has required fields (light migration)
-    for (const m of parsed.meets) {
-      if (!m.id) m.id = "meet_" + uid(6);
-      if (!m.name) m.name = "New Meet";
-      if (!Array.isArray(m.divisions) || m.divisions.length < 10) m.divisions = buildDefaultDivisions();
-      if (!Array.isArray(m.skateAbilityBoxes) || m.skateAbilityBoxes.length === 0) {
-        m.skateAbilityBoxes = [
-          { id: "sa_" + uid(6), enabled: false, label: "Box 1", manualAgeLabel: "Manual Age", cost: 0, d: ["", "", "", ""] },
-        ];
-      }
-      if (!m.timeTrials) m.timeTrials = { enabled: false, notes: "", judgesRequired: true };
-      if (!m.relays) m.relays = { enabled: false, notes: "" };
-      if (!Array.isArray(m.blocks)) m.blocks = [];
-      if (!Array.isArray(m.registrants)) m.registrants = [];
-      if (!Number.isFinite(Number(m.nextCheckIn))) m.nextCheckIn = 1;
-      if (!m.createdAt) m.createdAt = nowIso();
-      m.updatedAt = nowIso();
+  // Ensure demo passwords exist (Redline22 by default)
+  const defaults = { Lbird22: "Redline22", JudgeLee: "Redline22", CoachLee: "Redline22" };
+  for (const u of (db.users || [])) {
+    if (!u.passHash || u.passHash.length < 20) {
+      u.passHash = passHash(defaults[u.username] || "Redline22");
     }
-
-    atomicWrite(DATA_FILE, JSON.stringify(parsed, null, 2));
-    return parsed;
-  } catch (e) {
-    console.error("DB load failed. Rebuilding DB:", e);
-    const db = defaultDb();
-    atomicWrite(DATA_FILE, JSON.stringify(db, null, 2));
-    return db;
   }
 }
+ensureUserHashes();
+saveDb();
 
-function saveDb(db) {
-  db.meta.updatedAt = nowIso();
-  atomicWrite(DATA_FILE, JSON.stringify(db, null, 2));
-}
-
-let db = loadDb();
-
-// -------------------- SESSIONS (IN-MEMORY) --------------------
-const sessions = Object.create(null); // sid -> { userId, createdAt }
-const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 7; // 7 days
-const COOKIE_NAME = "sid";
+// -------------------- SESSIONS --------------------
+const sessions = new Map(); // sid -> { userId, exp }
+const SESSION_TTL = 1000 * 60 * 60 * 12; // 12 hours
+const SESSION_COOKIE = "ssm_sid";
 
 function getSession(req) {
   const cookies = parseCookies(req);
-  const sid = cookies[COOKIE_NAME];
+  const sid = cookies[SESSION_COOKIE];
   if (!sid) return null;
-  const s = sessions[sid];
+
+  const s = sessions.get(sid);
   if (!s) return null;
-  if (Date.now() - s.createdAt > SESSION_TTL_MS) {
-    delete sessions[sid];
+  if (Date.now() > s.exp) {
+    sessions.delete(sid);
     return null;
   }
-  const user = db.users.find((u) => u.id === s.userId);
+
+  const user = (db.users || []).find((u) => u.id === s.userId);
   if (!user) return null;
+
+  // sliding TTL
+  s.exp = Date.now() + SESSION_TTL;
+  sessions.set(sid, s);
+
   return { sid, user };
 }
+
 function setSessionCookie(res, sid) {
-  // NOTE: add Secure automatically in production platforms using HTTPS termination
   const isProd = String(process.env.NODE_ENV || "").toLowerCase() === "production";
   const parts = [
-    `${COOKIE_NAME}=${encodeURIComponent(sid)}`,
+    `${SESSION_COOKIE}=${encodeURIComponent(sid)}`,
     "Path=/",
     "HttpOnly",
     "SameSite=Lax",
-    `Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}`,
+    `Max-Age=${Math.floor(SESSION_TTL / 1000)}`,
     ...(isProd ? ["Secure"] : []),
   ];
   res.setHeader("Set-Cookie", parts.join("; "));
 }
 function clearSessionCookie(res) {
-  res.setHeader("Set-Cookie", `${COOKIE_NAME}=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Lax`);
+  res.setHeader("Set-Cookie", `${SESSION_COOKIE}=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Lax`);
 }
+
 function requireRole(roles) {
   return (req, res, next) => {
     const s = getSession(req);
@@ -316,100 +329,146 @@ function requireRole(roles) {
 // -------------------- UI --------------------
 function css() {
   return `
-:root{--blue:#2563eb;--bg:#f5f7ff;--card:#fff;--text:#0f172a;--muted:#64748b;--border:#e5e7eb;--shadow:0 10px 30px rgba(15,23,42,.08);}
-*{box-sizing:border-box;}
-body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,Arial,sans-serif;background:var(--bg);color:var(--text);}
-.wrap{max-width:1080px;margin:26px auto;padding:0 16px;}
-.topbar{display:flex;gap:12px;align-items:center;justify-content:space-between;background:var(--card);border:1px solid var(--border);border-radius:18px;padding:14px 16px;box-shadow:var(--shadow);}
-.brand{font-weight:900;letter-spacing:-.02em;display:flex;gap:10px;align-items:center;}
-.nav{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;}
-.btn{display:inline-block;padding:10px 14px;border-radius:14px;border:2px solid rgba(37,99,235,.25);background:#fff;color:var(--blue);font-weight:800;text-decoration:none;}
-.btn.primary{background:var(--blue);border-color:var(--blue);color:#fff;}
-.btn.danger{background:#dc2626;border-color:#dc2626;color:#fff;}
-.pill{display:inline-block;padding:6px 10px;border-radius:999px;border:1px solid var(--border);color:var(--muted);font-weight:800;font-size:12px;background:#fff;}
-.card{background:var(--card);border:1px solid var(--border);border-radius:18px;box-shadow:var(--shadow);padding:18px;margin:18px 0;}
-h1{margin:0 0 6px 0;font-size:34px;letter-spacing:-.02em;}
-h2{margin:0 0 10px 0;font-size:20px;}
-.muted{color:var(--muted);}
-.row{display:flex;gap:12px;flex-wrap:wrap;align-items:center;}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
-.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;}
-input,select,textarea{width:100%;padding:12px;border:1px solid var(--border);border-radius:12px;font-size:14px;background:#fff;}
-textarea{min-height:90px;}
-label{font-weight:900;font-size:12px;}
-.section{margin-top:16px;padding-top:16px;border-top:1px solid var(--border);}
-.box{border:1px solid var(--border);border-radius:16px;padding:14px;background:#fff;}
-.chk{display:flex;align-items:center;gap:10px;}
-.chk input{width:22px;height:22px;}
-.right{margin-left:auto;}
-.k{font-weight:900;}
-.small{font-size:12px;color:var(--muted);}
-hr{border:none;border-top:1px solid var(--border);margin:16px 0;}
-`;
+    :root{
+      --blue:#2f65d7;
+      --bg:#f4f6fb;
+      --card:#ffffff;
+      --text:#0f172a;
+      --muted:#64748b;
+      --border:#e5e7eb;
+      --shadow:0 12px 30px rgba(15,23,42,.08);
+    }
+    *{box-sizing:border-box;}
+    body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,Arial,sans-serif;background:var(--bg);color:var(--text);}
+    a{color:var(--blue);text-decoration:none;}
+    .wrap{max-width:1000px;margin:28px auto;padding:0 16px;}
+    .topbar{display:flex;align-items:center;gap:12px;justify-content:space-between;background:var(--card);border:1px solid var(--border);border-radius:18px;padding:14px 16px;box-shadow:var(--shadow);}
+    .brand{display:flex;align-items:center;gap:10px;font-weight:900;}
+    .nav{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;}
+    .btn{display:inline-block;padding:10px 14px;border-radius:14px;border:2px solid rgba(47,101,215,.35);background:#fff;color:var(--blue);font-weight:800;}
+    .btn.primary{background:var(--blue);border-color:var(--blue);color:#fff;}
+    .btn.danger{background:#dc2626;border-color:#dc2626;color:#fff;}
+    .pill{display:inline-block;padding:6px 10px;border-radius:999px;border:1px solid var(--border);color:var(--muted);font-weight:800;font-size:12px;background:#fff;}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:18px;box-shadow:var(--shadow);padding:18px;margin:18px 0;}
+    h1{margin:0 0 6px 0;font-size:38px;letter-spacing:-.02em;}
+    h2{margin:0 0 10px 0;font-size:22px;}
+    .muted{color:var(--muted);}
+    .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center;}
+    .right{margin-left:auto;}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+    .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;}
+    .grid4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;}
+    .section{margin-top:16px;padding-top:16px;border-top:1px solid var(--border);}
+    .mini{font-size:12px;color:var(--muted);}
+    .k{font-weight:900;}
+    input, select, textarea{width:100%;padding:12px 12px;border:1px solid var(--border);border-radius:12px;font-size:14px;background:#fff;}
+    textarea{min-height:90px;}
+    label{font-weight:900;font-size:13px;}
+    .box{border:1px solid var(--border);border-radius:16px;padding:14px;background:#fff;}
+    .chk{display:flex;align-items:center;gap:10px;}
+    .chk input{width:22px;height:22px;}
+    .hr{height:1px;background:var(--border);margin:16px 0;}
+  `;
 }
+
 function pageShell({ title, user, bodyHtml }) {
   const loggedIn = !!user;
   const rolePill = loggedIn ? `<span class="pill">${safeText(user.username)} • ${safeText(user.role)}</span>` : "";
+
   return `<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8"/>
-    <meta name="viewport" content="width=device-width,initial-scale=1"/>
-    <title>${safeText(title)} • SpeedSkateMeet</title>
-    <style>${css()}</style>
-  </head>
-  <body>
-    <div class="wrap">
-      <div class="topbar">
-        <div class="brand">SpeedSkateMeet</div>
-        <div class="nav">
-          <a class="btn" href="/">Home</a>
-          <a class="btn" href="/meets">Find a Meet</a>
-          <a class="btn" href="/rinks">Find a Rink</a>
-          <a class="btn" href="/live">Live Race Day</a>
-          ${loggedIn ? `<a class="btn primary" href="/portal">Portal</a><a class="btn" href="/logout">Logout</a>` : `<a class="btn primary" href="/login">Admin Login</a>`}
+  <html>
+    <head>
+      <meta charset="utf-8"/>
+      <meta name="viewport" content="width=device-width, initial-scale=1"/>
+      <title>${safeText(title)} • SpeedSkateMeet</title>
+      <style>${css()}</style>
+    </head>
+    <body>
+      <div class="wrap">
+        <div class="topbar">
+          <div class="brand">
+            <div style="font-size:20px;">SpeedSkateMeet</div>
+          </div>
+
+          <div class="nav">
+            <a class="btn" href="/">Home</a>
+            <a class="btn" href="/meets">Find a Meet</a>
+            <a class="btn" href="/rinks">Find a Rink</a>
+            <a class="btn" href="/live">Live Race Day</a>
+            ${
+              loggedIn
+                ? `<a class="btn primary" href="/portal">Portal</a><a class="btn" href="/logout">Logout</a>`
+                : `<a class="btn primary" href="/login">Admin Login</a>`
+            }
+          </div>
+
+          ${rolePill}
         </div>
-        ${rolePill}
+
+        ${bodyHtml}
+
+        <div class="mini" style="margin-top:18px;">
+          Data file: ${safeText(DATA_FILE)}
+        </div>
       </div>
-
-      ${bodyHtml}
-
-      <div class="small" style="margin-top:18px;">Data file: ${safeText(DATA_FILE)}</div>
-    </div>
-  </body>
-</html>`;
+    </body>
+  </html>`;
 }
 
-// -------------------- FINDERS --------------------
+// -------------------- MEET MODEL --------------------
+function newMeet() {
+  return {
+    id: "meet_" + uid(6),
+    meetName: "New Meet",
+    date: "",
+    trackLength: 100,
+    lanes: 4,
+
+    registrationOpen: true,
+    registrationClosedAt: null,
+
+    groups: buildMeetGroups(),
+
+    skateAbilityBoxes: [
+      { id: uid(6), enabled: false, label: "Box 1", manualAgeLabel: "Manual Age", cost: 0, distances: ["", "", "", ""] },
+    ],
+
+    timeTrialsConfig: { enabled: false, notes: "", judgesRequired: true },
+    relayConfig: { enabled: false, notes: "" },
+
+    blocks: [],
+
+    registrants: [],
+    nextCheckInNumber: 1,
+
+    createdAt: nowIso(),
+    updatedAt: nowIso(),
+  };
+}
+
 function findMeet(meetId) {
-  return db.meets.find((m) => m.id === meetId) || null;
-}
-function meetOr404(req, res) {
-  const m = findMeet(req.params.meetId);
-  if (!m) {
-    res.status(404).send("Meet not found");
-    return null;
-  }
-  return m;
+  return (db.meets || []).find((m) => m.id === meetId) || null;
 }
 function fmtCheckIn(n) {
   return String(n).padStart(3, "0");
 }
 
-// -------------------- ROUTES: PUBLIC --------------------
+// -------------------- ROUTES --------------------
 app.get("/", (req, res) => {
   const s = getSession(req);
   const body = `
     <div class="card">
       <h1>SpeedSkateMeet</h1>
       <div class="muted">USARS-style inline meet software • web-based • works on any device</div>
+
       <div class="section row">
         <a class="btn primary" href="/meets">Find a Meet</a>
         <a class="btn primary" href="/rinks">Find a Rink</a>
         <a class="btn" href="/live">Live Race Day</a>
         ${s ? `<a class="btn" href="/portal">Go to Portal</a>` : `<a class="btn" href="/login">Admin Login</a>`}
       </div>
-      <div class="section small">
+
+      <div class="section mini">
         Adult ages locked: Classic 25–34 • Masters 35–44
       </div>
     </div>
@@ -417,73 +476,164 @@ app.get("/", (req, res) => {
   res.send(pageShell({ title: "Home", user: s?.user, bodyHtml: body }));
 });
 
-app.get("/rinks", (req, res) => {
-  const s = getSession(req);
-  // rinks are forced canonical on load; still safe here:
-  const rinks = Array.isArray(db.rinks) ? db.rinks : canonicalRinks();
-  const cards = rinks
-    .map(
-      (r) => `
-      <div class="card">
-        <h2>${safeText(r.name)}</h2>
-        <div><span class="k">City:</span> ${safeText(r.city)}, ${safeText(r.state)}</div>
-        <div><span class="k">Phone:</span> ${safeText(r.phone || "—")}</div>
-        <div><span class="k">Address:</span> ${safeText(r.address || "—")}</div>
-        <div><span class="k">Website:</span> ${
-          r.website ? `<a href="https://${safeText(r.website)}" target="_blank" rel="noreferrer">${safeText(r.website)}</a>` : "—"
-        }</div>
-      </div>
-    `
-    )
-    .join("");
-  res.send(pageShell({ title: "Rinks", user: s?.user, bodyHtml: `<h1>Rinks</h1>${cards}` }));
-});
-
-app.get("/meets", (req, res) => {
-  const s = getSession(req);
-  const meetsHtml = (db.meets || [])
-    .map((m) => {
-      return `
-        <div class="card">
-          <div class="row">
-            <h2 style="margin:0;">${safeText(m.name)}</h2>
-            <span class="pill">${safeText(m.date || "TBD")}</span>
-            <span class="pill">Reg ${m.registrationOpen ? "OPEN" : "CLOSED"}</span>
-            <span class="right"></span>
-          </div>
-          <div class="section row">
-            <a class="btn primary" href="/meet/${encodeURIComponent(m.id)}/register">Register</a>
-            ${s?.user?.role === "director" ? `<a class="btn" href="/meet/${encodeURIComponent(m.id)}/builder">Meet Builder</a>` : ``}
-            ${s?.user?.role === "director" ? `<a class="btn" href="/meet/${encodeURIComponent(m.id)}/blocks">Block Builder</a>` : ``}
-          </div>
-        </div>
-      `;
-    })
-    .join("");
-  res.send(pageShell({ title: "Meets", user: s?.user, bodyHtml: `<h1>Meets</h1>${meetsHtml || `<div class="card"><div class="muted">No meets yet.</div></div>`}` }));
-});
-
+// -------------------- LIVE (placeholder concept page) --------------------
 app.get("/live", (req, res) => {
   const s = getSession(req);
   const body = `
     <div class="card">
       <h1>Live Race Day</h1>
-      <div class="muted">Live view wiring comes next (blocks → race order → judge entry → standings).</div>
+      <div class="muted">This page will display “current race” and “on deck” once blocks + judges loop is wired.</div>
+      <div class="section mini">TV idea: load this page on Apple TV / AirPlay for rink display. ✅</div>
     </div>
   `;
   res.send(pageShell({ title: "Live", user: s?.user, bodyHtml: body }));
 });
 
+// -------------------- RINKS (public list + director edit tools) --------------------
+app.get("/rinks", (req, res) => {
+  const s = getSession(req);
+  const rinks = (db.rinks || []).slice().sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+
+  const cards = rinks.map((r) => {
+    const site = r.website
+      ? `<a href="https://${safeText(r.website)}" target="_blank" rel="noreferrer">${safeText(r.website)}</a>`
+      : "—";
+
+    const directorTools = (s?.user?.role === "director")
+      ? `
+        <div class="section">
+          <form method="POST" action="/rinks/update" class="grid2" style="margin:0;">
+            <input type="hidden" name="id" value="${safeText(r.id)}"/>
+            <div>
+              <label>Name</label>
+              <input name="name" value="${safeText(r.name || "")}"/>
+            </div>
+            <div>
+              <label>Phone</label>
+              <input name="phone" value="${safeText(r.phone || "")}"/>
+            </div>
+            <div>
+              <label>City</label>
+              <input name="city" value="${safeText(r.city || "")}"/>
+            </div>
+            <div>
+              <label>State</label>
+              <input name="state" value="${safeText(r.state || "")}"/>
+            </div>
+            <div>
+              <label>Address</label>
+              <input name="address" value="${safeText(r.address || "")}"/>
+            </div>
+            <div>
+              <label>Website</label>
+              <input name="website" value="${safeText(r.website || "")}"/>
+            </div>
+            <div style="grid-column:1/-1;">
+              <label>Notes</label>
+              <input name="notes" value="${safeText(r.notes || "")}"/>
+            </div>
+            <div class="row" style="grid-column:1/-1;">
+              <button class="btn primary" type="submit">Save</button>
+            </div>
+          </form>
+
+          <form method="POST" action="/rinks/delete" style="margin-top:10px;">
+            <input type="hidden" name="id" value="${safeText(r.id)}"/>
+            <button class="btn danger" type="submit">Delete Rink</button>
+          </form>
+        </div>
+      `
+      : "";
+
+    return `
+      <div class="card">
+        <h2>${safeText(r.name)}</h2>
+        <div><span class="k">Phone:</span> ${safeText(r.phone || "—")}</div>
+        <div><span class="k">Address:</span> ${safeText(r.address || "—")}</div>
+        <div><span class="k">City/State:</span> ${safeText(r.city || "—")}, ${safeText(r.state || "—")}</div>
+        <div><span class="k">Website:</span> ${site}</div>
+        ${directorTools}
+      </div>
+    `;
+  }).join("");
+
+  const addBox = (s?.user?.role === "director")
+    ? `
+      <div class="card">
+        <h2>Add Rink</h2>
+        <form method="POST" action="/rinks/add" class="grid2">
+          <div><label>Name</label><input name="name" required></div>
+          <div><label>Phone</label><input name="phone"></div>
+          <div><label>City</label><input name="city"></div>
+          <div><label>State</label><input name="state"></div>
+          <div style="grid-column:1/-1;"><label>Address</label><input name="address"></div>
+          <div style="grid-column:1/-1;"><label>Website</label><input name="website"></div>
+          <div style="grid-column:1/-1;"><label>Notes</label><input name="notes"></div>
+          <div class="row" style="grid-column:1/-1;">
+            <button class="btn primary" type="submit">Add Rink</button>
+          </div>
+        </form>
+      </div>
+    `
+    : "";
+
+  res.send(pageShell({
+    title: "Rinks",
+    user: s?.user,
+    bodyHtml: `<h1>Rinks</h1>${addBox}${cards || `<div class="card"><div class="muted">No rinks yet.</div></div>`}`,
+  }));
+});
+
+app.post("/rinks/add", requireRole(["director"]), (req, res) => {
+  db.rinks = db.rinks || [];
+  db.rinks.push({
+    id: "rink_" + uid(6),
+    name: String(req.body.name || "").trim(),
+    phone: String(req.body.phone || "").trim(),
+    city: String(req.body.city || "").trim(),
+    state: String(req.body.state || "").trim(),
+    address: String(req.body.address || "").trim(),
+    website: String(req.body.website || "").trim().replace(/^https?:\/\//, ""),
+    notes: String(req.body.notes || "").trim(),
+  });
+  saveDb();
+  res.redirect("/rinks");
+});
+
+app.post("/rinks/update", requireRole(["director"]), (req, res) => {
+  const id = String(req.body.id || "");
+  const r = (db.rinks || []).find((x) => x.id === id);
+  if (!r) return res.redirect("/rinks");
+
+  r.name = String(req.body.name || "").trim();
+  r.phone = String(req.body.phone || "").trim();
+  r.city = String(req.body.city || "").trim();
+  r.state = String(req.body.state || "").trim();
+  r.address = String(req.body.address || "").trim();
+  r.website = String(req.body.website || "").trim().replace(/^https?:\/\//, "");
+  r.notes = String(req.body.notes || "").trim();
+
+  saveDb();
+  res.redirect("/rinks");
+});
+
+app.post("/rinks/delete", requireRole(["director"]), (req, res) => {
+  const id = String(req.body.id || "");
+  db.rinks = (db.rinks || []).filter((x) => x.id !== id);
+  saveDb();
+  res.redirect("/rinks");
+});
+
 // -------------------- AUTH --------------------
 app.get("/login", (req, res) => {
   const body = `
-    <div class="card" style="max-width:720px;margin:24px auto;">
+    <div class="card" style="max-width:640px;margin:24px auto;">
       <h1>Admin Login</h1>
-      <div class="muted">Demo usernames (passwords are never shown on public pages):</div>
-      <div class="section small">
-        <div><b>Director:</b> Lbird22</div>
-        <div><b>Judge:</b> JudgeLee</div>
-        <div><b>Coach:</b> CoachLee</div>
+      <div class="muted">Demo usernames:</div>
+      <div class="mini" style="margin-top:8px;">
+        Director: <b>Lbird22</b><br/>
+        Judge: <b>JudgeLee</b><br/>
+        Coach: <b>CoachLee</b><br/>
       </div>
 
       <form class="section" method="POST" action="/login">
@@ -507,571 +657,582 @@ app.get("/login", (req, res) => {
 });
 
 app.post("/login", (req, res) => {
-  const username = clampStr(req.body.username, 80).trim();
-  const password = clampStr(req.body.password, 120);
+  const username = String(req.body.username || "").trim();
+  const password = String(req.body.password || "").trim();
 
   const user = (db.users || []).find((u) => u.username.toLowerCase() === username.toLowerCase());
-  if (!user || user.password !== password) {
+  if (!user || user.passHash !== passHash(password)) {
     const body = `
-      <div class="card" style="max-width:720px;margin:24px auto;">
+      <div class="card" style="max-width:640px;margin:24px auto;">
         <h1>Login failed</h1>
         <div class="muted">Incorrect username or password.</div>
-        <div class="section">
-          <a class="btn primary" href="/login">Try again</a>
-        </div>
+        <div class="section"><a class="btn primary" href="/login">Try again</a></div>
       </div>
     `;
     return res.send(pageShell({ title: "Login failed", user: null, bodyHtml: body }));
   }
 
   const sid = uid(18);
-  sessions[sid] = { userId: user.id, createdAt: Date.now() };
+  sessions.set(sid, { userId: user.id, exp: Date.now() + SESSION_TTL });
   setSessionCookie(res, sid);
   res.redirect("/portal");
 });
 
 app.get("/logout", (req, res) => {
   const cookies = parseCookies(req);
-  const sid = cookies[COOKIE_NAME];
-  if (sid) delete sessions[sid];
+  const sid = cookies[SESSION_COOKIE];
+  if (sid) sessions.delete(sid);
   clearSessionCookie(res);
   res.redirect("/");
+});
+
+// -------------------- MEETS LIST --------------------
+app.get("/meets", (req, res) => {
+  const s = getSession(req);
+  const meets = (db.meets || []).slice().sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+
+  const cards = meets.map((m) => `
+    <div class="card">
+      <div class="row">
+        <h2 style="margin:0;">${safeText(m.meetName)}</h2>
+        <span class="pill">${safeText(m.date || "TBD")}</span>
+        <span class="pill">Reg: ${m.registrationOpen ? "OPEN" : "CLOSED"}</span>
+        <span class="right"></span>
+      </div>
+      <div class="section row">
+        <a class="btn primary" href="/register/${encodeURIComponent(m.id)}">Register</a>
+        <a class="btn" href="/live">Live</a>
+        ${
+          s?.user?.role === "director"
+            ? `<a class="btn" href="/admin/meet/${encodeURIComponent(m.id)}">Meet Builder</a>
+               <a class="btn" href="/admin/blocks/${encodeURIComponent(m.id)}">Block Builder</a>`
+            : ""
+        }
+      </div>
+    </div>
+  `).join("");
+
+  res.send(pageShell({
+    title: "Meets",
+    user: s?.user,
+    bodyHtml: `
+      <h1>Meets</h1>
+      ${cards || `<div class="card"><div class="muted">No meets yet.</div></div>`}
+    `
+  }));
 });
 
 // -------------------- PORTAL --------------------
 app.get("/portal", requireRole(["director", "judge", "coach"]), (req, res) => {
   const user = req.session.user;
+  const meets = (db.meets || []).slice();
 
-  const meetsHtml = (db.meets || [])
-    .map((m) => {
-      const regs = (m.registrants || []).length;
-      const blocks = (m.blocks || []).length;
-      return `
-        <div class="card">
-          <div class="row">
-            <h2 style="margin:0;">${safeText(m.name)}</h2>
-            <span class="pill">${safeText(m.date || "TBD")}</span>
-            <span class="pill">Regs: ${regs}</span>
-            <span class="pill">Blocks: ${blocks}</span>
-            <span class="right"></span>
-          </div>
-          <div class="section row">
-            ${user.role === "director" ? `<a class="btn primary" href="/meet/${encodeURIComponent(m.id)}/builder">Meet Builder</a>` : ""}
-            ${user.role === "director" ? `<a class="btn" href="/meet/${encodeURIComponent(m.id)}/blocks">Block Builder</a>` : ""}
-            <a class="btn" href="/meet/${encodeURIComponent(m.id)}/register">Registration Page</a>
-          </div>
-        </div>
-      `;
-    })
-    .join("");
-
-  const body = `
+  const meetCards = meets.map((m) => `
     <div class="card">
-      <h1>${safeText(user.role[0].toUpperCase() + user.role.slice(1))} Portal</h1>
-      <div class="muted">Logged in as ${safeText(user.username)}</div>
-
-      ${
-        user.role === "director"
-          ? `<form class="section" method="POST" action="/meet/new">
-               <button class="btn primary" type="submit">Build New Meet</button>
-             </form>`
-          : ""
-      }
+      <div class="row">
+        <h2 style="margin:0;">${safeText(m.meetName)}</h2>
+        <span class="pill">${safeText(m.date || "TBD")}</span>
+        <span class="pill">Regs: ${safeText(String((m.registrants || []).length))}</span>
+        <span class="right"></span>
+      </div>
+      <div class="section row">
+        <a class="btn primary" href="/admin/meet/${encodeURIComponent(m.id)}">Meet Builder</a>
+        <a class="btn" href="/admin/blocks/${encodeURIComponent(m.id)}">Block Builder</a>
+        <a class="btn" href="/register/${encodeURIComponent(m.id)}">Registration Page</a>
+      </div>
     </div>
+  `).join("");
 
-    <h2>Meets</h2>
-    ${meetsHtml || `<div class="card"><div class="muted">No meets yet.</div></div>`}
-  `;
-  res.send(pageShell({ title: "Portal", user, bodyHtml: body }));
+  const buildButton = (user.role === "director")
+    ? `
+      <form class="section" method="POST" action="/admin/meet/new">
+        <button class="btn primary" type="submit">Build New Meet</button>
+      </form>
+    `
+    : "";
+
+  res.send(pageShell({
+    title: "Portal",
+    user,
+    bodyHtml: `
+      <div class="card">
+        <h1>${safeText(user.role[0].toUpperCase() + user.role.slice(1))} Portal</h1>
+        <div class="muted">Logged in as ${safeText(user.username)}.</div>
+        ${buildButton}
+      </div>
+
+      <h2 style="margin-top:10px;">Meets</h2>
+      ${meetCards || `<div class="card"><div class="muted">No meets yet — build one first.</div></div>`}
+    `
+  }));
 });
 
-app.post("/meet/new", requireRole(["director"]), (req, res) => {
-  const m = defaultMeet();
+app.post("/admin/meet/new", requireRole(["director"]), (req, res) => {
   db.meets = db.meets || [];
+  const m = newMeet();
   db.meets.unshift(m);
-  saveDb(db);
-  res.redirect(`/meet/${encodeURIComponent(m.id)}/builder`);
+  saveDb();
+  res.redirect(`/admin/meet/${encodeURIComponent(m.id)}`);
 });
 
 // -------------------- MEET BUILDER --------------------
-app.get("/meet/:meetId/builder", requireRole(["director"]), (req, res) => {
+app.get("/admin/meet/:meetId", requireRole(["director"]), (req, res) => {
   const user = req.session.user;
-  const meet = meetOr404(req, res);
-  if (!meet) return;
+  const meet = findMeet(req.params.meetId);
+  if (!meet) return res.status(404).send("Meet not found");
 
-  const divisionsHtml = (meet.divisions || [])
-    .map((div) => {
-      const c = div.classes || {};
-      const renderClass = (key, label) => {
-        const obj = c[key] || { enabled: false, cost: 0, d: ["", "", "", ""] };
-        return `
-          <div class="box">
-            <div class="row">
-              <div class="chk">
-                <input type="checkbox" name="${div.id}__${key}__enabled" ${obj.enabled ? "checked" : ""}/>
-                <div class="k">${safeText(label)}</div>
-              </div>
-              <div class="right" style="min-width:220px;">
-                <label>Cost</label>
-                <input name="${div.id}__${key}__cost" value="${safeText(obj.cost ?? 0)}"/>
-              </div>
-            </div>
-
-            <div class="section grid2">
-              <div><label>D1</label><input name="${div.id}__${key}__d1" value="${safeText(obj.d?.[0] || "")}"/></div>
-              <div><label>D2</label><input name="${div.id}__${key}__d2" value="${safeText(obj.d?.[1] || "")}"/></div>
-              <div><label>D3</label><input name="${div.id}__${key}__d3" value="${safeText(obj.d?.[2] || "")}"/></div>
-              <div><label>D4</label><input name="${div.id}__${key}__d4" value="${safeText(obj.d?.[3] || "")}"/></div>
-            </div>
-
-            <div class="small">Plain inputs (no dropdowns).</div>
-          </div>
-        `;
-      };
+  // render groups (full list)
+  const groupsHtml = (meet.groups || []).map((g) => {
+    const divKeys = ["novice", "elite", "open"];
+    const entries = divKeys.map((k) => {
+      const d = g.divisions?.[k] || { enabled: false, cost: 0, distances: ["", "", "", ""] };
 
       return `
-        <div class="card">
+        <div class="box" style="margin:10px 0;">
           <div class="row">
-            <h2 style="margin:0;">${safeText(div.label)}</h2>
-            <span class="pill">${safeText(div.ages)}</span>
-          </div>
-          <div class="section">
-            ${renderClass("novice", "NOVICE")}
-            <div style="height:10px;"></div>
-            ${renderClass("elite", "ELITE")}
-            <div style="height:10px;"></div>
-            ${renderClass("open", "OPEN")}
-          </div>
-        </div>
-      `;
-    })
-    .join("");
-
-  const saBoxesHtml = (meet.skateAbilityBoxes || [])
-    .map((b, idx) => {
-      return `
-        <div class="box">
-          <div class="row">
-            <div class="k">SkateAbility</div>
-            <span class="pill">${safeText(b.label || `Box ${idx + 1}`)}</span>
-            <span class="right"></span>
-            <button class="btn danger" type="submit" name="sa_remove" value="${safeText(b.id)}">Remove</button>
-          </div>
-
-          <div class="section grid3">
             <div class="chk">
-              <input type="checkbox" name="sa_${b.id}__enabled" ${b.enabled ? "checked" : ""}/>
-              <div class="k">Enable</div>
+              <input type="checkbox" name="${g.id}.${k}.enabled" ${d.enabled ? "checked" : ""}/>
+              <div class="k">${safeText(k.toUpperCase())}</div>
             </div>
-            <div>
-              <label>Manual Age Label</label>
-              <input name="sa_${b.id}__manualAgeLabel" value="${safeText(b.manualAgeLabel || "Manual Age")}"/>
-            </div>
-            <div>
+            <div class="right" style="min-width:220px;">
               <label>Cost</label>
-              <input name="sa_${b.id}__cost" value="${safeText(b.cost ?? 0)}"/>
+              <input name="${g.id}.${k}.cost" value="${safeText(String(d.cost ?? 0))}"/>
             </div>
           </div>
 
-          <div class="section grid2">
-            <div><label>D1</label><input name="sa_${b.id}__d1" value="${safeText(b.d?.[0] || "")}"/></div>
-            <div><label>D2</label><input name="sa_${b.id}__d2" value="${safeText(b.d?.[1] || "")}"/></div>
-            <div><label>D3</label><input name="sa_${b.id}__d3" value="${safeText(b.d?.[2] || "")}"/></div>
-            <div><label>D4</label><input name="sa_${b.id}__d4" value="${safeText(b.d?.[3] || "")}"/></div>
+          <div class="section grid4">
+            <div><label>D1</label><input name="${g.id}.${k}.d1" value="${safeText(d.distances?.[0] || "")}"/></div>
+            <div><label>D2</label><input name="${g.id}.${k}.d2" value="${safeText(d.distances?.[1] || "")}"/></div>
+            <div><label>D3</label><input name="${g.id}.${k}.d3" value="${safeText(d.distances?.[2] || "")}"/></div>
+            <div><label>D4</label><input name="${g.id}.${k}.d4" value="${safeText(d.distances?.[3] || "")}"/></div>
           </div>
+
+          <div class="mini">Plain inputs (no dropdowns).</div>
         </div>
       `;
-    })
-    .join("");
+    }).join("");
 
-  const tt = meet.timeTrials || { enabled: false, notes: "", judgesRequired: true };
-  const rel = meet.relays || { enabled: false, notes: "" };
-
-  const body = `
-    <div class="card">
-      <h1>Meet Builder</h1>
-      <div class="muted">${safeText(meet.name)} ${meet.date ? `• ${safeText(meet.date)}` : ""}</div>
-
-      <form class="section" method="POST" action="/meet/${encodeURIComponent(meet.id)}/builder">
-        <div class="grid2">
-          <div>
-            <label>Meet Name</label>
-            <input name="meet_name" value="${safeText(meet.name)}"/>
-          </div>
-          <div>
-            <label>Date</label>
-            <input name="meet_date" value="${safeText(meet.date || "")}" placeholder="YYYY-MM-DD"/>
-          </div>
+    return `
+      <div class="card">
+        <div class="row">
+          <h2 style="margin:0;">${safeText(g.label)}</h2>
+          <span class="pill">${safeText(g.ages)}</span>
         </div>
+        <div class="section">${entries}</div>
+      </div>
+    `;
+  }).join("");
 
-        <div class="section">
-          <h2>Age Divisions</h2>
-          <div class="muted">Enable classes + set costs + distances (D1–D4).</div>
+  const saBoxes = (meet.skateAbilityBoxes || []).map((b, idx) => `
+    <div class="box" style="margin:10px 0;">
+      <div class="row">
+        <div class="k">SkateAbility</div>
+        <span class="pill">${safeText(b.label || `Box ${idx + 1}`)}</span>
+        <span class="right"></span>
+        <button class="btn danger" type="submit" name="remove_sa" value="${safeText(b.id)}">Remove</button>
+      </div>
+
+      <div class="section grid3">
+        <div class="chk">
+          <input type="checkbox" name="sa_${b.id}_enabled" ${b.enabled ? "checked" : ""}/>
+          <div class="k">Enable</div>
         </div>
-
-        ${divisionsHtml}
-
-        <div class="card">
-          <h2>SkateAbility</h2>
-          <div class="muted">Meet-wide; add multiple boxes. No novice/elite/open here.</div>
-          <div class="section">${saBoxesHtml}</div>
-          <div class="section">
-            <button class="btn" type="submit" name="sa_add" value="1">Add Another SkateAbility Box</button>
-          </div>
+        <div>
+          <label>Manual Age Label</label>
+          <input name="sa_${b.id}_manualAgeLabel" value="${safeText(b.manualAgeLabel || "Manual Age")}"/>
         </div>
-
-        <div class="card">
-          <h2>Time Trials</h2>
-          <div class="muted">Meet-wide flag so the system knows you need Time Trial judge tools.</div>
-          <div class="section grid2">
-            <div class="chk">
-              <input type="checkbox" name="tt_enabled" ${tt.enabled ? "checked" : ""}/>
-              <div class="k">Enable Time Trials at this meet</div>
-            </div>
-            <div class="chk">
-              <input type="checkbox" name="tt_judgesRequired" ${tt.judgesRequired ? "checked" : ""}/>
-              <div class="k">Judges panel required</div>
-            </div>
-          </div>
-          <div class="section">
-            <label>Notes (optional)</label>
-            <textarea name="tt_notes">${safeText(tt.notes || "")}</textarea>
-          </div>
+        <div>
+          <label>Cost</label>
+          <input name="sa_${b.id}_cost" value="${safeText(String(b.cost ?? 0))}"/>
         </div>
+      </div>
 
-        <div class="card">
-          <h2>Relays</h2>
-          <div class="muted">Meet-wide relay flag + notes (relay builder UI comes next).</div>
-          <div class="section chk">
-            <input type="checkbox" name="rel_enabled" ${rel.enabled ? "checked" : ""}/>
-            <div class="k">Enable Relays at this meet</div>
-          </div>
-          <div class="section">
-            <label>Notes (optional)</label>
-            <textarea name="rel_notes">${safeText(rel.notes || "")}</textarea>
-          </div>
-        </div>
-
-        <div class="section row">
-          <button class="btn primary" type="submit" name="save_meet" value="1">Save Meet</button>
-          <a class="btn" href="/portal">Back to Portal</a>
-          <a class="btn" href="/meet/${encodeURIComponent(meet.id)}/blocks">Block Builder</a>
-          <a class="btn" href="/meet/${encodeURIComponent(meet.id)}/register">Registration Page</a>
-        </div>
-      </form>
+      <div class="section grid4">
+        <div><label>D1</label><input name="sa_${b.id}_d1" value="${safeText(b.distances?.[0] || "")}"/></div>
+        <div><label>D2</label><input name="sa_${b.id}_d2" value="${safeText(b.distances?.[1] || "")}"/></div>
+        <div><label>D3</label><input name="sa_${b.id}_d3" value="${safeText(b.distances?.[2] || "")}"/></div>
+        <div><label>D4</label><input name="sa_${b.id}_d4" value="${safeText(b.distances?.[3] || "")}"/></div>
+      </div>
     </div>
-  `;
+  `).join("");
 
-  res.send(pageShell({ title: "Meet Builder", user, bodyHtml: body }));
+  const tt = meet.timeTrialsConfig || { enabled: false, judgesRequired: true, notes: "" };
+  const relay = meet.relayConfig || { enabled: false, notes: "" };
+
+  res.send(pageShell({
+    title: "Meet Builder",
+    user,
+    bodyHtml: `
+      <div class="card">
+        <h1>Meet Builder</h1>
+        <div class="muted">${safeText(meet.meetName)} • Meet #${safeText(meet.id)}</div>
+
+        <form class="section" method="POST" action="/admin/meet/${encodeURIComponent(meet.id)}/save">
+          <div class="grid2">
+            <div>
+              <label>Meet Name</label>
+              <input name="meetName" value="${safeText(meet.meetName)}"/>
+            </div>
+            <div>
+              <label>Date</label>
+              <input type="date" name="date" value="${safeText(meet.date || "")}"/>
+            </div>
+          </div>
+
+          <div class="section grid2">
+            <div>
+              <label>Track Length (m)</label>
+              <input name="trackLength" value="${safeText(String(meet.trackLength || 100))}"/>
+            </div>
+            <div>
+              <label>Lanes per Heat</label>
+              <input name="lanes" value="${safeText(String(meet.lanes || 4))}"/>
+            </div>
+          </div>
+
+          <div class="section">
+            <h2>SkateAbility</h2>
+            <div class="muted">Meet-wide. No novice/elite/open. Manual age label. Add multiple boxes.</div>
+            ${saBoxes}
+            <div class="section">
+              <button class="btn" type="submit" name="add_sa" value="1">Add another SkateAbility box</button>
+            </div>
+          </div>
+
+          <div class="section">
+            <h2>Time Trials</h2>
+            <div class="muted">Meet-wide flag (not per-division).</div>
+            <div class="grid2">
+              <div class="chk">
+                <input type="checkbox" name="tt_enabled" ${tt.enabled ? "checked" : ""}/>
+                <div class="k">Enable Time Trials</div>
+              </div>
+              <div class="chk">
+                <input type="checkbox" name="tt_judgesRequired" ${tt.judgesRequired ? "checked" : ""}/>
+                <div class="k">Judges panel required</div>
+              </div>
+            </div>
+            <div class="section">
+              <label>Notes</label>
+              <textarea name="tt_notes">${safeText(tt.notes || "")}</textarea>
+            </div>
+          </div>
+
+          <div class="section">
+            <h2>Relays</h2>
+            <div class="muted">Meet-wide relay flag + notes (relay builder UI comes next).</div>
+            <div class="chk">
+              <input type="checkbox" name="relay_enabled" ${relay.enabled ? "checked" : ""}/>
+              <div class="k">Enable Relays</div>
+            </div>
+            <div class="section">
+              <label>Notes</label>
+              <textarea name="relay_notes">${safeText(relay.notes || "")}</textarea>
+            </div>
+          </div>
+
+          <div class="section">
+            <h2>Age Divisions</h2>
+            <div class="muted">Costs + D1–D4 per classification.</div>
+          </div>
+
+          ${groupsHtml}
+
+          <div class="section row">
+            <button class="btn primary" type="submit" name="save" value="1">Save Meet</button>
+            <a class="btn" href="/admin/blocks/${encodeURIComponent(meet.id)}">Block Builder</a>
+            <a class="btn" href="/register/${encodeURIComponent(meet.id)}">Registration Page</a>
+            <a class="btn" href="/portal">Back to Portal</a>
+          </div>
+        </form>
+      </div>
+    `
+  }));
 });
 
-app.post("/meet/:meetId/builder", requireRole(["director"]), (req, res) => {
-  const meet = meetOr404(req, res);
-  if (!meet) return;
+app.post("/admin/meet/:meetId/save", requireRole(["director"]), (req, res) => {
+  const meet = findMeet(req.params.meetId);
+  if (!meet) return res.status(404).send("Meet not found");
 
-  // SkateAbility remove
-  if (req.body.sa_remove) {
-    const id = String(req.body.sa_remove);
+  // SkateAbility remove/add actions first
+  if (req.body.remove_sa) {
+    const id = String(req.body.remove_sa);
     meet.skateAbilityBoxes = (meet.skateAbilityBoxes || []).filter((b) => b.id !== id);
     if (meet.skateAbilityBoxes.length === 0) {
-      meet.skateAbilityBoxes.push({
-        id: "sa_" + uid(6),
-        enabled: false,
-        label: "Box 1",
-        manualAgeLabel: "Manual Age",
-        cost: 0,
-        d: ["", "", "", ""],
-      });
+      meet.skateAbilityBoxes.push({ id: uid(6), enabled: false, label: "Box 1", manualAgeLabel: "Manual Age", cost: 0, distances: ["", "", "", ""] });
     }
     meet.updatedAt = nowIso();
-    saveDb(db);
-    return res.redirect(`/meet/${encodeURIComponent(meet.id)}/builder`);
+    saveDb();
+    return res.redirect(`/admin/meet/${encodeURIComponent(meet.id)}`);
   }
-
-  // SkateAbility add
-  if (req.body.sa_add) {
+  if (req.body.add_sa) {
     const n = (meet.skateAbilityBoxes || []).length + 1;
     meet.skateAbilityBoxes = meet.skateAbilityBoxes || [];
-    meet.skateAbilityBoxes.push({
-      id: "sa_" + uid(6),
-      enabled: false,
-      label: `Box ${n}`,
-      manualAgeLabel: "Manual Age",
-      cost: 0,
-      d: ["", "", "", ""],
-    });
+    meet.skateAbilityBoxes.push({ id: uid(6), enabled: false, label: `Box ${n}`, manualAgeLabel: "Manual Age", cost: 0, distances: ["", "", "", ""] });
     meet.updatedAt = nowIso();
-    saveDb(db);
-    return res.redirect(`/meet/${encodeURIComponent(meet.id)}/builder`);
+    saveDb();
+    return res.redirect(`/admin/meet/${encodeURIComponent(meet.id)}`);
   }
 
-  // Meet basics
-  meet.name = clampStr(req.body.meet_name, 80).trim() || "New Meet";
-  meet.date = clampStr(req.body.meet_date, 40).trim();
+  meet.meetName = String(req.body.meetName || meet.meetName || "New Meet").trim().slice(0, 90);
+  meet.date = String(req.body.date || "").trim();
+  meet.trackLength = Number(req.body.trackLength || meet.trackLength || 100);
+  meet.lanes = Number(req.body.lanes || meet.lanes || 4);
 
-  // Divisions/classes
-  for (const div of meet.divisions || []) {
-    div.classes = div.classes || {};
+  // divisions
+  for (const g of (meet.groups || [])) {
+    g.divisions = g.divisions || {};
     for (const key of ["novice", "elite", "open"]) {
-      const enabled = !!req.body[`${div.id}__${key}__enabled`];
-      const cost = nOr0(req.body[`${div.id}__${key}__cost`]);
-      const d1 = clampStr(req.body[`${div.id}__${key}__d1`], 40);
-      const d2 = clampStr(req.body[`${div.id}__${key}__d2`], 40);
-      const d3 = clampStr(req.body[`${div.id}__${key}__d3`], 40);
-      const d4 = clampStr(req.body[`${div.id}__${key}__d4`], 40);
-      div.classes[key] = { enabled, cost, d: [d1, d2, d3, d4] };
+      const enabled = req.body[`${g.id}.${key}.enabled`] === "on";
+      const costRaw = req.body[`${g.id}.${key}.cost`];
+      const cost = Number.isFinite(Number(costRaw)) ? Number(costRaw) : 0;
+      const d1 = String(req.body[`${g.id}.${key}.d1`] || "");
+      const d2 = String(req.body[`${g.id}.${key}.d2`] || "");
+      const d3 = String(req.body[`${g.id}.${key}.d3`] || "");
+      const d4 = String(req.body[`${g.id}.${key}.d4`] || "");
+      g.divisions[key] = { enabled, cost, distances: [d1, d2, d3, d4] };
     }
   }
 
   // SkateAbility boxes
   meet.skateAbilityBoxes = meet.skateAbilityBoxes || [];
   for (const b of meet.skateAbilityBoxes) {
-    b.enabled = !!req.body[`sa_${b.id}__enabled`];
-    b.manualAgeLabel = clampStr(req.body[`sa_${b.id}__manualAgeLabel`], 40) || "Manual Age";
-    b.cost = nOr0(req.body[`sa_${b.id}__cost`]);
-    b.d = [
-      clampStr(req.body[`sa_${b.id}__d1`], 40),
-      clampStr(req.body[`sa_${b.id}__d2`], 40),
-      clampStr(req.body[`sa_${b.id}__d3`], 40),
-      clampStr(req.body[`sa_${b.id}__d4`], 40),
+    b.enabled = req.body[`sa_${b.id}_enabled`] === "on";
+    b.manualAgeLabel = String(req.body[`sa_${b.id}_manualAgeLabel`] || "Manual Age").slice(0, 60);
+    const costRaw = req.body[`sa_${b.id}_cost`];
+    b.cost = Number.isFinite(Number(costRaw)) ? Number(costRaw) : 0;
+    b.distances = [
+      String(req.body[`sa_${b.id}_d1`] || ""),
+      String(req.body[`sa_${b.id}_d2`] || ""),
+      String(req.body[`sa_${b.id}_d3`] || ""),
+      String(req.body[`sa_${b.id}_d4`] || ""),
     ];
   }
 
-  // Time Trials (meet-wide)
-  meet.timeTrials = meet.timeTrials || { enabled: false, notes: "", judgesRequired: true };
-  meet.timeTrials.enabled = !!req.body.tt_enabled;
-  meet.timeTrials.judgesRequired = !!req.body.tt_judgesRequired;
-  meet.timeTrials.notes = clampStr(req.body.tt_notes, 2000);
+  // Time Trials config
+  meet.timeTrialsConfig = meet.timeTrialsConfig || { enabled: false, notes: "", judgesRequired: true };
+  meet.timeTrialsConfig.enabled = req.body.tt_enabled === "on";
+  meet.timeTrialsConfig.judgesRequired = req.body.tt_judgesRequired === "on";
+  meet.timeTrialsConfig.notes = String(req.body.tt_notes || "").slice(0, 2000);
 
-  // Relays (meet-wide)
-  meet.relays = meet.relays || { enabled: false, notes: "" };
-  meet.relays.enabled = !!req.body.rel_enabled;
-  meet.relays.notes = clampStr(req.body.rel_notes, 2000);
+  // Relays config
+  meet.relayConfig = meet.relayConfig || { enabled: false, notes: "" };
+  meet.relayConfig.enabled = req.body.relay_enabled === "on";
+  meet.relayConfig.notes = String(req.body.relay_notes || "").slice(0, 2000);
 
   meet.updatedAt = nowIso();
-  saveDb(db);
-  res.redirect(`/meet/${encodeURIComponent(meet.id)}/builder`);
+  saveDb();
+  res.redirect(`/admin/meet/${encodeURIComponent(meet.id)}`);
 });
 
 // -------------------- BLOCK BUILDER (saved in meet) --------------------
-app.get("/meet/:meetId/blocks", requireRole(["director"]), (req, res) => {
+app.get("/admin/blocks/:meetId", requireRole(["director"]), (req, res) => {
   const user = req.session.user;
-  const meet = meetOr404(req, res);
-  if (!meet) return;
+  const meet = findMeet(req.params.meetId);
+  if (!meet) return res.status(404).send("Meet not found");
 
-  const blocks = meet.blocks || [];
-  const blocksHtml = blocks
-    .map((b) => {
-      return `
-        <div class="box">
-          <div class="row">
-            <div class="k">${safeText(b.name)}</div>
-            <span class="pill">${safeText(b.day || "Day 1")}</span>
-            <span class="pill">${safeText(b.type || "division")}</span>
-            <span class="right"></span>
-            <form method="POST" action="/meet/${encodeURIComponent(meet.id)}/blocks/delete" style="margin:0;">
-              <input type="hidden" name="blockId" value="${safeText(b.id)}"/>
-              <button class="btn danger" type="submit">Delete</button>
-            </form>
-          </div>
-          <div class="small">Items: ${(b.items || []).length}</div>
-        </div>
-      `;
-    })
-    .join("");
+  const blocks = (meet.blocks || []).slice();
 
-  const body = `
-    <div class="card">
-      <h1>Block Builder</h1>
-      <div class="muted">${safeText(meet.name)} • blocks are saved inside this meet</div>
-
-      <form class="section" method="POST" action="/meet/${encodeURIComponent(meet.id)}/blocks/add">
-        <div class="grid3">
-          <div>
-            <label>Day</label>
-            <select name="day">
-              <option value="Day 1">Day 1</option>
-              <option value="Day 2">Day 2</option>
-              <option value="Day 3">Day 3</option>
-            </select>
-          </div>
-          <div>
-            <label>Block Name</label>
-            <input name="name" placeholder="ex: Tiny Tot / Primary" required />
-          </div>
-          <div>
-            <label>Type</label>
-            <select name="type">
-              <option value="division">Division block</option>
-              <option value="time_trials">Time Trials block</option>
-              <option value="relays">Relays block</option>
-              <option value="skateability">SkateAbility block</option>
-              <option value="custom">Custom block</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="section row">
-          <button class="btn primary" type="submit">Add Block</button>
-          <a class="btn" href="/meet/${encodeURIComponent(meet.id)}/builder">Back to Meet Builder</a>
-          <a class="btn" href="/portal">Back to Portal</a>
-        </div>
-      </form>
-
-      <div class="section">
-        ${blocksHtml || `<div class="muted">No blocks yet.</div>`}
+  const blocksHtml = blocks.map((b) => `
+    <div class="box" style="margin:10px 0;">
+      <div class="row">
+        <div class="k">${safeText(b.name)}</div>
+        <span class="pill">${safeText(b.day || "Day 1")}</span>
+        <span class="pill">Items: ${safeText(String((b.items || []).length))}</span>
+        <span class="right"></span>
+        <form method="POST" action="/admin/blocks/${encodeURIComponent(meet.id)}/delete" style="margin:0;">
+          <input type="hidden" name="blockId" value="${safeText(b.id)}"/>
+          <button class="btn danger" type="submit">Delete</button>
+        </form>
       </div>
     </div>
-  `;
-  res.send(pageShell({ title: "Block Builder", user, bodyHtml: body }));
+  `).join("");
+
+  res.send(pageShell({
+    title: "Block Builder",
+    user,
+    bodyHtml: `
+      <div class="card">
+        <h1>Block Builder</h1>
+        <div class="muted">${safeText(meet.meetName)} • Blocks are saved inside this meet</div>
+
+        <form class="section" method="POST" action="/admin/blocks/${encodeURIComponent(meet.id)}/add">
+          <div class="grid2">
+            <div>
+              <label>Day</label>
+              <select name="day">
+                <option>Day 1</option>
+                <option>Day 2</option>
+                <option>Day 3</option>
+              </select>
+            </div>
+            <div>
+              <label>Block Name</label>
+              <input name="name" placeholder="Example: Tiny Tot / Primary" required />
+            </div>
+          </div>
+          <div class="section row">
+            <button class="btn primary" type="submit">Add Block</button>
+            <a class="btn" href="/admin/meet/${encodeURIComponent(meet.id)}">Back to Meet Builder</a>
+            <a class="btn" href="/portal">Back to Portal</a>
+          </div>
+        </form>
+
+        <div class="section">
+          ${blocksHtml || `<div class="muted">No blocks yet.</div>`}
+        </div>
+      </div>
+    `
+  }));
 });
 
-app.post("/meet/:meetId/blocks/add", requireRole(["director"]), (req, res) => {
-  const meet = meetOr404(req, res);
-  if (!meet) return;
+app.post("/admin/blocks/:meetId/add", requireRole(["director"]), (req, res) => {
+  const meet = findMeet(req.params.meetId);
+  if (!meet) return res.status(404).send("Meet not found");
 
   meet.blocks = meet.blocks || [];
   meet.blocks.push({
     id: "blk_" + uid(6),
-    day: clampStr(req.body.day, 10) || "Day 1",
-    name: clampStr(req.body.name, 60) || "Block",
-    type: clampStr(req.body.type, 20) || "division",
+    day: String(req.body.day || "Day 1"),
+    name: String(req.body.name || "Block").slice(0, 70),
     items: [],
     createdAt: nowIso(),
   });
-
   meet.updatedAt = nowIso();
-  saveDb(db);
-  res.redirect(`/meet/${encodeURIComponent(meet.id)}/blocks`);
+  saveDb();
+  res.redirect(`/admin/blocks/${encodeURIComponent(meet.id)}`);
 });
 
-app.post("/meet/:meetId/blocks/delete", requireRole(["director"]), (req, res) => {
-  const meet = meetOr404(req, res);
-  if (!meet) return;
+app.post("/admin/blocks/:meetId/delete", requireRole(["director"]), (req, res) => {
+  const meet = findMeet(req.params.meetId);
+  if (!meet) return res.status(404).send("Meet not found");
 
   const blockId = String(req.body.blockId || "");
   meet.blocks = (meet.blocks || []).filter((b) => b.id !== blockId);
   meet.updatedAt = nowIso();
-  saveDb(db);
-  res.redirect(`/meet/${encodeURIComponent(meet.id)}/blocks`);
+  saveDb();
+  res.redirect(`/admin/blocks/${encodeURIComponent(meet.id)}`);
 });
 
-// -------------------- REGISTRATION (simple: age + checkboxes) --------------------
-app.get("/meet/:meetId/register", (req, res) => {
+// -------------------- REGISTRATION (public) --------------------
+app.get("/register/:meetId", (req, res) => {
   const s = getSession(req);
-  const meet = meetOr404(req, res);
-  if (!meet) return;
+  const meet = findMeet(req.params.meetId);
+  if (!meet) return res.status(404).send("Meet not found");
+
+  const teamOptions = (db.teamList || TEAM_LIST).map((t) => `<option value="${safeText(t)}">${safeText(t)}</option>`).join("");
 
   const body = `
     <div class="card">
       <h1>Register</h1>
-      <div class="muted">${safeText(meet.name)} • ${safeText(meet.date || "TBD")}</div>
+      <div class="muted">${safeText(meet.meetName)} • ${safeText(meet.date || "TBD")}</div>
 
-      ${
-        meet.registrationOpen
-          ? `
-        <form class="section" method="POST" action="/meet/${encodeURIComponent(meet.id)}/register">
-          <div class="grid2">
-            <div><label>First Name</label><input name="first" required /></div>
-            <div><label>Last Name</label><input name="last" required /></div>
+      ${meet.registrationOpen ? `
+      <form class="section" method="POST" action="/register/${encodeURIComponent(meet.id)}/submit">
+        <div class="grid2">
+          <div><label>First Name</label><input name="first" required /></div>
+          <div><label>Last Name</label><input name="last" required /></div>
+        </div>
+
+        <div class="section grid2">
+          <div>
+            <label>Team</label>
+            <select name="team" required>
+              ${teamOptions}
+            </select>
           </div>
-
-          <div class="section grid2">
-            <div><label>Team</label><input name="team" placeholder="Independent" /></div>
-            <div><label>USARS # (optional)</label><input name="usars" /></div>
+          <div>
+            <label>USARS Number (optional)</label>
+            <input name="usars" />
           </div>
+        </div>
 
-          <div class="section grid2">
-            <div>
-              <label>Age</label>
-              <input name="age" placeholder="ex: 12" required />
-              <div class="small">Only age + checkboxes (no division dropdown).</div>
+        <div class="section grid2">
+          <div>
+            <label>Age</label>
+            <input name="age" placeholder="ex: 12" required />
+          </div>
+          <div>
+            <label>Options</label>
+            <div class="box">
+              <div class="chk"><input type="checkbox" name="challengeUp" /> <div><b>Challenge Up</b></div></div>
+              <div class="chk"><input type="checkbox" name="novice" /> <div><b>Novice</b></div></div>
+              <div class="chk"><input type="checkbox" name="elite" /> <div><b>Elite</b></div></div>
+              <div class="chk"><input type="checkbox" name="open" /> <div><b>Open</b></div></div>
+              <div class="chk"><input type="checkbox" name="timeTrials" /> <div><b>Time Trials</b></div></div>
+              <div class="chk"><input type="checkbox" name="relays" /> <div><b>Relays</b></div></div>
             </div>
-            <div>
-              <label>Options</label>
-              <div class="box">
-                <div class="chk"><input type="checkbox" name="challengeUp" /> <div><b>Challenge Up</b> <span class="small">(auto bumped later)</span></div></div>
-                <div class="chk"><input type="checkbox" name="novice" /> <div><b>Novice</b></div></div>
-                <div class="chk"><input type="checkbox" name="elite" /> <div><b>Elite</b></div></div>
-                <div class="chk"><input type="checkbox" name="open" /> <div><b>Open</b></div></div>
-                <div class="chk"><input type="checkbox" name="timeTrials" /> <div><b>Time Trials</b></div></div>
-                <div class="chk"><input type="checkbox" name="relays" /> <div><b>Relays</b></div></div>
-              </div>
-            </div>
           </div>
+        </div>
 
-          <div class="section row">
-            <button class="btn primary" type="submit">Register</button>
-            <a class="btn" href="/meets">Back</a>
-          </div>
-        </form>
-      `
-          : `<div class="section muted">Registration is currently closed.</div>`
-      }
+        <div class="section row">
+          <button class="btn primary" type="submit">Register</button>
+          <a class="btn" href="/meets">Back to Meets</a>
+        </div>
 
-      <div class="section">
-        <h2>Registrations</h2>
-        <div class="small">Total: ${(meet.registrants || []).length}</div>
-      </div>
+        <div class="mini section">This assigns your check-in / skater number.</div>
+      </form>
+      ` : `
+        <div class="section muted">Registration is currently closed.</div>
+      `}
     </div>
   `;
   res.send(pageShell({ title: "Register", user: s?.user, bodyHtml: body }));
 });
 
-app.post("/meet/:meetId/register", (req, res) => {
-  const meet = meetOr404(req, res);
-  if (!meet) return;
-  if (!meet.registrationOpen) return res.status(400).send("Registration closed");
+app.post("/register/:meetId/submit", (req, res) => {
+  const meet = findMeet(req.params.meetId);
+  if (!meet) return res.status(404).send("Meet not found");
+  if (!meet.registrationOpen) return res.status(403).send("Registration closed");
 
   const ageNum = Number(req.body.age);
-  const reg = {
-    id: "reg_" + uid(6),
-    checkIn: meet.nextCheckIn,
-    createdAt: nowIso(),
-    first: clampStr(req.body.first, 40),
-    last: clampStr(req.body.last, 40),
-    team: clampStr(req.body.team || "Independent", 80),
-    usars: clampStr(req.body.usars, 40),
-    age: Number.isFinite(ageNum) ? ageNum : null,
-    flags: {
-      challengeUp: !!req.body.challengeUp,
-      novice: !!req.body.novice,
-      elite: !!req.body.elite,
-      open: !!req.body.open,
-      timeTrials: !!req.body.timeTrials,
-      relays: !!req.body.relays,
-    },
-  };
+  const age = Number.isFinite(ageNum) ? ageNum : null;
+
+  const checkInNumber = meet.nextCheckInNumber || 1;
+  meet.nextCheckInNumber = checkInNumber + 1;
 
   meet.registrants = meet.registrants || [];
-  meet.registrants.push(reg);
-  meet.nextCheckIn = Number(meet.nextCheckIn || 1) + 1;
+  meet.registrants.push({
+    id: "reg_" + uid(6),
+    checkInNumber,
+    createdAt: nowIso(),
+    first: String(req.body.first || "").trim().slice(0, 40),
+    last: String(req.body.last || "").trim().slice(0, 40),
+    team: String(req.body.team || "Independent").trim().slice(0, 80),
+    usars: String(req.body.usars || "").trim().slice(0, 40),
+    age,
+    flags: {
+      challengeUp: req.body.challengeUp === "on",
+      novice: req.body.novice === "on",
+      elite: req.body.elite === "on",
+      open: req.body.open === "on",
+      timeTrials: req.body.timeTrials === "on",
+      relays: req.body.relays === "on",
+    },
+  });
 
   meet.updatedAt = nowIso();
-  saveDb(db);
+  saveDb();
 
-  // simple confirmation page
-  const s = getSession(req);
+  // simple confirmation
   const body = `
-    <div class="card" style="max-width:820px;margin:24px auto;">
+    <div class="card">
       <h1>Registered!</h1>
-      <div class="muted">Check-In / Skater #</div>
-      <div style="font-size:44px;font-weight:900;margin-top:6px;">#${fmtCheckIn(reg.checkIn)}</div>
+      <div class="muted">${safeText(meet.meetName)}</div>
       <div class="section">
-        <div><span class="k">Name:</span> ${safeText(reg.first)} ${safeText(reg.last)}</div>
-        <div><span class="k">Team:</span> ${safeText(reg.team)}</div>
-        <div><span class="k">Age:</span> ${safeText(reg.age ?? "—")}</div>
+        <div class="k">Your Check-In / Skater Number:</div>
+        <div style="font-size:42px;font-weight:900;margin-top:6px;">#${safeText(fmtCheckIn(checkInNumber))}</div>
       </div>
       <div class="section row">
-        <a class="btn primary" href="/meet/${encodeURIComponent(meet.id)}/register">Back to Registration</a>
-        <a class="btn" href="/meets">All Meets</a>
+        <a class="btn primary" href="/register/${encodeURIComponent(meet.id)}">Register another</a>
+        <a class="btn" href="/meets">Back to Meets</a>
       </div>
     </div>
   `;
-  res.send(pageShell({ title: "Registered", user: s?.user, bodyHtml: body }));
+  res.send(pageShell({ title: "Registered", user: null, bodyHtml: body }));
 });
 
-// -------------------- ERROR HANDLER --------------------
+// -------------------- SAFETY ERROR HANDLER --------------------
 app.use((err, req, res, next) => {
   console.error("Unhandled error:", err);
   res.status(500).send("Internal Server Error");
@@ -1081,13 +1242,16 @@ app.use((err, req, res, next) => {
 app.listen(PORT, HOST, () => {
   console.log(`
 ========================================================
-SpeedSkateMeet | CLEAN REBUILD v8.0
+SpeedSkateMeet | CLEAN REBUILD v${DATA_VERSION}
 Data: ${DATA_FILE}
 
-Rinks are FORCED to Roller City (Wichita, KS).
-No fake Wichita Skate Center will ever appear.
+Rinks default:
+- Roller City (Wichita, KS)
 
-Local: http://localhost:${PORT}
+Meets:
+- No default meet created. Build from Portal (Director).
+
+Listening on ${HOST}:${PORT}
 ========================================================
 `.trim());
 });
