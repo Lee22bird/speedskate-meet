@@ -1,1051 +1,727 @@
 // ============================================================
-// SpeedSkateMeet — CLEAN REBUILD v8 (single-file server.js)
-// Node.js + Express • JSON persistence • safe sessions (no crash)
+// SpeedSkateMeet — CLEAN REBUILD v7.2 (stable baseline)
+// Node.js + Express • single-file server.js • JSON persistence
+//
+// Goals:
+// ✅ No more getSession() crashes (db.sessions always exists)
+// ✅ Safe DB load + auto-heal missing keys
+// ✅ Simple cookie session (no extra deps)
+// ✅ Rinks list + add/edit (includes correct Roller City Wichita)
+// ✅ Portal + basic Director Dashboard + Meet Builder shell
+//
+// Deploy notes (Render):
+// - Start command: node server.js
+// - Uses PORT from Render
+// - Persists to DATA_FILE if set, else ./ssm_db.json
 // ============================================================
+
+"use strict";
 
 const express = require("express");
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
-const cookieParser = require("cookie-parser");
 
+// -------------------- Config --------------------
 const app = express();
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
-app.use(cookieParser());
 
-// --------------------------
-// CONFIG
-// --------------------------
-const PORT = process.env.PORT || 10000;
+const PORT = process.env.PORT || 3000;
 const HOST = "0.0.0.0";
 
-// Render disk path: /opt/render/project/src
+// Render best-practice: persist to a disk mount path via env var DATA_FILE.
+// If not set, we fallback to local file in repo folder (works locally, not durable on Render).
 const DATA_FILE =
+  process.env.DATA_FILE ||
   process.env.SSM_DATA_FILE ||
-  path.join(process.cwd(), "ssm_db.json");
+  path.join(__dirname, "ssm_db.json");
 
-// --------------------------
-// DB (JSON persistence)
-// --------------------------
-function safeReadJSON(file) {
-  try {
-    if (!fs.existsSync(file)) return null;
-    const raw = fs.readFileSync(file, "utf8");
-    if (!raw.trim()) return null;
-    return JSON.parse(raw);
-  } catch (e) {
-    return null;
-  }
-}
-
-function safeWriteJSON(file, obj) {
-  const tmp = file + ".tmp";
-  fs.writeFileSync(tmp, JSON.stringify(obj, null, 2), "utf8");
-  fs.renameSync(tmp, file);
-}
-
-function newDB() {
+// -------------------- DB --------------------
+function defaultDb() {
   return {
-    version: 8,
+    version: "7.2",
     users: {
-      // Demo users — passwords are NOT displayed publicly
-      Lbird22: { username: "Lbird22", role: "director", password: "Redline22" },
-      JudgeLee: { username: "JudgeLee", role: "judge", password: "Redline22" },
-      CoachLee: { username: "CoachLee", role: "coach", password: "Redline22" },
+      // Demo users (passwords not displayed)
+      Lbird22: { role: "director", pass: "Redline22" },
+      JudgeLee: { role: "judge", pass: "Redline22" },
+      CoachLee: { role: "coach", pass: "Redline22" },
     },
-    sessions: {},
+    sessions: {}, // sid -> { username, role, createdAt }
+    rinks: [],
     meets: [],
-    meetTemplates: [], // saved meets/templates
-    rinks: [
-      {
-        id: "roller_city_wichita",
-        name: "Roller City",
-        city: "Wichita, KS",
-        phone: "316-942-4555",
-        address: "3234 S. Meridian Ave Wichita, KS 67217",
-        website: "rollercitywichitaks.com",
-        team: "Midwest Racing",
-      },
-    ],
   };
 }
 
-let db = safeReadJSON(DATA_FILE) || newDB();
-
-// Ensure required keys exist (prevents crashes on old/blank DB)
-db.users = db.users || {};
-db.sessions = db.sessions || {};
-db.meets = db.meets || [];
-db.meetTemplates = db.meetTemplates || [];
-db.rinks = db.rinks || [];
-db.version = db.version || 8;
-
-function saveDB() {
-  safeWriteJSON(DATA_FILE, db);
-}
-
-// --------------------------
-// UTIL
-// --------------------------
-function id(prefix = "id") {
-  return `${prefix}_${crypto.randomBytes(8).toString("hex")}`;
-}
-
-function escapeHtml(s) {
-  return String(s ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
-function getSession(req) {
+function readDb() {
   try {
-    const sid = req.cookies?.ssm_session || null;
-    if (!sid) return null;
-    const sessions = db.sessions || {};
-    return sessions[sid] || null;
-  } catch {
-    return null;
+    if (!fs.existsSync(DATA_FILE)) {
+      const db = defaultDb();
+      writeDb(db);
+      return db;
+    }
+    const raw = fs.readFileSync(DATA_FILE, "utf8");
+    const parsed = raw ? JSON.parse(raw) : {};
+    return healDb(parsed);
+  } catch (e) {
+    console.error("DB read failed; recreating DB:", e);
+    const db = defaultDb();
+    // Try writing a fresh DB; if disk perms fail on Render, you'll see it in logs.
+    try {
+      writeDb(db);
+    } catch (e2) {
+      console.error("DB write failed while recreating:", e2);
+    }
+    return db;
   }
 }
 
-function requireAuth(req, res, next) {
-  const s = getSession(req);
-  if (!s || !s.user) return res.redirect("/login");
-  const u = db.users?.[s.user];
-  if (!u) return res.redirect("/login");
-  req.user = u;
-  req.session = s;
-  next();
+function healDb(db) {
+  const d = typeof db === "object" && db ? db : {};
+  if (!d.version) d.version = "7.2";
+  if (!d.users || typeof d.users !== "object") d.users = defaultDb().users;
+  if (!d.sessions || typeof d.sessions !== "object") d.sessions = {};
+  if (!Array.isArray(d.rinks)) d.rinks = [];
+  if (!Array.isArray(d.meets)) d.meets = [];
+  return d;
 }
 
-function nav(user) {
-  const isAuthed = !!user;
-  const right = isAuthed
-    ? `<div class="right">Signed in as <b>${escapeHtml(user.username)}</b> (${escapeHtml(
-        user.role
-      )}) · <a href="/portal">Portal</a> · <a href="/logout">Logout</a></div>`
-    : `<div class="right"><a href="/login">Admin Login</a></div>`;
+function writeDb(db) {
+  const dir = path.dirname(DATA_FILE);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(DATA_FILE, JSON.stringify(db, null, 2), "utf8");
+}
+
+function withDb(fn) {
+  const db = readDb();
+  const result = fn(db);
+  writeDb(db);
+  return result;
+}
+
+// Seed: ensure Roller City exists (and remove fake Wichita Skate Center)
+withDb((db) => {
+  // Remove fake / wrong entries
+  db.rinks = db.rinks.filter(
+    (r) => (r.name || "").toLowerCase() !== "wichita skate center"
+  );
+
+  const exists = db.rinks.some(
+    (r) => (r.name || "").toLowerCase() === "roller city"
+  );
+
+  if (!exists) {
+    db.rinks.push({
+      id: crypto.randomUUID(),
+      name: "Roller City",
+      city: "Wichita, KS",
+      phone: "316-942-4555",
+      address: "3234 S. Meridian Ave, Wichita, KS 67217",
+      website: "rollercitywichitaks.com",
+      team: "",
+    });
+  }
+});
+
+// -------------------- Helpers --------------------
+function escapeHtml(s) {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function parseCookies(req) {
+  const header = req.headers.cookie || "";
+  const out = {};
+  header.split(";").forEach((part) => {
+    const idx = part.indexOf("=");
+    if (idx === -1) return;
+    const k = part.slice(0, idx).trim();
+    const v = part.slice(idx + 1).trim();
+    if (!k) return;
+    out[k] = decodeURIComponent(v);
+  });
+  return out;
+}
+
+function setCookie(res, name, value, opts = {}) {
+  const pieces = [`${name}=${encodeURIComponent(value)}`];
+  pieces.push(`Path=/`);
+  pieces.push(`HttpOnly`);
+  // SameSite Lax helps a lot
+  pieces.push(`SameSite=Lax`);
+  if (opts.maxAgeSeconds) pieces.push(`Max-Age=${opts.maxAgeSeconds}`);
+  // On Render you’ll usually be https, so Secure is safe there.
+  if (opts.secure) pieces.push(`Secure`);
+  res.setHeader("Set-Cookie", pieces.join("; "));
+}
+
+function clearCookie(res, name) {
+  res.setHeader("Set-Cookie", `${name}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`);
+}
+
+function createSession(username, role) {
+  const sid = crypto.randomBytes(24).toString("hex");
+  withDb((db) => {
+    db.sessions[sid] = {
+      username,
+      role,
+      createdAt: Date.now(),
+    };
+  });
+  return sid;
+}
+
+function getSession(req) {
+  const cookies = parseCookies(req);
+  const sid = cookies.ssm_sid;
+  if (!sid) return null;
+
+  const db = readDb(); // read-only ok here
+  if (!db.sessions || typeof db.sessions !== "object") return null;
+
+  const sess = db.sessions[sid];
+  if (!sess || !sess.username) return null;
+
+  return sess;
+}
+
+function requireRole(role) {
+  return (req, res, next) => {
+    const s = getSession(req);
+    if (!s) return res.redirect("/login");
+    if (role && s.role !== role) {
+      return res.status(403).send(pageShell({ title: "Forbidden", user: s, bodyHtml: `<h1>Forbidden</h1><p>You do not have access to this page.</p>` }));
+    }
+    req.session = s;
+    next();
+  };
+}
+
+function navHtml(user) {
+  const loggedIn = !!user;
+  const portalBtn = loggedIn
+    ? `<a class="btn" href="/portal">Portal</a><a class="btn btn-ghost" href="/logout">Logout</a>`
+    : `<a class="btn" href="/login">Admin Login</a>`;
 
   return `
-  <div class="topbar">
-    <div class="brand">
-      <div class="logo">SpeedSkateMeet</div>
+    <div class="nav">
+      <div class="brand">SpeedSkateMeet</div>
+      <div class="navlinks">
+        <a class="btn btn-ghost" href="/">Home</a>
+        <a class="btn btn-ghost" href="/meets">Find a Meet</a>
+        <a class="btn btn-ghost" href="/rinks">Find a Rink</a>
+        <a class="btn btn-ghost" href="/live">Live Race Day</a>
+        ${portalBtn}
+      </div>
     </div>
-    <div class="links">
-      <a class="pill" href="/">Home</a>
-      <a class="pill" href="/meets">Find a Meet</a>
-      <a class="pill" href="/rinks">Find a Rink</a>
-      <a class="pill" href="/live">Live Race Day</a>
-    </div>
-    ${right}
-  </div>
   `;
 }
 
-function pageShell({ title, user, body }) {
+function pageShell({ title, user, bodyHtml }) {
+  const roleBadge = user ? `<span class="badge">${escapeHtml(user.username)} • ${escapeHtml(user.role)}</span>` : "";
   return `<!doctype html>
 <html>
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>${escapeHtml(title || "SpeedSkateMeet")}</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${escapeHtml(title)} • SpeedSkateMeet</title>
   <style>
-    :root{
-      --bg:#f5f7fb;
+    :root {
+      --bg:#f6f7fb;
       --card:#ffffff;
       --text:#111827;
       --muted:#6b7280;
+      --line:#e5e7eb;
       --blue:#2563eb;
       --blue2:#1d4ed8;
-      --border:#e5e7eb;
-      --shadow: 0 10px 30px rgba(0,0,0,.07);
-      --radius: 18px;
+      --shadow: 0 10px 30px rgba(0,0,0,.08);
+      --radius:18px;
     }
     *{box-sizing:border-box}
-    body{
-      margin:0;
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
-      background: linear-gradient(#f7f8fc, #f2f4fb);
-      color:var(--text);
-    }
-    a{color:var(--blue);text-decoration:none}
-    a:hover{text-decoration:underline}
-
-    .wrap{max-width:1100px;margin:0 auto;padding:18px}
-    .topbar{
-      display:flex;gap:14px;align-items:center;justify-content:space-between;
-      background:#fff;border:1px solid var(--border);border-radius:22px;
-      padding:14px 16px;box-shadow: var(--shadow);
-      position:sticky;top:10px;z-index:10;
-    }
-    .brand{display:flex;align-items:center;gap:12px}
-    .logo{font-weight:900;letter-spacing:.2px}
-    .links{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
-    .pill{
-      display:inline-block;
-      padding:10px 14px;
-      border:2px solid rgba(37,99,235,.35);
-      border-radius:18px;
-      background:#fff;
-      color:var(--blue2);
-      font-weight:700;
-    }
-    .pill.primary{
-      background:var(--blue);
-      border-color:var(--blue);
-      color:#fff;
-    }
-    .right{color:var(--muted);font-size:14px;white-space:nowrap}
-    .grid{display:grid;grid-template-columns:1fr;gap:16px;margin-top:16px}
-    @media(min-width:900px){ .grid.two{grid-template-columns:1fr 1fr} }
-
-    .card{
-      background:var(--card);
-      border:1px solid var(--border);
-      border-radius:var(--radius);
-      box-shadow: var(--shadow);
-      padding:18px;
-    }
-    h1{margin:8px 0 12px;font-size:40px}
-    h2{margin:0 0 10px;font-size:26px}
-    h3{margin:14px 0 8px;font-size:18px}
-    p{margin:8px 0;color:var(--muted);line-height:1.35}
-    .btn{
-      display:inline-block;
-      padding:10px 14px;
-      border-radius:14px;
-      border:1px solid var(--border);
-      background:#fff;
-      font-weight:800;
-      cursor:pointer;
-    }
-    .btn.primary{
-      background:var(--blue);
-      border-color:var(--blue);
-      color:#fff;
-    }
-    .btn.danger{
-      background:#ef4444;
-      border-color:#ef4444;
-      color:#fff;
-    }
-    .btn:disabled{opacity:.55;cursor:not-allowed}
-    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-    .field{display:flex;flex-direction:column;gap:6px;min-width:200px;flex:1}
-    label{font-size:13px;color:var(--muted);font-weight:700}
-    input, select, textarea{
-      width:100%;
-      padding:11px 12px;
-      border:1px solid var(--border);
-      border-radius:14px;
-      font-size:15px;
-      outline:none;
-      background:#fff;
-    }
-    textarea{min-height:80px}
-    .small{font-size:13px;color:var(--muted)}
-    .divider{height:1px;background:var(--border);margin:14px 0}
-    .badge{
-      display:inline-block;padding:4px 10px;border-radius:999px;border:1px solid var(--border);
-      color:var(--muted);font-weight:800;font-size:12px;background:#fff;
-    }
-    .sectionTitle{display:flex;align-items:center;justify-content:space-between;gap:10px}
+    body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+    .wrap{max-width:1050px;margin:0 auto;padding:18px}
+    .nav{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 16px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+    .brand{font-weight:900;font-size:22px;letter-spacing:.2px}
+    .navlinks{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+    .badge{display:inline-flex;align-items:center;padding:6px 10px;border-radius:999px;border:1px solid var(--line);background:#fff;font-size:12px;color:var(--muted)}
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:10px 14px;border-radius:14px;border:1px solid var(--blue);color:#fff;background:var(--blue);text-decoration:none;font-weight:800}
+    .btn:hover{background:var(--blue2)}
+    .btn-ghost{background:#fff;color:var(--blue);border:1px solid rgba(37,99,235,.35)}
+    .btn-ghost:hover{background:#f0f6ff}
+    .grid{display:grid;gap:16px}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px}
+    h1{margin:14px 0 10px;font-size:34px;letter-spacing:-.4px}
+    h2{margin:0 0 10px;font-size:22px}
+    p{margin:8px 0;color:var(--muted);line-height:1.5}
+    .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+    label{display:block;font-weight:800;font-size:13px;margin:10px 0 6px}
+    input,select,textarea{width:100%;padding:12px 12px;border-radius:14px;border:1px solid var(--line);font-size:14px;background:#fff}
+    textarea{min-height:90px}
+    .two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    @media (max-width:720px){.two{grid-template-columns:1fr}}
     .muted{color:var(--muted)}
-    .k{font-weight:900}
-    .table{width:100%;border-collapse:separate;border-spacing:0 10px}
-    .table td{padding:10px 12px;background:#fff;border:1px solid var(--border)}
-    .table tr td:first-child{border-top-left-radius:14px;border-bottom-left-radius:14px}
-    .table tr td:last-child{border-top-right-radius:14px;border-bottom-right-radius:14px}
-    .checkRow{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
-    .checkRow label{display:flex;gap:8px;align-items:center;color:var(--text);font-weight:800}
-    .checkRow input{width:auto}
+    .hr{height:1px;background:var(--line);margin:14px 0}
+    .topline{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:14px 0}
   </style>
 </head>
 <body>
   <div class="wrap">
-    ${nav(user)}
-    <div class="grid">
-      ${body}
+    ${navHtml(user)}
+    <div class="topline">
+      <div></div>
+      <div>${roleBadge}</div>
     </div>
-    <div style="height:18px"></div>
-    <div class="small muted">Data persists to: <code>${escapeHtml(DATA_FILE)}</code></div>
+    ${bodyHtml}
+    <div style="height:22px"></div>
+    <div class="muted" style="font-size:12px">
+      Data file: <code>${escapeHtml(DATA_FILE)}</code>
+    </div>
   </div>
 </body>
 </html>`;
 }
 
-// --------------------------
-// HOME
-// --------------------------
+// -------------------- Routes --------------------
 app.get("/", (req, res) => {
-  const user = getSession(req)?.user ? db.users?.[getSession(req).user] : null;
-
+  const s = getSession(req);
   const body = `
-    <div class="card" style="text-align:center">
-      <div style="display:flex;justify-content:center;margin-top:6px">
-        <div style="font-size:40px;font-weight:1000;letter-spacing:.3px">SpeedSkateMeet</div>
-      </div>
-      <p style="max-width:720px;margin:10px auto 0">
-        Meet software built for inline speed skating. Simple, mobile-friendly, and designed around how clubs actually run race day.
-      </p>
-
-      <div class="divider"></div>
-
-      <div class="row" style="justify-content:center">
-        <a class="btn primary" href="/meets">Find a Meet</a>
-        <a class="btn primary" href="/rinks">Find a Rink</a>
-        <a class="btn" href="/live">Live Race Day</a>
-        <a class="btn" href="/login">Admin Login</a>
-      </div>
-
-      <div class="divider"></div>
-
-      <div class="small muted">
-        Adult ages locked: <b>Classic 25–34</b> · <b>Masters 35–44</b>
+    <div class="card">
+      <h1>SpeedSkateMeet</h1>
+      <p>Meet software for the inline speed skating community — simple, fast, and made by skaters.</p>
+      <div class="row">
+        <a class="btn" href="/meets">Find a Meet</a>
+        <a class="btn btn-ghost" href="/rinks">Find a Rink</a>
+        <a class="btn btn-ghost" href="/live">Live Race Day</a>
+        ${s ? `<a class="btn btn-ghost" href="/portal">Portal</a>` : `<a class="btn btn-ghost" href="/login">Admin Login</a>`}
       </div>
     </div>
   `;
-
-  res.send(pageShell({ title: "Home", user, body }));
+  res.send(pageShell({ title: "Home", user: s, bodyHtml: body }));
 });
 
-// --------------------------
-// LOGIN / LOGOUT
-// --------------------------
-app.get("/login", (req, res) => {
+app.get("/live", (req, res) => {
+  const s = getSession(req);
   const body = `
-    <div class="card" style="max-width:520px;margin:0 auto">
-      <h2>Admin Login</h2>
-      <form method="POST" action="/login">
-        <div class="field">
-          <label>Username</label>
-          <input name="username" autocomplete="username" />
-        </div>
-        <div style="height:10px"></div>
-        <div class="field">
-          <label>Password</label>
-          <input name="password" type="password" autocomplete="current-password" />
-        </div>
-        <div style="height:14px"></div>
-        <button class="btn primary" type="submit">Login</button>
-
-        <div class="divider"></div>
-        <div class="small muted">
-          Demo usernames:<br/>
-          Director: <b>Lbird22</b><br/>
-          Judge: <b>JudgeLee</b><br/>
-          Coach: <b>CoachLee</b><br/>
-          <br/>
-          Passwords are never displayed on public pages.
-        </div>
-      </form>
+    <div class="card">
+      <h1>Live Race Day</h1>
+      <p>Placeholder page. We’ll wire this into blocks + judges panel next.</p>
     </div>
   `;
-  res.send(pageShell({ title: "Login", user: null, body }));
+  res.send(pageShell({ title: "Live", user: s, bodyHtml: body }));
+});
+
+app.get("/meets", (req, res) => {
+  const s = getSession(req);
+  const db = readDb();
+  const rows = db.meets
+    .map(
+      (m) => `
+      <div class="card">
+        <h2>${escapeHtml(m.name || "Meet")}</h2>
+        <p class="muted">${escapeHtml(m.date || "TBD")} • Regs: ${m.regCount || 0}</p>
+      </div>
+    `
+    )
+    .join("");
+  res.send(
+    pageShell({
+      title: "Find a Meet",
+      user: s,
+      bodyHtml: `
+        <div class="card">
+          <h1>Meets</h1>
+          <p>Public meet listings (placeholder).</p>
+        </div>
+        <div class="grid">${rows || `<div class="card"><p class="muted">No meets listed yet.</p></div>`}</div>
+      `,
+    })
+  );
+});
+
+// ---- Auth ----
+app.get("/login", (req, res) => {
+  const s = getSession(req);
+  if (s) return res.redirect("/portal");
+
+  const body = `
+    <div class="card" style="max-width:520px;margin:0 auto">
+      <h1>Admin Login</h1>
+      <form method="POST" action="/login">
+        <label>Username</label>
+        <input name="username" autocomplete="username" />
+        <label>Password</label>
+        <input name="password" type="password" autocomplete="current-password" />
+        <div class="row" style="margin-top:14px">
+          <button class="btn" type="submit">Login</button>
+        </div>
+      </form>
+      <div class="hr"></div>
+      <div class="muted" style="font-size:13px">
+        Demo usernames (passwords not displayed publicly):
+        <div style="margin-top:8px">
+          Director: <b>Lbird22</b><br/>
+          Judge: <b>JudgeLee</b><br/>
+          Coach: <b>CoachLee</b>
+        </div>
+      </div>
+    </div>
+  `;
+  res.send(pageShell({ title: "Login", user: null, bodyHtml: body }));
 });
 
 app.post("/login", (req, res) => {
   const username = String(req.body.username || "").trim();
   const password = String(req.body.password || "").trim();
+
+  const db = readDb();
   const u = db.users?.[username];
-  if (!u || u.password !== password) {
-    return res.send(
+
+  if (!u || u.pass !== password) {
+    return res.status(401).send(
       pageShell({
         title: "Login",
         user: null,
-        body: `<div class="card" style="max-width:520px;margin:0 auto">
-          <h2>Admin Login</h2>
-          <p style="color:#ef4444;font-weight:900">Invalid username or password.</p>
-          <a class="btn" href="/login">Try again</a>
-        </div>`,
+        bodyHtml: `
+          <div class="card" style="max-width:520px;margin:0 auto">
+            <h1>Login failed</h1>
+            <p>Incorrect username or password.</p>
+            <a class="btn" href="/login">Try again</a>
+          </div>
+        `,
       })
     );
   }
 
-  const sid = id("sess");
-  db.sessions[sid] = {
-    id: sid,
-    user: u.username,
-    role: u.role,
-    createdAt: Date.now(),
-  };
-  saveDB();
-
-  res.cookie("ssm_session", sid, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: !!process.env.RENDER, // ok on Render
-    maxAge: 1000 * 60 * 60 * 24 * 14,
-  });
-
+  const sid = createSession(username, u.role);
+  setCookie(res, "ssm_sid", sid, { secure: true, maxAgeSeconds: 60 * 60 * 24 * 14 }); // 14 days
   res.redirect("/portal");
 });
 
 app.get("/logout", (req, res) => {
-  const sid = req.cookies?.ssm_session;
-  if (sid && db.sessions?.[sid]) {
-    delete db.sessions[sid];
-    saveDB();
+  const cookies = parseCookies(req);
+  const sid = cookies.ssm_sid;
+
+  if (sid) {
+    withDb((db) => {
+      if (db.sessions && db.sessions[sid]) delete db.sessions[sid];
+    });
   }
-  res.clearCookie("ssm_session");
+  clearCookie(res, "ssm_sid");
   res.redirect("/");
 });
 
-// --------------------------
-// PORTAL / DIRECTOR DASHBOARD
-// --------------------------
-app.get("/portal", requireAuth, (req, res) => {
-  const user = req.user;
+app.get("/portal", (req, res) => {
+  const s = getSession(req);
+  if (!s) return res.redirect("/login");
 
-  const meetsList = db.meets
-    .slice()
-    .reverse()
-    .map((m) => {
-      return `
-        <div class="card">
-          <div class="sectionTitle">
-            <div>
-              <div style="font-size:18px;font-weight:1000">${escapeHtml(
-                m.name || "New Meet"
-              )} <span class="badge">${escapeHtml(m.id)}</span></div>
-              <div class="small muted">
-                Date: ${escapeHtml(m.date || "TBD")} · Regs: ${m.registrations?.length || 0}
-              </div>
-            </div>
-            <div class="row">
-              <a class="btn primary" href="/meet/${encodeURIComponent(m.id)}/builder">Meet Builder</a>
-              <a class="btn" href="/meet/${encodeURIComponent(m.id)}/register">Registration</a>
-            </div>
-          </div>
-        </div>
-      `;
-    })
-    .join("");
-
+  const role = s.role;
   const body = `
     <div class="card">
-      <div class="sectionTitle">
-        <div>
-          <h2 style="margin:0">Director Dashboard</h2>
-          <p>Build meets, open registration, and manage meet settings.</p>
-        </div>
-        <form method="POST" action="/meet/new">
-          <button class="btn primary" type="submit">Build New Meet</button>
-        </form>
-      </div>
-    </div>
-
-    ${meetsList || `<div class="card"><p>No meets yet. Click <b>Build New Meet</b>.</p></div>`}
-  `;
-
-  res.send(pageShell({ title: "Portal", user, body }));
-});
-
-app.post("/meet/new", requireAuth, (req, res) => {
-  const meet = {
-    id: id("meet"),
-    name: `New Meet`,
-    date: "TBD",
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-
-    // Meet Builder config
-    divisions: defaultDivisions(),
-    timeTrials: {
-      enabled: false,
-      notes: "",
-      needJudgesPanel: true,
-    },
-    relays: {
-      enabled: false,
-      notes: "",
-    },
-
-    registrations: [],
-  };
-  db.meets.push(meet);
-  saveDB();
-  res.redirect(`/meet/${encodeURIComponent(meet.id)}/builder`);
-});
-
-// --------------------------
-// DEFAULT DIVISIONS (simple + adjustable later)
-// --------------------------
-function defaultDivisions() {
-  // Keep it simple for now. You can edit these later in code or add UI.
-  // Ages are informational labels for now (registration is age input based).
-  return [
-    { key: "tiny_tot_girls", label: "Tiny Tot Girls", age: "0–5" },
-    { key: "tiny_tot_boys", label: "Tiny Tot Boys", age: "0–5" },
-    { key: "primary_girls", label: "Primary Girls", age: "6–7" },
-    { key: "primary_boys", label: "Primary Boys", age: "6–7" },
-    { key: "juvenile_girls", label: "Juvenile Girls", age: "8–9" },
-    { key: "juvenile_boys", label: "Juvenile Boys", age: "8–9" },
-    { key: "junior_girls", label: "Junior Girls", age: "10–11" },
-    { key: "junior_boys", label: "Junior Boys", age: "10–11" },
-    { key: "cadet_girls", label: "Cadet Girls", age: "12–13" },
-    { key: "cadet_boys", label: "Cadet Boys", age: "12–13" },
-    { key: "youth_women", label: "Youth Women", age: "14–15" },
-    { key: "youth_men", label: "Youth Men", age: "14–15" },
-    { key: "junior_women", label: "Junior Women", age: "16–17" },
-    { key: "junior_men", label: "Junior Men", age: "16–17" },
-    { key: "senior_women", label: "Senior Women", age: "18–24" },
-    { key: "senior_men", label: "Senior Men", age: "18–24" },
-    { key: "classic_women", label: "Classic Women", age: "25–34 (locked)" },
-    { key: "classic_men", label: "Classic Men", age: "25–34 (locked)" },
-    { key: "masters_women", label: "Masters Women", age: "35–44 (locked)" },
-    { key: "masters_men", label: "Masters Men", age: "35–44 (locked)" },
-    { key: "esquire_women", label: "Esquire Women", age: "55–64" },
-  ].map((d) => ({
-    ...d,
-    // per-division config:
-    novice: { enabled: true, cost: 0, d1: "", d2: "", d3: "", d4: "" },
-    elite: { enabled: true, cost: 0, d1: "", d2: "", d3: "", d4: "" },
-    open: { enabled: true, cost: 0, d1: "", d2: "", d3: "", d4: "" },
-  }));
-}
-
-// --------------------------
-// MEET BUILDER
-// --------------------------
-app.get("/meet/:meetId/builder", requireAuth, (req, res) => {
-  const user = req.user;
-  const meet = db.meets.find((m) => m.id === req.params.meetId);
-  if (!meet) return res.status(404).send("Meet not found");
-
-  const templates = db.meetTemplates
-    .slice()
-    .reverse()
-    .map((t) => `<option value="${escapeHtml(t.id)}">${escapeHtml(t.name)}</option>`)
-    .join("");
-
-  const divisionCards = (meet.divisions || [])
-    .map((d) => {
-      return `
-      <div class="card">
-        <div class="sectionTitle">
-          <div>
-            <div style="font-size:22px;font-weight:1000">${escapeHtml(d.label)} <span class="badge">${escapeHtml(d.age)}</span></div>
-            <div class="small muted">Configure distances + costs (no dropdowns — just type).</div>
-          </div>
-        </div>
-
-        ${classBox(meet.id, d.key, "novice", d.novice)}
-        ${classBox(meet.id, d.key, "elite", d.elite)}
-        ${classBox(meet.id, d.key, "open", d.open)}
-      </div>
-      `;
-    })
-    .join("");
-
-  const body = `
-    <div class="card">
-      <div class="sectionTitle">
-        <div>
-          <h2 style="margin:0">Meet Builder</h2>
-          <p class="muted"><span class="k">${escapeHtml(meet.name)}</span> · ${escapeHtml(meet.date)}</p>
-        </div>
-        <div class="row">
-          <a class="btn" href="/portal">Back to Portal</a>
-          <a class="btn primary" href="/meet/${escapeHtml(meet.id)}/register">Open Registration</a>
-        </div>
-      </div>
-
-      <div class="divider"></div>
-
-      <form method="POST" action="/meet/${escapeHtml(meet.id)}/meta">
-        <div class="row">
-          <div class="field">
-            <label>Meet Name</label>
-            <input name="name" value="${escapeHtml(meet.name)}"/>
-          </div>
-          <div class="field">
-            <label>Meet Date</label>
-            <input name="date" value="${escapeHtml(meet.date)}" placeholder="TBD or 2026-05-10"/>
-          </div>
-        </div>
-        <div style="height:10px"></div>
-        <button class="btn primary" type="submit">Save Meet</button>
-      </form>
-
-      <div class="divider"></div>
-
-      <h3>Saved Meets (Templates)</h3>
+      <h1>Portal</h1>
+      <p>Signed in as <b>${escapeHtml(s.username)}</b> (${escapeHtml(role)}).</p>
       <div class="row">
-        <form method="POST" action="/meet/${escapeHtml(meet.id)}/save-template" class="row" style="width:100%">
-          <div class="field">
-            <label>Save meet as (template name)</label>
-            <input name="templateName" placeholder="Example: USARS Indoor Standard"/>
-          </div>
-          <div style="align-self:flex-end">
-            <button class="btn" type="submit">Save Template</button>
-          </div>
-        </form>
+        ${role === "director" ? `<a class="btn" href="/director">Director Dashboard</a>` : ""}
+        <a class="btn btn-ghost" href="/rinks">Rinks</a>
       </div>
-      <div style="height:10px"></div>
-      <form method="POST" action="/meet/${escapeHtml(meet.id)}/load-template" class="row">
-        <div class="field">
-          <label>Load template (overwrites distances/costs/time trials/relays)</label>
-          <select name="templateId">
-            <option value="">Select a template…</option>
-            ${templates}
-          </select>
-        </div>
-        <div style="align-self:flex-end">
-          <button class="btn danger" type="submit">Load Template</button>
-        </div>
-      </form>
     </div>
-
-    <div class="card">
-      <h3>Time Trials (Meet-wide)</h3>
-      <p class="muted">This tells the system your meet includes Time Trials so you can plan staffing (judges panel). Not per-division clutter.</p>
-
-      <form method="POST" action="/meet/${escapeHtml(meet.id)}/time-trials">
-        <div class="checkRow">
-          <label><input type="checkbox" name="enabled" ${meet.timeTrials?.enabled ? "checked" : ""}/> Enable Time Trials at this meet</label>
-          <label><input type="checkbox" name="needJudgesPanel" ${meet.timeTrials?.needJudgesPanel ? "checked" : ""}/> Need judges panel</label>
-        </div>
-        <div style="height:10px"></div>
-        <div class="field">
-          <label>Notes (optional)</label>
-          <textarea name="notes" placeholder="Example: run TT before racing, 1 lap + 3 lap…">${escapeHtml(meet.timeTrials?.notes || "")}</textarea>
-        </div>
-        <div style="height:10px"></div>
-        <button class="btn primary" type="submit">Save Time Trials</button>
-      </form>
-    </div>
-
-    <div class="card">
-      <h3>Relays (Meet-wide)</h3>
-      <p class="muted">Simple toggle for now. We can build the full Relay Builder next.</p>
-
-      <form method="POST" action="/meet/${escapeHtml(meet.id)}/relays">
-        <div class="checkRow">
-          <label><input type="checkbox" name="enabled" ${meet.relays?.enabled ? "checked" : ""}/> Enable Relays at this meet</label>
-        </div>
-        <div style="height:10px"></div>
-        <div class="field">
-          <label>Notes (optional)</label>
-          <textarea name="notes" placeholder="Example: 2 divisions per relay, 4 skaters per team…">${escapeHtml(meet.relays?.notes || "")}</textarea>
-        </div>
-        <div style="height:10px"></div>
-        <button class="btn primary" type="submit">Save Relays</button>
-      </form>
-    </div>
-
-    ${divisionCards}
   `;
-
-  res.send(pageShell({ title: "Meet Builder", user, body }));
+  res.send(pageShell({ title: "Portal", user: s, bodyHtml: body }));
 });
 
-function classBox(meetId, divisionKey, classKey, cfg) {
-  const c = cfg || { enabled: true, cost: 0, d1: "", d2: "", d3: "", d4: "" };
-  const label = classKey.toUpperCase();
+// ---- Director ----
+app.get("/director", requireRole("director"), (req, res) => {
+  const s = req.session;
+  const db = readDb();
 
-  return `
-    <div class="card" style="margin-top:14px;background:#fbfcff">
-      <form method="POST" action="/meet/${escapeHtml(meetId)}/division/${escapeHtml(
-        divisionKey
-      )}/${escapeHtml(classKey)}">
-        <div class="sectionTitle">
-          <div class="checkRow">
-            <label><input type="checkbox" name="enabled" ${c.enabled ? "checked" : ""}/> ${escapeHtml(label)}</label>
-          </div>
-          <div style="min-width:220px" class="field">
-            <label>Cost</label>
-            <input name="cost" value="${escapeHtml(c.cost)}" />
-          </div>
-        </div>
-
-        <div style="height:10px"></div>
-
+  const meetCards = db.meets
+    .map(
+      (m) => `
+      <div class="card">
+        <h2>${escapeHtml(m.name || "New Meet")}</h2>
+        <p class="muted">Date: ${escapeHtml(m.date || "TBD")} • Regs: ${m.regCount || 0}</p>
         <div class="row">
-          <div class="field"><label>D1</label><input name="d1" value="${escapeHtml(c.d1)}" placeholder="ex: 1 lap / 500m" /></div>
-          <div class="field"><label>D2</label><input name="d2" value="${escapeHtml(c.d2)}" placeholder="ex: 2 lap / 1000m" /></div>
-          <div class="field"><label>D3</label><input name="d3" value="${escapeHtml(c.d3)}" placeholder="ex: 3 lap / 1500m" /></div>
-          <div class="field"><label>D4</label><input name="d4" value="${escapeHtml(c.d4)}" placeholder="ex: 5 lap / 2500m" /></div>
+          <a class="btn btn-ghost" href="/meet/${encodeURIComponent(m.id)}/builder">Meet Builder</a>
         </div>
-
-        <div style="height:10px"></div>
-        <button class="btn primary" type="submit">Save ${escapeHtml(label)}</button>
-      </form>
-    </div>
-  `;
-}
-
-app.post("/meet/:meetId/meta", requireAuth, (req, res) => {
-  const meet = db.meets.find((m) => m.id === req.params.meetId);
-  if (!meet) return res.status(404).send("Meet not found");
-
-  meet.name = String(req.body.name || "New Meet").trim() || "New Meet";
-  meet.date = String(req.body.date || "TBD").trim() || "TBD";
-  meet.updatedAt = Date.now();
-  saveDB();
-  res.redirect(`/meet/${encodeURIComponent(meet.id)}/builder`);
-});
-
-app.post("/meet/:meetId/division/:divKey/:classKey", requireAuth, (req, res) => {
-  const meet = db.meets.find((m) => m.id === req.params.meetId);
-  if (!meet) return res.status(404).send("Meet not found");
-
-  const div = (meet.divisions || []).find((d) => d.key === req.params.divKey);
-  if (!div) return res.status(404).send("Division not found");
-
-  const ck = req.params.classKey;
-  if (!["novice", "elite", "open"].includes(ck)) return res.status(400).send("Bad classKey");
-
-  div[ck] = {
-    enabled: !!req.body.enabled,
-    cost: Number(req.body.cost || 0) || 0,
-    d1: String(req.body.d1 || "").trim(),
-    d2: String(req.body.d2 || "").trim(),
-    d3: String(req.body.d3 || "").trim(),
-    d4: String(req.body.d4 || "").trim(),
-  };
-
-  meet.updatedAt = Date.now();
-  saveDB();
-  res.redirect(`/meet/${encodeURIComponent(meet.id)}/builder`);
-});
-
-app.post("/meet/:meetId/time-trials", requireAuth, (req, res) => {
-  const meet = db.meets.find((m) => m.id === req.params.meetId);
-  if (!meet) return res.status(404).send("Meet not found");
-
-  meet.timeTrials = {
-    enabled: !!req.body.enabled,
-    needJudgesPanel: !!req.body.needJudgesPanel,
-    notes: String(req.body.notes || "").trim(),
-  };
-
-  meet.updatedAt = Date.now();
-  saveDB();
-  res.redirect(`/meet/${encodeURIComponent(meet.id)}/builder`);
-});
-
-app.post("/meet/:meetId/relays", requireAuth, (req, res) => {
-  const meet = db.meets.find((m) => m.id === req.params.meetId);
-  if (!meet) return res.status(404).send("Meet not found");
-
-  meet.relays = {
-    enabled: !!req.body.enabled,
-    notes: String(req.body.notes || "").trim(),
-  };
-
-  meet.updatedAt = Date.now();
-  saveDB();
-  res.redirect(`/meet/${encodeURIComponent(meet.id)}/builder`);
-});
-
-app.post("/meet/:meetId/save-template", requireAuth, (req, res) => {
-  const meet = db.meets.find((m) => m.id === req.params.meetId);
-  if (!meet) return res.status(404).send("Meet not found");
-
-  const templateName = String(req.body.templateName || "").trim() || "Saved Template";
-  const t = {
-    id: id("tmpl"),
-    name: templateName,
-    createdAt: Date.now(),
-    divisions: JSON.parse(JSON.stringify(meet.divisions || [])),
-    timeTrials: JSON.parse(JSON.stringify(meet.timeTrials || {})),
-    relays: JSON.parse(JSON.stringify(meet.relays || {})),
-  };
-
-  db.meetTemplates.push(t);
-  saveDB();
-  res.redirect(`/meet/${encodeURIComponent(meet.id)}/builder`);
-});
-
-app.post("/meet/:meetId/load-template", requireAuth, (req, res) => {
-  const meet = db.meets.find((m) => m.id === req.params.meetId);
-  if (!meet) return res.status(404).send("Meet not found");
-
-  const templateId = String(req.body.templateId || "").trim();
-  const t = db.meetTemplates.find((x) => x.id === templateId);
-  if (!t) return res.redirect(`/meet/${encodeURIComponent(meet.id)}/builder`);
-
-  meet.divisions = JSON.parse(JSON.stringify(t.divisions || []));
-  meet.timeTrials = JSON.parse(JSON.stringify(t.timeTrials || { enabled: false, notes: "", needJudgesPanel: true }));
-  meet.relays = JSON.parse(JSON.stringify(t.relays || { enabled: false, notes: "" }));
-  meet.updatedAt = Date.now();
-  saveDB();
-  res.redirect(`/meet/${encodeURIComponent(meet.id)}/builder`);
-});
-
-// --------------------------
-// REGISTRATION (simplified like you asked)
-// age + checkboxes (challenge up / novice / elite / open / time trials / relays)
-// --------------------------
-app.get("/meet/:meetId/register", (req, res) => {
-  const user = getSession(req)?.user ? db.users?.[getSession(req).user] : null;
-  const meet = db.meets.find((m) => m.id === req.params.meetId);
-  if (!meet) return res.status(404).send("Meet not found");
+      </div>
+    `
+    )
+    .join("");
 
   const body = `
-    <div class="card" style="max-width:760px;margin:0 auto">
-      <h2>Register</h2>
-      <p class="muted"><b>${escapeHtml(meet.name)}</b> · ${escapeHtml(meet.date)} · <span class="badge">Registration OPEN</span></p>
-
-      <form method="POST" action="/meet/${escapeHtml(meet.id)}/register">
-        <div class="row">
-          <div class="field">
-            <label>First Name *</label>
-            <input name="firstName" required />
+    <div class="card">
+      <h1>Director Dashboard</h1>
+      <p>Create and manage meets.</p>
+      <form method="POST" action="/director/new">
+        <div class="two">
+          <div>
+            <label>Meet name</label>
+            <input name="name" placeholder="New Meet" />
           </div>
-          <div class="field">
-            <label>Last Name *</label>
-            <input name="lastName" required />
-          </div>
-        </div>
-
-        <div style="height:10px"></div>
-
-        <div class="row">
-          <div class="field">
-            <label>Team *</label>
-            <input name="team" value="Independent" required />
-          </div>
-          <div class="field">
-            <label>USARS Number (optional)</label>
-            <input name="usars" placeholder="Optional" />
+          <div>
+            <label>Date</label>
+            <input name="date" placeholder="TBD" />
           </div>
         </div>
-
-        <div style="height:10px"></div>
-
-        <div class="row">
-          <div class="field">
-            <label>Age *</label>
-            <input name="age" inputmode="numeric" placeholder="ex: 12" required />
-          </div>
+        <div class="row" style="margin-top:14px">
+          <button class="btn" type="submit">Build New Meet</button>
         </div>
-
-        <div style="height:12px"></div>
-
-        <div class="card" style="background:#fbfcff">
-          <h3 style="margin:0 0 8px">Options</h3>
-          <div class="checkRow">
-            <label><input type="checkbox" name="challengeUp"/> Challenge Up (auto bumped per rule)</label>
-          </div>
-
-          <div class="divider"></div>
-
-          <div class="checkRow">
-            <label><input type="checkbox" name="novice"/> Novice</label>
-            <label><input type="checkbox" name="elite"/> Elite</label>
-            <label><input type="checkbox" name="open"/> Open</label>
-          </div>
-
-          <div style="height:8px"></div>
-
-          <div class="checkRow">
-            <label><input type="checkbox" name="timeTrials"/> Time Trials</label>
-            <label><input type="checkbox" name="relays"/> Relays</label>
-          </div>
-
-          <div class="small muted" style="margin-top:10px">
-            This assigns your check-in / skater number.
-          </div>
-        </div>
-
-        <div style="height:14px"></div>
-        <button class="btn primary" type="submit">Register</button>
-        <a class="btn" href="/meets">Back</a>
       </form>
+    </div>
+    <div class="grid">
+      ${meetCards || `<div class="card"><p class="muted">No meets yet.</p></div>`}
     </div>
   `;
 
-  res.send(pageShell({ title: "Register", user, body }));
+  res.send(pageShell({ title: "Director", user: s, bodyHtml: body }));
 });
 
-app.post("/meet/:meetId/register", (req, res) => {
-  const meet = db.meets.find((m) => m.id === req.params.meetId);
-  if (!meet) return res.status(404).send("Meet not found");
+app.post("/director/new", requireRole("director"), (req, res) => {
+  const name = String(req.body.name || "New Meet").trim() || "New Meet";
+  const date = String(req.body.date || "TBD").trim() || "TBD";
 
-  meet.registrations = meet.registrations || [];
+  const id = crypto.randomUUID();
+  withDb((db) => {
+    db.meets.unshift({
+      id,
+      name,
+      date,
+      regCount: 0,
+      builder: {
+        // placeholder — we’ll expand this with your meet-builder rules next
+      },
+    });
+  });
 
-  const regNum = meet.registrations.length + 1; // meet number / check-in number
-  const r = {
-    id: id("reg"),
-    regNum,
-    firstName: String(req.body.firstName || "").trim(),
-    lastName: String(req.body.lastName || "").trim(),
-    team: String(req.body.team || "").trim(),
-    usars: String(req.body.usars || "").trim(),
-    age: Number(req.body.age || 0) || null,
-
-    flags: {
-      challengeUp: !!req.body.challengeUp,
-      novice: !!req.body.novice,
-      elite: !!req.body.elite,
-      open: !!req.body.open,
-      timeTrials: !!req.body.timeTrials,
-      relays: !!req.body.relays,
-    },
-
-    createdAt: Date.now(),
-  };
-
-  meet.registrations.push(r);
-  meet.updatedAt = Date.now();
-  saveDB();
-
-  res.send(
-    pageShell({
-      title: "Registered",
-      user: null,
-      body: `
-        <div class="card" style="max-width:760px;margin:0 auto">
-          <h2>Registered ✅</h2>
-          <p class="muted"><b>${escapeHtml(meet.name)}</b></p>
-          <div class="divider"></div>
-          <div class="row">
-            <div class="card" style="flex:1">
-              <div class="small muted">Skater</div>
-              <div style="font-size:22px;font-weight:1000">${escapeHtml(r.firstName)} ${escapeHtml(r.lastName)}</div>
-              <div class="small muted">Team: ${escapeHtml(r.team)}</div>
-            </div>
-            <div class="card" style="min-width:220px">
-              <div class="small muted">Meet #</div>
-              <div style="font-size:34px;font-weight:1000">${r.regNum}</div>
-              <div class="small muted">Use for check-in + number</div>
-            </div>
-          </div>
-
-          <div class="divider"></div>
-
-          <a class="btn primary" href="/meet/${escapeHtml(meet.id)}/register">Register another</a>
-          <a class="btn" href="/meets">Find a Meet</a>
-        </div>
-      `,
-    })
-  );
+  res.redirect(`/meet/${encodeURIComponent(id)}/builder`);
 });
 
-// --------------------------
-// MEETS LIST (public)
-// --------------------------
-app.get("/meets", (req, res) => {
-  const user = getSession(req)?.user ? db.users?.[getSession(req).user] : null;
+// ---- Meet Builder (shell for now) ----
+app.get("/meet/:id/builder", requireRole("director"), (req, res) => {
+  const s = req.session;
+  const id = req.params.id;
 
-  const rows =
-    db.meets.length === 0
-      ? `<div class="card"><p>No meets yet.</p></div>`
-      : db.meets
-          .slice()
-          .reverse()
-          .map((m) => {
-            return `
-            <div class="card">
-              <div class="sectionTitle">
-                <div>
-                  <div style="font-size:20px;font-weight:1000">${escapeHtml(m.name)}</div>
-                  <div class="small muted">Date: ${escapeHtml(m.date)} · Regs: ${m.registrations?.length || 0}</div>
-                </div>
-                <div class="row">
-                  <a class="btn primary" href="/meet/${escapeHtml(m.id)}/register">Register</a>
-                  ${user ? `<a class="btn" href="/meet/${escapeHtml(m.id)}/builder">Meet Builder</a>` : ""}
-                </div>
-              </div>
-            </div>
-          `;
-          })
-          .join("");
+  const db = readDb();
+  const meet = db.meets.find((m) => m.id === id);
 
-  res.send(
-    pageShell({
-      title: "Find a Meet",
-      user,
-      body: `
-        <div class="card">
-          <h2>Meets</h2>
-          <p class="muted">Choose a meet to register.</p>
-        </div>
-        ${rows}
-      `,
-    })
-  );
-});
+  if (!meet) {
+    return res.status(404).send(
+      pageShell({
+        title: "Not found",
+        user: s,
+        bodyHtml: `<div class="card"><h1>Meet not found</h1><a class="btn" href="/director">Back</a></div>`,
+      })
+    );
+  }
 
-// --------------------------
-// RINKS
-// --------------------------
-app.get("/rinks", (req, res) => {
-  const user = getSession(req)?.user ? db.users?.[getSession(req).user] : null;
+  const body = `
+    <div class="card">
+      <h1>Meet Builder</h1>
+      <p><b>${escapeHtml(meet.name)}</b> • ${escapeHtml(meet.date)}</p>
 
-  const cards = (db.rinks || [])
-    .map((r) => {
-      return `
-      <div class="card">
-        <h2 style="margin:0 0 8px">${escapeHtml(r.name)}</h2>
-        <div class="small muted">${escapeHtml(r.city)} · Team: ${escapeHtml(r.team || "—")}</div>
-        <div class="divider"></div>
-        <div><b>Phone:</b> ${escapeHtml(r.phone || "—")}</div>
-        <div><b>Address:</b> ${escapeHtml(r.address || "—")}</div>
-        <div><b>Website:</b> ${r.website ? `<a href="https://${escapeHtml(r.website)}" target="_blank" rel="noreferrer">${escapeHtml(r.website)}</a>` : "—"}</div>
+      <div class="hr"></div>
+
+      <h2>Notes / Next steps (we discussed)</h2>
+      <ul class="muted">
+        <li>Remove D1/D2/D3 dropdowns (make them plain inputs)</li>
+        <li>Time Trials: add meet-wide “Time Trials” config block (like SkateAbility)</li>
+        <li>Saved Meets: “Save meet as…” + dropdown to load templates</li>
+        <li>Block Builder should save inside meet</li>
+        <li>Relays: relay builder (we already mocked this)</li>
+      </ul>
+
+      <div class="row" style="margin-top:14px">
+        <a class="btn btn-ghost" href="/director">Back to Dashboard</a>
       </div>
-    `;
+    </div>
+  `;
+
+  res.send(pageShell({ title: "Meet Builder", user: s, bodyHtml: body }));
+});
+
+// ---- Rinks ----
+app.get("/rinks", (req, res) => {
+  const s = getSession(req);
+  const db = readDb();
+
+  const cards = db.rinks
+    .map((r) => {
+      const isDirector = s?.role === "director";
+      return `
+        <div class="card">
+          <h2>${escapeHtml(r.name || "Rink")}</h2>
+          <p><b>City:</b> ${escapeHtml(r.city || "-")}</p>
+          <p><b>Phone:</b> ${escapeHtml(r.phone || "-")}</p>
+          <p><b>Address:</b> ${escapeHtml(r.address || "-")}</p>
+          <p><b>Website:</b> ${r.website ? `<a href="https://${escapeHtml(r.website)}" target="_blank" rel="noreferrer">${escapeHtml(r.website)}</a>` : "-"}</p>
+          ${isDirector ? `<div class="row"><a class="btn btn-ghost" href="/rinks/${encodeURIComponent(r.id)}/edit">Edit</a></div>` : ""}
+        </div>
+      `;
     })
     .join("");
 
+  const body = `
+    <div class="card">
+      <h1>Rinks</h1>
+      <p>Rinks and contact info.</p>
+      ${s?.role === "director" ? `<div class="row"><a class="btn" href="/rinks/new">Add a rink</a></div>` : ""}
+    </div>
+    <div class="grid">${cards || `<div class="card"><p class="muted">No rinks yet.</p></div>`}</div>
+  `;
+
+  res.send(pageShell({ title: "Rinks", user: s, bodyHtml: body }));
+});
+
+app.get("/rinks/new", requireRole("director"), (req, res) => {
+  const s = req.session;
   res.send(
     pageShell({
-      title: "Find a Rink",
-      user,
-      body: `
-        <div class="card">
-          <h2>Rinks</h2>
-          <p class="muted">Rinks and clubs.</p>
+      title: "Add Rink",
+      user: s,
+      bodyHtml: `
+        <div class="card" style="max-width:720px;margin:0 auto">
+          <h1>Add a rink</h1>
+          <form method="POST" action="/rinks/new">
+            <div class="two">
+              <div>
+                <label>Name</label>
+                <input name="name" required />
+              </div>
+              <div>
+                <label>City</label>
+                <input name="city" placeholder="Wichita, KS" />
+              </div>
+            </div>
+            <div class="two">
+              <div>
+                <label>Phone</label>
+                <input name="phone" />
+              </div>
+              <div>
+                <label>Website (domain only)</label>
+                <input name="website" placeholder="rollercitywichitaks.com" />
+              </div>
+            </div>
+            <label>Address</label>
+            <input name="address" />
+            <div class="row" style="margin-top:14px">
+              <button class="btn" type="submit">Save</button>
+              <a class="btn btn-ghost" href="/rinks">Cancel</a>
+            </div>
+          </form>
         </div>
-        ${cards || `<div class="card"><p>No rinks yet.</p></div>`}
       `,
     })
   );
 });
 
-// --------------------------
-// LIVE (placeholder)
-// --------------------------
-app.get("/live", (req, res) => {
-  const user = getSession(req)?.user ? db.users?.[getSession(req).user] : null;
+app.post("/rinks/new", requireRole("director"), (req, res) => {
+  const name = String(req.body.name || "").trim();
+  const city = String(req.body.city || "").trim();
+  const phone = String(req.body.phone || "").trim();
+  const address = String(req.body.address || "").trim();
+  const website = String(req.body.website || "").trim();
+
+  if (!name) return res.redirect("/rinks/new");
+
+  withDb((db) => {
+    db.rinks.unshift({
+      id: crypto.randomUUID(),
+      name,
+      city,
+      phone,
+      address,
+      website,
+      team: "",
+    });
+  });
+
+  res.redirect("/rinks");
+});
+
+app.get("/rinks/:id/edit", requireRole("director"), (req, res) => {
+  const s = req.session;
+  const id = req.params.id;
+  const db = readDb();
+  const r = db.rinks.find((x) => x.id === id);
+  if (!r) return res.redirect("/rinks");
+
   res.send(
     pageShell({
-      title: "Live Race Day",
-      user,
-      body: `
-        <div class="card">
-          <h2>Live Race Day</h2>
-          <p class="muted">Placeholder page. Next: wire this to blocks + judges panels.</p>
+      title: "Edit Rink",
+      user: s,
+      bodyHtml: `
+        <div class="card" style="max-width:720px;margin:0 auto">
+          <h1>Edit rink</h1>
+          <form method="POST" action="/rinks/${escapeHtml(id)}/edit">
+            <div class="two">
+              <div>
+                <label>Name</label>
+                <input name="name" value="${escapeHtml(r.name)}" />
+              </div>
+              <div>
+                <label>City</label>
+                <input name="city" value="${escapeHtml(r.city)}" />
+              </div>
+            </div>
+            <div class="two">
+              <div>
+                <label>Phone</label>
+                <input name="phone" value="${escapeHtml(r.phone)}" />
+              </div>
+              <div>
+                <label>Website</label>
+                <input name="website" value="${escapeHtml(r.website)}" />
+              </div>
+            </div>
+            <label>Address</label>
+            <input name="address" value="${escapeHtml(r.address)}" />
+            <div class="row" style="margin-top:14px">
+              <button class="btn" type="submit">Save</button>
+              <a class="btn btn-ghost" href="/rinks">Cancel</a>
+            </div>
+          </form>
+
+          <form method="POST" action="/rinks/${escapeHtml(id)}/delete" onsubmit="return confirm('Delete this rink?');">
+            <div class="hr"></div>
+            <button class="btn btn-ghost" type="submit" style="border-color:#ef4444;color:#ef4444">Delete</button>
+          </form>
         </div>
       `,
     })
   );
 });
 
-// --------------------------
-// START SERVER
-// --------------------------
+app.post("/rinks/:id/edit", requireRole("director"), (req, res) => {
+  const id = req.params.id;
+  withDb((db) => {
+    const r = db.rinks.find((x) => x.id === id);
+    if (!r) return;
+    r.name = String(req.body.name || "").trim();
+    r.city = String(req.body.city || "").trim();
+    r.phone = String(req.body.phone || "").trim();
+    r.address = String(req.body.address || "").trim();
+    r.website = String(req.body.website || "").trim();
+  });
+  res.redirect("/rinks");
+});
+
+app.post("/rinks/:id/delete", requireRole("director"), (req, res) => {
+  const id = req.params.id;
+  withDb((db) => {
+    db.rinks = db.rinks.filter((x) => x.id !== id);
+  });
+  res.redirect("/rinks");
+});
+
+// -------------------- Start --------------------
 app.listen(PORT, HOST, () => {
-  console.log(`
-============================================================
-SpeedSkateMeet — CLEAN REBUILD v8
-Data: ${DATA_FILE}
-
-Login page:
-- Demo usernames (passwords not displayed publicly)
-
-Time Trials:
-- Meet-wide config (no per-division clutter)
-Relays:
-- Meet-wide toggle + notes
-
-Local: http://localhost:${PORT}
-============================================================
-`.trim());
+  console.log("============================================================");
+  console.log("SpeedSkateMeet — CLEAN REBUILD v7.2");
+  console.log("Data:", DATA_FILE);
+  console.log("Local:", `http://localhost:${PORT}`);
+  console.log("============================================================");
 });
