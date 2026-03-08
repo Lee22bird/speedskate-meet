@@ -11,9 +11,9 @@ const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 const DATA_DIR = fs.existsSync('/data') ? '/data' : __dirname;
 const DATA_FILE = process.env.SSM_DATA_FILE || path.join(DATA_DIR, 'ssm_db.json');
-const DATA_VERSION = 11;
+const DATA_VERSION = 12;
 const SESSION_COOKIE = 'ssm_sess';
-const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 14; // 14 days
+const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 14;
 
 const ADMIN_USERNAME = 'Lbird22';
 const ADMIN_PASSWORD = 'Redline22';
@@ -358,9 +358,7 @@ function getSessionUser(req) {
 
 function extendSession(db, token) {
   const sess = db.sessions.find(s => s.token === token);
-  if (sess) {
-    sess.expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString();
-  }
+  if (sess) sess.expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString();
 }
 
 function requireLogin(req, res, next) {
@@ -815,6 +813,7 @@ app.get('/admin/logout', (req, res) => {
 app.get('/portal', requireRole('meet_director', 'judge', 'coach'), (req, res) => {
   const editableMeets = req.db.meets.filter(m => hasRole(req.user, 'super_admin') || m.createdByUserId === req.user.id);
   const visibleMeets = hasRole(req.user, 'super_admin') ? req.db.meets : editableMeets;
+
   const cards = visibleMeets.map(m => `
     <div class="card">
       <div class="row between">
@@ -832,8 +831,10 @@ app.get('/portal', requireRole('meet_director', 'judge', 'coach'), (req, res) =>
       <div class="row">
         ${canEditMeet(req.user, m) ? `<a class="btn" href="/portal/meet/${m.id}/builder">Open Meet</a>` : `<a class="btn2" href="/portal/meet/${m.id}/race-day/director">View Race Day</a>`}
         <a class="btn2" href="/meet/${m.id}/live">Public Live</a>
+        ${canEditMeet(req.user, m) ? `<a class="btnDanger" href="/portal/meet/${m.id}/delete-confirm">Delete Meet</a>` : ``}
       </div>
     </div>`).join('<div class="spacer"></div>');
+
   const body = `
     <h1>Director Portal</h1>
     <div class="muted">Nothing appears until you build a meet.</div>
@@ -845,6 +846,7 @@ app.get('/portal', requireRole('meet_director', 'judge', 'coach'), (req, res) =>
     </div>
     <div class="spacer"></div>
     ${cards || `<div class="card"><div class="muted">No meets yet. Click “Build New Meet”.</div></div>`}`;
+
   res.send(pageShell({ title: 'Portal', user: req.user, bodyHtml: body }));
 });
 
@@ -854,6 +856,35 @@ app.post('/portal/create-meet', requireRole('meet_director'), (req, res) => {
   req.db.meets.push(meet);
   saveDb(req.db);
   res.redirect(`/portal/meet/${meet.id}/builder`);
+});
+
+app.get('/portal/meet/:meetId/delete-confirm', requireRole('meet_director'), (req, res) => {
+  const meet = getMeetOr404(req.db, req.params.meetId);
+  if (!meet || !canEditMeet(req.user, meet)) return res.redirect('/portal');
+
+  const body = `
+    <h1>Delete Meet</h1>
+    <div class="card">
+      <div class="danger">This will permanently delete this meet and all of its races, blocks, and registrations.</div>
+      <div class="spacer"></div>
+      <h2>${esc(meet.meetName)}</h2>
+      <div class="muted">Meet ID: ${esc(meet.id)}</div>
+      <div class="spacer"></div>
+      <form method="POST" action="/portal/meet/${meet.id}/delete">
+        <button class="btnDanger" type="submit">Delete Meet Permanently</button>
+        <a class="btn2" href="/portal">Cancel</a>
+      </form>
+    </div>`;
+
+  res.send(pageShell({ title: 'Delete Meet', user: req.user, bodyHtml: body }));
+});
+
+app.post('/portal/meet/:meetId/delete', requireRole('meet_director'), (req, res) => {
+  const meet = getMeetOr404(req.db, req.params.meetId);
+  if (!meet || !canEditMeet(req.user, meet)) return res.redirect('/portal');
+  req.db.meets = req.db.meets.filter(m => Number(m.id) !== Number(req.params.meetId));
+  saveDb(req.db);
+  res.redirect('/portal');
 });
 
 app.get('/portal/rinks', requireRole('meet_director'), (req, res) => {
@@ -1007,6 +1038,7 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
   }
 
   const rinkOptions = req.db.rinks.map(r => `<option value="${r.id}" ${Number(meet.rinkId) === Number(r.id) ? 'selected' : ''}>${esc(r.name)} (${esc(r.city || '')}, ${esc(r.state || '')})</option>`).join('');
+
   const groupsHtml = meet.groups.map((g, gi) => {
     const rows = ['novice','elite','open'].map(divKey => {
       const div = g.divisions[divKey];
@@ -1025,9 +1057,15 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
           </div>
         </div>`;
     }).join('<div class="spacer"></div>');
+
     return `
       <div class="card">
-        <div class="row between"><div><h3>${esc(g.label)}</h3><div class="muted">${esc(g.ages)}</div></div></div>
+        <div class="row between">
+          <div>
+            <h3>${esc(g.label)}</h3>
+            <div class="muted">${esc(g.ages)}</div>
+          </div>
+        </div>
         <div class="hr"></div>
         ${rows}
       </div>`;
@@ -1064,12 +1102,20 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
         <div class="spacer"></div>
         <label>Relay Notes</label>
         <textarea name="relayNotes">${esc(meet.relayNotes || '')}</textarea>
+
+        <div class="spacer"></div>
+        <div class="hr"></div>
+        <h2>Divisions & Distances</h2>
+        <div class="note">Check Novice / Elite / Open, add distances, then save to generate races.</div>
+        <div class="spacer"></div>
+
+        ${groupsHtml}
+
         <div class="spacer"></div>
         <button class="btn" type="submit">Save Meet & Generate Race List</button>
       </form>
-    </div>
-    <div class="spacer"></div>
-    ${groupsHtml}`;
+    </div>`;
+
   res.send(pageShell({ title: 'Meet Builder', user: req.user, meet, activeTab: 'builder', bodyHtml: body }));
 });
 
@@ -1298,6 +1344,7 @@ app.post('/api/meet/:meetId/blocks/move-race', requireRole('meet_director'), (re
     const idx = Math.max(0, Math.min(insertIndex, block.raceIds.length));
     block.raceIds.splice(idx, 0, raceId);
   }
+
   ensureCurrentRace(meet);
   meet.updatedAt = nowIso();
   saveDb(req.db);
@@ -1437,7 +1484,6 @@ function raceDaySubTabs(meet, active) {
 }
 
 function laneRowsForRace(race, meet) {
-  const regs = meet.registrations || [];
   const lanes = [];
   for (let i = 1; i <= (Number(meet.lanes) || 4); i++) {
     const existing = (race.laneEntries || []).find(x => Number(x.lane) === i) || {};
@@ -1448,8 +1494,6 @@ function laneRowsForRace(race, meet) {
       place: existing.place || '',
       time: existing.time || '',
       status: existing.status || '',
-      registrationId: existing.registrationId || '',
-      regOptions: regs.map(r => ({ id: r.id, label: `${r.name} — ${r.team}` }))
     });
   }
   return lanes;
@@ -1510,7 +1554,6 @@ app.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director', 'jud
       </script>`;
   } else if (mode === 'judges') {
     const lanes = currentLanes;
-    const options = meet.registrations.map(r => `<option value="${r.id}">${esc(r.name)} — ${esc(r.team)}</option>`).join('');
     body += `
       <div class="card">
         <h2>${current ? `Race ${Math.max(info.idx + 1, 1)} — ${esc(current.groupLabel)} — ${esc(current.distanceLabel)}` : 'No race selected'}</h2>
@@ -1527,13 +1570,12 @@ app.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director', 'jud
         <div class="spacer"></div>
         <table class="table"><thead><tr><th>Lane</th><th>Skater</th><th>Team</th><th>Place</th><th>Time</th><th>Status</th></tr></thead><tbody>${lanes.map(l => `<tr>
           <td>${l.lane}<input type="hidden" name="lane_${l.lane}" value="${l.lane}" /></td>
-          <td><input name="skaterName_${l.lane}" value="${esc(l.skaterName)}" list="regs" placeholder="Type skater name" /></td>
+          <td><input name="skaterName_${l.lane}" value="${esc(l.skaterName)}" placeholder="Skater name" /></td>
           <td><input name="team_${l.lane}" value="${esc(l.team)}" placeholder="Team" /></td>
           <td><input name="place_${l.lane}" value="${esc(l.place)}" placeholder="1 / 2 / 3 / 4" /></td>
           <td><input name="time_${l.lane}" value="${esc(l.time)}" placeholder="19.542" /></td>
           <td><select name="status_${l.lane}"><option value="" ${!l.status ? 'selected' : ''}>—</option><option value="DNS" ${l.status === 'DNS' ? 'selected' : ''}>DNS</option><option value="DQ" ${l.status === 'DQ' ? 'selected' : ''}>DQ</option><option value="Scratch" ${l.status === 'Scratch' ? 'selected' : ''}>Scratch</option></select></td>
         </tr>`).join('')}</tbody></table>
-        <datalist id="regs">${options}</datalist>
         <div class="spacer"></div>
         <label>Race Notes / Officials Report</label>
         <textarea name="notes" placeholder="DQ – inside pass violation – Judge 2">${esc(current.notes || '')}</textarea>
