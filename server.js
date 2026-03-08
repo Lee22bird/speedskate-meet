@@ -11,7 +11,7 @@ const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 const DATA_DIR = fs.existsSync('/data') ? '/data' : __dirname;
 const DATA_FILE = process.env.SSM_DATA_FILE || path.join(DATA_DIR, 'ssm_db.json');
-const DATA_VERSION = 12;
+const DATA_VERSION = 14;
 const SESSION_COOKIE = 'ssm_sess';
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 14;
 
@@ -86,6 +86,10 @@ const TEAM_LIST = [
   'West Michigan Wolverines Speed Team'
 ].sort((a, b) => a.localeCompare(b));
 
+function nowIso() {
+  return new Date().toISOString();
+}
+
 function safeReadJson(filePath) {
   if (!fs.existsSync(filePath)) return null;
   try {
@@ -103,8 +107,36 @@ function writeJsonAtomic(filePath, data) {
   fs.renameSync(tmp, filePath);
 }
 
-function nowIso() {
-  return new Date().toISOString();
+function esc(s) {
+  return String(s ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
+}
+
+function nextId(arr) {
+  let max = 0;
+  for (const item of arr || []) max = Math.max(max, Number(item.id) || 0);
+  return max + 1;
+}
+
+function parseCookies(req) {
+  const header = req.headers.cookie || '';
+  const out = {};
+  header.split(';').map(s => s.trim()).filter(Boolean).forEach(pair => {
+    const idx = pair.indexOf('=');
+    if (idx > -1) out[pair.slice(0, idx)] = decodeURIComponent(pair.slice(idx + 1));
+  });
+  return out;
+}
+
+function setCookie(res, name, value, maxAgeSec) {
+  res.setHeader('Set-Cookie', `${name}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAgeSec}`);
+}
+
+function clearCookie(res, name) {
+  res.setHeader('Set-Cookie', `${name}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
 }
 
 function baseDivisions() {
@@ -113,6 +145,7 @@ function baseDivisions() {
     elite: { enabled: false, cost: 0, distances: ['', '', '', ''] },
     open: { enabled: false, cost: 0, distances: ['', '', '', ''] },
   });
+
   return [
     { id: 'tiny_tot_girls', label: 'Tiny Tot Girls', ages: '5 & under', gender: 'girls' },
     { id: 'tiny_tot_boys', label: 'Tiny Tot Boys', ages: '5 & under', gender: 'boys' },
@@ -154,7 +187,7 @@ function defaultDb() {
         password: ADMIN_PASSWORD,
         displayName: 'Lee Bird',
         roles: ['super_admin', 'meet_director', 'judge', 'coach'],
-        team: 'Independent',
+        team: 'Midwest Racing',
         active: true,
         createdAt: nowIso(),
       },
@@ -174,12 +207,6 @@ function defaultDb() {
     ],
     meets: [],
   };
-}
-
-function nextId(arr) {
-  let max = 0;
-  for (const item of arr || []) max = Math.max(max, Number(item.id) || 0);
-  return max + 1;
 }
 
 function createMeet(ownerUserId) {
@@ -317,32 +344,6 @@ function saveDb(db) {
   writeJsonAtomic(DATA_FILE, db);
 }
 
-function esc(s) {
-  return String(s ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;');
-}
-
-function parseCookies(req) {
-  const header = req.headers.cookie || '';
-  const out = {};
-  header.split(';').map(s => s.trim()).filter(Boolean).forEach(pair => {
-    const idx = pair.indexOf('=');
-    if (idx > -1) out[pair.slice(0, idx)] = decodeURIComponent(pair.slice(idx + 1));
-  });
-  return out;
-}
-
-function setCookie(res, name, value, maxAgeSec) {
-  res.setHeader('Set-Cookie', `${name}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAgeSec}`);
-}
-
-function clearCookie(res, name) {
-  res.setHeader('Set-Cookie', `${name}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
-}
-
 function getSessionUser(req) {
   const cookies = parseCookies(req);
   const token = cookies[SESSION_COOKIE];
@@ -359,17 +360,6 @@ function getSessionUser(req) {
 function extendSession(db, token) {
   const sess = db.sessions.find(s => s.token === token);
   if (sess) sess.expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString();
-}
-
-function requireLogin(req, res, next) {
-  const data = getSessionUser(req);
-  if (!data) return res.redirect('/admin/login');
-  extendSession(data.db, data.token);
-  saveDb(data.db);
-  req.db = data.db;
-  req.user = data.user;
-  req.sessionToken = data.token;
-  next();
 }
 
 function hasRole(user, role) {
@@ -402,143 +392,8 @@ function canEditMeet(user, meet) {
   return hasRole(user, 'super_admin') || Number(meet.createdByUserId) === Number(user.id);
 }
 
-function navHtml(user) {
-  return `
-    <div class="topbar">
-      <div class="brandWrap">
-        <div class="brandMark">SSM</div>
-        <div class="brandText">SpeedSkateMeet</div>
-      </div>
-      <div class="nav">
-        <a class="pill" href="/">Home</a>
-        <a class="pill" href="/meets">Find a Meet</a>
-        <a class="pill" href="/rinks">Find a Rink</a>
-        <a class="pill" href="/live">Live Race Day</a>
-        ${user ? `<a class="pill solid" href="/portal">Portal</a><a class="pill" href="/admin/logout">Logout</a>` : `<a class="pill solid" href="/admin/login">Admin Login</a>`}
-      </div>
-    </div>
-  `;
-}
-
-function meetTabs(meet, active) {
-  if (!meet) return '';
-  const items = [
-    ['builder', 'Meet Builder', `/portal/meet/${meet.id}/builder`],
-    ['blocks', 'Block Builder', `/portal/meet/${meet.id}/blocks`],
-    ['registered', 'Registered', `/portal/meet/${meet.id}/registered`],
-    ['race-day', 'Race Day', `/portal/meet/${meet.id}/race-day/director`],
-  ];
-  return `<div class="meetTabs">${items.map(([key, label, href]) => `<a class="meetTab ${active === key ? 'active' : ''}" href="${href}">${label}</a>`).join('')}</div>`;
-}
-
-function pageShell({ title, bodyHtml, user, meet, activeTab }) {
-  return `<!doctype html>
-  <html>
-    <head>
-      <meta charset="utf-8" />
-      <meta name="viewport" content="width=device-width, initial-scale=1" />
-      <title>${esc(title)}</title>
-      <style>
-        :root {
-          --bg:#eef4ff;
-          --bg2:#f7f9fc;
-          --card:#ffffff;
-          --text:#0f172a;
-          --muted:#64748b;
-          --line:#dbe3ee;
-          --blue:#145af2;
-          --blue2:#0f4cd3;
-          --green:#12b76a;
-          --yellow:#f5b301;
-          --red:#d92d20;
-          --shadow:0 14px 34px rgba(15,23,42,.10);
-          --radius:18px;
-        }
-        *{box-sizing:border-box}
-        body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial;color:var(--text);background:linear-gradient(180deg,var(--bg),var(--bg2));}
-        a{text-decoration:none;color:var(--blue)}
-        .topbar{max-width:1280px;margin:18px auto 0;padding:0 18px;display:flex;align-items:center;justify-content:space-between;gap:18px}
-        .brandWrap{display:flex;align-items:center;gap:12px}
-        .brandMark{width:44px;height:44px;border-radius:14px;background:linear-gradient(135deg,#0b1f3a,#1560f2);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;letter-spacing:.6px;box-shadow:var(--shadow)}
-        .brandText{font-weight:900;font-size:22px;letter-spacing:-.5px}
-        .nav{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end}
-        .pill{border:1px solid #c7d2fe;padding:10px 14px;border-radius:999px;background:rgba(255,255,255,.8);font-weight:800;color:#1d4ed8}
-        .pill.solid{background:var(--blue);color:#fff;border-color:var(--blue)}
-        .wrap{max-width:1280px;margin:22px auto 64px;padding:0 18px}
-        .meetTabs{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0 18px}
-        .meetTab{padding:11px 14px;border-radius:14px;background:rgba(255,255,255,.8);border:1px solid var(--line);font-weight:900;color:#1e293b}
-        .meetTab.active{background:var(--blue);border-color:var(--blue);color:#fff}
-        h1{margin:14px 0 10px;font-size:42px;letter-spacing:-1px}
-        h2{margin:0 0 8px;font-size:28px;letter-spacing:-.5px}
-        h3{margin:0 0 8px;font-size:20px}
-        .card{background:var(--card);border:1px solid rgba(148,163,184,.24);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px}
-        .spacer{height:14px}
-        .muted{color:var(--muted)}
-        .danger{color:var(--red);font-weight:900}
-        .good{color:var(--green);font-weight:900}
-        .row{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start}
-        .between{justify-content:space-between}
-        .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-        .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
-        .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
-        @media(max-width:1000px){.grid4,.grid3{grid-template-columns:1fr 1fr}}
-        @media(max-width:860px){.grid2,.grid3,.grid4{grid-template-columns:1fr} .topbar{display:block}.nav{margin-top:12px}}
-        label{display:block;font-size:13px;font-weight:900;margin-bottom:6px;color:#0f172a}
-        input,select,textarea{width:100%;padding:12px 12px;border-radius:12px;border:1px solid var(--line);font-size:15px;outline:none;background:#fff}
-        input:focus,select:focus,textarea:focus{border-color:#93c5fd;box-shadow:0 0 0 4px rgba(147,197,253,.28)}
-        textarea{min-height:100px;resize:vertical}
-        input[type=checkbox],input[type=radio]{width:auto;transform:scale(1.05)}
-        .btn,.btn2,.btnDanger{display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:12px;padding:12px 16px;font-weight:900;cursor:pointer}
-        .btn{background:var(--blue);color:#fff}
-        .btn2{background:#fff;color:#1e40af;border:2px solid #c7d2fe}
-        .btnDanger{background:#fff;color:#b42318;border:2px solid #fecaca}
-        .hr{height:1px;background:rgba(148,163,184,.25);margin:14px 0}
-        .chip{display:inline-flex;align-items:center;gap:6px;padding:8px 11px;border-radius:999px;background:#f8fbff;border:1px solid var(--line);font-weight:900}
-        .small{font-size:12px}
-        .groupCard{padding:16px;border-radius:16px;border:1px solid rgba(148,163,184,.25);background:#fff}
-        .bb{display:grid;grid-template-columns:1.25fr .85fr;gap:16px}
-        @media(max-width:1040px){.bb{grid-template-columns:1fr}}
-        .block{border:1px solid rgba(148,163,184,.25);background:#fff;border-radius:16px;padding:14px}
-        .blockHead{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
-        .dropZone{min-height:42px;padding:8px;border-radius:14px;border:2px dashed rgba(148,163,184,.35);background:#f8fbff}
-        .dropZone.over{border-color:#7cb3ff;background:#eaf3ff}
-        .raceItem{border:1px solid rgba(148,163,184,.25);background:#fff;border-radius:14px;padding:10px;margin:8px 0;cursor:grab}
-        .raceItem.activeCurrent{border-color:#12b76a;box-shadow:0 0 0 3px rgba(18,183,106,.13)}
-        .raceMeta{font-size:12px;color:var(--muted);margin-top:3px}
-        .rightCol{position:sticky;top:12px;align-self:start}
-        .table{width:100%;border-collapse:collapse}
-        .table th,.table td{padding:11px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
-        .table th{font-size:12px;text-transform:uppercase;color:#475569;letter-spacing:.05em}
-        .subTabs{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
-        .subTab{padding:11px 14px;border-radius:12px;background:#fff;border:1px solid var(--line);font-weight:900;color:#0f172a}
-        .subTab.active{background:var(--blue);color:#fff;border-color:var(--blue)}
-        .statusCard{border-radius:18px;padding:16px;color:#fff;box-shadow:var(--shadow)}
-        .statusCard.green{background:linear-gradient(135deg,#0ea765,#18c77a)}
-        .statusCard.yellow{background:linear-gradient(135deg,#d29600,#f7ba10)}
-        .statusCard.blue{background:linear-gradient(135deg,#0f4cd3,#3a82ff)}
-        .statusCard.gray{background:linear-gradient(135deg,#475467,#667085)}
-        .statusLabel{font-size:12px;opacity:.9;text-transform:uppercase;letter-spacing:.08em;font-weight:900}
-        .statusTitle{font-size:24px;font-weight:900;margin-top:5px;line-height:1.1}
-        .laneGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
-        @media(max-width:900px){.laneGrid{grid-template-columns:1fr}}
-        .note{font-size:13px;color:var(--muted)}
-        .codeBox{background:#0b1220;color:#dbeafe;padding:12px;border-radius:12px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;overflow:auto}
-      </style>
-    </head>
-    <body>
-      ${navHtml(user)}
-      <div class="wrap">
-        ${meetTabs(meet, activeTab)}
-        ${bodyHtml}
-        <div class="spacer"></div>
-        <div class="note small">Data file: ${esc(DATA_FILE)}</div>
-      </div>
-    </body>
-  </html>`;
-}
-
 function normalizeDistances(arr4) {
-  return [0,1,2,3].map(i => String(arr4?.[i] ?? '').trim());
+  return [0, 1, 2, 3].map(i => String(arr4?.[i] ?? '').trim());
 }
 
 function ensureAtLeastOneBlock(meet) {
@@ -553,14 +408,14 @@ function generateRacesForMeet(meet) {
   let n = 1;
   const oldMap = new Map((meet.races || []).map(r => [`${r.groupId}|${r.division}|${r.dayIndex}|${r.distanceLabel}`, r]));
   for (const g of meet.groups || []) {
-    for (const divKey of ['novice','elite','open']) {
+    for (const divKey of ['novice', 'elite', 'open']) {
       const div = g.divisions?.[divKey];
       if (!div || !div.enabled) continue;
       const dists = normalizeDistances(div.distances);
       for (let i = 0; i < 4; i++) {
         const dist = dists[i];
         if (!dist) continue;
-        const key = `${g.id}|${divKey}|${i+1}|${dist}`;
+        const key = `${g.id}|${divKey}|${i + 1}|${dist}`;
         const old = oldMap.get(key);
         races.push({
           id: old?.id || ('r' + crypto.randomBytes(6).toString('hex')),
@@ -663,28 +518,190 @@ function findAgeGroup(groups, age, genderGuess) {
   return byGender || candidates[0];
 }
 
-function publicMeetCards(db) {
-  return db.meets.map(m => `
-    <div class="card">
-      <div class="row between">
-        <div>
-          <h2>${esc(m.meetName || 'Meet')}</h2>
-          <div class="muted">${esc(m.date || 'Date TBD')} ${m.startTime ? `• ${esc(m.startTime)}` : ''}</div>
-        </div>
-        <div class="row">
-          <span class="chip">Races: ${esc((m.races || []).length)}</span>
-          <span class="chip">Blocks: ${esc((m.blocks || []).length)}</span>
-        </div>
-      </div>
-      <div class="spacer"></div>
-      <div class="row">
-        <a class="btn2" href="/meet/${m.id}/register">Register</a>
-        <a class="btn2" href="/meet/${m.id}/live">View Live</a>
-      </div>
-    </div>
-  `).join('<div class="spacer"></div>');
+function divisionEnabledForRegistration(reg, division) {
+  return !!reg.options?.[division];
 }
 
+function rebuildRaceAssignments(meet) {
+  const regs = meet.registrations || [];
+  const lanesPerRace = Math.max(1, Number(meet.lanes) || 4);
+
+  for (const race of meet.races || []) {
+    race.laneEntries = [];
+  }
+
+  for (const race of meet.races || []) {
+    const matches = regs.filter(reg =>
+      String(reg.divisionGroupId || '') === String(race.groupId || '') &&
+      divisionEnabledForRegistration(reg, race.division)
+    );
+
+    race.laneEntries = matches.slice(0, lanesPerRace).map((reg, idx) => ({
+      lane: idx + 1,
+      registrationId: reg.id,
+      skaterName: reg.name,
+      team: reg.team,
+      place: '',
+      time: '',
+      status: '',
+    }));
+  }
+
+  meet.updatedAt = nowIso();
+}
+
+function laneRowsForRace(race, meet) {
+  const lanes = [];
+  const maxLanes = Math.max(1, Number(meet.lanes) || 4);
+  for (let i = 1; i <= maxLanes; i++) {
+    const existing = (race.laneEntries || []).find(x => Number(x.lane) === i) || {};
+    lanes.push({
+      lane: i,
+      skaterName: existing.skaterName || '',
+      team: existing.team || '',
+      place: existing.place || '',
+      time: existing.time || '',
+      status: existing.status || '',
+    });
+  }
+  return lanes;
+}
+
+function navHtml(user) {
+  return `
+    <div class="topbar">
+      <div class="brandWrap">
+        <div class="brandMark">SSM</div>
+        <div class="brandText">SpeedSkateMeet</div>
+      </div>
+      <div class="nav">
+        <a class="pill" href="/">Home</a>
+        <a class="pill" href="/meets">Find a Meet</a>
+        <a class="pill" href="/rinks">Find a Rink</a>
+        <a class="pill" href="/live">Live Race Day</a>
+        ${user ? `<a class="pill solid" href="/portal">Portal</a><a class="pill" href="/admin/logout">Logout</a>` : `<a class="pill solid" href="/admin/login">Admin Login</a>`}
+      </div>
+    </div>
+  `;
+}
+
+function meetTabs(meet, active) {
+  if (!meet) return '';
+  const items = [
+    ['builder', 'Meet Builder', `/portal/meet/${meet.id}/builder`],
+    ['blocks', 'Block Builder', `/portal/meet/${meet.id}/blocks`],
+    ['registered', 'Registered', `/portal/meet/${meet.id}/registered`],
+    ['race-day', 'Race Day', `/portal/meet/${meet.id}/race-day/director`],
+  ];
+  return `<div class="meetTabs">${items.map(([key, label, href]) => `<a class="meetTab ${active === key ? 'active' : ''}" href="${href}">${label}</a>`).join('')}</div>`;
+}
+
+function pageShell({ title, bodyHtml, user, meet, activeTab }) {
+  return `<!doctype html>
+  <html>
+    <head>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <title>${esc(title)}</title>
+      <style>
+        :root {
+          --bg:#eef4ff;
+          --bg2:#f7f9fc;
+          --card:#ffffff;
+          --text:#0f172a;
+          --muted:#64748b;
+          --line:#dbe3ee;
+          --blue:#145af2;
+          --green:#12b76a;
+          --yellow:#f5b301;
+          --red:#d92d20;
+          --shadow:0 14px 34px rgba(15,23,42,.10);
+          --radius:18px;
+        }
+        *{box-sizing:border-box}
+        body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial;color:var(--text);background:linear-gradient(180deg,var(--bg),var(--bg2));}
+        a{text-decoration:none;color:var(--blue)}
+        .topbar{max-width:1280px;margin:18px auto 0;padding:0 18px;display:flex;align-items:center;justify-content:space-between;gap:18px}
+        .brandWrap{display:flex;align-items:center;gap:12px}
+        .brandMark{width:44px;height:44px;border-radius:14px;background:linear-gradient(135deg,#0b1f3a,#1560f2);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;letter-spacing:.6px;box-shadow:var(--shadow)}
+        .brandText{font-weight:900;font-size:22px;letter-spacing:-.5px}
+        .nav{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+        .pill{border:1px solid #c7d2fe;padding:10px 14px;border-radius:999px;background:rgba(255,255,255,.8);font-weight:800;color:#1d4ed8}
+        .pill.solid{background:var(--blue);color:#fff;border-color:var(--blue)}
+        .wrap{max-width:1280px;margin:22px auto 64px;padding:0 18px}
+        .meetTabs{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0 18px}
+        .meetTab{padding:11px 14px;border-radius:14px;background:rgba(255,255,255,.8);border:1px solid var(--line);font-weight:900;color:#1e293b}
+        .meetTab.active{background:var(--blue);border-color:var(--blue);color:#fff}
+        h1{margin:14px 0 10px;font-size:42px;letter-spacing:-1px}
+        h2{margin:0 0 8px;font-size:28px;letter-spacing:-.5px}
+        h3{margin:0 0 8px;font-size:20px}
+        .card{background:var(--card);border:1px solid rgba(148,163,184,.24);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px}
+        .spacer{height:14px}
+        .muted{color:var(--muted)}
+        .danger{color:var(--red);font-weight:900}
+        .good{color:var(--green);font-weight:900}
+        .row{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start}
+        .between{justify-content:space-between}
+        .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+        .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+        .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+        @media(max-width:1000px){.grid4,.grid3{grid-template-columns:1fr 1fr}}
+        @media(max-width:860px){.grid2,.grid3,.grid4{grid-template-columns:1fr} .topbar{display:block}.nav{margin-top:12px}}
+        label{display:block;font-size:13px;font-weight:900;margin-bottom:6px;color:#0f172a}
+        input,select,textarea{width:100%;padding:12px 12px;border-radius:12px;border:1px solid var(--line);font-size:15px;outline:none;background:#fff}
+        input:focus,select:focus,textarea:focus{border-color:#93c5fd;box-shadow:0 0 0 4px rgba(147,197,253,.28)}
+        textarea{min-height:100px;resize:vertical}
+        input[type=checkbox],input[type=radio]{width:auto;transform:scale(1.05)}
+        .btn,.btn2,.btnDanger{display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:12px;padding:12px 16px;font-weight:900;cursor:pointer}
+        .btn{background:var(--blue);color:#fff}
+        .btn2{background:#fff;color:#1e40af;border:2px solid #c7d2fe}
+        .btnDanger{background:#fff;color:#b42318;border:2px solid #fecaca}
+        .hr{height:1px;background:rgba(148,163,184,.25);margin:14px 0}
+        .chip{display:inline-flex;align-items:center;gap:6px;padding:8px 11px;border-radius:999px;background:#f8fbff;border:1px solid var(--line);font-weight:900}
+        .small{font-size:12px}
+        .groupCard{padding:16px;border-radius:16px;border:1px solid rgba(148,163,184,.25);background:#fff}
+        .bb{display:grid;grid-template-columns:1.25fr .85fr;gap:16px}
+        @media(max-width:1040px){.bb{grid-template-columns:1fr}}
+        .block{border:1px solid rgba(148,163,184,.25);background:#fff;border-radius:16px;padding:14px}
+        .blockHead{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+        .dropZone{min-height:42px;padding:8px;border-radius:14px;border:2px dashed rgba(148,163,184,.35);background:#f8fbff}
+        .dropZone.over{border-color:#7cb3ff;background:#eaf3ff}
+        .raceItem{border:1px solid rgba(148,163,184,.25);background:#fff;border-radius:14px;padding:10px;margin:8px 0;cursor:grab}
+        .raceItem.activeCurrent{border-color:#12b76a;box-shadow:0 0 0 3px rgba(18,183,106,.13)}
+        .raceMeta{font-size:12px;color:var(--muted);margin-top:3px}
+        .rightCol{position:sticky;top:12px;align-self:start}
+        .table{width:100%;border-collapse:collapse}
+        .table th,.table td{padding:11px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+        .table th{font-size:12px;text-transform:uppercase;color:#475569;letter-spacing:.05em}
+        .subTabs{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+        .subTab{padding:11px 14px;border-radius:12px;background:#fff;border:1px solid var(--line);font-weight:900;color:#0f172a}
+        .subTab.active{background:var(--blue);color:#fff;border-color:var(--blue)}
+        .statusCard{border-radius:18px;padding:16px;color:#fff;box-shadow:var(--shadow)}
+        .statusCard.green{background:linear-gradient(135deg,#0ea765,#18c77a)}
+        .statusCard.yellow{background:linear-gradient(135deg,#d29600,#f7ba10)}
+        .statusCard.blue{background:linear-gradient(135deg,#0f4cd3,#3a82ff)}
+        .statusCard.gray{background:linear-gradient(135deg,#475467,#667085)}
+        .statusLabel{font-size:12px;opacity:.9;text-transform:uppercase;letter-spacing:.08em;font-weight:900}
+        .statusTitle{font-size:24px;font-weight:900;margin-top:5px;line-height:1.1}
+        .note{font-size:13px;color:var(--muted)}
+        .codeBox{background:#0b1220;color:#dbeafe;padding:12px;border-radius:12px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;overflow:auto}
+        .stackForm{display:flex;flex-direction:column;gap:14px}
+        .actionRow{display:flex;gap:8px;flex-wrap:wrap}
+      </style>
+    </head>
+    <body>
+      ${navHtml(user)}
+      <div class="wrap">
+        ${meetTabs(meet, activeTab)}
+        ${bodyHtml}
+        <div class="spacer"></div>
+        <div class="note small">Data file: ${esc(DATA_FILE)}</div>
+      </div>
+    </body>
+  </html>`;
+}
+
+/* Public */
 app.get('/', (req, res) => {
   const data = getSessionUser(req);
   const body = `
@@ -706,8 +723,7 @@ app.get('/', (req, res) => {
         <div class="spacer"></div>
         ${data ? `<a class="btn" href="/portal">Go to Portal</a>` : `<a class="btn" href="/admin/login">Admin Login</a>`}
       </div>
-    </div>
-  `;
+    </div>`;
   res.send(pageShell({ title: 'Home', user: data?.user || null, bodyHtml: body }));
 });
 
@@ -757,25 +773,123 @@ app.get('/live', (req, res) => {
   }));
 });
 
+app.get('/meet/:meetId/register', (req, res) => {
+  const db = loadDb();
+  const meet = getMeetOr404(db, req.params.meetId);
+  const data = getSessionUser(req);
+  if (!meet) return res.redirect('/meets');
+  const closed = isRegistrationClosed(meet);
+
+  const body = `
+    <h1>Register</h1>
+    <div class="card">
+      <h2>${esc(meet.meetName)}</h2>
+      <div class="muted">${esc(meet.date || '')} ${meet.startTime ? `• ${esc(meet.startTime)}` : ''}</div>
+      <div class="spacer"></div>
+      ${closed ? `<div class="danger">Registration Closed</div>` : `
+      <form method="POST" action="/meet/${meet.id}/register">
+        <div class="grid3">
+          <div><label>Skater Name</label><input name="name" required /></div>
+          <div><label>Age</label><input name="age" required /></div>
+          <div><label>Gender</label>
+            <select name="gender">
+              <option value="boys">Boy</option>
+              <option value="girls">Girl</option>
+              <option value="men">Man</option>
+              <option value="women">Woman</option>
+            </select>
+          </div>
+          <div><label>Team</label><input name="team" list="teams-register" value="Midwest Racing" /></div>
+        </div>
+        <datalist id="teams-register">${TEAM_LIST.map(t => `<option value="${esc(t)}"></option>`).join('')}</datalist>
+        <div class="spacer"></div>
+        <div class="row">
+          <label><input type="checkbox" name="challengeUp" /> Challenge Up</label>
+          <label><input type="checkbox" name="novice" /> Novice</label>
+          <label><input type="checkbox" name="elite" /> Elite</label>
+          <label><input type="checkbox" name="open" /> Open</label>
+          <label><input type="checkbox" name="timeTrials" /> Time Trials</label>
+          <label><input type="checkbox" name="relays" /> Relays</label>
+        </div>
+        <div class="spacer"></div>
+        <button class="btn" type="submit">Register Skater</button>
+      </form>`}
+    </div>`;
+  res.send(pageShell({ title: 'Register', user: data?.user || null, bodyHtml: body }));
+});
+
+app.post('/meet/:meetId/register', (req, res) => {
+  const db = loadDb();
+  const meet = getMeetOr404(db, req.params.meetId);
+  if (!meet) return res.redirect('/meets');
+  if (isRegistrationClosed(meet)) return res.redirect(`/meet/${meet.id}/register`);
+
+  const gender = String(req.body.gender || '').trim() || 'boys';
+  const group = findAgeGroup(meet.groups, req.body.age, gender);
+  const meetNumber = (meet.registrations.reduce((max, r) => Math.max(max, Number(r.meetNumber) || 0), 0) + 1);
+
+  meet.registrations.push({
+    id: nextId(meet.registrations),
+    createdAt: nowIso(),
+    name: String(req.body.name || '').trim(),
+    age: Number(req.body.age || 0),
+    gender,
+    team: String(req.body.team || 'Midwest Racing').trim() || 'Midwest Racing',
+    divisionGroupId: group?.id || '',
+    divisionGroupLabel: group?.label || 'Unassigned',
+    meetNumber,
+    options: {
+      challengeUp: !!req.body.challengeUp,
+      novice: !!req.body.novice,
+      elite: !!req.body.elite,
+      open: !!req.body.open,
+      timeTrials: !!req.body.timeTrials,
+      relays: !!req.body.relays,
+    },
+  });
+
+  rebuildRaceAssignments(meet);
+  ensureCurrentRace(meet);
+  saveDb(db);
+  res.redirect(`/meet/${meet.id}/register?ok=1`);
+});
+
+app.get('/meet/:meetId/live', (req, res) => {
+  const db = loadDb();
+  const meet = getMeetOr404(db, req.params.meetId);
+  const data = getSessionUser(req);
+  if (!meet) return res.redirect('/meets');
+
+  const info = currentRaceInfo(meet);
+  const current = info.current;
+  const lanes = current ? laneRowsForRace(current, meet) : [];
+
+  const body = `
+    <h1>${esc(meet.meetName)}</h1>
+    <div class="grid3">
+      <div class="statusCard green"><div class="statusLabel">Current Race</div><div class="statusTitle">${current ? esc(current.groupLabel) : '—'}</div><div>${current ? `${esc(current.distanceLabel)} • Race ${Math.max(info.idx + 1, 1)} of ${info.ordered.length}` : ''}</div></div>
+      <div class="statusCard yellow"><div class="statusLabel">On Deck</div><div class="statusTitle">${info.next ? esc(info.next.groupLabel) : '—'}</div><div>${info.next ? esc(info.next.distanceLabel) : ''}</div></div>
+      <div class="statusCard blue"><div class="statusLabel">Coming Up</div><div class="statusTitle">${info.coming[0] ? esc(info.coming[0].groupLabel) : '—'}</div><div>${info.coming[0] ? esc(info.coming[0].distanceLabel) : ''}</div></div>
+    </div>
+    <div class="spacer"></div>
+    <div class="card">${current ? `<h2>${esc(current.groupLabel)} — ${esc(current.distanceLabel)}</h2><table class="table"><thead><tr><th>Lane</th><th>Skater</th><th>Team</th><th>${current.resultsMode === 'times' ? 'Time' : 'Place'}</th><th>Status</th></tr></thead><tbody>${lanes.map(l => `<tr><td>${l.lane}</td><td>${esc(l.skaterName)}</td><td>${esc(l.team)}</td><td>${esc(current.resultsMode === 'times' ? l.time : l.place)}</td><td>${esc(l.status)}</td></tr>`).join('')}</tbody></table>` : `<div class="muted">No race selected.</div>`}</div>
+    <div class="spacer"></div>
+    <div class="card"><div class="muted">Refresh this page during the meet to follow what race is happening.</div></div>`;
+  res.send(pageShell({ title: 'Live', user: data?.user || null, bodyHtml: body }));
+});
+
+/* Login */
 app.get('/admin/login', (req, res) => {
   const body = `
     <h1>Admin Login</h1>
     <div class="card">
       <form method="POST" action="/admin/login">
         <div class="grid2">
-          <div>
-            <label>Username</label>
-            <input name="username" autocomplete="username" required />
-          </div>
-          <div>
-            <label>Password</label>
-            <input name="password" type="password" autocomplete="current-password" required />
-          </div>
+          <div><label>Username</label><input name="username" autocomplete="username" required /></div>
+          <div><label>Password</label><input name="password" type="password" autocomplete="current-password" required /></div>
         </div>
         <div class="spacer"></div>
         <button class="btn" type="submit">Login</button>
-        <div class="spacer"></div>
-        <div class="note">App login restored as requested.</div>
       </form>
     </div>`;
   res.send(pageShell({ title: 'Admin Login', user: null, bodyHtml: body }));
@@ -810,10 +924,9 @@ app.get('/admin/logout', (req, res) => {
   res.redirect('/');
 });
 
+/* Portal */
 app.get('/portal', requireRole('meet_director', 'judge', 'coach'), (req, res) => {
-  const editableMeets = req.db.meets.filter(m => hasRole(req.user, 'super_admin') || m.createdByUserId === req.user.id);
-  const visibleMeets = hasRole(req.user, 'super_admin') ? req.db.meets : editableMeets;
-
+  const visibleMeets = hasRole(req.user, 'super_admin') ? req.db.meets : req.db.meets.filter(m => m.createdByUserId === req.user.id);
   const cards = visibleMeets.map(m => `
     <div class="card">
       <div class="row between">
@@ -846,7 +959,6 @@ app.get('/portal', requireRole('meet_director', 'judge', 'coach'), (req, res) =>
     </div>
     <div class="spacer"></div>
     ${cards || `<div class="card"><div class="muted">No meets yet. Click “Build New Meet”.</div></div>`}`;
-
   res.send(pageShell({ title: 'Portal', user: req.user, bodyHtml: body }));
 });
 
@@ -861,7 +973,6 @@ app.post('/portal/create-meet', requireRole('meet_director'), (req, res) => {
 app.get('/portal/meet/:meetId/delete-confirm', requireRole('meet_director'), (req, res) => {
   const meet = getMeetOr404(req.db, req.params.meetId);
   if (!meet || !canEditMeet(req.user, meet)) return res.redirect('/portal');
-
   const body = `
     <h1>Delete Meet</h1>
     <div class="card">
@@ -875,7 +986,6 @@ app.get('/portal/meet/:meetId/delete-confirm', requireRole('meet_director'), (re
         <a class="btn2" href="/portal">Cancel</a>
       </form>
     </div>`;
-
   res.send(pageShell({ title: 'Delete Meet', user: req.user, bodyHtml: body }));
 });
 
@@ -887,6 +997,7 @@ app.post('/portal/meet/:meetId/delete', requireRole('meet_director'), (req, res)
   res.redirect('/portal');
 });
 
+/* Rinks */
 app.get('/portal/rinks', requireRole('meet_director'), (req, res) => {
   const rows = req.db.rinks.map(r => `
     <tr>
@@ -974,6 +1085,7 @@ app.post('/portal/rinks/:id/edit', requireRole('meet_director'), (req, res) => {
   res.redirect('/portal/rinks');
 });
 
+/* Users */
 app.get('/portal/users', requireRole('super_admin'), (req, res) => {
   const rows = req.db.users.map(u => `
     <tr>
@@ -991,7 +1103,7 @@ app.get('/portal/users', requireRole('super_admin'), (req, res) => {
           <div><label>Name</label><input name="displayName" required /></div>
           <div><label>Username</label><input name="username" required /></div>
           <div><label>Password / PIN</label><input name="password" required /></div>
-          <div><label>Team</label><input name="team" list="teams-users" /></div>
+          <div><label>Team</label><input name="team" list="teams-users" value="Midwest Racing" /></div>
         </div>
         <datalist id="teams-users">${TEAM_LIST.map(t => `<option value="${esc(t)}"></option>`).join('')}</datalist>
         <div class="spacer"></div>
@@ -1017,7 +1129,7 @@ app.post('/portal/users/new', requireRole('super_admin'), (req, res) => {
     displayName: String(req.body.displayName || '').trim(),
     username: String(req.body.username || '').trim(),
     password: String(req.body.password || '').trim(),
-    team: String(req.body.team || '').trim(),
+    team: String(req.body.team || 'Midwest Racing').trim(),
     roles,
     active: true,
     createdAt: nowIso(),
@@ -1026,6 +1138,7 @@ app.post('/portal/users/new', requireRole('super_admin'), (req, res) => {
   res.redirect('/portal/users');
 });
 
+/* Meet Builder */
 app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res) => {
   const meet = getMeetOr404(req.db, req.params.meetId);
   if (!meet) return res.redirect('/portal');
@@ -1040,7 +1153,7 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
   const rinkOptions = req.db.rinks.map(r => `<option value="${r.id}" ${Number(meet.rinkId) === Number(r.id) ? 'selected' : ''}>${esc(r.name)} (${esc(r.city || '')}, ${esc(r.state || '')})</option>`).join('');
 
   const groupsHtml = meet.groups.map((g, gi) => {
-    const rows = ['novice','elite','open'].map(divKey => {
+    const rows = ['novice', 'elite', 'open'].map(divKey => {
       const div = g.divisions[divKey];
       return `
         <div class="groupCard">
@@ -1057,15 +1170,9 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
           </div>
         </div>`;
     }).join('<div class="spacer"></div>');
-
     return `
       <div class="card">
-        <div class="row between">
-          <div>
-            <h3>${esc(g.label)}</h3>
-            <div class="muted">${esc(g.ages)}</div>
-          </div>
-        </div>
+        <div class="row between"><div><h3>${esc(g.label)}</h3><div class="muted">${esc(g.ages)}</div></div></div>
         <div class="hr"></div>
         ${rows}
       </div>`;
@@ -1073,8 +1180,8 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
 
   const body = `
     <h1>Meet Builder</h1>
-    <div class="card">
-      <form method="POST" action="/portal/meet/${meet.id}/builder/save">
+    <form method="POST" action="/portal/meet/${meet.id}/builder/save" class="stackForm">
+      <div class="card">
         <div class="row between">
           <h2 style="margin:0">Meet Setup</h2>
           <button class="btn" type="submit">Save Meet & Generate Race List</button>
@@ -1084,8 +1191,8 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
           <div><label>Meet Name</label><input name="meetName" value="${esc(meet.meetName)}" required /></div>
           <div><label>Date</label><input type="date" name="date" value="${esc(meet.date)}" /></div>
           <div><label>Start Time</label><input type="time" name="startTime" value="${esc(meet.startTime)}" /></div>
-          <div><label>Registration Close Date</label><input type="date" name="registrationCloseDate" value="${esc(meet.registrationCloseAt ? meet.registrationCloseAt.slice(0,10) : '')}" /></div>
-          <div><label>Registration Close Time</label><input type="time" name="registrationCloseTime" value="${esc(meet.registrationCloseAt ? meet.registrationCloseAt.slice(11,16) : '')}" /></div>
+          <div><label>Registration Close Date</label><input type="date" name="registrationCloseDate" value="${esc(meet.registrationCloseAt ? meet.registrationCloseAt.slice(0, 10) : '')}" /></div>
+          <div><label>Registration Close Time</label><input type="time" name="registrationCloseTime" value="${esc(meet.registrationCloseAt ? meet.registrationCloseAt.slice(11, 16) : '')}" /></div>
           <div><label>Rink</label><select name="rinkId">${rinkOptions}</select></div>
           <div><label>Track Length</label><input name="trackLength" value="${esc(meet.trackLength)}" /></div>
           <div><label>Lanes</label><input name="lanes" value="${esc(meet.lanes)}" /></div>
@@ -1102,20 +1209,17 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
         <div class="spacer"></div>
         <label>Relay Notes</label>
         <textarea name="relayNotes">${esc(meet.relayNotes || '')}</textarea>
+      </div>
 
-        <div class="spacer"></div>
-        <div class="hr"></div>
-        <h2>Divisions & Distances</h2>
-        <div class="note">Check Novice / Elite / Open, add distances, then save to generate races.</div>
-        <div class="spacer"></div>
+      ${groupsHtml}
 
-        ${groupsHtml}
-
-        <div class="spacer"></div>
-        <button class="btn" type="submit">Save Meet & Generate Race List</button>
-      </form>
-    </div>`;
-
+      <div class="card">
+        <div class="row between">
+          <div class="muted">Saving now keeps divisions, distances, and race generation together.</div>
+          <button class="btn" type="submit">Save Meet & Generate Race List</button>
+        </div>
+      </div>
+    </form>`;
   res.send(pageShell({ title: 'Meet Builder', user: req.user, meet, activeTab: 'builder', bodyHtml: body }));
 });
 
@@ -1138,24 +1242,26 @@ app.post('/portal/meet/:meetId/builder/save', requireRole('meet_director'), (req
   meet.relayNotes = String(req.body.relayNotes || '');
 
   meet.groups.forEach((g, gi) => {
-    for (const divKey of ['novice','elite','open']) {
+    for (const divKey of ['novice', 'elite', 'open']) {
       const enabled = !!req.body[`g_${gi}_${divKey}_enabled`];
       const cost = Number(String(req.body[`g_${gi}_${divKey}_cost`] || '0').trim() || 0);
       const d1 = String(req.body[`g_${gi}_${divKey}_d1`] || '').trim();
       const d2 = String(req.body[`g_${gi}_${divKey}_d2`] || '').trim();
       const d3 = String(req.body[`g_${gi}_${divKey}_d3`] || '').trim();
       const d4 = String(req.body[`g_${gi}_${divKey}_d4`] || '').trim();
-      g.divisions[divKey] = { enabled, cost, distances: [d1,d2,d3,d4] };
+      g.divisions[divKey] = { enabled, cost, distances: [d1, d2, d3, d4] };
     }
   });
 
   generateRacesForMeet(meet);
+  rebuildRaceAssignments(meet);
   ensureAtLeastOneBlock(meet);
   ensureCurrentRace(meet);
   saveDb(req.db);
   res.redirect(`/portal/meet/${meet.id}/blocks`);
 });
 
+/* Blocks */
 app.get('/portal/meet/:meetId/blocks', requireRole('meet_director'), (req, res) => {
   const meet = getMeetOr404(req.db, req.params.meetId);
   if (!meet) return res.redirect('/portal');
@@ -1177,7 +1283,7 @@ app.get('/portal/meet/:meetId/blocks', requireRole('meet_director'), (req, res) 
   const unassigned = (meet.races || []).filter(r => !assigned.has(r.id));
 
   const blocksHtml = meet.blocks.map(b => `
-    <div class="block" data-block-id="${esc(b.id)}">
+    <div class="block">
       <div class="blockHead">
         <div>
           <div style="font-weight:900;font-size:18px">${esc(b.name)}</div>
@@ -1185,6 +1291,7 @@ app.get('/portal/meet/:meetId/blocks', requireRole('meet_director'), (req, res) 
         </div>
         <div class="row">
           <button class="btn2 small" type="button" onclick="renameBlock('${esc(b.id)}')">Rename</button>
+          <button class="btnDanger small" type="button" onclick="deleteBlock('${esc(b.id)}')">Delete</button>
         </div>
       </div>
       <div class="spacer"></div>
@@ -1192,7 +1299,7 @@ app.get('/portal/meet/:meetId/blocks', requireRole('meet_director'), (req, res) 
         <div>
           <label>Day</label>
           <select onchange="setBlockDay('${esc(b.id)}', this.value)">
-            ${['Day 1','Day 2','Day 3'].map(day => `<option value="${day}" ${b.day === day ? 'selected' : ''}>${day}</option>`).join('')}
+            ${['Day 1', 'Day 2', 'Day 3'].map(day => `<option value="${day}" ${b.day === day ? 'selected' : ''}>${day}</option>`).join('')}
           </select>
         </div>
         <div>
@@ -1206,10 +1313,7 @@ app.get('/portal/meet/:meetId/blocks', requireRole('meet_director'), (req, res) 
           const r = raceById.get(rid);
           if (!r) return '';
           const isCurrent = meet.currentRaceId === r.id;
-          return `<div class="raceItem ${isCurrent ? 'activeCurrent' : ''}" draggable="true" data-race-id="${esc(r.id)}">
-            <div style="font-weight:900">${esc(r.groupLabel)} • ${esc(r.division.toUpperCase())}</div>
-            <div class="raceMeta">${esc(r.distanceLabel)} • D${esc(r.dayIndex)} • ${esc(r.ages)}</div>
-          </div>`;
+          return `<div class="raceItem ${isCurrent ? 'activeCurrent' : ''}" draggable="true" data-race-id="${esc(r.id)}"><div style="font-weight:900">${esc(r.groupLabel)} • ${esc(r.division.toUpperCase())}</div><div class="raceMeta">${esc(r.distanceLabel)} • D${esc(r.dayIndex)} • ${esc(r.ages)}</div></div>`;
         }).join('') || `<div class="note">Drop races here…</div>`}
       </div>
     </div>`).join('<div class="spacer"></div>');
@@ -1226,6 +1330,7 @@ app.get('/portal/meet/:meetId/blocks', requireRole('meet_director'), (req, res) 
         </div>
         <div class="row">
           <button class="btn2" type="button" onclick="addBlock()">Add Block</button>
+          <form method="POST" action="/portal/meet/${meet.id}/assign-races"><button class="btn2" type="submit">Build Race Assignments</button></form>
           <a class="btn" href="/portal/meet/${meet.id}/registered/print-race-list" target="_blank">Print Race List</a>
         </div>
       </div>
@@ -1266,23 +1371,14 @@ app.get('/portal/meet/:meetId/blocks', requireRole('meet_director'), (req, res) 
             zone.classList.remove('over');
             const raceId = e.dataTransfer.getData('text/plain') || dragRaceId;
             const destBlockId = zone.getAttribute('data-drop-block');
-            const insertIndex = computeInsertIndex(zone, e.clientY);
             const res = await fetch('/api/meet/' + meetId + '/blocks/move-race', {
-              method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ raceId, destBlockId, insertIndex })
+              method:'POST',
+              headers:{'Content-Type':'application/json'},
+              body: JSON.stringify({ raceId, destBlockId })
             });
             if (res.ok) location.reload(); else alert('Move failed');
           });
         });
-      }
-      function computeInsertIndex(zone, mouseY){
-        const items = Array.from(zone.querySelectorAll('.raceItem'));
-        if (!items.length) return 0;
-        let idx = items.length;
-        for (let i = 0; i < items.length; i++) {
-          const rect = items[i].getBoundingClientRect();
-          if (mouseY < rect.top + rect.height / 2) { idx = i; break; }
-        }
-        return idx;
       }
       async function addBlock(){
         const res = await fetch('/api/meet/' + meetId + '/blocks/add', { method:'POST' });
@@ -1291,14 +1387,27 @@ app.get('/portal/meet/:meetId/blocks', requireRole('meet_director'), (req, res) 
       async function renameBlock(id){
         const name = prompt('Block name:');
         if (!name) return;
-        const res = await fetch('/api/meet/' + meetId + '/blocks/update-meta', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ blockId:id, name }) });
+        const res = await fetch('/api/meet/' + meetId + '/blocks/update-meta', {
+          method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ blockId:id, name })
+        });
         if (res.ok) location.reload(); else alert('Rename failed');
       }
+      async function deleteBlock(id){
+        if (!confirm('Delete this block? Its races will move back to Unassigned.')) return;
+        const res = await fetch('/api/meet/' + meetId + '/blocks/delete', {
+          method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ blockId:id })
+        });
+        if (res.ok) location.reload(); else alert('Delete block failed');
+      }
       async function setBlockDay(id, day){
-        await fetch('/api/meet/' + meetId + '/blocks/update-meta', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ blockId:id, day }) });
+        await fetch('/api/meet/' + meetId + '/blocks/update-meta', {
+          method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ blockId:id, day })
+        });
       }
       async function setBlockNotes(id, notes){
-        await fetch('/api/meet/' + meetId + '/blocks/update-meta', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ blockId:id, notes }) });
+        await fetch('/api/meet/' + meetId + '/blocks/update-meta', {
+          method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ blockId:id, notes })
+        });
       }
       attachDnD();
     </script>`;
@@ -1328,100 +1437,47 @@ app.post('/api/meet/:meetId/blocks/update-meta', requireRole('meet_director'), (
   res.json({ ok: true });
 });
 
-app.post('/api/meet/:meetId/blocks/move-race', requireRole('meet_director'), (req, res) => {
+app.post('/api/meet/:meetId/blocks/delete', requireRole('meet_director'), (req, res) => {
   const meet = getMeetOr404(req.db, req.params.meetId);
   if (!meet || !canEditMeet(req.user, meet)) return res.status(403).send('Forbidden');
-  const raceId = String(req.body.raceId || '');
-  const destBlockId = String(req.body.destBlockId || '');
-  let insertIndex = Number(req.body.insertIndex);
-  if (!Number.isFinite(insertIndex)) insertIndex = 999999;
-
-  for (const b of meet.blocks) b.raceIds = (b.raceIds || []).filter(id => id !== raceId);
-
-  if (destBlockId !== '__unassigned__') {
-    const block = meet.blocks.find(b => b.id === destBlockId);
-    if (!block) return res.status(404).send('Block not found');
-    const idx = Math.max(0, Math.min(insertIndex, block.raceIds.length));
-    block.raceIds.splice(idx, 0, raceId);
-  }
-
+  const blockId = String(req.body.blockId || '');
+  const block = meet.blocks.find(b => b.id === blockId);
+  if (!block) return res.status(404).send('Block not found');
+  meet.blocks = meet.blocks.filter(b => b.id !== blockId);
+  ensureAtLeastOneBlock(meet);
   ensureCurrentRace(meet);
   meet.updatedAt = nowIso();
   saveDb(req.db);
   res.json({ ok: true });
 });
 
-app.get('/meet/:meetId/register', (req, res) => {
-  const db = loadDb();
-  const meet = getMeetOr404(db, req.params.meetId);
-  const data = getSessionUser(req);
-  if (!meet) return res.redirect('/meets');
-  const closed = isRegistrationClosed(meet);
-  const body = `
-    <h1>Register</h1>
-    <div class="card">
-      <h2>${esc(meet.meetName)}</h2>
-      <div class="muted">${esc(meet.date || '')} ${meet.startTime ? `• ${esc(meet.startTime)}` : ''}</div>
-      <div class="spacer"></div>
-      ${closed ? `<div class="danger">Registration Closed</div>` : `<form method="POST" action="/meet/${meet.id}/register">
-        <div class="grid3">
-          <div><label>Skater Name</label><input name="name" required /></div>
-          <div><label>Age</label><input name="age" required /></div>
-          <div><label>Gender</label><select name="gender"><option value="boys">Boy</option><option value="girls">Girl</option><option value="men">Man</option><option value="women">Woman</option></select></div>
-          <div><label>Team</label><input name="team" list="teams-register" value="Independent" /></div>
-        </div>
-        <datalist id="teams-register">${TEAM_LIST.map(t => `<option value="${esc(t)}"></option>`).join('')}</datalist>
-        <div class="spacer"></div>
-        <div class="row">
-          <label><input type="checkbox" name="challengeUp" /> Challenge Up</label>
-          <label><input type="checkbox" name="novice" /> Novice</label>
-          <label><input type="checkbox" name="elite" /> Elite</label>
-          <label><input type="checkbox" name="open" /> Open</label>
-          <label><input type="checkbox" name="timeTrials" /> Time Trials</label>
-          <label><input type="checkbox" name="relays" /> Relays</label>
-        </div>
-        <div class="spacer"></div>
-        <button class="btn" type="submit">Register Skater</button>
-      </form>`}
-    </div>`;
-  res.send(pageShell({ title: 'Register', user: data?.user || null, bodyHtml: body }));
-});
-
-app.post('/meet/:meetId/register', (req, res) => {
-  const db = loadDb();
-  const meet = getMeetOr404(db, req.params.meetId);
-  if (!meet) return res.redirect('/meets');
-  if (isRegistrationClosed(meet)) return res.redirect(`/meet/${meet.id}/register`);
-
-  const gender = String(req.body.gender || '').trim() || 'boys';
-  const group = findAgeGroup(meet.groups, req.body.age, gender);
-  const meetNumber = (meet.registrations.reduce((max, r) => Math.max(max, Number(r.meetNumber) || 0), 0) + 1);
-
-  meet.registrations.push({
-    id: nextId(meet.registrations),
-    createdAt: nowIso(),
-    name: String(req.body.name || '').trim(),
-    age: Number(req.body.age || 0),
-    gender,
-    team: String(req.body.team || 'Independent').trim() || 'Independent',
-    divisionGroupId: group?.id || '',
-    divisionGroupLabel: group?.label || 'Unassigned',
-    meetNumber,
-    options: {
-      challengeUp: !!req.body.challengeUp,
-      novice: !!req.body.novice,
-      elite: !!req.body.elite,
-      open: !!req.body.open,
-      timeTrials: !!req.body.timeTrials,
-      relays: !!req.body.relays,
-    },
-  });
-
+app.post('/api/meet/:meetId/blocks/move-race', requireRole('meet_director'), (req, res) => {
+  const meet = getMeetOr404(req.db, req.params.meetId);
+  if (!meet || !canEditMeet(req.user, meet)) return res.status(403).send('Forbidden');
+  const raceId = String(req.body.raceId || '');
+  const destBlockId = String(req.body.destBlockId || '');
+  for (const b of meet.blocks) b.raceIds = (b.raceIds || []).filter(id => id !== raceId);
+  if (destBlockId !== '__unassigned__') {
+    const block = meet.blocks.find(b => b.id === destBlockId);
+    if (!block) return res.status(404).send('Block not found');
+    block.raceIds.push(raceId);
+  }
+  ensureCurrentRace(meet);
   meet.updatedAt = nowIso();
-  saveDb(db);
-  res.redirect(`/meet/${meet.id}/register?ok=1`);
+  saveDb(req.db);
+  res.json({ ok: true });
 });
 
+app.post('/portal/meet/:meetId/assign-races', requireRole('meet_director'), (req, res) => {
+  const meet = getMeetOr404(req.db, req.params.meetId);
+  if (!meet || !canEditMeet(req.user, meet)) return res.redirect('/portal');
+  rebuildRaceAssignments(meet);
+  ensureCurrentRace(meet);
+  saveDb(req.db);
+  res.redirect(`/portal/meet/${meet.id}/registered`);
+});
+
+/* Registered */
 app.get('/portal/meet/:meetId/registered', requireRole('meet_director'), (req, res) => {
   const meet = getMeetOr404(req.db, req.params.meetId);
   if (!meet) return res.redirect('/portal');
@@ -1435,44 +1491,186 @@ app.get('/portal/meet/:meetId/registered', requireRole('meet_director'), (req, r
       <td>${esc(r.team)}</td>
       <td>${esc(r.divisionGroupLabel || '')}</td>
       <td>${['challengeUp','novice','elite','open','timeTrials','relays'].filter(k => r.options?.[k]).join(', ') || '-'}</td>
+      <td>
+        <div class="actionRow">
+          <a class="btn2 small" href="/portal/meet/${meet.id}/registered/${r.id}/edit">Edit</a>
+          <a class="btnDanger small" href="/portal/meet/${meet.id}/registered/${r.id}/delete">Delete</a>
+        </div>
+      </td>
     </tr>`).join('');
 
   const body = `
     <h1>Registered</h1>
     <div class="card">
       <div class="row between">
-        <div><h2 style="margin:0">${esc(meet.meetName)}</h2><div class="muted small">Registration close: ${meet.registrationCloseAt ? esc(meet.registrationCloseAt.replace('T', ' ')) : 'Not set'}</div></div>
+        <div>
+          <h2 style="margin:0">${esc(meet.meetName)}</h2>
+          <div class="muted small">Registration close: ${meet.registrationCloseAt ? esc(meet.registrationCloseAt.replace('T', ' ')) : 'Not set'}</div>
+        </div>
         <div class="row">
+          <form method="POST" action="/portal/meet/${meet.id}/assign-races"><button class="btn2" type="submit">Build Race Assignments</button></form>
           <a class="btn" href="/meet/${meet.id}/register" target="_blank">Open Public Registration</a>
           <a class="btn2" href="/portal/meet/${meet.id}/registered/print-race-list" target="_blank">Print Race List</a>
         </div>
       </div>
       <div class="spacer"></div>
-      <table class="table"><thead><tr><th>#</th><th>Name</th><th>Age</th><th>Team</th><th>Division</th><th>Options</th></tr></thead><tbody>${rows || `<tr><td colspan="6" class="muted">No registrations yet.</td></tr>`}</tbody></table>
+      <table class="table">
+        <thead><tr><th>#</th><th>Name</th><th>Age</th><th>Team</th><th>Division</th><th>Options</th><th>Actions</th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="7" class="muted">No registrations yet.</td></tr>`}</tbody>
+      </table>
     </div>`;
   res.send(pageShell({ title: 'Registered', user: req.user, meet, activeTab: 'registered', bodyHtml: body }));
+});
+
+function registrationForm(meet, reg, action, title) {
+  const gender = reg.gender || 'boys';
+  return `
+    <h1>${esc(title)}</h1>
+    <div class="card">
+      <form method="POST" action="${action}">
+        <div class="grid3">
+          <div><label>Skater Name</label><input name="name" value="${esc(reg.name || '')}" required /></div>
+          <div><label>Age</label><input name="age" value="${esc(reg.age || '')}" required /></div>
+          <div><label>Gender</label>
+            <select name="gender">
+              <option value="boys" ${gender === 'boys' ? 'selected' : ''}>Boy</option>
+              <option value="girls" ${gender === 'girls' ? 'selected' : ''}>Girl</option>
+              <option value="men" ${gender === 'men' ? 'selected' : ''}>Man</option>
+              <option value="women" ${gender === 'women' ? 'selected' : ''}>Woman</option>
+            </select>
+          </div>
+          <div><label>Team</label><input name="team" list="teams-edit" value="${esc(reg.team || 'Midwest Racing')}" /></div>
+        </div>
+        <datalist id="teams-edit">${TEAM_LIST.map(t => `<option value="${esc(t)}"></option>`).join('')}</datalist>
+        <div class="spacer"></div>
+        <div class="row">
+          <label><input type="checkbox" name="challengeUp" ${reg.options?.challengeUp ? 'checked' : ''}/> Challenge Up</label>
+          <label><input type="checkbox" name="novice" ${reg.options?.novice ? 'checked' : ''}/> Novice</label>
+          <label><input type="checkbox" name="elite" ${reg.options?.elite ? 'checked' : ''}/> Elite</label>
+          <label><input type="checkbox" name="open" ${reg.options?.open ? 'checked' : ''}/> Open</label>
+          <label><input type="checkbox" name="timeTrials" ${reg.options?.timeTrials ? 'checked' : ''}/> Time Trials</label>
+          <label><input type="checkbox" name="relays" ${reg.options?.relays ? 'checked' : ''}/> Relays</label>
+        </div>
+        <div class="spacer"></div>
+        <button class="btn" type="submit">Save Racer</button>
+        <a class="btn2" href="/portal/meet/${meet.id}/registered">Back</a>
+      </form>
+    </div>`;
+}
+
+app.get('/portal/meet/:meetId/registered/:regId/edit', requireRole('meet_director'), (req, res) => {
+  const meet = getMeetOr404(req.db, req.params.meetId);
+  if (!meet || !canEditMeet(req.user, meet)) return res.redirect('/portal');
+  const reg = (meet.registrations || []).find(r => Number(r.id) === Number(req.params.regId));
+  if (!reg) return res.redirect(`/portal/meet/${meet.id}/registered`);
+  res.send(pageShell({
+    title: 'Edit Racer',
+    user: req.user,
+    meet,
+    activeTab: 'registered',
+    bodyHtml: registrationForm(meet, reg, `/portal/meet/${meet.id}/registered/${reg.id}/edit`, 'Edit Racer')
+  }));
+});
+
+app.post('/portal/meet/:meetId/registered/:regId/edit', requireRole('meet_director'), (req, res) => {
+  const meet = getMeetOr404(req.db, req.params.meetId);
+  if (!meet || !canEditMeet(req.user, meet)) return res.redirect('/portal');
+  const reg = (meet.registrations || []).find(r => Number(r.id) === Number(req.params.regId));
+  if (!reg) return res.redirect(`/portal/meet/${meet.id}/registered`);
+
+  const gender = String(req.body.gender || '').trim() || 'boys';
+  const group = findAgeGroup(meet.groups, req.body.age, gender);
+
+  reg.name = String(req.body.name || '').trim();
+  reg.age = Number(req.body.age || 0);
+  reg.gender = gender;
+  reg.team = String(req.body.team || 'Midwest Racing').trim() || 'Midwest Racing';
+  reg.divisionGroupId = group?.id || '';
+  reg.divisionGroupLabel = group?.label || 'Unassigned';
+  reg.options = {
+    challengeUp: !!req.body.challengeUp,
+    novice: !!req.body.novice,
+    elite: !!req.body.elite,
+    open: !!req.body.open,
+    timeTrials: !!req.body.timeTrials,
+    relays: !!req.body.relays,
+  };
+
+  rebuildRaceAssignments(meet);
+  saveDb(req.db);
+  res.redirect(`/portal/meet/${meet.id}/registered`);
+});
+
+app.get('/portal/meet/:meetId/registered/:regId/delete', requireRole('meet_director'), (req, res) => {
+  const meet = getMeetOr404(req.db, req.params.meetId);
+  if (!meet || !canEditMeet(req.user, meet)) return res.redirect('/portal');
+  const reg = (meet.registrations || []).find(r => Number(r.id) === Number(req.params.regId));
+  if (!reg) return res.redirect(`/portal/meet/${meet.id}/registered`);
+
+  const body = `
+    <h1>Delete Racer</h1>
+    <div class="card">
+      <div class="danger">This will remove ${esc(reg.name)} from registrations and race assignments.</div>
+      <div class="spacer"></div>
+      <form method="POST" action="/portal/meet/${meet.id}/registered/${reg.id}/delete">
+        <button class="btnDanger" type="submit">Delete Racer</button>
+        <a class="btn2" href="/portal/meet/${meet.id}/registered">Cancel</a>
+      </form>
+    </div>`;
+  res.send(pageShell({ title: 'Delete Racer', user: req.user, meet, activeTab: 'registered', bodyHtml: body }));
+});
+
+app.post('/portal/meet/:meetId/registered/:regId/delete', requireRole('meet_director'), (req, res) => {
+  const meet = getMeetOr404(req.db, req.params.meetId);
+  if (!meet || !canEditMeet(req.user, meet)) return res.redirect('/portal');
+  meet.registrations = (meet.registrations || []).filter(r => Number(r.id) !== Number(req.params.regId));
+  rebuildRaceAssignments(meet);
+  saveDb(req.db);
+  res.redirect(`/portal/meet/${meet.id}/registered`);
 });
 
 app.get('/portal/meet/:meetId/registered/print-race-list', requireRole('meet_director'), (req, res) => {
   const meet = getMeetOr404(req.db, req.params.meetId);
   if (!meet) return res.redirect('/portal');
   const ordered = orderedRaces(meet);
-  const grouped = [];
-  const blockKeySeen = new Set();
+  let raceNo = 1;
+  const rows = ordered.map(r => `
+    <tr>
+      <td>${raceNo++}</td>
+      <td>${esc(r.blockName || 'Unassigned')}</td>
+      <td>${esc(r.blockDay || '')}</td>
+      <td>${esc(r.groupLabel)}</td>
+      <td>${esc(r.distanceLabel)}</td>
+      <td>${esc(r.division.toUpperCase())}</td>
+    </tr>`).join('');
 
-  for (const r of ordered) {
-    const key = `${r.blockId || 'unassigned'}`;
-    if (!blockKeySeen.has(key)) {
-      blockKeySeen.add(key);
-      grouped.push({ blockName: r.blockName, day: r.blockDay, notes: r.blockNotes, races: [] });
-    }
-    grouped[grouped.length - 1].races.push(r);
-  }
-
-  const body = `<!doctype html><html><head><meta charset="utf-8"><title>Race List</title><style>body{font-family:Arial;padding:28px;color:#111} h1,h2{margin:0 0 8px} .block{margin-bottom:26px;padding-bottom:18px;border-bottom:1px solid #ddd} .race{margin:8px 0}</style></head><body><h1>${esc(meet.meetName)}</h1><div>${esc(meet.date || '')} ${meet.startTime ? `• ${esc(meet.startTime)}` : ''}</div>${grouped.map(g => `<div class="block"><h2>${esc(g.blockName || 'Unassigned')} ${g.day ? `• ${esc(g.day)}` : ''}</h2>${g.notes ? `<div>${esc(g.notes)}</div>` : ''}${g.races.map((r, idx) => `<div class="race">Race ${idx + 1 + ordered.findIndex(x => x.id === g.races[0].id)} – ${esc(r.groupLabel)} – ${esc(r.distanceLabel)} – ${esc(r.division.toUpperCase())}</div>`).join('')}</div>`).join('')}</body></html>`;
+  const body = `<!doctype html>
+  <html>
+    <head>
+      <meta charset="utf-8">
+      <title>Race List</title>
+      <style>
+        body{font-family:Arial,sans-serif;padding:18px;color:#111;font-size:12px}
+        h1,h2{margin:0}
+        .meta{margin:4px 0 14px;color:#444}
+        table{width:100%;border-collapse:collapse}
+        th,td{padding:6px 8px;border-bottom:1px solid #ddd;text-align:left}
+        th{font-size:11px;text-transform:uppercase;color:#555;letter-spacing:.05em}
+      </style>
+    </head>
+    <body>
+      <h1>${esc(meet.meetName)}</h1>
+      <div class="meta">${esc(meet.date || '')} ${meet.startTime ? `• ${esc(meet.startTime)}` : ''}</div>
+      <table>
+        <thead><tr><th>Race</th><th>Block</th><th>Day</th><th>Division</th><th>Distance</th><th>Class</th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="6">No races yet.</td></tr>`}</tbody>
+      </table>
+    </body>
+  </html>`;
   res.send(body);
 });
 
+/* Race Day */
 function raceDaySubTabs(meet, active) {
   const subs = [
     ['director', 'Director', `/portal/meet/${meet.id}/race-day/director`],
@@ -1483,26 +1681,9 @@ function raceDaySubTabs(meet, active) {
   return `<div class="subTabs">${subs.map(([k, label, href]) => `<a class="subTab ${active === k ? 'active' : ''}" href="${href}">${label}</a>`).join('')}</div>`;
 }
 
-function laneRowsForRace(race, meet) {
-  const lanes = [];
-  for (let i = 1; i <= (Number(meet.lanes) || 4); i++) {
-    const existing = (race.laneEntries || []).find(x => Number(x.lane) === i) || {};
-    lanes.push({
-      lane: i,
-      skaterName: existing.skaterName || '',
-      team: existing.team || '',
-      place: existing.place || '',
-      time: existing.time || '',
-      status: existing.status || '',
-    });
-  }
-  return lanes;
-}
-
 app.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director', 'judge', 'coach'), (req, res) => {
   const meet = getMeetOr404(req.db, req.params.meetId);
   if (!meet) return res.redirect('/portal');
-
   const mode = String(req.params.mode || 'director');
   const info = currentRaceInfo(meet);
   const current = info.current;
@@ -1521,18 +1702,9 @@ app.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director', 'jud
       <div class="spacer"></div>
       <div class="card">
         <div class="grid3">
-          <div>
-            <label>Set Current Race</label>
-            <select onchange="setCurrentRace(this.value)">${raceOptions}</select>
-          </div>
-          <div class="row" style="align-items:end">
-            <button class="btn2" type="button" onclick="moveCurrent(-1)">Previous Race</button>
-            <button class="btn" type="button" onclick="moveCurrent(1)">Next Race</button>
-          </div>
-          <div class="row" style="align-items:end">
-            <button class="btn2" type="button" onclick="pauseMeet()">${meet.raceDayPaused ? 'Resume Meet' : 'Pause Meet'}</button>
-            ${current && current.status === 'closed' ? `<button class="btnDanger" type="button" onclick="unlockRace('${current.id}')">Unlock Race</button>` : ''}
-          </div>
+          <div><label>Set Current Race</label><select onchange="setCurrentRace(this.value)">${raceOptions}</select></div>
+          <div class="row" style="align-items:end"><button class="btn2" type="button" onclick="moveCurrent(-1)">Previous Race</button><button class="btn" type="button" onclick="moveCurrent(1)">Next Race</button></div>
+          <div class="row" style="align-items:end"><button class="btn2" type="button" onclick="pauseMeet()">${meet.raceDayPaused ? 'Resume Meet' : 'Pause Meet'}</button>${current && current.status === 'closed' ? `<button class="btnDanger" type="button" onclick="unlockRace('${current.id}')">Unlock Race</button>` : ''}</div>
         </div>
       </div>
       <div class="spacer"></div>
@@ -1553,38 +1725,13 @@ app.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director', 'jud
         async function unlockRace(raceId){ const res = await fetch('/api/meet/${meet.id}/race-day/unlock-race', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({raceId})}); if(res.ok) location.reload(); }
       </script>`;
   } else if (mode === 'judges') {
-    const lanes = currentLanes;
     body += `
       <div class="card">
         <h2>${current ? `Race ${Math.max(info.idx + 1, 1)} — ${esc(current.groupLabel)} — ${esc(current.distanceLabel)}` : 'No race selected'}</h2>
         <div class="muted">Judges always land on the current race. Save, then close race when done.</div>
       </div>
       <div class="spacer"></div>
-      ${current ? `<div class="card"><form method="POST" action="/portal/meet/${meet.id}/race-day/judges/save">
-        <input type="hidden" name="raceId" value="${esc(current.id)}" />
-        <div class="row">
-          <label><input type="radio" name="resultsMode" value="places" ${current.resultsMode !== 'times' ? 'checked' : ''}/> Places</label>
-          <label><input type="radio" name="resultsMode" value="times" ${current.resultsMode === 'times' ? 'checked' : ''}/> Times</label>
-          <label><input type="checkbox" name="isFinal" ${current.isFinal ? 'checked' : ''}/> Final race</label>
-        </div>
-        <div class="spacer"></div>
-        <table class="table"><thead><tr><th>Lane</th><th>Skater</th><th>Team</th><th>Place</th><th>Time</th><th>Status</th></tr></thead><tbody>${lanes.map(l => `<tr>
-          <td>${l.lane}<input type="hidden" name="lane_${l.lane}" value="${l.lane}" /></td>
-          <td><input name="skaterName_${l.lane}" value="${esc(l.skaterName)}" placeholder="Skater name" /></td>
-          <td><input name="team_${l.lane}" value="${esc(l.team)}" placeholder="Team" /></td>
-          <td><input name="place_${l.lane}" value="${esc(l.place)}" placeholder="1 / 2 / 3 / 4" /></td>
-          <td><input name="time_${l.lane}" value="${esc(l.time)}" placeholder="19.542" /></td>
-          <td><select name="status_${l.lane}"><option value="" ${!l.status ? 'selected' : ''}>—</option><option value="DNS" ${l.status === 'DNS' ? 'selected' : ''}>DNS</option><option value="DQ" ${l.status === 'DQ' ? 'selected' : ''}>DQ</option><option value="Scratch" ${l.status === 'Scratch' ? 'selected' : ''}>Scratch</option></select></td>
-        </tr>`).join('')}</tbody></table>
-        <div class="spacer"></div>
-        <label>Race Notes / Officials Report</label>
-        <textarea name="notes" placeholder="DQ – inside pass violation – Judge 2">${esc(current.notes || '')}</textarea>
-        <div class="spacer"></div>
-        <div class="row">
-          <button class="btn2" type="submit" name="action" value="save">Save</button>
-          <button class="btn" type="submit" name="action" value="close">Close Race</button>
-        </div>
-      </form></div>` : `<div class="card"><div class="muted">No race selected yet. Set one in Director view.</div></div>`}`;
+      ${current ? `<div class="card"><form method="POST" action="/portal/meet/${meet.id}/race-day/judges/save"><input type="hidden" name="raceId" value="${esc(current.id)}" /><div class="row"><label><input type="radio" name="resultsMode" value="places" ${current.resultsMode !== 'times' ? 'checked' : ''}/> Places</label><label><input type="radio" name="resultsMode" value="times" ${current.resultsMode === 'times' ? 'checked' : ''}/> Times</label><label><input type="checkbox" name="isFinal" ${current.isFinal ? 'checked' : ''}/> Final race</label></div><div class="spacer"></div><table class="table"><thead><tr><th>Lane</th><th>Skater</th><th>Team</th><th>Place</th><th>Time</th><th>Status</th></tr></thead><tbody>${currentLanes.map(l => `<tr><td>${l.lane}</td><td><input name="skaterName_${l.lane}" value="${esc(l.skaterName)}" /></td><td><input name="team_${l.lane}" value="${esc(l.team)}" /></td><td><input name="place_${l.lane}" value="${esc(l.place)}" /></td><td><input name="time_${l.lane}" value="${esc(l.time)}" /></td><td><select name="status_${l.lane}"><option value="" ${!l.status ? 'selected' : ''}>—</option><option value="DNS" ${l.status === 'DNS' ? 'selected' : ''}>DNS</option><option value="DQ" ${l.status === 'DQ' ? 'selected' : ''}>DQ</option><option value="Scratch" ${l.status === 'Scratch' ? 'selected' : ''}>Scratch</option></select></td></tr>`).join('')}</tbody></table><div class="spacer"></div><label>Race Notes / Officials Report</label><textarea name="notes">${esc(current.notes || '')}</textarea><div class="spacer"></div><div class="row"><button class="btn2" type="submit" name="action" value="save">Save</button><button class="btn" type="submit" name="action" value="close">Close Race</button></div></form></div>` : `<div class="card"><div class="muted">No race selected yet.</div></div>`}`;
   } else if (mode === 'announcer') {
     body += `
       <div class="grid3">
@@ -1604,7 +1751,6 @@ app.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director', 'jud
       <div class="spacer"></div>
       <div class="card">${current ? `<h2>${esc(current.groupLabel)} — ${esc(current.distanceLabel)}</h2><table class="table"><thead><tr><th>Lane</th><th>Skater</th><th>Team</th><th>${current.resultsMode === 'times' ? 'Time' : 'Place'}</th><th>Status</th></tr></thead><tbody>${currentLanes.map(l => `<tr><td>${l.lane}</td><td>${esc(l.skaterName)}</td><td>${esc(l.team)}</td><td>${esc(current.resultsMode === 'times' ? l.time : l.place)}</td><td>${esc(l.status)}</td></tr>`).join('')}</tbody></table>` : `<div class="muted">No live race selected.</div>`}</div>`;
   }
-
   res.send(pageShell({ title: 'Race Day', user: req.user, meet, activeTab: 'race-day', bodyHtml: body }));
 });
 
@@ -1614,8 +1760,8 @@ app.post('/portal/meet/:meetId/race-day/judges/save', requireRole('judge', 'meet
   const race = (meet.races || []).find(r => r.id === String(req.body.raceId || ''));
   if (!race) return res.redirect(`/portal/meet/${meet.id}/race-day/judges`);
 
+  const lanes = Math.max(1, Number(meet.lanes) || 4);
   const laneEntries = [];
-  const lanes = Number(meet.lanes) || 4;
   for (let i = 1; i <= lanes; i++) {
     laneEntries.push({
       lane: i,
@@ -1700,6 +1846,7 @@ app.post('/api/meet/:meetId/race-day/unlock-race', requireRole('meet_director'),
   res.json({ ok: true });
 });
 
+/* Coach */
 app.get('/portal/meet/:meetId/coach', requireRole('coach', 'meet_director'), (req, res) => {
   const meet = getMeetOr404(req.db, req.params.meetId);
   if (!meet) return res.redirect('/portal');
@@ -1724,30 +1871,6 @@ app.get('/portal/meet/:meetId/coach', requireRole('coach', 'meet_director'), (re
 
   const body = `<h1>Coach Panel</h1><div class="muted">Simple coach view: my skaters, race status, and what is coming up.</div><div class="spacer"></div>${cardHtml || `<div class="card"><div class="muted">No skaters on your team yet.</div></div>`}`;
   res.send(pageShell({ title: 'Coach Panel', user: req.user, meet, activeTab: 'race-day', bodyHtml: body }));
-});
-
-app.get('/meet/:meetId/live', (req, res) => {
-  const db = loadDb();
-  const meet = getMeetOr404(db, req.params.meetId);
-  const data = getSessionUser(req);
-  if (!meet) return res.redirect('/meets');
-
-  const info = currentRaceInfo(meet);
-  const current = info.current;
-  const lanes = current ? laneRowsForRace(current, meet) : [];
-
-  const body = `
-    <h1>${esc(meet.meetName)}</h1>
-    <div class="grid3">
-      <div class="statusCard green"><div class="statusLabel">Current Race</div><div class="statusTitle">${current ? esc(current.groupLabel) : '—'}</div><div>${current ? `${esc(current.distanceLabel)} • Race ${Math.max(info.idx + 1, 1)} of ${info.ordered.length}` : ''}</div></div>
-      <div class="statusCard yellow"><div class="statusLabel">On Deck</div><div class="statusTitle">${info.next ? esc(info.next.groupLabel) : '—'}</div><div>${info.next ? esc(info.next.distanceLabel) : ''}</div></div>
-      <div class="statusCard blue"><div class="statusLabel">Coming Up</div><div class="statusTitle">${info.coming[0] ? esc(info.coming[0].groupLabel) : '—'}</div><div>${info.coming[0] ? esc(info.coming[0].distanceLabel) : ''}</div></div>
-    </div>
-    <div class="spacer"></div>
-    <div class="card">${current ? `<h2>${esc(current.groupLabel)} — ${esc(current.distanceLabel)}</h2><table class="table"><thead><tr><th>Lane</th><th>Skater</th><th>Team</th><th>${current.resultsMode === 'times' ? 'Time' : 'Place'}</th><th>Status</th></tr></thead><tbody>${lanes.map(l => `<tr><td>${l.lane}</td><td>${esc(l.skaterName)}</td><td>${esc(l.team)}</td><td>${esc(current.resultsMode === 'times' ? l.time : l.place)}</td><td>${esc(l.status)}</td></tr>`).join('')}</tbody></table>` : `<div class="muted">No race selected.</div>`}</div>
-    <div class="spacer"></div>
-    <div class="card"><div class="muted">Refresh this page during the meet to follow what race is happening.</div></div>`;
-  res.send(pageShell({ title: 'Live', user: data?.user || null, bodyHtml: body }));
 });
 
 app.listen(PORT, HOST, () => {
