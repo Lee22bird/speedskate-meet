@@ -701,6 +701,28 @@ function pageShell({ title, bodyHtml, user, meet, activeTab }) {
   </html>`;
 }
 
+function publicMeetCards(db) {
+  return (db.meets || []).map(m => `
+    <div class="card">
+      <div class="row between">
+        <div>
+          <h2>${esc(m.meetName || 'Meet')}</h2>
+          <div class="muted">${esc(m.date || 'Date TBD')} ${m.startTime ? `• ${esc(m.startTime)}` : ''}</div>
+        </div>
+        <div class="row">
+          <span class="chip">Races: ${esc((m.races || []).length)}</span>
+          <span class="chip">Blocks: ${esc((m.blocks || []).length)}</span>
+        </div>
+      </div>
+      <div class="spacer"></div>
+      <div class="row">
+        <a class="btn2" href="/meet/${m.id}/register">Register</a>
+        <a class="btn2" href="/meet/${m.id}/live">View Live</a>
+      </div>
+    </div>
+  `).join('<div class="spacer"></div>');
+}
+
 /* Public */
 app.get('/', (req, res) => {
   const data = getSessionUser(req);
