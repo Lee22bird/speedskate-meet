@@ -93,6 +93,8 @@ const STANDARD_POINTS = {
   4: 5,
 };
 
+const BLOCK_TYPES = ['race', 'break', 'lunch', 'awards', 'practice'];
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -168,6 +170,38 @@ function makeDivisionsTemplate() {
   };
 }
 
+function makeQuadGroupsTemplate() {
+  return [
+    { id: 'quad_juvenile_boys', label: 'Quad Juvenile Boys', ages: '9 & under', gender: 'boys', distances: ['200', '500'], enabled: false, cost: 0 },
+    { id: 'quad_juvenile_girls', label: 'Quad Juvenile Girls', ages: '9 & under', gender: 'girls', distances: ['200', '500'], enabled: false, cost: 0 },
+
+    { id: 'quad_freshman_boys', label: 'Quad Freshman Boys', ages: '10-13', gender: 'boys', distances: ['300', '700'], enabled: false, cost: 0 },
+    { id: 'quad_freshman_girls', label: 'Quad Freshman Girls', ages: '10-13', gender: 'girls', distances: ['300', '700'], enabled: false, cost: 0 },
+
+    { id: 'quad_senior_men', label: 'Quad Senior Men', ages: '14+', gender: 'men', distances: ['300', '1000'], enabled: false, cost: 0 },
+    { id: 'quad_senior_ladies', label: 'Quad Senior Ladies', ages: '14+', gender: 'women', distances: ['300', '1000'], enabled: false, cost: 0 },
+
+    { id: 'quad_masters_men', label: 'Quad Masters Men', ages: '35+', gender: 'men', distances: ['300', '1000'], enabled: false, cost: 0 },
+    { id: 'quad_masters_ladies', label: 'Quad Masters Ladies', ages: '35+', gender: 'women', distances: ['300', '1000'], enabled: false, cost: 0 },
+  ];
+}
+
+function makeOpenGroupsTemplate() {
+  return [
+    { id: 'open_juvenile_boys', label: 'Open Juvenile Boys', ages: '9 & under', gender: 'boys', distances: ['1500', ''], enabled: false, cost: 0 },
+    { id: 'open_juvenile_girls', label: 'Open Juvenile Girls', ages: '9 & under', gender: 'girls', distances: ['1500', ''], enabled: false, cost: 0 },
+
+    { id: 'open_freshman_boys', label: 'Open Freshman Boys', ages: '10-13', gender: 'boys', distances: ['2000', ''], enabled: false, cost: 0 },
+    { id: 'open_freshman_girls', label: 'Open Freshman Girls', ages: '10-13', gender: 'girls', distances: ['2000', ''], enabled: false, cost: 0 },
+
+    { id: 'open_senior_men', label: 'Open Senior Men', ages: '14+', gender: 'men', distances: ['3000', '5000'], enabled: false, cost: 0 },
+    { id: 'open_senior_women', label: 'Open Senior Women', ages: '14+', gender: 'women', distances: ['1500', '3000'], enabled: false, cost: 0 },
+
+    { id: 'open_masters_men', label: 'Open Masters Men', ages: '35+', gender: 'men', distances: ['1500', '2000'], enabled: false, cost: 0 },
+    { id: 'open_masters_women', label: 'Open Masters Women', ages: '35+', gender: 'women', distances: ['1500', '2000'], enabled: false, cost: 0 },
+  ];
+}
+
 function baseGroups() {
   return [
     { id: 'tiny_tot_girls', label: 'Tiny Tot Girls', ages: '5 & under', gender: 'girls' },
@@ -224,9 +258,16 @@ function defaultMeet(ownerUserId) {
     registrationCloseAt: '',
 
     rinkId: 1,
+    useCustomRink: false,
+    customRinkName: '',
+    customRinkCity: '',
+    customRinkState: '',
+
     trackLength: 100,
     lanes: 4,
 
+    quadEnabled: false,
+    openEnabled: false,
     timeTrialsEnabled: false,
     relayEnabled: false,
     judgesPanelRequired: true,
@@ -238,6 +279,9 @@ function defaultMeet(ownerUserId) {
     status: 'draft',
 
     groups: baseGroups(),
+    quadGroups: makeQuadGroupsTemplate(),
+    openGroups: makeOpenGroupsTemplate(),
+
     races: [],
     blocks: [],
     registrations: [],
@@ -250,7 +294,7 @@ function defaultMeet(ownerUserId) {
 
 function defaultDb() {
   return {
-    version: 17,
+    version: 18,
     createdAt: nowIso(),
     updatedAt: nowIso(),
 
@@ -275,6 +319,7 @@ function defaultDb() {
         name: 'Roller City',
         city: 'Wichita',
         state: 'KS',
+        zip: '',
         team: '',
         address: '3234 S. Meridian Ave, Wichita, KS 67217',
         phone: '316-942-4555',
@@ -300,6 +345,7 @@ function sanitizeRinks(db) {
   } else {
     rollerCity.city = 'Wichita';
     rollerCity.state = 'KS';
+    rollerCity.zip = String(rollerCity.zip || '');
     rollerCity.address = '3234 S. Meridian Ave, Wichita, KS 67217';
     rollerCity.phone = '316-942-4555';
     rollerCity.website = 'rollercitywichitaks.com';
@@ -318,6 +364,49 @@ function normalizeDivisionSet(divs) {
   return out;
 }
 
+function normalizeQuadGroups(groups) {
+  const base = makeQuadGroupsTemplate();
+  const byId = new Map((groups || []).map(g => [String(g.id), g]));
+  return base.map(item => {
+    const existing = byId.get(String(item.id));
+    return {
+      ...item,
+      enabled: !!existing?.enabled,
+      cost: Number(existing?.cost || 0),
+      distances: [...item.distances],
+    };
+  });
+}
+
+function normalizeOpenGroups(groups, standardGroups) {
+  const base = makeOpenGroupsTemplate();
+  const byId = new Map((groups || []).map(g => [String(g.id), g]));
+
+  return base.map(item => {
+    const existing = byId.get(String(item.id));
+    let distances = item.distances;
+
+    if (!existing && Array.isArray(standardGroups)) {
+      const fallbackFromStandard = standardGroups.find(g =>
+        String(g.label || '').toLowerCase() === String(item.label || '').replace(/^open\s+/i, '').toLowerCase()
+      );
+      const oldOpen = fallbackFromStandard?.divisions?.open;
+      if (oldOpen?.enabled) {
+        distances = [String(oldOpen.distances?.[0] || '').trim(), String(oldOpen.distances?.[1] || '').trim()];
+      }
+    }
+
+    return {
+      ...item,
+      enabled: !!existing?.enabled,
+      cost: Number(existing?.cost || 0),
+      distances: existing
+        ? [String(existing.distances?.[0] || '').trim(), String(existing.distances?.[1] || '').trim()]
+        : distances,
+    };
+  });
+}
+
 function migrateMeet(meet, fallbackOwnerId) {
   if (!meet.createdByUserId) meet.createdByUserId = fallbackOwnerId;
   if (!meet.createdAt) meet.createdAt = nowIso();
@@ -329,9 +418,16 @@ function migrateMeet(meet, fallbackOwnerId) {
   if (typeof meet.registrationCloseAt !== 'string') meet.registrationCloseAt = '';
 
   if (typeof meet.rinkId !== 'number') meet.rinkId = 1;
+  if (typeof meet.useCustomRink !== 'boolean') meet.useCustomRink = false;
+  if (typeof meet.customRinkName !== 'string') meet.customRinkName = '';
+  if (typeof meet.customRinkCity !== 'string') meet.customRinkCity = '';
+  if (typeof meet.customRinkState !== 'string') meet.customRinkState = '';
+
   if (!Number.isFinite(Number(meet.trackLength))) meet.trackLength = 100;
   if (!Number.isFinite(Number(meet.lanes))) meet.lanes = 4;
 
+  if (typeof meet.quadEnabled !== 'boolean') meet.quadEnabled = false;
+  if (typeof meet.openEnabled !== 'boolean') meet.openEnabled = false;
   if (typeof meet.timeTrialsEnabled !== 'boolean') meet.timeTrialsEnabled = false;
   if (typeof meet.relayEnabled !== 'boolean') meet.relayEnabled = false;
   if (typeof meet.judgesPanelRequired !== 'boolean') meet.judgesPanelRequired = true;
@@ -358,6 +454,9 @@ function migrateMeet(meet, fallbackOwnerId) {
     });
   }
 
+  meet.quadGroups = normalizeQuadGroups(meet.quadGroups);
+  meet.openGroups = normalizeOpenGroups(meet.openGroups, meet.groups);
+
   if (!Array.isArray(meet.races)) meet.races = [];
   if (!Array.isArray(meet.blocks)) meet.blocks = [];
   if (!Array.isArray(meet.registrations)) meet.registrations = [];
@@ -377,6 +476,7 @@ function migrateMeet(meet, fallbackOwnerId) {
     dayIndex: Number(r.dayIndex || 1),
     cost: Number(r.cost || 0),
 
+    raceType: String(r.raceType || (String(r.division || '').toLowerCase() === 'open' ? 'open' : 'standard')),
     stage: String(r.stage || 'race'),
     heatNumber: Number(r.heatNumber || 0),
     parentRaceKey: String(r.parentRaceKey || ''),
@@ -395,7 +495,7 @@ function migrateMeet(meet, fallbackOwnerId) {
     id: String(b.id || ('b' + (idx + 1))),
     name: String(b.name || `Block ${idx + 1}`),
     day: String(b.day || 'Day 1'),
-    type: String(b.type || 'race'),
+    type: BLOCK_TYPES.includes(String(b.type || 'race')) ? String(b.type || 'race') : 'race',
     notes: String(b.notes || ''),
     raceIds: Array.isArray(b.raceIds) ? b.raceIds.map(String) : [],
   }));
@@ -415,6 +515,12 @@ function migrateMeet(meet, fallbackOwnerId) {
     originalDivisionGroupId: String(reg.originalDivisionGroupId || reg.divisionGroupId || ''),
     originalDivisionGroupLabel: String(reg.originalDivisionGroupLabel || reg.divisionGroupLabel || ''),
 
+    quadGroupId: String(reg.quadGroupId || ''),
+    quadGroupLabel: String(reg.quadGroupLabel || ''),
+
+    openGroupId: String(reg.openGroupId || ''),
+    openGroupLabel: String(reg.openGroupLabel || ''),
+
     meetNumber: Number(reg.meetNumber || idx + 1),
     helmetNumber: reg.helmetNumber === '' || reg.helmetNumber == null ? '' : Number(reg.helmetNumber),
 
@@ -429,6 +535,7 @@ function migrateMeet(meet, fallbackOwnerId) {
       open: !!reg.options?.open,
       timeTrials: !!reg.options?.timeTrials,
       relays: !!reg.options?.relays,
+      quad: !!reg.options?.quad,
     },
   }));
 }
@@ -456,13 +563,13 @@ function loadDb() {
 
   db.sessions = db.sessions.filter(s => s.expiresAt && new Date(s.expiresAt).getTime() > Date.now());
 
-  db.version = 17;
+  db.version = 18;
   db.updatedAt = nowIso();
   return db;
 }
 
 function saveDb(db) {
-  db.version = 17;
+  db.version = 18;
   db.updatedAt = nowIso();
   writeJsonAtomic(DATA_FILE, db);
 }
@@ -599,6 +706,16 @@ function challengeAdjustedGroup(meet, baseGroup, challengeUp) {
   return findChallengeUpGroup(meet.groups || [], baseGroup.id) || baseGroup;
 }
 
+function findQuadGroup(meet, age, genderGuess) {
+  const enabled = (meet.quadGroups || []).filter(g => g.enabled);
+  return findAgeGroup(enabled.length ? enabled : (meet.quadGroups || []), age, genderGuess);
+}
+
+function findOpenGroup(meet, age, genderGuess) {
+  const enabled = (meet.openGroups || []).filter(g => g.enabled);
+  return findAgeGroup(enabled.length ? enabled : (meet.openGroups || []), age, genderGuess);
+}
+
 function divisionEnabledForRegistration(reg, division) {
   return !!reg.options?.[division];
 }
@@ -618,10 +735,22 @@ function nextHelmetNumber(meet) {
 function calculateRegistrationTotal(meet, reg) {
   let total = 0;
   for (const race of meet.races || []) {
-    if (
+    const usesStandardGroup =
+      String(race.raceType || 'standard') === 'standard' &&
       String(race.groupId) === String(reg.divisionGroupId) &&
-      divisionEnabledForRegistration(reg, race.division)
-    ) {
+      divisionEnabledForRegistration(reg, race.division);
+
+    const usesQuadGroup =
+      String(race.raceType || '') === 'quad' &&
+      reg.options?.quad &&
+      String(race.groupId) === String(reg.quadGroupId);
+
+    const usesOpenGroup =
+      String(race.raceType || '') === 'open' &&
+      reg.options?.open &&
+      String(race.groupId) === String(reg.openGroupId);
+
+    if (usesStandardGroup || usesQuadGroup || usesOpenGroup) {
       total += Number(race.cost || 0);
     }
   }
@@ -647,12 +776,32 @@ function normalizeDistances(arr4) {
   return [0, 1, 2, 3].map(i => String(arr4?.[i] ?? '').trim());
 }
 
-function baseRaceKey(groupId, division, dayIndex, distanceLabel) {
-  return `${groupId}|${division}|${dayIndex}|${distanceLabel}`;
+function normalizeTwoDistances(arr2) {
+  return [0, 1].map(i => String(arr2?.[i] ?? '').trim());
+}
+
+function baseRaceKey(groupId, division, dayIndex, distanceLabel, raceType = 'standard') {
+  return `${raceType}|${groupId}|${division}|${dayIndex}|${distanceLabel}`;
 }
 
 function isOpenDivision(div) {
   return String(div || '').toLowerCase() === 'open';
+}
+
+function hasExistingSchedule(meet) {
+  return (meet.blocks || []).some(block => (block.raceIds || []).length > 0);
+}
+
+function buildEntryTypeList(reg) {
+  const out = [];
+  if (reg.options?.challengeUp) out.push('Challenge Up');
+  if (reg.options?.novice) out.push('Novice');
+  if (reg.options?.elite) out.push('Elite');
+  if (reg.options?.open) out.push('Open');
+  if (reg.options?.timeTrials) out.push('Time Trials');
+  if (reg.options?.relays) out.push('Relays');
+  if (reg.options?.quad) out.push('Quad');
+  return out;
 }
 
 function raceDisplayStage(race) {
@@ -723,12 +872,13 @@ function computeMeetStandings(meet) {
     if (!race.countsForOverall) continue;
     if (String(race.status || '') !== 'closed') continue;
 
-    const bucketKey = `${race.groupId}|${race.division}`;
+    const bucketKey = `${race.raceType || 'standard'}|${race.groupId}|${race.division}`;
     if (!divisions[bucketKey]) {
       divisions[bucketKey] = {
         groupId: race.groupId,
         groupLabel: race.groupLabel,
         division: race.division,
+        raceType: race.raceType || 'standard',
         races: [],
       };
     }
@@ -778,10 +928,13 @@ function computeMeetStandings(meet) {
       groupId: divisions[key].groupId,
       groupLabel: divisions[key].groupLabel,
       division: divisions[key].division,
+      raceType: divisions[key].raceType,
       races: divisions[key].races.sort((a, b) => Number(a.dayIndex || 0) - Number(b.dayIndex || 0)),
       standings: rows,
     };
   }).sort((a, b) => {
+    const byType = String(a.raceType || '').localeCompare(String(b.raceType || ''));
+    if (byType !== 0) return byType;
     const byGroup = String(a.groupLabel).localeCompare(String(b.groupLabel));
     if (byGroup !== 0) return byGroup;
     return String(a.division).localeCompare(String(b.division));
@@ -792,7 +945,7 @@ function computeMeetStandings(meet) {
 
 function computeOpenResults(meet) {
   return (meet.races || [])
-    .filter(r => isOpenDivision(r.division) && r.isFinal && String(r.status || '') === 'closed')
+    .filter(r => (isOpenDivision(r.division) || String(r.raceType || '') === 'open') && r.isFinal && String(r.status || '') === 'closed')
     .sort((a, b) => {
       const byGroup = String(a.groupLabel || '').localeCompare(String(b.groupLabel || ''));
       if (byGroup !== 0) return byGroup;
@@ -818,6 +971,7 @@ function orderedRaces(meet) {
   const out = [];
 
   for (const block of meet.blocks || []) {
+    if (String(block.type || 'race') !== 'race') continue;
     for (const raceId of block.raceIds || []) {
       const race = raceById.get(raceId);
       if (race) {
@@ -1039,15 +1193,15 @@ function buildRaceSetForEntries(baseRace, regs, laneCount) {
 function generateBaseRacesForMeet(meet) {
   const oldMap = new Map(
     (meet.races || [])
-      .filter(r => r.stage !== 'heat' && r.stage !== 'final' && r.stage !== 'semi')
-      .map(r => [baseRaceKey(r.groupId, r.division, r.dayIndex, r.distanceLabel), r])
+      .filter(r => !['heat', 'final', 'semi'].includes(String(r.stage || '')))
+      .map(r => [baseRaceKey(r.groupId, r.division, r.dayIndex, r.distanceLabel, r.raceType || 'standard'), r])
   );
 
   const races = [];
   let orderHint = 1;
 
   for (const group of meet.groups || []) {
-    for (const divKey of ['novice', 'elite', 'open']) {
+    for (const divKey of ['novice', 'elite']) {
       const div = group.divisions?.[divKey];
       if (!div || !div.enabled) continue;
 
@@ -1056,9 +1210,8 @@ function generateBaseRacesForMeet(meet) {
         const distance = distances[i];
         if (!distance) continue;
 
-        const key = baseRaceKey(group.id, divKey, i + 1, distance);
+        const key = baseRaceKey(group.id, divKey, i + 1, distance, 'standard');
         const old = oldMap.get(key);
-        const isOpen = isOpenDivision(divKey);
 
         races.push({
           id: old?.id || ('r' + crypto.randomBytes(6).toString('hex')),
@@ -1072,17 +1225,100 @@ function generateBaseRacesForMeet(meet) {
           dayIndex: i + 1,
           cost: Number(div.cost || 0),
 
-          stage: isOpen ? 'final' : (old?.stage || 'race'),
-          heatNumber: isOpen ? 0 : Number(old?.heatNumber || 0),
+          raceType: 'standard',
+          stage: old?.stage || 'race',
+          heatNumber: Number(old?.heatNumber || 0),
           parentRaceKey: old?.parentRaceKey || key,
-          startType: isOpen ? 'rolling' : (old?.startType || 'standing'),
-          countsForOverall: isOpen ? false : (typeof old?.countsForOverall === 'boolean' ? old.countsForOverall : true),
+          startType: old?.startType || 'standing',
+          countsForOverall: typeof old?.countsForOverall === 'boolean' ? old.countsForOverall : true,
 
           laneEntries: Array.isArray(old?.laneEntries) ? old.laneEntries : [],
           resultsMode: old?.resultsMode || 'places',
           status: old?.status || 'open',
           notes: String(old?.notes || ''),
-          isFinal: isOpen ? true : !!old?.isFinal,
+          isFinal: !!old?.isFinal,
+          closedAt: old?.closedAt || '',
+        });
+      }
+    }
+  }
+
+  if (meet.quadEnabled) {
+    for (const group of meet.quadGroups || []) {
+      if (!group.enabled) continue;
+      const distances = normalizeTwoDistances(group.distances);
+      for (let i = 0; i < distances.length; i++) {
+        const distance = distances[i];
+        if (!distance) continue;
+
+        const key = baseRaceKey(group.id, 'quad', i + 1, distance, 'quad');
+        const old = oldMap.get(key);
+
+        races.push({
+          id: old?.id || ('r' + crypto.randomBytes(6).toString('hex')),
+          orderHint: orderHint++,
+
+          groupId: group.id,
+          groupLabel: group.label,
+          ages: group.ages,
+          division: 'quad',
+          distanceLabel: distance,
+          dayIndex: i + 1,
+          cost: Number(group.cost || 0),
+
+          raceType: 'quad',
+          stage: old?.stage || 'race',
+          heatNumber: Number(old?.heatNumber || 0),
+          parentRaceKey: old?.parentRaceKey || key,
+          startType: old?.startType || 'standing',
+          countsForOverall: typeof old?.countsForOverall === 'boolean' ? old.countsForOverall : true,
+
+          laneEntries: Array.isArray(old?.laneEntries) ? old.laneEntries : [],
+          resultsMode: old?.resultsMode || 'places',
+          status: old?.status || 'open',
+          notes: String(old?.notes || ''),
+          isFinal: !!old?.isFinal,
+          closedAt: old?.closedAt || '',
+        });
+      }
+    }
+  }
+
+  if (meet.openEnabled) {
+    for (const group of meet.openGroups || []) {
+      if (!group.enabled) continue;
+      const distances = normalizeTwoDistances(group.distances);
+      for (let i = 0; i < distances.length; i++) {
+        const distance = distances[i];
+        if (!distance) continue;
+
+        const key = baseRaceKey(group.id, 'open', i + 1, distance, 'open');
+        const old = oldMap.get(key);
+
+        races.push({
+          id: old?.id || ('r' + crypto.randomBytes(6).toString('hex')),
+          orderHint: orderHint++,
+
+          groupId: group.id,
+          groupLabel: group.label,
+          ages: group.ages,
+          division: 'open',
+          distanceLabel: distance,
+          dayIndex: i + 1,
+          cost: Number(group.cost || 0),
+
+          raceType: 'open',
+          stage: 'final',
+          heatNumber: 0,
+          parentRaceKey: old?.parentRaceKey || key,
+          startType: 'rolling',
+          countsForOverall: false,
+
+          laneEntries: Array.isArray(old?.laneEntries) ? old.laneEntries : [],
+          resultsMode: old?.resultsMode || 'places',
+          status: old?.status || 'open',
+          notes: String(old?.notes || ''),
+          isFinal: true,
           closedAt: old?.closedAt || '',
         });
       }
@@ -1118,10 +1354,18 @@ function rebuildRaceAssignments(meet) {
   const newRaces = [];
 
   for (const baseRace of baseRaces) {
-    const matchingRegs = (meet.registrations || []).filter(reg =>
-      String(reg.divisionGroupId || '') === String(baseRace.groupId || '') &&
-      divisionEnabledForRegistration(reg, baseRace.division)
-    );
+    const matchingRegs = (meet.registrations || []).filter(reg => {
+      if (String(baseRace.raceType || 'standard') === 'quad') {
+        return reg.options?.quad && String(reg.quadGroupId || '') === String(baseRace.groupId || '');
+      }
+      if (String(baseRace.raceType || 'standard') === 'open') {
+        return reg.options?.open && String(reg.openGroupId || '') === String(baseRace.groupId || '');
+      }
+      return (
+        String(reg.divisionGroupId || '') === String(baseRace.groupId || '') &&
+        divisionEnabledForRegistration(reg, baseRace.division)
+      );
+    });
 
     const raceSet = buildRaceSetForEntries(baseRace, matchingRegs, laneCount);
     newRaces.push(...raceSet);
@@ -1134,7 +1378,14 @@ function rebuildRaceAssignments(meet) {
       const oldRace = (meet.races || []).find(r => r.id === oldRid);
       if (!oldRace) continue;
 
-      const parentKey = oldRace.parentRaceKey || baseRaceKey(oldRace.groupId, oldRace.division, oldRace.dayIndex, oldRace.distanceLabel);
+      const parentKey = oldRace.parentRaceKey || baseRaceKey(
+        oldRace.groupId,
+        oldRace.division,
+        oldRace.dayIndex,
+        oldRace.distanceLabel,
+        oldRace.raceType || 'standard'
+      );
+
       const replacements = newRaces.filter(r => (r.parentRaceKey || '') === parentKey);
 
       for (const rep of replacements) {
@@ -1229,6 +1480,10 @@ function coachStandingsForMeet(meet, coachTeam) {
       ),
     }))
     .filter(section => (section.standings || []).length > 0);
+}function buildEntrySummaryHtml(reg) {
+  const items = buildEntryTypeList(reg);
+  if (!items.length) return '';
+  return `<div class="note">${items.map(esc).join(' • ')}</div>`;
 }
 
 function announcerBoxHtml(current, lanes) {
@@ -1284,6 +1539,8 @@ function meetTabs(meet, active) {
   if (!meet) return '';
   const tabs = [
     ['builder', 'Meet Builder', `/portal/meet/${meet.id}/builder`],
+    ['quad-builder', 'Quad Builder', `/portal/meet/${meet.id}/quad-builder`],
+    ['open-builder', 'Open Builder', `/portal/meet/${meet.id}/open-builder`],
     ['blocks', 'Block Builder', `/portal/meet/${meet.id}/blocks`],
     ['registered', 'Registered', `/portal/meet/${meet.id}/registered`],
     ['checkin', 'Check-In', `/portal/meet/${meet.id}/checkin`],
@@ -1494,6 +1751,13 @@ function pageShell({ title, bodyHtml, user, meet, activeTab }) {
         background:#fff;
       }
 
+      .builderSection {
+        background:#fff;
+        border:1px solid rgba(148,163,184,.25);
+        border-radius:16px;
+        padding:16px;
+      }
+
       .bb { display:grid; grid-template-columns:1.25fr .85fr; gap:16px; }
       @media(max-width:1040px) { .bb { grid-template-columns:1fr; } }
 
@@ -1639,6 +1903,10 @@ function publicMeetCards(db) {
 
   return publicMeets.map(m => {
     const rink = (db.rinks || []).find(r => Number(r.id) === Number(m.rinkId));
+    const rinkLine = m.useCustomRink
+      ? [m.customRinkName, m.customRinkCity, m.customRinkState].filter(Boolean).join(' • ')
+      : (rink ? `${rink.name} • ${rink.city}, ${rink.state}` : '');
+
     return `
       <div class="card">
         <div class="row between">
@@ -1648,9 +1916,7 @@ function publicMeetCards(db) {
               ${esc(m.date || 'Date TBD')}
               ${m.startTime ? ` • ${esc(m.startTime)}` : ''}
             </div>
-            <div class="note">
-              ${rink ? `${esc(rink.name)} • ${esc(rink.city)}, ${esc(rink.state)}` : ''}
-            </div>
+            <div class="note">${esc(rinkLine)}</div>
           </div>
           <div class="row">
             <span class="chip">Races: ${esc((m.races || []).length)}</span>
@@ -1757,7 +2023,9 @@ function resultsSectionHtml(section) {
       </div>
     </div>
   `;
-}app.get('/', (req, res) => {
+}
+
+app.get('/', (req, res) => {
   const data = getSessionUser(req);
 
   const body = `
@@ -1765,7 +2033,7 @@ function resultsSectionHtml(section) {
     <div class="grid2">
       <div class="card">
         <h2>Built for real rink race days</h2>
-        <div class="muted">Meet Builder → Block Builder → Registered → Check-In → Race Day → Results.</div>
+        <div class="muted">Meet Builder → Quad Builder → Open Builder → Block Builder → Registered → Check-In → Race Day → Results.</div>
         <div class="spacer"></div>
         <div class="row">
           <a class="btn" href="/meets">Find a Meet</a>
@@ -1776,7 +2044,7 @@ function resultsSectionHtml(section) {
       <div class="card">
         <h2>Modern inline meet management</h2>
         <div class="note">
-          Live results, heats, finals, block scheduling, coach tools, sponsor support, QR-ready public pages, and automatic standings.
+          Live results, heats, finals, quad races, open races, block scheduling, coach tools, sponsor support, QR-ready public pages, and automatic standings.
         </div>
         <div class="spacer"></div>
         ${data ? `<a class="btn" href="/portal">Go to Portal</a>` : `<a class="btn" href="/admin/login">Admin Login</a>`}
@@ -1817,6 +2085,7 @@ app.get('/rinks', (req, res) => {
           <div><b>Address:</b> ${esc(r.address || '')}</div>
           <div><b>Phone:</b> ${esc(r.phone || '')}</div>
           <div><b>City/State:</b> ${esc(r.city || '')}, ${esc(r.state || '')}</div>
+          <div><b>ZIP:</b> ${esc(r.zip || '')}</div>
           ${r.website ? `<div><b>Website:</b> <a href="https://${esc(r.website)}" target="_blank" rel="noreferrer">${esc(r.website)}</a></div>` : ''}
         </div>
         ${
@@ -1842,10 +2111,14 @@ app.get('/live', (req, res) => {
   const publicMeets = (db.meets || []).filter(m => m.isPublic);
   const cards = publicMeets.map(m => {
     const rink = db.rinks.find(r => Number(r.id) === Number(m.rinkId));
+    const location = m.useCustomRink
+      ? [m.customRinkCity, m.customRinkState].filter(Boolean).join(', ')
+      : (rink ? `${rink.city}, ${rink.state}` : '');
+
     return `
       <div class="card">
         <h2>${esc(m.meetName)}</h2>
-        <div class="muted">${rink ? `${esc(rink.city)}, ${esc(rink.state)}` : ''}</div>
+        <div class="muted">${esc(location)}</div>
         <div class="spacer"></div>
         <div class="row">
           <a class="btn" href="/meet/${m.id}/live">Open Live Board</a>
@@ -1938,6 +2211,9 @@ app.get('/portal', requireRole('meet_director', 'judge', 'coach'), (req, res) =>
   const cards = visibleMeets.map(meet => {
     const rink = req.db.rinks.find(r => Number(r.id) === Number(meet.rinkId));
     const standings = computeMeetStandings(meet);
+    const location = meet.useCustomRink
+      ? [meet.customRinkCity, meet.customRinkState].filter(Boolean).join(', ')
+      : (rink ? `${rink.city}, ${rink.state}` : '');
 
     return `
       <div class="card">
@@ -1945,7 +2221,7 @@ app.get('/portal', requireRole('meet_director', 'judge', 'coach'), (req, res) =>
           <div>
             <h2 style="margin:0">${esc(meet.meetName)}</h2>
             <div class="muted small">
-              ${rink ? `${esc(rink.city)}, ${esc(rink.state)}` : ''} • Meet ID: ${esc(meet.id)}
+              ${esc(location)} • Meet ID: ${esc(meet.id)}
             </div>
             <div class="note">
               ${meet.isPublic ? 'Public meet' : 'Private meet'} • Status: ${esc(meet.status || 'draft')}
@@ -2111,9 +2387,10 @@ app.get('/portal/meet/:meetId/coach', requireRole('coach', 'meet_director', 'sup
         <td>
           ${esc(reg.name)}
           ${sponsorLineHtml(reg.sponsor || '')}
+          ${buildEntrySummaryHtml(reg)}
         </td>
         <td>${esc(reg.divisionGroupLabel || '')}</td>
-        <td>${['novice', 'elite', 'open'].filter(k => reg.options?.[k]).map(cap).join(', ') || '—'}</td>
+        <td>${buildEntryTypeList(reg).join(', ') || '—'}</td>
         <td>${reg.helmetNumber ? '#' + esc(reg.helmetNumber) : ''}</td>
         <td>${reg.checkedIn ? '✔' : '—'}</td>
         <td>${reg.paid ? '✔' : '—'}</td>
@@ -2146,6 +2423,7 @@ app.get('/portal/meet/:meetId/coach', requireRole('coach', 'meet_director', 'sup
             <div style="font-weight:900">${sk.helmetNumber ? '#' + esc(sk.helmetNumber) + ' ' : ''}${esc(sk.skaterName)}</div>
             <div class="muted">${esc(sk.team || '')}</div>
             ${sponsorLineHtml(reg?.sponsor || '')}
+            ${buildEntrySummaryHtml(reg || {})}
           </div>
         `;
       }).join('')}
@@ -2444,6 +2722,10 @@ function rinkForm(rink, action, title) {
             <input name="state" value="${esc(rink.state || '')}" />
           </div>
           <div>
+            <label>ZIP (optional)</label>
+            <input name="zip" value="${esc(rink.zip || '')}" />
+          </div>
+          <div>
             <label>Team</label>
             <input name="team" value="${esc(rink.team || '')}" />
           </div>
@@ -2468,6 +2750,7 @@ app.get('/portal/rinks', requireRole('meet_director'), (req, res) => {
     <tr>
       <td>${esc(r.name)}</td>
       <td>${esc(r.city || '')}, ${esc(r.state || '')}</td>
+      <td>${esc(r.zip || '')}</td>
       <td>${esc(r.phone || '')}</td>
       <td><a class="btn2 small" href="/portal/rinks/${r.id}/edit">Edit</a></td>
     </tr>
@@ -2488,6 +2771,7 @@ app.get('/portal/rinks', requireRole('meet_director'), (req, res) => {
           <tr>
             <th>Name</th>
             <th>City/State</th>
+            <th>ZIP</th>
             <th>Phone</th>
             <th></th>
           </tr>
@@ -2521,6 +2805,7 @@ app.post('/portal/rinks/new', requireRole('meet_director'), (req, res) => {
     website: String(req.body.website || '').trim(),
     city: String(req.body.city || '').trim(),
     state: String(req.body.state || '').trim(),
+    zip: String(req.body.zip || '').trim(),
     team: String(req.body.team || '').trim(),
     notes: String(req.body.notes || '').trim(),
   });
@@ -2552,6 +2837,7 @@ app.post('/portal/rinks/:id/edit', requireRole('meet_director'), (req, res) => {
     website: String(req.body.website || '').trim(),
     city: String(req.body.city || '').trim(),
     state: String(req.body.state || '').trim(),
+    zip: String(req.body.zip || '').trim(),
     team: String(req.body.team || '').trim(),
     notes: String(req.body.notes || '').trim(),
   });
@@ -2559,7 +2845,81 @@ app.post('/portal/rinks/:id/edit', requireRole('meet_director'), (req, res) => {
   sanitizeRinks(req.db);
   saveDb(req.db);
   res.redirect('/portal/rinks');
-});app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res) => {
+});function quadBuilderCardsHtml(meet) {
+  return (meet.quadGroups || []).map((group, gi) => `
+    <div class="card">
+      <div class="row between">
+        <div>
+          <h3>${esc(group.label)}</h3>
+          <div class="muted">${esc(group.ages)}</div>
+        </div>
+        <label style="margin:0">
+          <input type="checkbox" name="q_${gi}_enabled" ${group.enabled ? 'checked' : ''} />
+          Enabled
+        </label>
+      </div>
+
+      <div class="spacer"></div>
+
+      <div class="grid3">
+        <div>
+          <label>Cost</label>
+          <input name="q_${gi}_cost" value="${esc(group.cost || 0)}" />
+        </div>
+        <div>
+          <label>Distance 1</label>
+          <input name="q_${gi}_d1" value="${esc(group.distances?.[0] || '')}" />
+        </div>
+        <div>
+          <label>Distance 2</label>
+          <input name="q_${gi}_d2" value="${esc(group.distances?.[1] || '')}" />
+        </div>
+      </div>
+
+      <div class="spacer"></div>
+      <div class="note">Quad builder is separate from standard divisions and registration uses its own quad checkbox.</div>
+    </div>
+  `).join('<div class="spacer"></div>');
+}
+
+function openBuilderCardsHtml(meet) {
+  return (meet.openGroups || []).map((group, gi) => `
+    <div class="card">
+      <div class="row between">
+        <div>
+          <h3>${esc(group.label)}</h3>
+          <div class="muted">${esc(group.ages)}</div>
+        </div>
+        <label style="margin:0">
+          <input type="checkbox" name="o_${gi}_enabled" ${group.enabled ? 'checked' : ''} />
+          Enabled
+        </label>
+      </div>
+
+      <div class="spacer"></div>
+
+      <div class="grid3">
+        <div>
+          <label>Cost</label>
+          <input name="o_${gi}_cost" value="${esc(group.cost || 0)}" />
+        </div>
+        <div>
+          <label>Distance 1</label>
+          <input name="o_${gi}_d1" value="${esc(group.distances?.[0] || '')}" />
+        </div>
+        <div>
+          <label>Distance 2</label>
+          <input name="o_${gi}_d2" value="${esc(group.distances?.[1] || '')}" />
+        </div>
+      </div>
+
+      <div class="spacer"></div>
+      <div class="note">Open runs separate from standard divisions and does not live in the standard division cards anymore.</div>
+    </div>
+  `).join('<div class="spacer"></div>');
+}
+
+app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res) => {
   const meet = getMeetOr404(req.db, req.params.meetId);
   if (!meet) return res.redirect('/portal');
 
@@ -2583,7 +2943,7 @@ app.post('/portal/rinks/:id/edit', requireRole('meet_director'), (req, res) => {
   `).join('');
 
   const groupsHtml = meet.groups.map((group, gi) => {
-    const divCards = ['novice', 'elite', 'open'].map(divKey => {
+    const divCards = ['novice', 'elite'].map(divKey => {
       const div = group.divisions[divKey];
       return `
         <div class="groupCard">
@@ -2618,7 +2978,6 @@ app.post('/portal/rinks/:id/edit', requireRole('meet_director'), (req, res) => {
               <input name="g_${gi}_${divKey}_d4" value="${esc(div.distances[3] || '')}" />
             </div>
           </div>
-          ${divKey === 'open' ? `<div class="note">Open runs as one rolling-start final with no lane limit and separate results.</div>` : ``}
         </div>
       `;
     }).join('<div class="spacer"></div>');
@@ -2643,7 +3002,10 @@ app.post('/portal/rinks/:id/edit', requireRole('meet_director'), (req, res) => {
       <div class="card">
         <div class="row between">
           <h2 style="margin:0">Meet Setup</h2>
-          <button class="btn" type="submit">Save Meet & Generate Race List</button>
+          <div class="actionRow">
+            <button class="btn" type="submit">Save Meet</button>
+            <button class="btnDanger" type="submit" formaction="/portal/meet/${meet.id}/builder/rebuild" onclick="return confirmRebuild(${hasExistingSchedule(meet) ? 'true' : 'false'})">Rebuild Race List</button>
+          </div>
         </div>
 
         <div class="spacer"></div>
@@ -2675,8 +3037,13 @@ app.post('/portal/rinks/:id/edit', requireRole('meet_director'), (req, res) => {
           </div>
 
           <div>
-            <label>Rink</label>
-            <select name="rinkId">${rinkOptions}</select>
+            <label>Status</label>
+            <select name="status">
+              <option value="draft" ${meet.status === 'draft' ? 'selected' : ''}>Draft</option>
+              <option value="published" ${meet.status === 'published' ? 'selected' : ''}>Published</option>
+              <option value="live" ${meet.status === 'live' ? 'selected' : ''}>Live</option>
+              <option value="complete" ${meet.status === 'complete' ? 'selected' : ''}>Complete</option>
+            </select>
           </div>
 
           <div>
@@ -2688,21 +3055,49 @@ app.post('/portal/rinks/:id/edit', requireRole('meet_director'), (req, res) => {
             <label>Lanes</label>
             <input name="lanes" value="${esc(meet.lanes)}" />
           </div>
+        </div>
 
-          <div>
-            <label>Status</label>
-            <select name="status">
-              <option value="draft" ${meet.status === 'draft' ? 'selected' : ''}>Draft</option>
-              <option value="published" ${meet.status === 'published' ? 'selected' : ''}>Published</option>
-              <option value="live" ${meet.status === 'live' ? 'selected' : ''}>Live</option>
-              <option value="complete" ${meet.status === 'complete' ? 'selected' : ''}>Complete</option>
-            </select>
+        <div class="hr"></div>
+
+        <div class="grid2">
+          <div class="builderSection">
+            <label style="margin:0">
+              <input type="radio" name="rinkMode" value="saved" ${!meet.useCustomRink ? 'checked' : ''} />
+              Use Saved Rink
+            </label>
+            <div class="spacer"></div>
+            <label>Rink</label>
+            <select name="rinkId">${rinkOptions}</select>
+          </div>
+
+          <div class="builderSection">
+            <label style="margin:0">
+              <input type="radio" name="rinkMode" value="custom" ${meet.useCustomRink ? 'checked' : ''} />
+              Use Custom Rink
+            </label>
+            <div class="spacer"></div>
+            <div class="grid3">
+              <div>
+                <label>Custom Rink Name</label>
+                <input name="customRinkName" value="${esc(meet.customRinkName || '')}" />
+              </div>
+              <div>
+                <label>Custom City</label>
+                <input name="customRinkCity" value="${esc(meet.customRinkCity || '')}" />
+              </div>
+              <div>
+                <label>Custom State</label>
+                <input name="customRinkState" value="${esc(meet.customRinkState || '')}" />
+              </div>
+            </div>
           </div>
         </div>
 
         <div class="hr"></div>
 
         <div class="row">
+          <label><input type="checkbox" name="quadEnabled" ${meet.quadEnabled ? 'checked' : ''} /> Quad</label>
+          <label><input type="checkbox" name="openEnabled" ${meet.openEnabled ? 'checked' : ''} /> Open</label>
           <label><input type="checkbox" name="timeTrialsEnabled" ${meet.timeTrialsEnabled ? 'checked' : ''} /> Time Trials</label>
           <label><input type="checkbox" name="relayEnabled" ${meet.relayEnabled ? 'checked' : ''} /> Relays</label>
           <label><input type="checkbox" name="judgesPanelRequired" ${meet.judgesPanelRequired ? 'checked' : ''} /> Judges Panel Required</label>
@@ -2725,12 +3120,26 @@ app.post('/portal/rinks/:id/edit', requireRole('meet_director'), (req, res) => {
       <div class="card">
         <div class="row between">
           <div class="muted">
-            Saving now keeps divisions, distances, race costs, challenge-up logic, open rules, and race generation together.
+            Standard divisions now contain Novice and Elite only. Open and Quad are managed from their own builder tabs.
           </div>
-          <button class="btn" type="submit">Save Meet & Generate Race List</button>
+          <div class="actionRow">
+            <button class="btn" type="submit">Save Meet</button>
+            <button class="btnDanger" type="submit" formaction="/portal/meet/${meet.id}/builder/rebuild" onclick="return confirmRebuild(${hasExistingSchedule(meet) ? 'true' : 'false'})">Rebuild Race List</button>
+          </div>
         </div>
       </div>
     </form>
+
+    <script>
+      function confirmRebuild(hasSchedule) {
+        if (!hasSchedule) return confirm('Rebuild race list now?');
+        return confirm(
+          'Rebuild Race List?\\n\\n' +
+          'This will clear block race assignments and rebuild race sets from the current meet setup and registrations.\\n\\n' +
+          'Use Save Meet when you only want to save settings without wiping schedule work.'
+        );
+      }
+    </script>
   `;
 
   res.send(pageShell({
@@ -2753,9 +3162,16 @@ app.post('/portal/meet/:meetId/builder/save', requireRole('meet_director'), (req
   meet.registrationCloseAt = combineDateTime(req.body.registrationCloseDate, req.body.registrationCloseTime);
 
   meet.rinkId = Number(req.body.rinkId || 1);
+  meet.useCustomRink = String(req.body.rinkMode || 'saved') === 'custom';
+  meet.customRinkName = String(req.body.customRinkName || '').trim();
+  meet.customRinkCity = String(req.body.customRinkCity || '').trim();
+  meet.customRinkState = String(req.body.customRinkState || '').trim();
+
   meet.trackLength = Number(req.body.trackLength || 100);
   meet.lanes = Number(req.body.lanes || 4);
 
+  meet.quadEnabled = !!req.body.quadEnabled;
+  meet.openEnabled = !!req.body.openEnabled;
   meet.timeTrialsEnabled = !!req.body.timeTrialsEnabled;
   meet.relayEnabled = !!req.body.relayEnabled;
   meet.judgesPanelRequired = !!req.body.judgesPanelRequired;
@@ -2767,7 +3183,7 @@ app.post('/portal/meet/:meetId/builder/save', requireRole('meet_director'), (req
   meet.relayNotes = String(req.body.relayNotes || '');
 
   meet.groups.forEach((group, gi) => {
-    for (const divKey of ['novice', 'elite', 'open']) {
+    for (const divKey of ['novice', 'elite']) {
       const enabled = !!req.body[`g_${gi}_${divKey}_enabled`];
       const cost = Number(String(req.body[`g_${gi}_${divKey}_cost`] || '0').trim() || 0);
       const d1 = String(req.body[`g_${gi}_${divKey}_d1`] || '').trim();
@@ -2781,6 +3197,271 @@ app.post('/portal/meet/:meetId/builder/save', requireRole('meet_director'), (req
         distances: [d1, d2, d3, d4],
       };
     }
+
+    group.divisions.open = {
+      enabled: false,
+      cost: 0,
+      distances: ['', '', '', ''],
+    };
+  });
+
+  meet.updatedAt = nowIso();
+  saveDb(req.db);
+  res.redirect(`/portal/meet/${meet.id}/builder`);
+});
+
+app.post('/portal/meet/:meetId/builder/rebuild', requireRole('meet_director'), (req, res) => {
+  const meet = getMeetOr404(req.db, req.params.meetId);
+  if (!meet) return res.redirect('/portal');
+  if (!canEditMeet(req.user, meet)) return res.status(403).send('Forbidden');
+
+  meet.meetName = String(req.body.meetName || 'New Meet').trim();
+  meet.date = String(req.body.date || '').trim();
+  meet.startTime = String(req.body.startTime || '').trim();
+  meet.registrationCloseAt = combineDateTime(req.body.registrationCloseDate, req.body.registrationCloseTime);
+
+  meet.rinkId = Number(req.body.rinkId || 1);
+  meet.useCustomRink = String(req.body.rinkMode || 'saved') === 'custom';
+  meet.customRinkName = String(req.body.customRinkName || '').trim();
+  meet.customRinkCity = String(req.body.customRinkCity || '').trim();
+  meet.customRinkState = String(req.body.customRinkState || '').trim();
+
+  meet.trackLength = Number(req.body.trackLength || 100);
+  meet.lanes = Number(req.body.lanes || 4);
+
+  meet.quadEnabled = !!req.body.quadEnabled;
+  meet.openEnabled = !!req.body.openEnabled;
+  meet.timeTrialsEnabled = !!req.body.timeTrialsEnabled;
+  meet.relayEnabled = !!req.body.relayEnabled;
+  meet.judgesPanelRequired = !!req.body.judgesPanelRequired;
+
+  meet.isPublic = !!req.body.isPublic;
+  meet.status = String(req.body.status || 'draft');
+
+  meet.notes = String(req.body.notes || '');
+  meet.relayNotes = String(req.body.relayNotes || '');
+
+  meet.groups.forEach((group, gi) => {
+    for (const divKey of ['novice', 'elite']) {
+      const enabled = !!req.body[`g_${gi}_${divKey}_enabled`];
+      const cost = Number(String(req.body[`g_${gi}_${divKey}_cost`] || '0').trim() || 0);
+      const d1 = String(req.body[`g_${gi}_${divKey}_d1`] || '').trim();
+      const d2 = String(req.body[`g_${gi}_${divKey}_d2`] || '').trim();
+      const d3 = String(req.body[`g_${gi}_${divKey}_d3`] || '').trim();
+      const d4 = String(req.body[`g_${gi}_${divKey}_d4`] || '').trim();
+
+      group.divisions[divKey] = {
+        enabled,
+        cost,
+        distances: [d1, d2, d3, d4],
+      };
+    }
+
+    group.divisions.open = {
+      enabled: false,
+      cost: 0,
+      distances: ['', '', '', ''],
+    };
+  });
+
+  generateBaseRacesForMeet(meet);
+  rebuildRaceAssignments(meet);
+  ensureAtLeastOneBlock(meet);
+  ensureCurrentRace(meet);
+
+  saveDb(req.db);
+  res.redirect(`/portal/meet/${meet.id}/blocks`);
+});
+
+app.get('/portal/meet/:meetId/quad-builder', requireRole('meet_director'), (req, res) => {
+  const meet = getMeetOr404(req.db, req.params.meetId);
+  if (!meet) return res.redirect('/portal');
+
+  if (!canEditMeet(req.user, meet)) {
+    return res.status(403).send(pageShell({
+      title: 'Forbidden',
+      user: req.user,
+      bodyHtml: `
+        <h1>Forbidden</h1>
+        <div class="card">
+          <div class="danger">Only the meet owner can edit this meet.</div>
+        </div>
+      `,
+    }));
+  }
+
+  const body = `
+    <h1>Quad Builder</h1>
+    <form method="POST" action="/portal/meet/${meet.id}/quad-builder/save" class="stackForm">
+      <div class="card">
+        <div class="row between">
+          <h2 style="margin:0">Quad Setup</h2>
+          <div class="actionRow">
+            <button class="btn" type="submit">Save Quad Builder</button>
+            <button class="btnDanger" type="submit" formaction="/portal/meet/${meet.id}/quad-builder/rebuild" onclick="return confirmRebuild(${hasExistingSchedule(meet) ? 'true' : 'false'})">Save & Rebuild</button>
+          </div>
+        </div>
+        <div class="spacer"></div>
+        <div class="row">
+          <label><input type="checkbox" name="quadEnabled" ${meet.quadEnabled ? 'checked' : ''} /> Enable Quad Races For This Meet</label>
+        </div>
+      </div>
+
+      ${quadBuilderCardsHtml(meet)}
+
+      <script>
+        function confirmRebuild(hasSchedule) {
+          if (!hasSchedule) return confirm('Save and rebuild quad races now?');
+          return confirm('Save and rebuild race list? This clears block race assignments and rebuilds from current setup.');
+        }
+      </script>
+    </form>
+  `;
+
+  res.send(pageShell({
+    title: 'Quad Builder',
+    user: req.user,
+    meet,
+    activeTab: 'quad-builder',
+    bodyHtml: body,
+  }));
+});
+
+app.post('/portal/meet/:meetId/quad-builder/save', requireRole('meet_director'), (req, res) => {
+  const meet = getMeetOr404(req.db, req.params.meetId);
+  if (!meet) return res.redirect('/portal');
+  if (!canEditMeet(req.user, meet)) return res.status(403).send('Forbidden');
+
+  meet.quadEnabled = !!req.body.quadEnabled;
+
+  (meet.quadGroups || []).forEach((group, gi) => {
+    group.enabled = !!req.body[`q_${gi}_enabled`];
+    group.cost = Number(String(req.body[`q_${gi}_cost`] || '0').trim() || 0);
+    group.distances = [
+      String(req.body[`q_${gi}_d1`] || '').trim(),
+      String(req.body[`q_${gi}_d2`] || '').trim(),
+    ];
+  });
+
+  meet.updatedAt = nowIso();
+  saveDb(req.db);
+  res.redirect(`/portal/meet/${meet.id}/quad-builder`);
+});
+
+app.post('/portal/meet/:meetId/quad-builder/rebuild', requireRole('meet_director'), (req, res) => {
+  const meet = getMeetOr404(req.db, req.params.meetId);
+  if (!meet) return res.redirect('/portal');
+  if (!canEditMeet(req.user, meet)) return res.status(403).send('Forbidden');
+
+  meet.quadEnabled = !!req.body.quadEnabled;
+
+  (meet.quadGroups || []).forEach((group, gi) => {
+    group.enabled = !!req.body[`q_${gi}_enabled`];
+    group.cost = Number(String(req.body[`q_${gi}_cost`] || '0').trim() || 0);
+    group.distances = [
+      String(req.body[`q_${gi}_d1`] || '').trim(),
+      String(req.body[`q_${gi}_d2`] || '').trim(),
+    ];
+  });
+
+  generateBaseRacesForMeet(meet);
+  rebuildRaceAssignments(meet);
+  ensureAtLeastOneBlock(meet);
+  ensureCurrentRace(meet);
+
+  saveDb(req.db);
+  res.redirect(`/portal/meet/${meet.id}/blocks`);
+});
+
+app.get('/portal/meet/:meetId/open-builder', requireRole('meet_director'), (req, res) => {
+  const meet = getMeetOr404(req.db, req.params.meetId);
+  if (!meet) return res.redirect('/portal');
+
+  if (!canEditMeet(req.user, meet)) {
+    return res.status(403).send(pageShell({
+      title: 'Forbidden',
+      user: req.user,
+      bodyHtml: `
+        <h1>Forbidden</h1>
+        <div class="card">
+          <div class="danger">Only the meet owner can edit this meet.</div>
+        </div>
+      `,
+    }));
+  }
+
+  const body = `
+    <h1>Open Builder</h1>
+    <form method="POST" action="/portal/meet/${meet.id}/open-builder/save" class="stackForm">
+      <div class="card">
+        <div class="row between">
+          <h2 style="margin:0">Open Setup</h2>
+          <div class="actionRow">
+            <button class="btn" type="submit">Save Open Builder</button>
+            <button class="btnDanger" type="submit" formaction="/portal/meet/${meet.id}/open-builder/rebuild" onclick="return confirmRebuild(${hasExistingSchedule(meet) ? 'true' : 'false'})">Save & Rebuild</button>
+          </div>
+        </div>
+        <div class="spacer"></div>
+        <div class="row">
+          <label><input type="checkbox" name="openEnabled" ${meet.openEnabled ? 'checked' : ''} /> Enable Open Races For This Meet</label>
+        </div>
+      </div>
+
+      ${openBuilderCardsHtml(meet)}
+
+      <script>
+        function confirmRebuild(hasSchedule) {
+          if (!hasSchedule) return confirm('Save and rebuild open races now?');
+          return confirm('Save and rebuild race list? This clears block race assignments and rebuilds from current setup.');
+        }
+      </script>
+    </form>
+  `;
+
+  res.send(pageShell({
+    title: 'Open Builder',
+    user: req.user,
+    meet,
+    activeTab: 'open-builder',
+    bodyHtml: body,
+  }));
+});
+
+app.post('/portal/meet/:meetId/open-builder/save', requireRole('meet_director'), (req, res) => {
+  const meet = getMeetOr404(req.db, req.params.meetId);
+  if (!meet) return res.redirect('/portal');
+  if (!canEditMeet(req.user, meet)) return res.status(403).send('Forbidden');
+
+  meet.openEnabled = !!req.body.openEnabled;
+
+  (meet.openGroups || []).forEach((group, gi) => {
+    group.enabled = !!req.body[`o_${gi}_enabled`];
+    group.cost = Number(String(req.body[`o_${gi}_cost`] || '0').trim() || 0);
+    group.distances = [
+      String(req.body[`o_${gi}_d1`] || '').trim(),
+      String(req.body[`o_${gi}_d2`] || '').trim(),
+    ];
+  });
+
+  meet.updatedAt = nowIso();
+  saveDb(req.db);
+  res.redirect(`/portal/meet/${meet.id}/open-builder`);
+});
+
+app.post('/portal/meet/:meetId/open-builder/rebuild', requireRole('meet_director'), (req, res) => {
+  const meet = getMeetOr404(req.db, req.params.meetId);
+  if (!meet) return res.redirect('/portal');
+  if (!canEditMeet(req.user, meet)) return res.status(403).send('Forbidden');
+
+  meet.openEnabled = !!req.body.openEnabled;
+
+  (meet.openGroups || []).forEach((group, gi) => {
+    group.enabled = !!req.body[`o_${gi}_enabled`];
+    group.cost = Number(String(req.body[`o_${gi}_cost`] || '0').trim() || 0);
+    group.distances = [
+      String(req.body[`o_${gi}_d1`] || '').trim(),
+      String(req.body[`o_${gi}_d2`] || '').trim(),
+    ];
   });
 
   generateBaseRacesForMeet(meet);
@@ -2854,6 +3535,7 @@ app.get('/meet/:meetId/register', (req, res) => {
                 <label><input type="checkbox" name="novice" /> Novice</label>
                 <label><input type="checkbox" name="elite" /> Elite</label>
                 <label><input type="checkbox" name="open" /> Open</label>
+                <label><input type="checkbox" name="quad" /> Quad</label>
                 <label><input type="checkbox" name="timeTrials" /> Time Trials</label>
                 <label><input type="checkbox" name="relays" /> Relays</label>
               </div>
@@ -2885,6 +3567,8 @@ app.post('/meet/:meetId/register', (req, res) => {
   const gender = String(req.body.gender || '').trim() || 'boys';
   const baseGroup = findAgeGroup(meet.groups, req.body.age, gender);
   const finalGroup = challengeAdjustedGroup(meet, baseGroup, !!req.body.challengeUp);
+  const quadGroup = !!req.body.quad ? findQuadGroup(meet, req.body.age, gender) : null;
+  const openGroup = !!req.body.open ? findOpenGroup(meet, req.body.age, gender) : null;
 
   const meetNumber =
     (meet.registrations || []).reduce((max, r) => Math.max(max, Number(r.meetNumber) || 0), 0) + 1;
@@ -2905,6 +3589,12 @@ app.post('/meet/:meetId/register', (req, res) => {
     originalDivisionGroupId: baseGroup?.id || '',
     originalDivisionGroupLabel: baseGroup?.label || '',
 
+    quadGroupId: quadGroup?.id || '',
+    quadGroupLabel: quadGroup?.label || '',
+
+    openGroupId: openGroup?.id || '',
+    openGroupLabel: openGroup?.label || '',
+
     meetNumber,
     helmetNumber: nextHelmetNumber(meet),
 
@@ -2917,6 +3607,7 @@ app.post('/meet/:meetId/register', (req, res) => {
       novice: !!req.body.novice,
       elite: !!req.body.elite,
       open: !!req.body.open,
+      quad: !!req.body.quad,
       timeTrials: !!req.body.timeTrials,
       relays: !!req.body.relays,
     },
@@ -2977,6 +3668,7 @@ function registrationForm(meet, reg, action, title) {
           <label><input type="checkbox" name="novice" ${reg.options?.novice ? 'checked' : ''} /> Novice</label>
           <label><input type="checkbox" name="elite" ${reg.options?.elite ? 'checked' : ''} /> Elite</label>
           <label><input type="checkbox" name="open" ${reg.options?.open ? 'checked' : ''} /> Open</label>
+          <label><input type="checkbox" name="quad" ${reg.options?.quad ? 'checked' : ''} /> Quad</label>
           <label><input type="checkbox" name="timeTrials" ${reg.options?.timeTrials ? 'checked' : ''} /> Time Trials</label>
           <label><input type="checkbox" name="relays" ${reg.options?.relays ? 'checked' : ''} /> Relays</label>
         </div>
@@ -2988,9 +3680,7 @@ function registrationForm(meet, reg, action, title) {
       </form>
     </div>
   `;
-}
-
-app.get('/portal/meet/:meetId/registered', requireRole('meet_director'), (req, res) => {
+}app.get('/portal/meet/:meetId/registered', requireRole('meet_director'), (req, res) => {
   const meet = getMeetOr404(req.db, req.params.meetId);
   if (!meet) return res.redirect('/portal');
   if (!canEditMeet(req.user, meet)) return res.status(403).send('Forbidden');
@@ -2998,7 +3688,19 @@ app.get('/portal/meet/:meetId/registered', requireRole('meet_director'), (req, r
   ensureRegistrationTotalsAndNumbers(meet);
   saveDb(req.db);
 
-  const rows = (meet.registrations || []).map(r => `
+  const q = String(req.query.q || '').trim().toLowerCase();
+
+  const filteredRegs = (meet.registrations || []).filter(r => {
+    if (!q) return true;
+    return (
+      String(r.name || '').toLowerCase().includes(q) ||
+      String(r.team || '').toLowerCase().includes(q) ||
+      String(r.helmetNumber || '').includes(q) ||
+      String(r.meetNumber || '').includes(q)
+    );
+  });
+
+  const rows = filteredRegs.map(r => `
     <tr>
       <td>${esc(r.meetNumber)}</td>
       <td>${esc(r.helmetNumber)}</td>
@@ -3011,8 +3713,10 @@ app.get('/portal/meet/:meetId/registered', requireRole('meet_director'), (req, r
       <td>
         ${esc(r.divisionGroupLabel || '')}
         ${r.options?.challengeUp ? `<div class="note">Challenge Up from ${esc(r.originalDivisionGroupLabel || '')}</div>` : ``}
+        ${r.options?.quad && r.quadGroupLabel ? `<div class="note">Quad: ${esc(r.quadGroupLabel)}</div>` : ``}
+        ${r.options?.open && r.openGroupLabel ? `<div class="note">Open: ${esc(r.openGroupLabel)}</div>` : ``}
       </td>
-      <td>${['challengeUp', 'novice', 'elite', 'open', 'timeTrials', 'relays'].filter(k => r.options?.[k]).join(', ') || '-'}</td>
+      <td>${buildEntryTypeList(r).join(', ') || '-'}</td>
       <td>$${esc(r.totalCost)}</td>
       <td>${r.paid ? '✔' : '—'}</td>
       <td>${r.checkedIn ? '✔' : '—'}</td>
@@ -3046,6 +3750,20 @@ app.get('/portal/meet/:meetId/registered', requireRole('meet_director'), (req, r
 
       <div class="spacer"></div>
 
+      <div class="grid3">
+        <div>
+          <label>Search Skater</label>
+          <input value="${esc(req.query.q || '')}" placeholder="name, team, helmet #, meet #" oninput="filterRegistered(this.value)" />
+        </div>
+        <div></div>
+        <div class="row" style="align-items:end; justify-content:flex-end">
+          <span class="chip">Showing: ${filteredRegs.length}</span>
+          <span class="chip">Total: ${(meet.registrations || []).length}</span>
+        </div>
+      </div>
+
+      <div class="spacer"></div>
+
       <table class="table">
         <thead>
           <tr>
@@ -3067,6 +3785,15 @@ app.get('/portal/meet/:meetId/registered', requireRole('meet_director'), (req, r
         </tbody>
       </table>
     </div>
+
+    <script>
+      function filterRegistered(value) {
+        const url = new URL(window.location.href);
+        if (value && value.trim()) url.searchParams.set('q', value.trim());
+        else url.searchParams.delete('q');
+        window.location.href = url.toString();
+      }
+    </script>
   `;
 
   res.send(pageShell({
@@ -3104,6 +3831,8 @@ app.post('/portal/meet/:meetId/registered/:regId/edit', requireRole('meet_direct
   const gender = String(req.body.gender || '').trim() || 'boys';
   const baseGroup = findAgeGroup(meet.groups, req.body.age, gender);
   const finalGroup = challengeAdjustedGroup(meet, baseGroup, !!req.body.challengeUp);
+  const quadGroup = !!req.body.quad ? findQuadGroup(meet, req.body.age, gender) : null;
+  const openGroup = !!req.body.open ? findOpenGroup(meet, req.body.age, gender) : null;
 
   reg.name = String(req.body.name || '').trim();
   reg.age = Number(req.body.age || 0);
@@ -3116,11 +3845,18 @@ app.post('/portal/meet/:meetId/registered/:regId/edit', requireRole('meet_direct
   reg.divisionGroupId = finalGroup?.id || '';
   reg.divisionGroupLabel = finalGroup?.label || 'Unassigned';
 
+  reg.quadGroupId = quadGroup?.id || '';
+  reg.quadGroupLabel = quadGroup?.label || '';
+
+  reg.openGroupId = openGroup?.id || '';
+  reg.openGroupLabel = openGroup?.label || '';
+
   reg.options = {
     challengeUp: !!req.body.challengeUp,
     novice: !!req.body.novice,
     elite: !!req.body.elite,
     open: !!req.body.open,
+    quad: !!req.body.quad,
     timeTrials: !!req.body.timeTrials,
     relays: !!req.body.relays,
   };
@@ -3199,9 +3935,14 @@ app.get('/portal/meet/:meetId/checkin', requireRole('meet_director'), (req, res)
       <td>
         ${esc(r.name)}
         ${sponsorLineHtml(r.sponsor || '')}
+        ${buildEntrySummaryHtml(r)}
       </td>
       <td>${esc(r.team)}</td>
-      <td>${esc(r.divisionGroupLabel)}</td>
+      <td>
+        ${esc(r.divisionGroupLabel || '')}
+        ${r.options?.quad && r.quadGroupLabel ? `<div class="note">Quad: ${esc(r.quadGroupLabel)}</div>` : ''}
+        ${r.options?.open && r.openGroupLabel ? `<div class="note">Open: ${esc(r.openGroupLabel)}</div>` : ''}
+      </td>
       <td>
         <form method="POST" action="/portal/meet/${meet.id}/checkin/helmet/${r.id}" class="checkin-form row center">
           <input style="max-width:90px" name="helmetNumber" value="${esc(r.helmetNumber)}" />
@@ -3232,7 +3973,7 @@ app.get('/portal/meet/:meetId/checkin', requireRole('meet_director'), (req, res)
       <div class="row between">
         <div>
           <h2 style="margin:0">${esc(meet.meetName)}</h2>
-          <div class="muted">Money, helmet numbers, sponsor visibility, and meet check-in all in one place.</div>
+          <div class="muted">Money, helmet numbers, sponsor visibility, entry summary, and meet check-in all in one place.</div>
         </div>
         <div class="row">
           <form method="POST" action="/portal/meet/${meet.id}/checkin/reassign-helmets">
@@ -3386,7 +4127,20 @@ app.post('/portal/meet/:meetId/checkin/reassign-helmets', requireRole('meet_dire
   rebuildRaceAssignments(meet);
   saveDb(req.db);
   res.redirect(`/portal/meet/${meet.id}/checkin`);
-});app.get('/portal/meet/:meetId/blocks', requireRole('meet_director'), (req, res) => {
+});function nextRaceBlockNumberForDay(meet, day) {
+  return (meet.blocks || []).filter(b => String(b.day || 'Day 1') === String(day || 'Day 1') && String(b.type || 'race') === 'race').length + 1;
+}
+
+function defaultBlockNameForType(meet, day, type) {
+  if (String(type) === 'race') return `Block ${nextRaceBlockNumberForDay(meet, day)}`;
+  if (String(type) === 'practice') return 'Practice';
+  if (String(type) === 'lunch') return 'Lunch';
+  if (String(type) === 'break') return 'Break';
+  if (String(type) === 'awards') return 'Awards';
+  return 'Block';
+}
+
+app.get('/portal/meet/:meetId/blocks', requireRole('meet_director'), (req, res) => {
   const meet = getMeetOr404(req.db, req.params.meetId);
   if (!meet) return res.redirect('/portal');
 
@@ -3444,7 +4198,7 @@ app.post('/portal/meet/:meetId/checkin/reassign-helmets', requireRole('meet_dire
         <div>
           <label>Block Type</label>
           <select onchange="setBlockType('${esc(block.id)}', this.value)">
-            ${['race', 'break', 'lunch', 'awards', 'practice'].map(type => `
+            ${BLOCK_TYPES.map(type => `
               <option value="${type}" ${(block.type || 'race') === type ? 'selected' : ''}>${type}</option>
             `).join('')}
           </select>
@@ -3517,7 +4271,11 @@ app.post('/portal/meet/:meetId/checkin/reassign-helmets', requireRole('meet_dire
           </div>
         </div>
         <div class="row">
-          <button class="btn2" type="button" onclick="addBlock()">Add Block</button>
+          <button class="btn2" type="button" onclick="addBlock('race')">Add Block</button>
+          <button class="btn2" type="button" onclick="addBlock('practice')">Add Practice</button>
+          <button class="btn2" type="button" onclick="addBlock('lunch')">Add Lunch</button>
+          <button class="btn2" type="button" onclick="addBlock('break')">Add Break</button>
+          <button class="btn2" type="button" onclick="addBlock('awards')">Add Awards</button>
           <form method="POST" action="/portal/meet/${meet.id}/assign-races">
             <button class="btn2" type="submit">Rebuild Race Assignments</button>
           </form>
@@ -3557,6 +4315,7 @@ app.post('/portal/meet/:meetId/checkin/reassign-helmets', requireRole('meet_dire
                 <option value="novice">Novice</option>
                 <option value="elite">Elite</option>
                 <option value="open">Open</option>
+                <option value="quad">Quad</option>
               </select>
             </div>
 
@@ -3639,9 +4398,13 @@ app.post('/portal/meet/:meetId/checkin/reassign-helmets', requireRole('meet_dire
         });
       }
 
-      async function addBlock() {
+      async function addBlock(type) {
         saveBlockFilters();
-        const res = await fetch('/api/meet/' + meetId + '/blocks/add', { method: 'POST' });
+        const res = await fetch('/api/meet/' + meetId + '/blocks/add', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type })
+        });
         if (res.ok) location.reload();
       }
 
@@ -3742,12 +4505,14 @@ app.post('/api/meet/:meetId/blocks/add', requireRole('meet_director'), (req, res
   const meet = getMeetOr404(req.db, req.params.meetId);
   if (!meet || !canEditMeet(req.user, meet)) return res.status(403).send('Forbidden');
 
-  const n = (meet.blocks || []).length + 1;
+  const type = BLOCK_TYPES.includes(String(req.body.type || 'race')) ? String(req.body.type || 'race') : 'race';
+  const day = 'Day 1';
+
   meet.blocks.push({
-    id: 'b' + n,
-    name: 'Block ' + n,
-    day: 'Day 1',
-    type: 'race',
+    id: 'b' + crypto.randomBytes(4).toString('hex'),
+    name: defaultBlockNameForType(meet, day, type),
+    day,
+    type,
     notes: '',
     raceIds: [],
   });
@@ -3764,10 +4529,26 @@ app.post('/api/meet/:meetId/blocks/update-meta', requireRole('meet_director'), (
   const block = (meet.blocks || []).find(b => b.id === String(req.body.blockId || ''));
   if (!block) return res.status(404).send('Not found');
 
-  if (typeof req.body.name === 'string' && req.body.name.trim()) block.name = String(req.body.name).trim();
+  const oldDay = block.day || 'Day 1';
+  const oldType = block.type || 'race';
+
   if (typeof req.body.day === 'string' && req.body.day.trim()) block.day = String(req.body.day).trim();
-  if (typeof req.body.type === 'string' && req.body.type.trim()) block.type = String(req.body.type).trim();
+  if (typeof req.body.type === 'string' && BLOCK_TYPES.includes(String(req.body.type).trim())) block.type = String(req.body.type).trim();
+
+  if (typeof req.body.name === 'string' && req.body.name.trim()) {
+    block.name = String(req.body.name).trim();
+  } else if (
+    (oldDay !== block.day || oldType !== block.type) &&
+    (/^Block \d+$/i.test(String(block.name || '')) || ['Practice', 'Lunch', 'Break', 'Awards'].includes(String(block.name || '')))
+  ) {
+    block.name = defaultBlockNameForType(meet, block.day, block.type);
+  }
+
   if (typeof req.body.notes === 'string') block.notes = String(req.body.notes);
+
+  if (String(block.type || 'race') !== 'race') {
+    block.raceIds = [];
+  }
 
   meet.updatedAt = nowIso();
   saveDb(req.db);
@@ -3822,6 +4603,7 @@ function raceDaySubTabs(meet, active) {
     ['judges', 'Judges', `/portal/meet/${meet.id}/race-day/judges`],
     ['announcer', 'Announcer', `/portal/meet/${meet.id}/race-day/announcer`],
     ['live', 'Live', `/portal/meet/${meet.id}/race-day/live`],
+    ['schedule', 'Schedule', `/portal/meet/${meet.id}/race-day/schedule`],
   ];
 
   return `
@@ -4040,7 +4822,7 @@ app.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director', 'jud
               : 'No race selected'
           }
         </h2>
-        <div class="muted">Judges always land on the current race. Save, then close race when done.</div>
+        <div class="muted">Judges always land on the current race. Save keeps you here and preserves scroll. Close race moves on when done.</div>
       </div>
 
       <div class="spacer"></div>
@@ -4049,7 +4831,7 @@ app.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director', 'jud
         current
           ? `
             <div class="card">
-              <form method="POST" action="/portal/meet/${meet.id}/race-day/judges/save">
+              <form method="POST" action="/portal/meet/${meet.id}/race-day/judges/save" class="judgesForm">
                 <input type="hidden" name="raceId" value="${esc(current.id)}" />
 
                 <div class="row">
@@ -4112,6 +4894,22 @@ app.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director', 'jud
                 </div>
               </form>
             </div>
+
+            <script>
+              const savedJudgesScrollY = sessionStorage.getItem('judgesScrollY');
+              if (savedJudgesScrollY !== null) {
+                window.scrollTo(0, parseInt(savedJudgesScrollY, 10));
+                sessionStorage.removeItem('judgesScrollY');
+              }
+
+              document.querySelectorAll('.judgesForm').forEach(form => {
+                form.addEventListener('submit', () => {
+                  if (document.activeElement && document.activeElement.value === 'save') {
+                    sessionStorage.setItem('judgesScrollY', String(window.scrollY));
+                  }
+                });
+              });
+            </script>
           `
           : `<div class="card"><div class="muted">No race selected yet.</div></div>`
       }
@@ -4147,6 +4945,40 @@ app.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director', 'jud
           return { ...l, sponsor: reg?.sponsor || '' };
         }))}
       </div>
+    `;
+  } else if (mode === 'schedule') {
+    const days = {};
+    for (const block of meet.blocks || []) {
+      const day = block.day || 'Day 1';
+      if (!days[day]) days[day] = [];
+      days[day].push(block);
+    }
+
+    body += `
+      <div class="card">
+        <h2>Race Day Schedule</h2>
+        <div class="muted">This is the schedule view that can later pair with text alerts.</div>
+      </div>
+
+      <div class="spacer"></div>
+
+      ${Object.keys(days).sort().map(day => `
+        <div class="card">
+          <h2>${esc(day)}</h2>
+          ${(days[day] || []).map(block => `
+            <div class="groupCard">
+              <div class="row between">
+                <div>
+                  <div style="font-weight:900">${esc(block.name)}</div>
+                  <div class="muted">${esc(cap(block.type || 'race'))}</div>
+                  ${block.notes ? `<div class="note">${esc(block.notes)}</div>` : ''}
+                </div>
+                <div class="chip">${(block.raceIds || []).length} races</div>
+              </div>
+            </div>
+          `).join('<div class="spacer"></div>')}
+        </div>
+      `).join('<div class="spacer"></div>') || `<div class="card"><div class="muted">No blocks yet.</div></div>`}
     `;
   } else {
     body += `
@@ -4332,9 +5164,7 @@ app.post('/api/meet/:meetId/race-day/unlock-race', requireRole('meet_director'),
 
   saveDb(req.db);
   res.json({ ok: true });
-});
-
-app.get('/portal/meet/:meetId/results', requireRole('meet_director', 'judge', 'coach'), (req, res) => {
+});app.get('/portal/meet/:meetId/results', requireRole('meet_director', 'judge', 'coach'), (req, res) => {
   const meet = getMeetOr404(req.db, req.params.meetId);
   if (!meet) return res.redirect('/portal');
 
@@ -4396,6 +5226,7 @@ app.get('/portal/meet/:meetId/results', requireRole('meet_director', 'judge', 'c
                     <th>Place</th>
                     <th>Skater</th>
                     <th>Team</th>
+                    <th>Time</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -4410,9 +5241,10 @@ app.get('/portal/meet/:meetId/results', requireRole('meet_director', 'judge', 'c
                             ${sponsorLineHtml(reg?.sponsor || '')}
                           </td>
                           <td>${esc(row.team || '')}</td>
+                          <td>${esc(row.time || '')}</td>
                         </tr>
                       `;
-                    }).join('') || `<tr><td colspan="3" class="muted">No open results yet.</td></tr>`
+                    }).join('') || `<tr><td colspan="4" class="muted">No open results yet.</td></tr>`
                   }
                 </tbody>
               </table>
@@ -4495,6 +5327,7 @@ app.get('/meet/:meetId/results', (req, res) => {
                     <th>Place</th>
                     <th>Skater</th>
                     <th>Team</th>
+                    <th>Time</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -4509,9 +5342,10 @@ app.get('/meet/:meetId/results', (req, res) => {
                             ${sponsorLineHtml(reg?.sponsor || '')}
                           </td>
                           <td>${esc(row.team || '')}</td>
+                          <td>${esc(row.time || '')}</td>
                         </tr>
                       `;
-                    }).join('') || `<tr><td colspan="3" class="muted">No open results yet.</td></tr>`
+                    }).join('') || `<tr><td colspan="4" class="muted">No open results yet.</td></tr>`
                   }
                 </tbody>
               </table>
@@ -4604,6 +5438,7 @@ app.get('/portal/meet/:meetId/results/print', requireRole('meet_director', 'judg
                     <th>Place</th>
                     <th>Skater</th>
                     <th>Team</th>
+                    <th>Time</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -4618,9 +5453,10 @@ app.get('/portal/meet/:meetId/results/print', requireRole('meet_director', 'judg
                             ${reg?.sponsor ? `<div class="note">Sponsor: ${esc(reg.sponsor)}</div>` : ''}
                           </td>
                           <td>${esc(row.team || '')}</td>
+                          <td>${esc(row.time || '')}</td>
                         </tr>
                       `;
-                    }).join('') || `<tr><td colspan="3">No open results yet.</td></tr>`
+                    }).join('') || `<tr><td colspan="4">No open results yet.</td></tr>`
                   }
                 </tbody>
               </table>
@@ -4651,6 +5487,12 @@ app.get('/meet/:meetId/live', (req, res) => {
 
   const body = `
     <h1>${esc(meet.meetName)}</h1>
+
+    <div class="subTabs">
+      <a class="subTab active" href="/meet/${meet.id}/live">Live</a>
+      <a class="subTab" href="/meet/${meet.id}/schedule">Schedule</a>
+      <a class="subTab" href="/meet/${meet.id}/results">Results</a>
+    </div>
 
     <div class="grid3">
       <div class="statusCard orange">
@@ -4777,6 +5619,56 @@ app.get('/meet/:meetId/live', (req, res) => {
   }));
 });
 
+app.get('/meet/:meetId/schedule', (req, res) => {
+  const db = loadDb();
+  const meet = getMeetOr404(db, req.params.meetId);
+  const data = getSessionUser(req);
+
+  if (!meet) return res.redirect('/meets');
+  if (!meet.isPublic) return res.redirect('/meets');
+
+  const days = {};
+  for (const block of meet.blocks || []) {
+    const day = block.day || 'Day 1';
+    if (!days[day]) days[day] = [];
+    days[day].push(block);
+  }
+
+  const body = `
+    <h1>${esc(meet.meetName)} Schedule</h1>
+
+    <div class="subTabs">
+      <a class="subTab" href="/meet/${meet.id}/live">Live</a>
+      <a class="subTab active" href="/meet/${meet.id}/schedule">Schedule</a>
+      <a class="subTab" href="/meet/${meet.id}/results">Results</a>
+    </div>
+
+    ${Object.keys(days).sort().map(day => `
+      <div class="card">
+        <h2>${esc(day)}</h2>
+        ${(days[day] || []).map(block => `
+          <div class="groupCard">
+            <div class="row between">
+              <div>
+                <div style="font-weight:900">${esc(block.name)}</div>
+                <div class="muted">${esc(cap(block.type || 'race'))}</div>
+                ${block.notes ? `<div class="note">${esc(block.notes)}</div>` : ''}
+              </div>
+              <div class="chip">${(block.raceIds || []).length} races</div>
+            </div>
+          </div>
+        `).join('<div class="spacer"></div>')}
+      </div>
+    `).join('<div class="spacer"></div>') || `<div class="card"><div class="muted">No schedule posted yet.</div></div>`}
+  `;
+
+  res.send(pageShell({
+    title: 'Schedule',
+    user: data?.user || null,
+    bodyHtml: body,
+  }));
+});
+
 app.get('/portal/meet/:meetId/registered/print-race-list', requireRole('meet_director'), (req, res) => {
   const meet = getMeetOr404(req.db, req.params.meetId);
   if (!meet) return res.redirect('/portal');
@@ -4873,6 +5765,6 @@ app.get('/portal/meet/:meetId/registered/print-race-list', requireRole('meet_dir
 });
 
 app.listen(PORT, HOST, () => {
-  console.log(`SpeedSkateMeet v17 listening on ${HOST}:${PORT}`);
+  console.log(`SpeedSkateMeet v18 listening on ${HOST}:${PORT}`);
   console.log(`Data file: ${DATA_FILE}`);
 });
