@@ -3553,7 +3553,486 @@ function raceDayDirectorPage(user, meet) {
         </form>
         <form class="inline" method="post" action="/portal/meet/${meet.id}/race-day/next">
           <button class="btn btn-primary" type="submit">Next Race</button>
-        </formfunction getRoleRedirectForUser(user, db) {
+        </form>
+        <form class="inline" method="post" action="/portal/meet/${meet.id}/race-day/pause-toggle">
+          <button class="btn ${meet.raceDayPaused ? 'btn-primary' : 'btn-gold'}" type="submit">
+            ${meet.raceDayPaused ? 'Resume Meet' : 'Pause Meet'}
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <div class="card card-pad" style="margin-top:18px;">
+      <h3 style="margin-top:0;">Set Current Race</h3>
+      <form class="stack" method="post" action="/portal/meet/${meet.id}/race-day/set-current">
+        <div>
+          <label>Race</label>
+          <select name="raceId">
+            ${(bundle.races || []).map(r => `
+              <option value="${esc(r.id)}" ${selected(meet.currentRaceId, r.id)}>${esc(r.label)}</option>
+            `).join('')}
+          </select>
+        </div>
+        <div class="actions">
+          <button class="btn btn-primary" type="submit">Set Current Race</button>
+        </div>
+      </form>
+    </div>
+  `, { user });
+}
+
+function raceDayJudgesPage(user, meet) {
+  const bundle = getCurrentRaceBundle(meet);
+  const current = bundle.currentRace;
+
+  if (!current) {
+    return layout(`Judges — ${meet.meetName}`, `
+      <div class="section-title">
+        <div>
+          <h2>Judges</h2>
+          <div class="muted">No current race selected yet.</div>
+        </div>
+      </div>
+      ${roleTabsNav(meet, 'judges')}
+      <div class="card card-pad"><p class="muted">Set a current race from Director view first.</p></div>
+    `, { user });
+  }
+
+  const isTime = current.resultsMode === 'time';
+  const entries = current.packEntries?.length ? current.packEntries : current.laneEntries || [];
+
+  return layout(`Judges — ${meet.meetName}`, `
+    <div class="section-title">
+      <div>
+        <h2>Judges</h2>
+        <div class="muted">${esc(current.label)}</div>
+      </div>
+      <div class="actions">
+        <a class="btn btn-ghost" href="/portal/meet/${meet.id}">← Meet Dashboard</a>
+      </div>
+    </div>
+
+    ${roleTabsNav(meet, 'judges')}
+
+    <form class="stack" method="post" action="/portal/meet/${meet.id}/race-day/${current.id}/judges-save">
+      <div class="card card-pad">
+        <div class="mini">Race Type</div>
+        <h3 style="margin:8px 0 6px;">${esc(current.type)}</h3>
+        <div class="muted">
+          ${isTime ? 'Enter time in milliseconds or decimal milliseconds equivalent for ranking.' : 'Enter finish places for meet scoring.'}
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Meet #</th>
+              <th>Skater</th>
+              <th>Team</th>
+              ${isTime ? '<th>Time (ms)</th><th>Place</th>' : '<th>Place</th><th>Points</th>'}
+            </tr>
+          </thead>
+          <tbody>
+            ${entries.map((entry, idx) => `
+              <tr>
+                <td>${current.packEntries?.length ? idx + 1 : esc(entry.lane || idx + 1)}</td>
+                <td>${esc(entry.meetNumber || '')}</td>
+                <td>${esc(entry.name || '')}</td>
+                <td>${esc(entry.team || '')}</td>
+                ${
+                  isTime
+                    ? `
+                      <td><input name="timeMs_${idx}" value="${esc(entry.timeMs || '')}" /></td>
+                      <td>${esc(entry.place || '')}</td>
+                    `
+                    : `
+                      <td><input name="place_${idx}" value="${esc(entry.place || '')}" /></td>
+                      <td>${esc(entry.points || 0)}</td>
+                    `
+                }
+                <input type="hidden" name="entryId_${idx}" value="${esc(entry.registrationId || '')}" />
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card card-pad">
+        <label>Race Notes</label>
+        <textarea name="notes">${esc(current.notes || '')}</textarea>
+        <div class="actions" style="margin-top:14px;">
+          <button class="btn btn-ghost" type="submit" name="action" value="save">Save</button>
+          <button class="btn btn-primary" type="submit" name="action" value="close">Close Race</button>
+        </div>
+      </div>
+    </form>
+  `, { user });
+}
+
+function raceDayAnnouncerPage(user, meet) {
+  const bundle = getCurrentRaceBundle(meet);
+  const current = bundle.currentRace;
+  const next = bundle.nextRace;
+
+  return layout(`Announcer — ${meet.meetName}`, `
+    <div class="section-title">
+      <div>
+        <h2>Announcer</h2>
+        <div class="muted">Call current and upcoming races clearly from one screen.</div>
+      </div>
+      <div class="actions">
+        <a class="btn btn-ghost" href="/portal/meet/${meet.id}">← Meet Dashboard</a>
+      </div>
+    </div>
+
+    ${roleTabsNav(meet, 'announcer')}
+
+    <div class="hero" style="min-height:320px;">
+      <div>
+        <div class="hero-kicker">${esc(meet.meetName)}</div>
+        <h1>${current ? esc(current.label) : 'Waiting for Race Selection'}</h1>
+        <p class="hero-subtext">${current ? 'Now Racing' : 'Set the current race from Director view.'}</p>
+      </div>
+    </div>
+
+    <div class="grid grid-2">
+      <div class="card card-pad">
+        <h3 style="margin-top:0;">Current Race Entries</h3>
+        ${
+          current
+            ? `
+              <div class="grid">
+                ${(current.packEntries?.length ? current.packEntries : current.laneEntries || []).map(entry => `
+                  <div class="subtle">
+                    <strong>${esc(entry.name || '')}</strong>
+                    <div class="mini">#${esc(entry.meetNumber || '')} · ${esc(entry.team || '')}</div>
+                  </div>
+                `).join('') || '<div class="muted">No entries.</div>'}
+              </div>
+            `
+            : '<div class="muted">No current race.</div>'
+        }
+      </div>
+
+      <div class="card card-pad">
+        <h3 style="margin-top:0;">Next Up</h3>
+        ${next ? `
+          <div class="subtle">
+            <strong>${esc(next.label)}</strong>
+            <div class="mini">${esc(next.type)}</div>
+          </div>
+        ` : `<div class="muted">No next race yet.</div>`}
+      </div>
+    </div>
+  `, { user });
+}
+
+function raceDayCoachPage(user, meet) {
+  const bundle = getCurrentRaceBundle(meet);
+  const team = user.team || '';
+  const current = bundle.currentRace;
+  const next = bundle.nextRace;
+
+  const teamRegs = (meet.registrations || []).filter(reg => String(reg.team || '') === String(team || ''));
+  const currentEntries = current
+    ? (current.packEntries?.length ? current.packEntries : current.laneEntries || []).filter(entry => teamRegs.some(reg => String(reg.id) === String(entry.registrationId)))
+    : [];
+  const nextEntries = next
+    ? (next.packEntries?.length ? next.packEntries : next.laneEntries || []).filter(entry => teamRegs.some(reg => String(reg.id) === String(entry.registrationId)))
+    : [];
+
+  return layout(`Coach — ${meet.meetName}`, `
+    <div class="section-title">
+      <div>
+        <h2>Coach</h2>
+        <div class="muted">${esc(team || 'No team assigned')}</div>
+      </div>
+      <div class="actions">
+        <a class="btn btn-ghost" href="/portal/meet/${meet.id}">← Meet Dashboard</a>
+      </div>
+    </div>
+
+    ${roleTabsNav(meet, 'coach')}
+
+    <div class="grid grid-2">
+      <div class="card card-pad">
+        <h3 style="margin-top:0;">Your Skaters in Current Race</h3>
+        ${
+          currentEntries.length
+            ? currentEntries.map(entry => `
+                <div class="subtle" style="margin-bottom:10px;">
+                  <strong>${esc(entry.name || '')}</strong>
+                  <div class="mini">#${esc(entry.meetNumber || '')}</div>
+                </div>
+              `).join('')
+            : `<div class="muted">No skaters from your team in the current race.</div>`
+        }
+      </div>
+
+      <div class="card card-pad">
+        <h3 style="margin-top:0;">Your Skaters Next Up</h3>
+        ${
+          nextEntries.length
+            ? nextEntries.map(entry => `
+                <div class="subtle" style="margin-bottom:10px;">
+                  <strong>${esc(entry.name || '')}</strong>
+                  <div class="mini">#${esc(entry.meetNumber || '')}</div>
+                </div>
+              `).join('')
+            : `<div class="muted">No skaters from your team next up.</div>`
+        }
+      </div>
+    </div>
+
+    <div class="card card-pad" style="margin-top:18px;">
+      <h3 style="margin-top:0;">Your Team Registrations</h3>
+      <div class="grid">
+        ${teamRegs.length ? teamRegs.map(reg => `
+          <div class="subtle">
+            <strong>${esc(reg.name)}</strong>
+            <div class="mini">#${esc(reg.meetNumber)} · ${esc(reg.divisionGroupLabel || '—')}</div>
+          </div>
+        `).join('') : '<div class="muted">No team skaters found.</div>'}
+      </div>
+    </div>
+  `, { user });
+}
+
+function raceDayLivePage(user, meet) {
+  const bundle = getCurrentRaceBundle(meet);
+  const current = bundle.currentRace;
+  const next = bundle.nextRace;
+  const onDeck = bundle.onDeckRace;
+
+  return layout(`Live — ${meet.meetName}`, `
+    <div class="section-title">
+      <div>
+        <h2>Live</h2>
+        <div class="muted">Clean live booth / rink-facing display.</div>
+      </div>
+      ${user ? `<div class="actions"><a class="btn btn-ghost" href="/portal/meet/${meet.id}">← Meet Dashboard</a></div>` : ''}
+    </div>
+
+    ${user ? roleTabsNav(meet, 'live') : ''}
+
+    <div class="hero" style="min-height:340px;">
+      <div>
+        <div class="hero-kicker">${esc(meet.meetName)}</div>
+        <h1>${current ? esc(current.label) : 'Waiting for Race Selection'}</h1>
+        <p class="hero-subtext">${current ? 'Now Racing' : 'No current race selected yet.'}</p>
+      </div>
+    </div>
+
+    <div class="grid grid-3">
+      <div class="card card-pad">
+        <div class="mini">Current</div>
+        <h3 style="margin:8px 0 6px;">${current ? esc(current.label) : '—'}</h3>
+      </div>
+      <div class="card card-pad">
+        <div class="mini">Next</div>
+        <h3 style="margin:8px 0 6px;">${next ? esc(next.label) : '—'}</h3>
+      </div>
+      <div class="card card-pad">
+        <div class="mini">On Deck</div>
+        <h3 style="margin:8px 0 6px;">${onDeck ? esc(onDeck.label) : '—'}</h3>
+      </div>
+    </div>
+  `, { user });
+}
+
+function resultsPage(meet, query = {}) {
+  const divisionStandings = meet.results?.standingsByDivision || [];
+  const openStandings = meet.results?.standingsByOpenGroup || [];
+  const ttStandings = meet.results?.timeTrialsByOpenGroup || [];
+
+  return layout(`Results — ${meet.meetName}`, `
+    <div class="section-title">
+      <div>
+        <h2>${esc(meet.meetName)} Results</h2>
+        <div class="muted">Live public results, meet standings, and time trial group output.</div>
+      </div>
+    </div>
+
+    ${query.smsok ? `<div class="pill ok" style="margin-bottom:16px;">Text alert signup saved</div>` : ''}
+    ${query.smsbad ? `<div class="pill warn" style="margin-bottom:16px;">Unable to save that text signup</div>` : ''}
+
+    <div class="card card-pad" style="margin-bottom:18px;">
+      <h3 style="margin-top:0;">Get Text Alerts</h3>
+      <div class="mini" style="margin-bottom:14px;">Enter your racer’s race day number and your phone number for meet-specific alerts.</div>
+      <form class="stack" method="post" action="/results/${meet.id}/text-alerts">
+        <div class="row row-2">
+          <div>
+            <label>Race Day Number</label>
+            <input name="meetNumber" required />
+          </div>
+          <div>
+            <label>Phone Number</label>
+            <input name="phone" required />
+          </div>
+        </div>
+        <div class="actions">
+          <button class="btn btn-primary" type="submit">Save Text Alerts</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="grid">
+      ${divisionStandings.map(bucket => `
+        <div class="card card-pad">
+          <h3 style="margin-top:0;">${esc(bucket.label)}</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Rank</th>
+                  <th>#</th>
+                  <th>Skater</th>
+                  <th>Team</th>
+                  <th>Points</th>
+                  <th>Races</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${bucket.rows.map(row => `
+                  <tr>
+                    <td>${esc(row.rank)}</td>
+                    <td>${esc(row.meetNumber)}</td>
+                    <td>${esc(row.name)}</td>
+                    <td>${esc(row.team)}</td>
+                    <td>${esc(row.totalPoints)}</td>
+                    <td>${esc(row.raceCount)}</td>
+                  </tr>
+                `).join('') || '<tr><td colspan="6" class="center muted">No standings yet.</td></tr>'}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `).join('')}
+
+      ${openStandings.map(bucket => `
+        <div class="card card-pad">
+          <h3 style="margin-top:0;">${esc(bucket.label)} Open Standings</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Rank</th>
+                  <th>#</th>
+                  <th>Skater</th>
+                  <th>Team</th>
+                  <th>Points</th>
+                  <th>Races</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${bucket.rows.map(row => `
+                  <tr>
+                    <td>${esc(row.rank)}</td>
+                    <td>${esc(row.meetNumber)}</td>
+                    <td>${esc(row.name)}</td>
+                    <td>${esc(row.team)}</td>
+                    <td>${esc(row.totalPoints)}</td>
+                    <td>${esc(row.raceCount)}</td>
+                  </tr>
+                `).join('') || '<tr><td colspan="6" class="center muted">No standings yet.</td></tr>'}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `).join('')}
+
+      ${ttStandings.map(bucket => `
+        <div class="card card-pad">
+          <h3 style="margin-top:0;">${esc(bucket.label)} Time Trial Standings</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Rank</th>
+                  <th>#</th>
+                  <th>Skater</th>
+                  <th>Team</th>
+                  <th>Points</th>
+                  <th>Races</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${bucket.rows.map(row => `
+                  <tr>
+                    <td>${esc(row.rank)}</td>
+                    <td>${esc(row.meetNumber)}</td>
+                    <td>${esc(row.name)}</td>
+                    <td>${esc(row.team)}</td>
+                    <td>${esc(row.totalPoints)}</td>
+                    <td>${esc(row.raceCount)}</td>
+                  </tr>
+                `).join('') || '<tr><td colspan="6" class="center muted">No standings yet.</td></tr>'}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `).join('')}
+
+      ${(divisionStandings.length + openStandings.length + ttStandings.length) === 0 ? `
+        <div class="card card-pad">
+          <h3 style="margin-top:0;">No results yet</h3>
+          <p class="muted">Race results and standings will appear here once judges start closing races.</p>
+        </div>
+      ` : ''}
+    </div>
+  `, { hideNav: false });
+}
+
+function printRaceListPage(meet) {
+  const rows = getSortedRaces(meet).map((race, idx) => `
+    <tr>
+      <td>${idx + 1}</td>
+      <td>${esc(race.label)}</td>
+      <td>${esc(race.type)}</td>
+      <td>${esc(race.distanceLabel || '')}</td>
+      <td>${esc(getBlockById(meet, race.blockId)?.name || '—')}</td>
+      <td>${esc((race.packEntries?.length || race.laneEntries?.length || 0))}</td>
+    </tr>
+  `).join('');
+
+  return `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>${esc(meet.meetName)} — Race List</title>
+  <style>
+    body { font-family: Arial, sans-serif; color: #111; margin: 24px; }
+    h1 { margin: 0 0 8px; }
+    .meta { color: #555; margin-bottom: 18px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 8px 10px; border-bottom: 1px solid #ddd; text-align: left; font-size: 13px; }
+    th { background: #f5f5f5; }
+  </style>
+</head>
+<body>
+  <h1>${esc(meet.meetName)}</h1>
+  <div class="meta">${meet.date ? esc(formatDateHuman(meet.date)) : 'No date set'} · ${esc(meet.startTime || 'No start time')}</div>
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Race</th>
+        <th>Type</th>
+        <th>Distance</th>
+        <th>Block</th>
+        <th>Entries</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${rows || `<tr><td colspan="6">No races yet.</td></tr>`}
+    </tbody>
+  </table>
+  <script>window.onload = () => window.print();</script>
+</body>
+</html>`;
+}function getRoleRedirectForUser(user, db) {
   const meets = (db.meets || [])
     .filter(meet => canEditMeet(user, meet) || hasRole(user, USER_ROLES.JUDGE) || hasRole(user, USER_ROLES.ANNOUNCER) || hasRole(user, USER_ROLES.COACH) || hasRole(user, USER_ROLES.CHECKIN))
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
