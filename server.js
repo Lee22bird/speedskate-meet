@@ -189,7 +189,7 @@ function sanitizeRinks(db) {
 
 function normalizeDivisionSet(divs) {
   const out=divs||{};
-  for(const key of ['novice','elite','open']) {
+  for(const key of ['novice','elite']) {
     if(!out[key]) out[key]={enabled:false,cost:0,distances:['','','','']};
     out[key].enabled=!!out[key].enabled; out[key].cost=Number(out[key].cost||0);
     if(!Array.isArray(out[key].distances)) out[key].distances=['','','',''];
@@ -577,7 +577,7 @@ function generateBaseRacesForMeet(meet) {
   const oldMap=new Map((meet.races||[]).filter(r=>!r.isOpenRace&&!r.isQuadRace&&!['heat','semi'].includes(String(r.stage||''))).map(r=>[baseRaceKey(r.groupId,r.division,r.dayIndex,r.distanceLabel),r]));
   const races=[]; let orderHint=1;
   for(const group of meet.groups||[]) {
-    for(const divKey of ['novice','elite','open']) {
+    for(const divKey of ['novice','elite']) {
       const div=group.divisions?.[divKey]; if(!div||!div.enabled) continue;
       const distances=normalizeDistances(div.distances);
       for(let i=0;i<4;i++) {
@@ -1007,6 +1007,14 @@ function pageShell({ title, bodyHtml, user, meet, activeTab }) {
     .bb-sticky { position: sticky; top: 80px; align-self: start; }
     .block-card { border: 1.5px solid var(--border2); background: #fff; border-radius: var(--radius-lg); padding: 16px; margin-bottom: 14px; }
     .block-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .divider-card { margin-bottom: 14px; }
+    .divider-card-inner { display: flex; align-items: center; gap: 12px; background: var(--off); border: 1.5px dashed var(--border2); border-radius: var(--radius); padding: 12px 16px; flex-wrap: wrap; }
+    .divider-icon { font-size: 22px; flex-shrink: 0; }
+    .divider-info { flex: 1; min-width: 120px; }
+    .divider-name { font-weight: 700; font-size: 15px; color: var(--muted); }
+    .divider-day-sel { max-width: 100px; padding: 6px 8px; font-size: 13px; }
+    .divider-notes-inp { padding: 6px 8px; font-size: 13px; border-radius: 6px; border: 1.5px solid var(--border2); }
+    .divider-add-group { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 6px 10px; background: var(--off); border-radius: var(--radius-sm); border: 1px solid var(--border); }
     .drop-zone { min-height: 48px; padding: 8px; border-radius: var(--radius); border: 2px dashed #cbd5e1; background: var(--off); transition: all .15s; }
     .drop-zone.over { border-color: var(--sky2); background: #f0f9ff; }
     .race-item { border: 1.5px solid var(--border); background: #fff; border-radius: var(--radius-sm); padding: 11px 13px; margin: 6px 0; cursor: grab; transition: box-shadow .15s, transform .15s; }
@@ -1052,25 +1060,36 @@ function pageShell({ title, bodyHtml, user, meet, activeTab }) {
       min-height: 360px; display: flex; align-items: flex-end;
       background: var(--navy); margin-bottom: 28px; box-shadow: var(--shadow-lg);
     }
+    .hero-centered { align-items: center; justify-content: center; min-height: 420px; }
     .hero-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .40; }
     .hero-gradient { position: absolute; inset: 0; background: linear-gradient(to top, rgba(15,31,61,.95) 40%, rgba(15,31,61,.20) 100%); }
     .hero-content { position: relative; z-index: 1; padding: 36px; }
+    .hero-content-centered { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 36px; text-align: center; }
+    .hero-logo { height: 160px; width: auto; max-width: 90%; display: block; filter: drop-shadow(0 4px 24px rgba(0,0,0,.5)); }
     .hero-eyebrow { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .15em; color: var(--orange); margin-bottom: 8px; }
     .hero-title { font-family: 'Barlow Condensed',sans-serif; font-size: 64px; font-weight: 900; line-height: .95; letter-spacing: -1px; color: #fff; }
     .hero-title span { color: var(--orange); }
     .hero-sub { font-size: 17px; color: rgba(255,255,255,.80); margin-top: 12px; max-width: 520px; }
     .hero-actions { display: flex; gap: 12px; margin-top: 22px; flex-wrap: wrap; }
+    .hero-actions-centered { display: flex; gap: 12px; margin-top: 28px; flex-wrap: wrap; justify-content: center; }
+    .btn-white { background: rgba(255,255,255,.15) !important; color: #fff !important; border-color: rgba(255,255,255,.35) !important; backdrop-filter: blur(4px); }
+    .btn-white:hover { background: rgba(255,255,255,.25) !important; }
 
     /* ── Feature cards ────────────────────────────────────────────── */
     .feature-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; margin-bottom: 28px; }
     @media(max-width:900px){.feature-grid{grid-template-columns:1fr;}}
-    .feature-card { border-radius: var(--radius-lg); overflow: hidden; position: relative; min-height: 200px; display: flex; align-items: flex-end; box-shadow: var(--shadow); }
+    .feature-card { border-radius: var(--radius-lg); overflow: hidden; position: relative; min-height: 240px; display: flex; align-items: flex-end; box-shadow: var(--shadow); }
+    .feature-card-link { display: flex; text-decoration: none; cursor: pointer; transition: transform .2s, box-shadow .2s; }
+    .feature-card-link:hover { transform: translateY(-4px); box-shadow: var(--shadow-lg); }
+    .feature-card-link:hover .feature-card-overlay { background: linear-gradient(to top, rgba(15,31,61,.96) 50%, rgba(15,31,61,.30) 100%); }
     .feature-card-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-    .feature-card-overlay { position: absolute; inset: 0; background: linear-gradient(to top, rgba(15,31,61,.90) 50%, rgba(15,31,61,.15) 100%); }
-    .feature-card-content { position: relative; z-index: 1; padding: 20px; color: #fff; }
+    .feature-card-overlay { position: absolute; inset: 0; background: linear-gradient(to top, rgba(15,31,61,.90) 50%, rgba(15,31,61,.15) 100%); transition: background .2s; }
+    .feature-card-content { position: relative; z-index: 1; padding: 24px; color: #fff; width: 100%; }
     .feature-icon { width: 36px; height: 36px; margin-bottom: 8px; }
-    .feature-title { font-family: 'Barlow Condensed',sans-serif; font-size: 22px; font-weight: 700; }
-    .feature-desc  { font-size: 13px; opacity: .80; margin-top: 4px; }
+    .feature-icon-emoji { font-size: 32px; margin-bottom: 10px; line-height: 1; }
+    .feature-title { font-family: 'Barlow Condensed',sans-serif; font-size: 24px; font-weight: 700; }
+    .feature-desc  { font-size: 14px; opacity: .85; margin-top: 6px; line-height: 1.5; }
+    .feature-cta   { font-size: 13px; font-weight: 700; color: var(--orange); margin-top: 12px; letter-spacing: .04em; }
 
     /* ── Misc helpers ─────────────────────────────────────────────── */
     .spacer    { height: 16px; }
@@ -1144,52 +1163,53 @@ function resultsSectionHtml(section) {
 
 app.get('/', (req, res) => {
   const data = getSessionUser(req);
+  const portalLink = data ? '/portal' : '/admin/login';
   res.send(pageShell({ title:'Home', user:data?.user||null, bodyHtml:`
-    <div class="hero">
+    <div class="hero hero-centered">
       <img class="hero-img" src="/public/images/home/hero-banner.jpg" alt="" />
       <div class="hero-gradient"></div>
-      <div class="hero-content">
-        <div class="hero-eyebrow">The Platform for Inline Speed Skating</div>
-        <div class="hero-title">SPEED<span>SKATE</span><br>MEET.COM</div>
-        <div class="hero-sub">Meet Builder. Open & Quad Builders. Live Race Day. Automatic Standings.</div>
-        <div class="hero-actions">
+      <div class="hero-content-centered">
+        <img src="/public/images/branding/ssm-logo.png" alt="SpeedSkateMeet.com" class="hero-logo" />
+        <div class="hero-actions-centered">
           <a class="btn-orange" href="/meets">Find a Meet</a>
-          <a class="btn2" href="/live">Live Race Day</a>
-          ${data?`<a class="btn" href="/portal">Go to Portal</a>`:`<a class="btn" href="/admin/login">Admin Login</a>`}
+          <a class="btn2 btn-white" href="/live">Live Race Day</a>
+          ${data ? '<a class="btn2 btn-white" href="/portal">Portal</a>' : '<a class="btn2 btn-white" href="/admin/login">Login</a>'}
         </div>
       </div>
     </div>
     <div class="feature-grid">
-      <div class="feature-card">
+      <a class="feature-card feature-card-link" href="/live">
         <img class="feature-card-bg" src="/public/images/home/feature-card-dark.jpg" alt="" />
         <div class="feature-card-overlay"></div>
         <div class="feature-card-content">
-          <img class="feature-icon" src="/public/images/icon-trophy.png" alt="" />
+          <div class="feature-icon-emoji">🏆</div>
           <div class="feature-title">Live Results</div>
-          <div class="feature-desc">Real-time standings updated race by race.</div>
+          <div class="feature-desc">Follow along in real time. Race-by-race results and standings updated the moment a race closes.</div>
+          <div class="feature-cta">Watch Live →</div>
         </div>
-      </div>
-      <div class="feature-card">
+      </a>
+      <a class="feature-card feature-card-link" href="${portalLink}">
         <img class="feature-card-bg" src="/public/images/home/feature-card-gold.jpg" alt="" />
         <div class="feature-card-overlay"></div>
         <div class="feature-card-content">
-          <img class="feature-icon" src="/public/images/icon-clipboard.png" alt="" />
+          <div class="feature-icon-emoji">📋</div>
           <div class="feature-title">Meet Management</div>
-          <div class="feature-desc">Inline, Open, and Quad builders in one place.</div>
+          <div class="feature-desc">Build your meet from scratch. Inline, Open, and Quad race builders with block scheduling, check-in, and automatic standings.</div>
+          <div class="feature-cta">Go to Portal →</div>
         </div>
-      </div>
-      <div class="feature-card">
+      </a>
+      <a class="feature-card feature-card-link" href="/rinks">
         <img class="feature-card-bg" src="/public/images/home/feature-card-light.jpg" alt="" />
         <div class="feature-card-overlay"></div>
         <div class="feature-card-content">
-          <img class="feature-icon" src="/public/images/icon-map-pin.png" alt="" />
+          <div class="feature-icon-emoji">📍</div>
           <div class="feature-title">Find a Rink</div>
-          <div class="feature-desc">Discover meets and venues near you.</div>
+          <div class="feature-desc">Discover inline speed skating venues and upcoming meets near you. Addresses, contact info, and schedules all in one place.</div>
+          <div class="feature-cta">Browse Rinks →</div>
         </div>
-      </div>
+      </a>
     </div>` }));
 });
-
 app.get('/meets', (req, res) => {
   const db=loadDb(); const data=getSessionUser(req);
   const cards=(db.meets||[]).filter(m=>m.isPublic).map(m=>{
@@ -1226,7 +1246,7 @@ app.get('/rinks', (req, res) => {
     <div class="card" style="margin-bottom:14px">
       <div class="row between">
         <div>
-          <h2 style="margin:0"><img src="/public/images/icon-map-pin.png" style="height:20px;vertical-align:middle;margin-right:6px" />${esc(r.name)}</h2>
+          <h2 style="margin:0">📍 ${esc(r.name)}</h2>
           <div class="muted">${esc(r.address||'')} • ${esc(r.city||'')}, ${esc(r.state||'')}</div>
           <div class="note">${r.phone?esc(r.phone):''}${r.website?` • <a href="https://${esc(r.website)}" target="_blank" rel="noreferrer">${esc(r.website)}</a>`:''}</div>
         </div>
@@ -1567,7 +1587,7 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
   const quadEnabledCount=(meet.quadGroups||[]).filter(g=>g.enabled).length;
 
   const groupsHtml=meet.groups.map((group,gi)=>{
-    const divCards=['novice','elite','open'].map(divKey=>{
+    const divCards=['novice','elite'].map(divKey=>{
       const div=group.divisions[divKey];
       const colors={novice:'var(--sky2)',elite:'var(--navy)',open:'var(--orange)'};
       return `
@@ -1585,7 +1605,6 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
             <div><label>D3</label><input name="g_${gi}_${divKey}_d3" value="${esc(div.distances[2]||'')}" placeholder="1000m" /></div>
             <div><label>D4</label><input name="g_${gi}_${divKey}_d4" value="${esc(div.distances[3]||'')}" placeholder="1500m" /></div>
           </div>
-          ${divKey==='open'?`<div class="note" style="margin-top:8px">Rolling-start pack final, no lane limit, separate results.</div>`:''}
         </div>`;
     }).join('<div class="spacer-sm"></div>');
     return `
@@ -1697,7 +1716,7 @@ app.post('/portal/meet/:meetId/builder/save', requireRole('meet_director'), (req
   meet.notes=String(req.body.notes||'');
   meet.relayNotes=String(req.body.relayNotes||'');
   meet.groups.forEach((group,gi)=>{
-    for(const divKey of ['novice','elite','open']) {
+    for(const divKey of ['novice','elite']) {
       group.divisions[divKey]={
         enabled:!!req.body[`g_${gi}_${divKey}_enabled`],
         cost:Number(String(req.body[`g_${gi}_${divKey}_cost`]||'0').trim()||0),
@@ -2203,6 +2222,8 @@ app.get('/portal/meet/:meetId/blocks', requireRole('meet_director'), (req, res) 
   const raceById=new Map((meet.races||[]).map(r=>[r.id,r]));
   const assigned=new Set(); for(const block of meet.blocks||[]) for(const rid of block.raceIds||[]) assigned.add(rid);
   const unassigned=(meet.races||[]).filter(r=>!assigned.has(r.id));
+  const breakTypes=['break','lunch','awards','practice'];
+  const breakIcons={break:'☕',lunch:'🍽️',awards:'🏆',practice:'⛸️'};
 
   function raceItemHtml(race,isCurrent,draggable=true) {
     const tag=race.isOpenRace?'🏁 ':race.isQuadRace?'🛼 ':'';
@@ -2218,35 +2239,56 @@ app.get('/portal/meet/:meetId/blocks', requireRole('meet_director'), (req, res) 
       </div>`;
   }
 
-  const blocksHtml=(meet.blocks||[]).map(block=>`
-    <div class="block-card">
-      <div class="block-head" style="margin-bottom:12px">
-        <div>
-          <div style="font-weight:700;font-size:17px;color:var(--navy)">${esc(block.name)}</div>
-          <div class="note">${esc(block.day||'Day 1')} • ${esc((block.type||'race').toUpperCase())}</div>
+  let raceBlockNum = 0;
+  const blocksHtml=(meet.blocks||[]).map(block=>{
+    const isBreak=breakTypes.includes(block.type||'');
+    if(isBreak) {
+      const icon=breakIcons[block.type]||'📌';
+      return `
+        <div class="divider-card">
+          <div class="divider-card-inner">
+            <div class="divider-icon">${icon}</div>
+            <div class="divider-info">
+              <div class="divider-name">${esc(block.name)}</div>
+              <div class="note">${esc(block.day||'Day 1')}${block.notes?' • '+esc(block.notes):''}</div>
+            </div>
+            <div class="action-row">
+              <select class="divider-day-sel" onchange="setBlockDay('${esc(block.id)}',this.value)">
+                ${['Day 1','Day 2','Day 3'].map(d=>`<option value="${d}" ${block.day===d?'selected':''}>${d}</option>`).join('')}
+              </select>
+              <input class="divider-notes-inp" value="${esc(block.notes||'')}" placeholder="notes..." onblur="setBlockNotes('${esc(block.id)}',this.value)" style="max-width:140px" />
+              <button class="btn2 btn-sm" onclick="renameBlock('${esc(block.id)}')">Rename</button>
+              <button class="btn-danger btn-sm" onclick="deleteBlock('${esc(block.id)}')">Remove</button>
+            </div>
+          </div>
+        </div>`;
+    }
+    raceBlockNum++;
+    return `
+      <div class="block-card">
+        <div class="block-head" style="margin-bottom:12px">
+          <div>
+            <div style="font-weight:700;font-size:17px;color:var(--navy)">${esc(block.name)}</div>
+            <div class="note">${esc(block.day||'Day 1')} • Race Block ${raceBlockNum}</div>
+          </div>
+          <div class="action-row">
+            <button class="btn2 btn-sm" onclick="renameBlock('${esc(block.id)}')">Rename</button>
+            <button class="btn-danger btn-sm" onclick="deleteBlock('${esc(block.id)}')">Delete</button>
+          </div>
         </div>
-        <div class="action-row">
-          <button class="btn2 btn-sm" onclick="renameBlock('${esc(block.id)}')">Rename</button>
-          <button class="btn-danger btn-sm" onclick="deleteBlock('${esc(block.id)}')">Delete</button>
+        <div class="form-grid cols-2" style="margin-bottom:12px">
+          <div><label>Day</label>
+            <select onchange="setBlockDay('${esc(block.id)}',this.value)">
+              ${['Day 1','Day 2','Day 3'].map(d=>`<option value="${d}" ${block.day===d?'selected':''}>${d}</option>`).join('')}
+            </select>
+          </div>
+          <div><label>Notes</label><input value="${esc(block.notes||'')}" onblur="setBlockNotes('${esc(block.id)}',this.value)" placeholder="notes..." /></div>
         </div>
-      </div>
-      <div class="form-grid cols-3" style="margin-bottom:12px">
-        <div><label>Day</label>
-          <select onchange="setBlockDay('${esc(block.id)}',this.value)">
-            ${['Day 1','Day 2','Day 3'].map(d=>`<option value="${d}" ${block.day===d?'selected':''}>${d}</option>`).join('')}
-          </select>
+        <div class="drop-zone" data-drop-block="${esc(block.id)}">
+          ${(block.raceIds||[]).map(rid=>{const race=raceById.get(rid);if(!race) return '';return raceItemHtml(race,meet.currentRaceId===race.id,true);}).join('')||`<div class="note" style="padding:8px">Drop races here…</div>`}
         </div>
-        <div><label>Block Type</label>
-          <select onchange="setBlockType('${esc(block.id)}',this.value)">
-            ${['race','break','lunch','awards','practice'].map(t=>`<option value="${t}" ${(block.type||'race')===t?'selected':''}>${cap(t)}</option>`).join('')}
-          </select>
-        </div>
-        <div><label>Notes</label><input value="${esc(block.notes||'')}" onblur="setBlockNotes('${esc(block.id)}',this.value)" placeholder="notes..." /></div>
-      </div>
-      <div class="drop-zone" data-drop-block="${esc(block.id)}">
-        ${(block.raceIds||[]).map(rid=>{const race=raceById.get(rid);if(!race) return '';return raceItemHtml(race,meet.currentRaceId===race.id,(block.type||'race')==='race');}).join('')||`<div class="note" style="padding:8px">${(block.type||'race')==='race'?'Drop races here…':'Non-race block.'}</div>`}
-      </div>
-    </div>`).join('');
+      </div>`;
+  }).join('');
 
   res.send(pageShell({title:'Block Builder',user:req.user,meet,activeTab:'blocks', bodyHtml:`
     <div class="page-header"><h1>Block Builder</h1><div class="sub">${esc(meet.meetName)} • Drag races into blocks</div></div>
@@ -2259,7 +2301,14 @@ app.get('/portal/meet/:meetId/blocks', requireRole('meet_director'), (req, res) 
           <span class="chip" id="unassignedChip">Unassigned: ${unassigned.length}</span>
         </div>
         <div class="action-row">
-          <button class="btn2" onclick="addBlock()">+ Add Block</button>
+          <button class="btn2" onclick="addBlock()">+ Add Race Block</button>
+          <div class="divider-add-group">
+            <span class="note" style="white-space:nowrap">+ Add:</span>
+            <button class="btn2 btn-sm" onclick="addDivider('break','☕ Break')">☕ Break</button>
+            <button class="btn2 btn-sm" onclick="addDivider('lunch','🍽️ Lunch')">🍽️ Lunch</button>
+            <button class="btn2 btn-sm" onclick="addDivider('awards','🏆 Awards')">🏆 Awards</button>
+            <button class="btn2 btn-sm" onclick="addDivider('practice','⛸️ Practice')">⛸️ Practice</button>
+          </div>
           <form method="POST" action="/portal/meet/${meet.id}/assign-races"><button class="btn2" type="submit">Rebuild</button></form>
           <a class="btn-orange" href="/portal/meet/${meet.id}/registered/print-race-list" target="_blank">Print Race List</a>
         </div>
@@ -2314,10 +2363,10 @@ app.get('/portal/meet/:meetId/blocks', requireRole('meet_director'), (req, res) 
         });
       }
       async function addBlock(){saveFilters();const r=await fetch('/api/meet/'+meetId+'/blocks/add',{method:'POST'});if(r.ok) location.reload();}
-      async function renameBlock(id){const name=prompt('Block name:');if(!name) return;saveFilters();const r=await fetch('/api/meet/'+meetId+'/blocks/update-meta',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({blockId:id,name})});if(r.ok) location.reload();}
-      async function deleteBlock(id){if(!confirm('Delete this block?')) return;saveFilters();const r=await fetch('/api/meet/'+meetId+'/blocks/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({blockId:id})});if(r.ok) location.reload();}
+      async function addDivider(type,name){saveFilters();const r=await fetch('/api/meet/'+meetId+'/blocks/add-divider',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type,name})});if(r.ok) location.reload();}
+      async function renameBlock(id){const name=prompt('Name:');if(!name) return;saveFilters();const r=await fetch('/api/meet/'+meetId+'/blocks/update-meta',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({blockId:id,name})});if(r.ok) location.reload();}
+      async function deleteBlock(id){if(!confirm('Remove this?')) return;saveFilters();const r=await fetch('/api/meet/'+meetId+'/blocks/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({blockId:id})});if(r.ok) location.reload();}
       async function setBlockDay(id,day){saveFilters();await fetch('/api/meet/'+meetId+'/blocks/update-meta',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({blockId:id,day})});}
-      async function setBlockType(id,type){saveFilters();await fetch('/api/meet/'+meetId+'/blocks/update-meta',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({blockId:id,type})});location.reload();}
       async function setBlockNotes(id,notes){saveFilters();await fetch('/api/meet/'+meetId+'/blocks/update-meta',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({blockId:id,notes})});}
       function applyFilters(){
         saveFilters();
@@ -2337,12 +2386,20 @@ app.get('/portal/meet/:meetId/blocks', requireRole('meet_director'), (req, res) 
       restoreFilters(); attachDnD(); applyFilters();
     </script>`}));
 });
-
 app.post('/api/meet/:meetId/blocks/add', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet||!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
   const n=(meet.blocks||[]).length+1;
   meet.blocks.push({id:'b'+crypto.randomBytes(4).toString('hex'),name:'Block '+n,day:'Day 1',type:'race',notes:'',raceIds:[]});
+  meet.updatedAt=nowIso(); saveDb(req.db); res.json({ok:true});
+});
+
+app.post('/api/meet/:meetId/blocks/add-divider', requireRole('meet_director'), (req, res) => {
+  const meet=getMeetOr404(req.db,req.params.meetId);
+  if(!meet||!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
+  const type=String(req.body.type||'break');
+  const name=String(req.body.name||'Break').trim();
+  meet.blocks.push({id:'b'+crypto.randomBytes(4).toString('hex'),name,day:'Day 1',type,notes:'',raceIds:[]});
   meet.updatedAt=nowIso(); saveDb(req.db); res.json({ok:true});
 });
 
@@ -2715,18 +2772,27 @@ app.get('/portal/meet/:meetId/registered/print-race-list', requireRole('meet_dir
   const meet=getMeetOr404(req.db,req.params.meetId); if(!meet) return res.redirect('/portal');
   const blocksByDay={};
   for(const block of meet.blocks||[]) { const day=block.day||'Day 1'; if(!blocksByDay[day]) blocksByDay[day]=[]; blocksByDay[day].push(block); }
-  let raceNo=1;
+  const breakTypes=['break','lunch','awards','practice'];
+  const breakIcons={break:'☕',lunch:'🍽️',awards:'🏆',practice:'⛸️'};
+  let raceNo=1; let raceBlockNum=0;
   const daySections=Object.keys(blocksByDay).sort().map(day=>{
     const blockSections=blocksByDay[day].map(block=>{
+      const isBreak=breakTypes.includes(block.type||'');
+      if(isBreak) {
+        const icon=breakIcons[block.type]||'📌';
+        return `<div style="margin:14px 0;padding:10px 14px;background:#f8fafc;border-left:3px solid #cbd5e1;border-radius:4px;color:#64748b;font-weight:600">
+          ${icon} ${esc(block.name)}${block.notes?' — '+esc(block.notes):''}
+        </div>`;
+      }
+      raceBlockNum++;
       const raceRows=(block.raceIds||[]).map(rid=>{
         const race=(meet.races||[]).find(r=>r.id===rid); if(!race) return '';
         const tag=race.isOpenRace?'🏁 ':race.isQuadRace?'🛼 ':'';
-        return `<tr><td>${raceNo++}</td><td>${tag}${esc(race.groupLabel)}</td><td>${esc(race.distanceLabel)}</td><td>${esc(cap(race.division))}</td><td>${esc(raceDisplayStage(race))}</td><td>${esc(cap(race.startType))}</td><td>$${esc(race.cost)}</td></tr>`;
+        return `<tr><td>${raceNo++}</td><td>${tag}${esc(race.groupLabel)}</td><td>${esc(race.distanceLabel)}</td><td>${esc(cap(race.division))}</td><td>${esc(raceDisplayStage(race))}</td><td>${esc(cap(race.startType))}</td><td>${esc(race.cost)}</td></tr>`;
       }).join('');
-      return `<div style="margin-bottom:18px"><h3>${esc(block.name)}</h3>${block.notes?`<div style="color:#555;font-size:11px">${esc(block.notes)}</div>`:''}
-        ${(block.type||'race')!=='race'?`<div style="color:#555">Non-race block</div>`:`
+      return `<div style="margin-bottom:18px"><h3>${esc(block.name)} <span style="font-weight:400;font-size:12px;color:#888">Race Block ${raceBlockNum}</span></h3>${block.notes?`<div style="color:#555;font-size:11px">${esc(block.notes)}</div>`:''}
         <table><thead><tr><th>Race</th><th>Division</th><th>Distance</th><th>Class</th><th>Stage</th><th>Start</th><th>Cost</th></tr></thead>
-        <tbody>${raceRows||`<tr><td colspan="7">No races.</td></tr>`}</tbody></table>`}</div>`;
+        <tbody>${raceRows||`<tr><td colspan="7">No races.</td></tr>`}</tbody></table></div>`;
     }).join('');
     return `<div style="margin-bottom:24px"><h2>${esc(day)}</h2>${blockSections}</div>`;
   }).join('');
