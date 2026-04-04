@@ -4,37 +4,24 @@ const path = require('path');
 const crypto = require('crypto');
 
 const app = express();
-
 app.use(express.urlencoded({ extended: true }));
-app.use(express.json({ limit: '2mb' }));
-app.use(express.static('public'));
+app.use(express.json({ limit: '1mb' }));
 
-const PORT = process.env.PORT || 3000;
-const HOST = process.env.HOST || '0.0.0.0';
+const PORT = process.env.PORT || 10000;
+const HOST = '0.0.0.0';
 
 const DATA_DIR = fs.existsSync('/data') ? '/data' : __dirname;
 const DATA_FILE = process.env.SSM_DATA_FILE || path.join(DATA_DIR, 'ssm_db.json');
 
-const DATA_VERSION = 16;
 const SESSION_COOKIE = 'ssm_sess';
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 14;
 
 const ADMIN_USERNAME = 'Lbird22';
 const ADMIN_PASSWORD = 'Redline22';
 
-const USER_ROLES = {
-  SUPER_ADMIN: 'super_admin',
-  MEET_DIRECTOR: 'meet_director',
-  JUDGE: 'judge',
-  ANNOUNCER: 'announcer',
-  COACH: 'coach',
-  CHECKIN: 'checkin',
-};
-
 const TEAM_LIST = [
   'Independent',
   'Aurora Speed Club',
-  'Astro Speed',
   'Ashland Speedskating of Virginia',
   'Badger State Racing',
   'Bell’s Speed Skating Team',
@@ -96,80 +83,47 @@ const TEAM_LIST = [
   'Warrior Racing',
   'Weber’s Racing',
   'Weber’s Skateway',
-  'West Michigan Wolverines Speed Team'
+  'West Michigan Wolverines Speed Team',
 ].sort((a, b) => a.localeCompare(b));
 
-const AGE_RULES = {
-  USARS: 'USARS Rule',
-  MEET_DATE: 'Age on Meet Date',
-  CUSTOM: 'Custom Date',
-};
-
-const OPEN_TT_GROUPS = [
-  { id: 'juvenile_girls_open_tt', label: 'Juvenile Girls', gender: 'girls', minAge: 0, maxAge: 9 },
-  { id: 'juvenile_boys_open_tt', label: 'Juvenile Boys', gender: 'boys', minAge: 0, maxAge: 9 },
-  { id: 'freshman_girls_open_tt', label: 'Freshman Girls', gender: 'girls', minAge: 10, maxAge: 13 },
-  { id: 'freshman_boys_open_tt', label: 'Freshman Boys', gender: 'boys', minAge: 10, maxAge: 13 },
-  { id: 'senior_ladies_open_tt', label: 'Senior Ladies', gender: 'women', minAge: 14, maxAge: 120 },
-  { id: 'senior_men_open_tt', label: 'Senior Men', gender: 'men', minAge: 14, maxAge: 120 },
-  { id: 'masters_ladies_open_tt', label: 'Masters Ladies', gender: 'women', minAge: 35, maxAge: 120 },
-  { id: 'masters_men_open_tt', label: 'Masters Men', gender: 'men', minAge: 35, maxAge: 120 },
-];
-
-const STANDARD_DIVISION_KEYS = ['novice', 'elite'];
-
-const INLINE_POINTS_TABLE = {
-  1: 13,
-  2: 8,
-  3: 5,
-  4: 3,
-  5: 2,
-  6: 1,
+const STANDARD_POINTS = {
+  1: 30,
+  2: 20,
+  3: 10,
+  4: 5,
 };
 
 function nowIso() {
   return new Date().toISOString();
 }
 
-function esc(value) {
-  return String(value ?? '')
+function esc(s) {
+  return String(s ?? '')
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;');
 }
 
-function safeReadJson(filePath) {
-  if (!fs.existsSync(filePath)) return null;
-  try {
-    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
-  } catch {
-    return null;
-  }
-}
-
-function writeJsonAtomic(filePath, data) {
-  const dir = path.dirname(filePath);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  const tmp = filePath + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf8');
-  fs.renameSync(tmp, filePath);
+function cap(s) {
+  const str = String(s || '');
+  return str ? str.charAt(0).toUpperCase() + str.slice(1) : '';
 }
 
 function nextId(arr) {
   let max = 0;
-  for (const item of arr || []) max = Math.max(max, Number(item.id) || 0);
+  for (const item of arr || []) {
+    max = Math.max(max, Number(item.id) || 0);
+  }
   return max + 1;
 }
 
 function parseCookies(req) {
-  const header = req.headers.cookie || '';
+  const raw = req.headers.cookie || '';
   const out = {};
-  header.split(';').map(s => s.trim()).filter(Boolean).forEach(pair => {
+  raw.split(';').map(s => s.trim()).filter(Boolean).forEach(pair => {
     const idx = pair.indexOf('=');
-    if (idx > -1) {
-      out[pair.slice(0, idx)] = decodeURIComponent(pair.slice(idx + 1));
-    }
+    if (idx > -1) out[pair.slice(0, idx)] = decodeURIComponent(pair.slice(idx + 1));
   });
   return out;
 }
@@ -188,179 +142,72 @@ function clearCookie(res, name) {
   );
 }
 
-function normalizeGender(value) {
-  const raw = String(value || '').trim().toLowerCase();
-  if (['girl', 'girls', 'lady', 'ladies', 'woman', 'women', 'female', 'f'].includes(raw)) {
-    return raw.includes('girl') ? 'girls' : 'women';
+function safeReadJson(filePath) {
+  if (!fs.existsSync(filePath)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch (err) {
+    console.error('Failed reading JSON DB:', err);
+    return null;
   }
-  if (['boy', 'boys', 'man', 'men', 'male', 'm'].includes(raw)) {
-    return raw.includes('boy') ? 'boys' : 'men';
-  }
-  return 'boys';
 }
 
-function ageToCompetitionGender(gender, age) {
-  const g = normalizeGender(gender);
-  if (g === 'girls' || g === 'boys') {
-    if (Number(age) >= 14) {
-      return g === 'girls' ? 'women' : 'men';
-    }
-    return g;
-  }
-  if (g === 'women' || g === 'men') {
-    if (Number(age) <= 13) {
-      return g === 'women' ? 'girls' : 'boys';
-    }
-    return g;
-  }
-  return g;
+function writeJsonAtomic(filePath, data) {
+  const dir = path.dirname(filePath);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  const tmp = filePath + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf8');
+  fs.renameSync(tmp, filePath);
 }
 
-function getUsarsReferenceDate(meet) {
-  if (meet?.date) {
-    const meetDate = new Date(`${meet.date}T12:00:00`);
-    if (!Number.isNaN(meetDate.getTime())) {
-      return new Date(`${meetDate.getFullYear()}-12-31T12:00:00`);
-    }
-  }
-  const now = new Date();
-  return new Date(`${now.getFullYear()}-12-31T12:00:00`);
-}
-
-function getAgeReferenceDate(meet) {
-  const rule = meet?.ageRule || AGE_RULES.USARS;
-
-  if (rule === AGE_RULES.MEET_DATE && meet?.date) {
-    return new Date(`${meet.date}T12:00:00`);
-  }
-
-  if (rule === AGE_RULES.CUSTOM && meet?.customAgeCutoffDate) {
-    return new Date(`${meet.customAgeCutoffDate}T12:00:00`);
-  }
-
-  return getUsarsReferenceDate(meet);
-}
-
-function getAgeOnDate(birthdate, referenceDate) {
-  if (!birthdate || !referenceDate) return null;
-  const dob = new Date(`${birthdate}T12:00:00`);
-  const ref = new Date(referenceDate);
-
-  if (Number.isNaN(dob.getTime()) || Number.isNaN(ref.getTime())) return null;
-
-  let age = ref.getFullYear() - dob.getFullYear();
-
-  const hadBirthday =
-    ref.getMonth() > dob.getMonth() ||
-    (ref.getMonth() === dob.getMonth() && ref.getDate() >= dob.getDate());
-
-  if (!hadBirthday) age--;
-
-  return age;
-}
-
-function compareBirthdateYoungestFirst(a, b) {
-  const aDate = new Date(`${a.birthdate}T12:00:00`).getTime();
-  const bDate = new Date(`${b.birthdate}T12:00:00`).getTime();
-  return bDate - aDate;
-}
-
-function formatDateForInput(value) {
-  if (!value) return '';
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return '';
-  return d.toISOString().slice(0, 10);
-}
-
-function formatDateHuman(value) {
-  if (!value) return '—';
-  const d = new Date(`${value}T12:00:00`);
-  if (Number.isNaN(d.getTime())) return value;
-  return d.toLocaleDateString();
-}
-
-function formatDateTimeHuman(value) {
-  if (!value) return '—';
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return value;
-  return d.toLocaleString();
-}
-
-function toMoney(v) {
-  const n = Number(v || 0);
-  return `$${n.toFixed(2)}`;
-}
-
-function parseNumber(v, fallback = 0) {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : fallback;
-}
-
-function selected(value, expected) {
-  return String(value || '') === String(expected) ? 'selected' : '';
-}
-
-function checked(value) {
-  return value ? 'checked' : '';
-}
-
-function buildDivisionTemplate() {
+function makeDivisionsTemplate() {
   return {
-    enabled: false,
-    cost: 0,
-    distances: ['', '', '', ''],
+    novice: { enabled: false, cost: 0, distances: ['', '', '', ''] },
+    elite: { enabled: false, cost: 0, distances: ['', '', '', ''] },
+    open: { enabled: false, cost: 0, distances: ['', '', '', ''] },
   };
 }
 
 function baseGroups() {
-  const groups = [
-    { id: 'tiny_tot_girls', label: 'Tiny Tot Girls', ages: '5 & under', gender: 'girls', minAge: 0, maxAge: 5 },
-    { id: 'tiny_tot_boys', label: 'Tiny Tot Boys', ages: '5 & under', gender: 'boys', minAge: 0, maxAge: 5 },
-    { id: 'primary_girls', label: 'Primary Girls', ages: '6-7', gender: 'girls', minAge: 6, maxAge: 7 },
-    { id: 'primary_boys', label: 'Primary Boys', ages: '6-7', gender: 'boys', minAge: 6, maxAge: 7 },
-    { id: 'juvenile_girls', label: 'Juvenile Girls', ages: '8-9', gender: 'girls', minAge: 8, maxAge: 9 },
-    { id: 'juvenile_boys', label: 'Juvenile Boys', ages: '8-9', gender: 'boys', minAge: 8, maxAge: 9 },
-    { id: 'elementary_girls', label: 'Elementary Girls', ages: '10-11', gender: 'girls', minAge: 10, maxAge: 11 },
-    { id: 'elementary_boys', label: 'Elementary Boys', ages: '10-11', gender: 'boys', minAge: 10, maxAge: 11 },
-    { id: 'freshman_girls', label: 'Freshman Girls', ages: '12-13', gender: 'girls', minAge: 12, maxAge: 13 },
-    { id: 'freshman_boys', label: 'Freshman Boys', ages: '12-13', gender: 'boys', minAge: 12, maxAge: 13 },
-    { id: 'sophomore_women', label: 'Sophomore Women', ages: '14-15', gender: 'women', minAge: 14, maxAge: 15 },
-    { id: 'sophomore_men', label: 'Sophomore Men', ages: '14-15', gender: 'men', minAge: 14, maxAge: 15 },
-    { id: 'junior_women', label: 'Junior Women', ages: '16-17', gender: 'women', minAge: 16, maxAge: 17 },
-    { id: 'junior_men', label: 'Junior Men', ages: '16-17', gender: 'men', minAge: 16, maxAge: 17 },
-    { id: 'senior_women', label: 'Senior Women', ages: '18-24', gender: 'women', minAge: 18, maxAge: 24 },
-    { id: 'senior_men', label: 'Senior Men', ages: '18-24', gender: 'men', minAge: 18, maxAge: 24 },
-    { id: 'classic_women', label: 'Classic Women', ages: '25-34', gender: 'women', minAge: 25, maxAge: 34 },
-    { id: 'classic_men', label: 'Classic Men', ages: '25-34', gender: 'men', minAge: 25, maxAge: 34 },
-    { id: 'masters_women', label: 'Masters Women', ages: '35-44', gender: 'women', minAge: 35, maxAge: 44 },
-    { id: 'masters_men', label: 'Masters Men', ages: '35-44', gender: 'men', minAge: 35, maxAge: 44 },
-    { id: 'veteran_women', label: 'Veteran Women', ages: '45-54', gender: 'women', minAge: 45, maxAge: 54 },
-    { id: 'veteran_men', label: 'Veteran Men', ages: '45-54', gender: 'men', minAge: 45, maxAge: 54 },
-    { id: 'esquire_women', label: 'Esquire Women', ages: '55-64', gender: 'women', minAge: 55, maxAge: 64 },
-    { id: 'esquire_men', label: 'Esquire Men', ages: '55-64', gender: 'men', minAge: 55, maxAge: 64 },
-    { id: 'premier_women', label: 'Premier Women', ages: '65 & older', gender: 'women', minAge: 65, maxAge: 120 },
-    { id: 'premier_men', label: 'Premier Men', ages: '65 & older', gender: 'men', minAge: 65, maxAge: 120 },
-  ];
+  return [
+    { id: 'tiny_tot_girls', label: 'Tiny Tot Girls', ages: '5 & under', gender: 'girls' },
+    { id: 'tiny_tot_boys', label: 'Tiny Tot Boys', ages: '5 & under', gender: 'boys' },
 
-  return groups.map(group => ({
-    ...group,
-    divisions: {
-      novice: buildDivisionTemplate(),
-      elite: buildDivisionTemplate(),
-      open: buildDivisionTemplate(),
-      quad: buildDivisionTemplate(),
-    },
-  }));
-}function buildSpecialGroups() {
-  return OPEN_TT_GROUPS.map(group => ({
-    id: group.id,
-    label: group.label,
-    gender: group.gender,
-    minAge: group.minAge,
-    maxAge: group.maxAge,
-    enabled: false,
-    cost: 0,
-    distances: ['', '', '', ''],
+    { id: 'primary_girls', label: 'Primary Girls', ages: '6-7', gender: 'girls' },
+    { id: 'primary_boys', label: 'Primary Boys', ages: '6-7', gender: 'boys' },
+
+    { id: 'juvenile_girls', label: 'Juvenile Girls', ages: '8-9', gender: 'girls' },
+    { id: 'juvenile_boys', label: 'Juvenile Boys', ages: '8-9', gender: 'boys' },
+
+    { id: 'elementary_girls', label: 'Elementary Girls', ages: '10-11', gender: 'girls' },
+    { id: 'elementary_boys', label: 'Elementary Boys', ages: '10-11', gender: 'boys' },
+
+    { id: 'freshman_girls', label: 'Freshman Girls', ages: '12-13', gender: 'girls' },
+    { id: 'freshman_boys', label: 'Freshman Boys', ages: '12-13', gender: 'boys' },
+
+    { id: 'sophomore_girls', label: 'Sophomore Girls', ages: '14-15', gender: 'girls' },
+    { id: 'sophomore_boys', label: 'Sophomore Boys', ages: '14-15', gender: 'boys' },
+
+    { id: 'junior_women', label: 'Junior Women', ages: '16-17', gender: 'women' },
+    { id: 'junior_men', label: 'Junior Men', ages: '16-17', gender: 'men' },
+
+    { id: 'senior_women', label: 'Senior Women', ages: '18-24', gender: 'women' },
+    { id: 'senior_men', label: 'Senior Men', ages: '18-24', gender: 'men' },
+
+    { id: 'classic_women', label: 'Classic Women', ages: '25-34', gender: 'women' },
+    { id: 'classic_men', label: 'Classic Men', ages: '25-34', gender: 'men' },
+
+    { id: 'master_women', label: 'Master Women', ages: '35-44', gender: 'women' },
+    { id: 'master_men', label: 'Master Men', ages: '35-44', gender: 'men' },
+
+    { id: 'veteran_women', label: 'Veteran Women', ages: '45-54', gender: 'women' },
+    { id: 'veteran_men', label: 'Veteran Men', ages: '45-54', gender: 'men' },
+
+    { id: 'esquire_women', label: 'Esquire Women', ages: '55+', gender: 'women' },
+    { id: 'esquire_men', label: 'Esquire Men', ages: '55+', gender: 'men' },
+  ].map(g => ({
+    ...g,
+    divisions: makeDivisionsTemplate(),
   }));
 }
 
@@ -370,72 +217,58 @@ function defaultMeet(ownerUserId) {
     createdByUserId: ownerUserId,
     createdAt: nowIso(),
     updatedAt: nowIso(),
+
     meetName: 'New Meet',
     date: '',
     startTime: '',
-    registrationCloseDate: '',
-    registrationCloseTime: '',
-    status: 'Draft',
+    registrationCloseAt: '',
+
+    rinkId: 1,
     trackLength: 100,
     lanes: 4,
-    rinkMode: 'saved',
-    rinkId: 1,
-    customRinkName: '',
-    customCity: '',
-    customState: '',
-    quadEnabled: false,
-    openEnabled: false,
+
     timeTrialsEnabled: false,
-    relaysEnabled: false,
-    allowDayOfRegistration: false,
+    relayEnabled: false,
     judgesPanelRequired: true,
-    showOnFindAMeet: true,
-    meetNotes: '',
-    ageRule: AGE_RULES.USARS,
-    customAgeCutoffDate: '',
+
+    notes: '',
+    relayNotes: '',
+
+    isPublic: false,
+    status: 'draft',
+
     groups: baseGroups(),
-    openGroups: buildSpecialGroups(),
-    quadGroups: buildSpecialGroups(),
-    registrations: [],
     races: [],
     blocks: [],
-    scheduleItems: [],
-    assignments: {
-      judges: [],
-      announcers: [],
-      coaches: [],
-      checkin: [],
-    },
+    registrations: [],
+
     currentRaceId: '',
     currentRaceIndex: -1,
     raceDayPaused: false,
-    results: {
-      timeTrialsByOpenGroup: [],
-      inlineStandings: [],
-      quadStandings: [],
-      openResults: [],
-    },
   };
 }
 
 function defaultDb() {
   return {
-    version: DATA_VERSION,
+    version: 17,
     createdAt: nowIso(),
     updatedAt: nowIso(),
+
     sessions: [],
+
     users: [
       {
         id: 1,
         username: ADMIN_USERNAME,
         password: ADMIN_PASSWORD,
         displayName: 'Lee Bird',
-        roles: [USER_ROLES.SUPER_ADMIN, USER_ROLES.MEET_DIRECTOR, USER_ROLES.JUDGE, USER_ROLES.COACH],
+        roles: ['super_admin', 'meet_director', 'judge', 'coach'],
         team: 'Midwest Racing',
         active: true,
         createdAt: nowIso(),
       },
     ],
+
     rinks: [
       {
         id: 1,
@@ -449,190 +282,160 @@ function defaultDb() {
         notes: '',
       },
     ],
+
     meets: [],
   };
 }
 
 function sanitizeRinks(db) {
-  if (!Array.isArray(db.rinks)) db.rinks = [];
-  db.rinks = db.rinks.filter(r => !String(r.name || '').toLowerCase().includes('wichita skate center'));
+  db.rinks = (db.rinks || []).filter(r => {
+    const name = String(r.name || '').trim().toLowerCase();
+    return name !== 'wichita skate center';
+  });
 
-  const hasRollerCity = db.rinks.some(
-    r => String(r.name || '').trim().toLowerCase() === 'roller city'
-  );
+  const rollerCity = (db.rinks || []).find(r => String(r.name || '').trim().toLowerCase() === 'roller city');
 
-  if (!hasRollerCity) {
+  if (!rollerCity) {
     db.rinks.unshift(defaultDb().rinks[0]);
   } else {
-    db.rinks = db.rinks.map(r => {
-      if (String(r.name || '').trim().toLowerCase() === 'roller city') {
-        return {
-          ...r,
-          address: '3234 S. Meridian Ave, Wichita, KS 67217',
-          phone: '316-942-4555',
-          website: 'rollercitywichitaks.com',
-          city: 'Wichita',
-          state: 'KS',
-        };
-      }
-      return r;
-    });
+    rollerCity.city = 'Wichita';
+    rollerCity.state = 'KS';
+    rollerCity.address = '3234 S. Meridian Ave, Wichita, KS 67217';
+    rollerCity.phone = '316-942-4555';
+    rollerCity.website = 'rollercitywichitaks.com';
   }
 }
 
-function normalizeDivisionBlock(div) {
-  const safe = div || {};
-  return {
-    enabled: !!safe.enabled,
-    cost: Number(safe.cost || 0),
-    distances: Array.isArray(safe.distances)
-      ? [0, 1, 2, 3].map(i => String(safe.distances[i] || '').trim())
-      : ['', '', '', ''],
-  };
-}
-
-function normalizeSpecialGroups(groups) {
-  const defaults = buildSpecialGroups();
-  const byId = new Map((groups || []).map(g => [g.id, g]));
-  return defaults.map(group => {
-    const existing = byId.get(group.id) || {};
-    return {
-      ...group,
-      enabled: !!existing.enabled,
-      cost: Number(existing.cost || 0),
-      distances: Array.isArray(existing.distances)
-        ? [0, 1, 2, 3].map(i => String(existing.distances[i] || '').trim())
-        : ['', '', '', ''],
-    };
-  });
+function normalizeDivisionSet(divs) {
+  const out = divs || {};
+  for (const key of ['novice', 'elite', 'open']) {
+    if (!out[key]) out[key] = { enabled: false, cost: 0, distances: ['', '', '', ''] };
+    out[key].enabled = !!out[key].enabled;
+    out[key].cost = Number(out[key].cost || 0);
+    if (!Array.isArray(out[key].distances)) out[key].distances = ['', '', '', ''];
+    out[key].distances = [0, 1, 2, 3].map(i => String(out[key].distances[i] || '').trim());
+  }
+  return out;
 }
 
 function migrateMeet(meet, fallbackOwnerId) {
   if (!meet.createdByUserId) meet.createdByUserId = fallbackOwnerId;
-  if (!Array.isArray(meet.groups) || meet.groups.length === 0) meet.groups = baseGroups();
-  if (!Array.isArray(meet.openGroups)) meet.openGroups = buildSpecialGroups();
-  if (!Array.isArray(meet.quadGroups)) meet.quadGroups = buildSpecialGroups();
-  if (!Array.isArray(meet.registrations)) meet.registrations = [];
+  if (!meet.createdAt) meet.createdAt = nowIso();
+  if (!meet.updatedAt) meet.updatedAt = nowIso();
+
+  if (typeof meet.meetName !== 'string') meet.meetName = 'New Meet';
+  if (typeof meet.date !== 'string') meet.date = '';
+  if (typeof meet.startTime !== 'string') meet.startTime = '';
+  if (typeof meet.registrationCloseAt !== 'string') meet.registrationCloseAt = '';
+
+  if (typeof meet.rinkId !== 'number') meet.rinkId = 1;
+  if (!Number.isFinite(Number(meet.trackLength))) meet.trackLength = 100;
+  if (!Number.isFinite(Number(meet.lanes))) meet.lanes = 4;
+
+  if (typeof meet.timeTrialsEnabled !== 'boolean') meet.timeTrialsEnabled = false;
+  if (typeof meet.relayEnabled !== 'boolean') meet.relayEnabled = false;
+  if (typeof meet.judgesPanelRequired !== 'boolean') meet.judgesPanelRequired = true;
+
+  if (typeof meet.notes !== 'string') meet.notes = '';
+  if (typeof meet.relayNotes !== 'string') meet.relayNotes = '';
+
+  if (typeof meet.isPublic !== 'boolean') meet.isPublic = false;
+  if (typeof meet.status !== 'string') meet.status = 'draft';
+
+  if (!Array.isArray(meet.groups) || meet.groups.length === 0) {
+    meet.groups = baseGroups();
+  } else {
+    const baseMap = new Map(baseGroups().map(g => [g.id, g]));
+    meet.groups = meet.groups.map(g => {
+      const base = baseMap.get(g.id);
+      return {
+        id: g.id || base?.id || crypto.randomBytes(4).toString('hex'),
+        label: base?.label || g.label || 'Division Group',
+        ages: base?.ages || g.ages || '',
+        gender: base?.gender || g.gender || '',
+        divisions: normalizeDivisionSet(g.divisions),
+      };
+    });
+  }
+
   if (!Array.isArray(meet.races)) meet.races = [];
   if (!Array.isArray(meet.blocks)) meet.blocks = [];
-  if (!Array.isArray(meet.scheduleItems)) meet.scheduleItems = [];
-  if (!meet.assignments || typeof meet.assignments !== 'object') meet.assignments = {};
-  if (!Array.isArray(meet.assignments.judges)) meet.assignments.judges = [];
-  if (!Array.isArray(meet.assignments.announcers)) meet.assignments.announcers = [];
-  if (!Array.isArray(meet.assignments.coaches)) meet.assignments.coaches = [];
-  if (!Array.isArray(meet.assignments.checkin)) meet.assignments.checkin = [];
-  if (!meet.results || typeof meet.results !== 'object') meet.results = {};
-  if (!Array.isArray(meet.results.timeTrialsByOpenGroup)) meet.results.timeTrialsByOpenGroup = [];
-  if (!Array.isArray(meet.results.inlineStandings)) meet.results.inlineStandings = [];
-  if (!Array.isArray(meet.results.quadStandings)) meet.results.quadStandings = [];
-  if (!Array.isArray(meet.results.openResults)) meet.results.openResults = [];
+  if (!Array.isArray(meet.registrations)) meet.registrations = [];
 
-  meet.ageRule = meet.ageRule || AGE_RULES.USARS;
-  meet.customAgeCutoffDate = meet.customAgeCutoffDate || '';
-  meet.quadEnabled = !!meet.quadEnabled;
-  meet.openEnabled = !!meet.openEnabled;
-  meet.timeTrialsEnabled = !!meet.timeTrialsEnabled;
-  meet.relaysEnabled = !!meet.relaysEnabled;
-  meet.allowDayOfRegistration = !!meet.allowDayOfRegistration;
-  meet.judgesPanelRequired = meet.judgesPanelRequired !== false;
-  meet.showOnFindAMeet = meet.showOnFindAMeet !== false;
-  meet.status = meet.status || 'Draft';
-  meet.rinkMode = meet.rinkMode || 'saved';
-  meet.currentRaceId = meet.currentRaceId || '';
-  meet.currentRaceIndex = Number.isFinite(meet.currentRaceIndex) ? meet.currentRaceIndex : -1;
-  meet.raceDayPaused = !!meet.raceDayPaused;
+  if (typeof meet.currentRaceId !== 'string') meet.currentRaceId = '';
+  if (typeof meet.currentRaceIndex !== 'number') meet.currentRaceIndex = -1;
+  if (typeof meet.raceDayPaused !== 'boolean') meet.raceDayPaused = false;
 
-  const freshGroups = baseGroups();
-  const byId = new Map((meet.groups || []).map(g => [g.id, g]));
+  meet.races = meet.races.map((r, idx) => ({
+    id: r.id || ('r' + crypto.randomBytes(6).toString('hex')),
+    orderHint: Number(r.orderHint || idx + 1),
+    groupId: String(r.groupId || ''),
+    groupLabel: String(r.groupLabel || ''),
+    ages: String(r.ages || ''),
+    division: String(r.division || 'elite'),
+    distanceLabel: String(r.distanceLabel || ''),
+    dayIndex: Number(r.dayIndex || 1),
+    cost: Number(r.cost || 0),
 
-  meet.groups = freshGroups.map(group => {
-    const existing = byId.get(group.id) || {};
-    return {
-      ...group,
-      divisions: {
-        novice: normalizeDivisionBlock(existing.divisions?.novice),
-        elite: normalizeDivisionBlock(existing.divisions?.elite),
-        open: normalizeDivisionBlock(existing.divisions?.open),
-        quad: normalizeDivisionBlock(existing.divisions?.quad),
-      },
-    };
-  });
+    stage: String(r.stage || 'race'),
+    heatNumber: Number(r.heatNumber || 0),
+    parentRaceKey: String(r.parentRaceKey || ''),
+    startType: String(r.startType || 'standing'),
+    countsForOverall: typeof r.countsForOverall === 'boolean' ? r.countsForOverall : (String(r.division || '') !== 'open'),
 
-  meet.openGroups = normalizeSpecialGroups(meet.openGroups);
-  meet.quadGroups = normalizeSpecialGroups(meet.quadGroups);
+    laneEntries: Array.isArray(r.laneEntries) ? r.laneEntries : [],
+    resultsMode: String(r.resultsMode || 'places'),
+    status: String(r.status || 'open'),
+    notes: String(r.notes || ''),
+    isFinal: !!r.isFinal,
+    closedAt: String(r.closedAt || ''),
+  }));
 
-  meet.registrations = meet.registrations.map(reg => ({
-    id: reg.id || crypto.randomBytes(6).toString('hex'),
-    createdAt: reg.createdAt || nowIso(),
-    walkIn: !!reg.walkIn,
+  meet.blocks = meet.blocks.map((b, idx) => ({
+    id: String(b.id || ('b' + (idx + 1))),
+    name: String(b.name || `Block ${idx + 1}`),
+    day: String(b.day || 'Day 1'),
+    type: String(b.type || 'race'),
+    notes: String(b.notes || ''),
+    raceIds: Array.isArray(b.raceIds) ? b.raceIds.map(String) : [],
+  }));
+
+  meet.registrations = meet.registrations.map((reg, idx) => ({
+    id: Number(reg.id || idx + 1),
+    createdAt: String(reg.createdAt || nowIso()),
     name: String(reg.name || ''),
-    birthdate: String(reg.birthdate || ''),
-    gender: normalizeGender(reg.gender),
+    age: Number(reg.age || 0),
+    gender: String(reg.gender || 'boys'),
     team: String(reg.team || 'Independent'),
-    calculatedAge: reg.calculatedAge ?? null,
+    sponsor: String(reg.sponsor || ''),
+
     divisionGroupId: String(reg.divisionGroupId || ''),
     divisionGroupLabel: String(reg.divisionGroupLabel || ''),
-    ttOpenGroupId: String(reg.ttOpenGroupId || ''),
-    ttOpenGroupLabel: String(reg.ttOpenGroupLabel || ''),
-    meetNumber: Number(reg.meetNumber || 0),
+
+    originalDivisionGroupId: String(reg.originalDivisionGroupId || reg.divisionGroupId || ''),
+    originalDivisionGroupLabel: String(reg.originalDivisionGroupLabel || reg.divisionGroupLabel || ''),
+
+    meetNumber: Number(reg.meetNumber || idx + 1),
+    helmetNumber: reg.helmetNumber === '' || reg.helmetNumber == null ? '' : Number(reg.helmetNumber),
+
+    paid: !!reg.paid,
+    checkedIn: !!reg.checkedIn,
+    totalCost: Number(reg.totalCost || 0),
+
     options: {
+      challengeUp: !!reg.options?.challengeUp,
       novice: !!reg.options?.novice,
       elite: !!reg.options?.elite,
       open: !!reg.options?.open,
-      quad: !!reg.options?.quad,
       timeTrials: !!reg.options?.timeTrials,
       relays: !!reg.options?.relays,
     },
-    checkIn: {
-      checkedIn: !!reg.checkIn?.checkedIn,
-      checkedInAt: reg.checkIn?.checkedInAt || '',
-    },
-  }));
-
-  meet.races = meet.races.map((race, idx) => ({
-    id: race.id || `race_${idx + 1}_${crypto.randomBytes(4).toString('hex')}`,
-    type: race.type || 'standard',
-    scoringBucket: String(race.scoringBucket || ''),
-    orderHint: Number(race.orderHint || idx + 1),
-    label: String(race.label || ''),
-    groupId: String(race.groupId || ''),
-    groupLabel: String(race.groupLabel || ''),
-    divisionKey: String(race.divisionKey || ''),
-    dayIndex: Number(race.dayIndex || 1),
-    distanceLabel: String(race.distanceLabel || ''),
-    blockId: String(race.blockId || ''),
-    laneEntries: Array.isArray(race.laneEntries) ? race.laneEntries : [],
-    packEntries: Array.isArray(race.packEntries) ? race.packEntries : [],
-    resultsMode: race.resultsMode || 'places',
-    status: race.status || 'open',
-    notes: String(race.notes || ''),
-    isFinal: race.isFinal !== false,
-    closedAt: String(race.closedAt || ''),
-    minAge: Number(race.minAge || 0),
-    maxAge: Number(race.maxAge || 999),
-    gender: String(race.gender || ''),
-  }));
-
-  meet.blocks = meet.blocks.map((block, idx) => ({
-    id: block.id || `block_${idx + 1}`,
-    name: String(block.name || `Block ${idx + 1}`),
-    day: String(block.day || 'Day 1'),
-    notes: String(block.notes || ''),
-    raceIds: Array.isArray(block.raceIds) ? block.raceIds : [],
-  }));
-
-  meet.scheduleItems = meet.scheduleItems.map((item, idx) => ({
-    id: item.id || `schedule_${idx + 1}`,
-    label: String(item.label || 'Schedule Item'),
-    kind: String(item.kind || 'break'),
-    day: String(item.day || 'Day 1'),
-    notes: String(item.notes || ''),
-    order: Number(item.order || idx + 1),
   }));
 }
 
 function loadDb() {
   let db = safeReadJson(DATA_FILE);
+
   if (!db) {
     db = defaultDb();
     writeJsonAtomic(DATA_FILE, db);
@@ -640,9 +443,7 @@ function loadDb() {
   }
 
   if (!Array.isArray(db.users) || db.users.length === 0) db.users = defaultDb().users;
-  if (!db.users.some(u => u.username === ADMIN_USERNAME)) {
-    db.users.unshift(defaultDb().users[0]);
-  }
+  if (!db.users.some(u => u.username === ADMIN_USERNAME)) db.users.unshift(defaultDb().users[0]);
 
   if (!Array.isArray(db.rinks)) db.rinks = defaultDb().rinks;
   if (!Array.isArray(db.meets)) db.meets = [];
@@ -650,23 +451,24 @@ function loadDb() {
 
   sanitizeRinks(db);
 
-  const fallbackOwner = (db.users[0] && db.users[0].id) || 1;
-  db.meets.forEach(meet => migrateMeet(meet, fallbackOwner));
+  const fallbackOwnerId = (db.users[0] && db.users[0].id) || 1;
+  db.meets.forEach(m => migrateMeet(m, fallbackOwnerId));
 
   db.sessions = db.sessions.filter(s => s.expiresAt && new Date(s.expiresAt).getTime() > Date.now());
-  db.version = DATA_VERSION;
+
+  db.version = 17;
+  db.updatedAt = nowIso();
   return db;
 }
 
 function saveDb(db) {
-  db.version = DATA_VERSION;
+  db.version = 17;
   db.updatedAt = nowIso();
   writeJsonAtomic(DATA_FILE, db);
 }
 
 function getSessionUser(req) {
-  const cookies = parseCookies(req);
-  const token = cookies[SESSION_COOKIE];
+  const token = parseCookies(req)[SESSION_COOKIE];
   if (!token) return null;
 
   const db = loadDb();
@@ -677,14 +479,12 @@ function getSessionUser(req) {
   const user = db.users.find(u => u.id === sess.userId && u.active !== false);
   if (!user) return null;
 
-  return { db, user, session: sess, token };
+  return { db, session: sess, token, user };
 }
 
 function extendSession(db, token) {
   const sess = db.sessions.find(s => s.token === token);
-  if (sess) {
-    sess.expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString();
-  }
+  if (sess) sess.expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString();
 }
 
 function hasRole(user, role) {
@@ -703,11 +503,20 @@ function requireRole(...roles) {
     req.user = data.user;
     req.sessionToken = data.token;
 
-    if (hasRole(data.user, USER_ROLES.SUPER_ADMIN) || roles.some(role => hasRole(data.user, role))) {
+    if (hasRole(data.user, 'super_admin') || roles.some(role => hasRole(data.user, role))) {
       return next();
     }
 
-    return res.status(403).send('Forbidden');
+    return res.status(403).send(pageShell({
+      title: 'Forbidden',
+      user: data.user,
+      bodyHtml: `
+        <h1>Forbidden</h1>
+        <div class="card">
+          <div class="danger">You do not have access to this page.</div>
+        </div>
+      `,
+    }));
   };
 }
 
@@ -716,704 +525,247 @@ function getMeetOr404(db, meetId) {
 }
 
 function canEditMeet(user, meet) {
-  return hasRole(user, USER_ROLES.SUPER_ADMIN) || Number(meet.createdByUserId) === Number(user.id);
-}function roleHomePath(user) {
-  if (hasRole(user, USER_ROLES.SUPER_ADMIN) || hasRole(user, USER_ROLES.MEET_DIRECTOR)) return '/portal';
-  if (hasRole(user, USER_ROLES.JUDGE)) return '/judge';
-  if (hasRole(user, USER_ROLES.ANNOUNCER)) return '/announcer';
-  if (hasRole(user, USER_ROLES.COACH)) return '/coach';
-  if (hasRole(user, USER_ROLES.CHECKIN)) return '/checkin';
-  return '/portal';
+  return hasRole(user, 'super_admin') || Number(meet.createdByUserId) === Number(user.id);
 }
 
-function roleBackLabel(user) {
-  if (hasRole(user, USER_ROLES.SUPER_ADMIN) || hasRole(user, USER_ROLES.MEET_DIRECTOR)) {
-    return '← Meet Dashboard';
+function ensureAtLeastOneBlock(meet) {
+  if (!Array.isArray(meet.blocks)) meet.blocks = [];
+  if (meet.blocks.length === 0) {
+    meet.blocks.push({
+      id: 'b1',
+      name: 'Block 1',
+      day: 'Day 1',
+      type: 'race',
+      notes: '',
+      raceIds: [],
+    });
   }
-  return '← Back to My Meets';
 }
 
-function roleBackHref(user, meet) {
-  if (hasRole(user, USER_ROLES.SUPER_ADMIN) || hasRole(user, USER_ROLES.MEET_DIRECTOR)) {
-    return `/portal/meet/${meet.id}`;
+function combineDateTime(date, time) {
+  const d = String(date || '').trim();
+  const t = String(time || '').trim();
+  if (!d) return '';
+  if (!t) return `${d}T00:00:00`;
+  return `${d}T${t}:00`;
+}
+
+function isRegistrationClosed(meet) {
+  if (!meet.registrationCloseAt) return false;
+  const ts = new Date(meet.registrationCloseAt).getTime();
+  if (!Number.isFinite(ts)) return false;
+  return Date.now() > ts;
+}
+
+function groupAgeMatch(group, age) {
+  const n = Number(age);
+  const ages = String(group.ages || '');
+
+  if (ages.includes('& under')) {
+    const limit = Number((ages.match(/\d+/) || [0])[0]);
+    return n <= limit;
   }
-  if (hasRole(user, USER_ROLES.JUDGE)) return '/judge';
-  if (hasRole(user, USER_ROLES.ANNOUNCER)) return '/announcer';
-  if (hasRole(user, USER_ROLES.COACH)) return '/coach';
-  if (hasRole(user, USER_ROLES.CHECKIN)) return '/checkin';
-  return '/portal';
-}
-
-function getAssignedMeetsForUser(db, user) {
-  if (hasRole(user, USER_ROLES.SUPER_ADMIN) || hasRole(user, USER_ROLES.MEET_DIRECTOR)) {
-    return (db.meets || []).filter(meet => canEditMeet(user, meet));
+  if (ages.includes('+')) {
+    const min = Number((ages.match(/\d+/) || [999])[0]);
+    return n >= min;
   }
-
-  return (db.meets || []).filter(meet => {
-    const a = meet.assignments || {};
-    return (
-      (hasRole(user, USER_ROLES.JUDGE) && (a.judges || []).includes(user.id)) ||
-      (hasRole(user, USER_ROLES.ANNOUNCER) && (a.announcers || []).includes(user.id)) ||
-      (hasRole(user, USER_ROLES.COACH) && (a.coaches || []).includes(user.id)) ||
-      (hasRole(user, USER_ROLES.CHECKIN) && (a.checkin || []).includes(user.id))
-    );
-  });
-}
-
-function getCompetitionDivisionGroup(meet, birthdate, gender) {
-  const ref = getAgeReferenceDate(meet);
-  const age = getAgeOnDate(birthdate, ref);
-  const compGender = ageToCompetitionGender(gender, age);
-
-  const group = (meet.groups || []).find(g => {
-    return Number(age) >= Number(g.minAge) &&
-      Number(age) <= Number(g.maxAge) &&
-      normalizeGender(g.gender) === compGender;
-  });
-
-  return {
-    age,
-    group: group || null,
-  };
-}
-
-function getOpenTtGroup(age, gender) {
-  const compGender = ageToCompetitionGender(gender, age);
-
-  let candidates = OPEN_TT_GROUPS.filter(group => {
-    return Number(age) >= Number(group.minAge) &&
-      Number(age) <= Number(group.maxAge);
-  });
-
-  if (Number(age) >= 35 && (compGender === 'women' || compGender === 'men')) {
-    candidates = candidates.filter(g => g.label.toLowerCase().includes('masters'));
-  } else if (Number(age) >= 14 && (compGender === 'women' || compGender === 'men')) {
-    candidates = candidates.filter(g => g.label.toLowerCase().includes('senior'));
-  } else {
-    candidates = candidates.filter(g => !g.label.toLowerCase().includes('masters') && !g.label.toLowerCase().includes('senior'));
+  const nums = ages.match(/\d+/g) || [];
+  if (nums.length >= 2) {
+    return n >= Number(nums[0]) && n <= Number(nums[1]);
   }
-
-  const exact = candidates.find(group => normalizeGender(group.gender) === compGender);
-  return exact || null;
+  return false;
 }
 
-function refreshRegistrationDerivedFields(meet, reg) {
-  const div = getCompetitionDivisionGroup(meet, reg.birthdate, reg.gender);
-  reg.calculatedAge = div.age ?? null;
-  reg.divisionGroupId = div.group?.id || '';
-  reg.divisionGroupLabel = div.group?.label || '';
+function findAgeGroup(groups, age, genderGuess) {
+  const n = Number(age);
+  if (!Number.isFinite(n)) return null;
 
-  const openGroup = getOpenTtGroup(reg.calculatedAge, reg.gender);
-  reg.ttOpenGroupId = openGroup?.id || '';
-  reg.ttOpenGroupLabel = openGroup?.label || '';
+  const normalizedGender = String(genderGuess || '').toLowerCase();
+  const candidates = groups.filter(g => groupAgeMatch(g, n));
 
-  return reg;
+  if (!candidates.length) return null;
+  return candidates.find(g => g.gender === normalizedGender) || candidates[0];
 }
 
-function rebuildAllRegistrationDerivedFields(meet) {
-  meet.registrations = (meet.registrations || []).map(reg => refreshRegistrationDerivedFields(meet, reg));
+function findChallengeUpGroup(groups, currentGroupId) {
+  const idx = groups.findIndex(g => String(g.id) === String(currentGroupId));
+  if (idx < 0) return null;
+  return groups[idx + 1] || null;
 }
 
-function getDivisionConfig(meet, groupId, divisionKey) {
-  const group = (meet.groups || []).find(g => g.id === groupId);
-  if (!group) return null;
-  return group.divisions?.[divisionKey] || null;
+function challengeAdjustedGroup(meet, baseGroup, challengeUp) {
+  if (!baseGroup) return null;
+  if (!challengeUp) return baseGroup;
+  return findChallengeUpGroup(meet.groups || [], baseGroup.id) || baseGroup;
 }
 
-function getSpecialGroupConfig(groups, groupId) {
-  return (groups || []).find(g => g.id === groupId) || null;
+function divisionEnabledForRegistration(reg, division) {
+  return !!reg.options?.[division];
 }
 
-function getMeetDistances(meet, groupId, divisionKey) {
-  const cfg = getDivisionConfig(meet, groupId, divisionKey);
-  if (!cfg?.enabled) return [];
-  return (cfg.distances || []).map(x => String(x || '').trim()).filter(Boolean);
+function nextHelmetNumber(meet) {
+  const used = new Set(
+    (meet.registrations || [])
+      .map(r => Number(r.helmetNumber))
+      .filter(n => Number.isFinite(n) && n > 0)
+  );
+
+  let n = 1;
+  while (used.has(n)) n += 1;
+  return n;
 }
 
-function getSpecialDistances(groups, groupId) {
-  const cfg = getSpecialGroupConfig(groups, groupId);
-  if (!cfg?.enabled) return [];
-  return (cfg.distances || []).map(x => String(x || '').trim()).filter(Boolean);
+function calculateRegistrationTotal(meet, reg) {
+  let total = 0;
+  for (const race of meet.races || []) {
+    if (
+      String(race.groupId) === String(reg.divisionGroupId) &&
+      divisionEnabledForRegistration(reg, race.division)
+    ) {
+      total += Number(race.cost || 0);
+    }
+  }
+  return total;
 }
 
-function raceTypeLabel(race) {
-  if (race.type === 'time_trial') return 'Time Trial';
-  if (race.type === 'open_pack') return 'Open';
-  if (race.type === 'quad') return 'Quad';
+function ensureRegistrationTotalsAndNumbers(meet) {
+  for (const reg of meet.registrations || []) {
+    reg.totalCost = calculateRegistrationTotal(meet, reg);
+    if (!Number.isFinite(Number(reg.helmetNumber)) || Number(reg.helmetNumber) <= 0) {
+      reg.helmetNumber = nextHelmetNumber(meet);
+    }
+  }
+}
+
+function sponsorLineHtml(sponsor) {
+  const s = String(sponsor || '').trim();
+  if (!s) return '';
+  return `<div class="note"><b>Sponsor:</b> ${esc(s)}</div>`;
+}
+
+function normalizeDistances(arr4) {
+  return [0, 1, 2, 3].map(i => String(arr4?.[i] ?? '').trim());
+}
+
+function baseRaceKey(groupId, division, dayIndex, distanceLabel) {
+  return `${groupId}|${division}|${dayIndex}|${distanceLabel}`;
+}
+
+function isOpenDivision(div) {
+  return String(div || '').toLowerCase() === 'open';
+}
+
+function raceDisplayStage(race) {
+  if (race.stage === 'heat') return `Heat ${race.heatNumber}`;
+  if (race.stage === 'semi') return `Semi ${race.heatNumber}`;
+  if (race.stage === 'final') return 'Final';
   return 'Race';
 }
 
-function raceDivisionPretty(key) {
-  if (key === 'novice') return 'Novice';
-  if (key === 'elite') return 'Elite';
-  if (key === 'open') return 'Open';
-  if (key === 'quad') return 'Quad';
-  return key || '';
+function normalizePlaceValue(place) {
+  const n = Number(String(place || '').trim());
+  return Number.isFinite(n) ? n : null;
 }
 
-function getRaceDisplayTitle(race) {
-  const parts = [];
-  if (race.groupLabel) parts.push(race.groupLabel);
-  if (race.divisionKey && race.type !== 'time_trial') parts.push(raceDivisionPretty(race.divisionKey));
-  if (race.type === 'time_trial') parts.push('Time Trial');
-  if (race.distanceLabel && race.type !== 'time_trial') parts.push(race.distanceLabel);
-  return parts.join(' — ');
-}
+function scoreRaceByStandardPoints(race) {
+  const results = [];
 
-function scorePlaceToPoints(place) {
-  return Number(INLINE_POINTS_TABLE[Number(place)] || 0);
-}
-
-function findPotentialDuplicate(meet, payload, excludeRegId = '') {
-  const targetName = String(payload.name || '').trim().toLowerCase();
-  const targetBirthdate = String(payload.birthdate || '').trim();
-  const targetTeam = String(payload.team || '').trim().toLowerCase();
-
-  return (meet.registrations || []).find(reg => {
-    if (excludeRegId && String(reg.id) === String(excludeRegId)) return false;
-
-    const sameName = String(reg.name || '').trim().toLowerCase() === targetName;
-    const sameBirthdate = String(reg.birthdate || '').trim() === targetBirthdate;
-    const sameTeam = String(reg.team || '').trim().toLowerCase() === targetTeam;
-
-    return (sameName && sameBirthdate) || (sameName && sameTeam && !!targetName);
-  }) || null;
-}
-
-function rebuildMeetNumbers(meet) {
-  const regs = [...(meet.registrations || [])].sort((a, b) => {
-    const aNum = Number(a.meetNumber || 0);
-    const bNum = Number(b.meetNumber || 0);
-    if (aNum && bNum) return aNum - bNum;
-    if (aNum) return -1;
-    if (bNum) return 1;
-    return String(a.name || '').localeCompare(String(b.name || ''));
-  });
-
-  let next = 1;
-  for (const reg of regs) {
-    if (Number(reg.meetNumber || 0) > 0) {
-      next = Math.max(next, Number(reg.meetNumber) + 1);
-      continue;
-    }
-    reg.meetNumber = next++;
-  }
-}
-
-function buildRegistrationFromBody(meet, body, opts = {}) {
-  const reg = {
-    id: opts.id || crypto.randomBytes(6).toString('hex'),
-    createdAt: opts.createdAt || nowIso(),
-    walkIn: !!opts.walkIn,
-    name: String(body.name || '').trim(),
-    birthdate: String(body.birthdate || '').trim(),
-    gender: normalizeGender(body.gender),
-    team: String(body.team || 'Independent').trim() || 'Independent',
-    calculatedAge: null,
-    divisionGroupId: '',
-    divisionGroupLabel: '',
-    ttOpenGroupId: '',
-    ttOpenGroupLabel: '',
-    meetNumber: Number(opts.meetNumber || 0),
-    options: {
-      novice: !!body.opt_novice || !!body.novice,
-      elite: !!body.opt_elite || !!body.elite,
-      open: !!body.opt_open || !!body.open,
-      quad: !!body.opt_quad || !!body.quad,
-      timeTrials: !!body.opt_timeTrials || !!body.timeTrials,
-      relays: !!body.opt_relays || !!body.relays,
-    },
-    checkIn: {
-      checkedIn: !!opts.checkedIn,
-      checkedInAt: opts.checkedInAt || '',
-    },
-  };
-
-  return refreshRegistrationDerivedFields(meet, reg);
-}function buildRaceEntriesForRace(meet, race) {
-  const regs = (meet.registrations || []).filter(reg => {
-    if (race.type === 'time_trial') {
-      return !!reg.options?.timeTrials && reg.ttOpenGroupId === race.groupId;
-    }
-
-    if (race.type === 'open_pack') {
-      return !!reg.options?.open &&
-        Number(reg.calculatedAge || -1) >= Number(race.minAge || 0) &&
-        Number(reg.calculatedAge || -1) <= Number(race.maxAge || 999) &&
-        ageToCompetitionGender(reg.gender, reg.calculatedAge) === normalizeGender(race.gender || reg.gender);
-    }
-
-    if (race.type === 'quad') {
-      return !!reg.options?.quad &&
-        Number(reg.calculatedAge || -1) >= Number(race.minAge || 0) &&
-        Number(reg.calculatedAge || -1) <= Number(race.maxAge || 999) &&
-        ageToCompetitionGender(reg.gender, reg.calculatedAge) === normalizeGender(race.gender || reg.gender);
-    }
-
-    return !!reg.options?.[race.divisionKey] && reg.divisionGroupId === race.groupId;
-  });
-
-  if (race.type === 'time_trial') {
-    const ordered = [...regs].sort(compareBirthdateYoungestFirst);
-    race.laneEntries = ordered.map((reg, idx) => ({
-      lane: idx + 1,
-      registrationId: reg.id,
-      meetNumber: reg.meetNumber,
-      skaterName: reg.name,
-      birthdate: reg.birthdate,
-      team: reg.team,
-      resultTime: '',
-      place: '',
-      points: 0,
-      status: '',
-    }));
-    race.packEntries = [];
-    race.resultsMode = 'time';
-    return;
-  }
-
-  if (race.type === 'open_pack' || race.type === 'quad') {
-    const ordered = [...regs].sort((a, b) => a.name.localeCompare(b.name));
-    race.packEntries = ordered.map((reg, idx) => ({
-      order: idx + 1,
-      registrationId: reg.id,
-      meetNumber: reg.meetNumber,
-      skaterName: reg.name,
-      birthdate: reg.birthdate,
-      team: reg.team,
-      place: '',
-      points: 0,
-      status: '',
-    }));
-    race.laneEntries = [];
-    race.resultsMode = 'places';
-    return;
-  }
-
-  const laneCap = Number(meet.lanes || 4);
-  const ordered = [...regs].sort((a, b) => a.name.localeCompare(b.name));
-  race.laneEntries = ordered.slice(0, laneCap).map((reg, idx) => ({
-    lane: idx + 1,
-    registrationId: reg.id,
-    meetNumber: reg.meetNumber,
-    skaterName: reg.name,
-    birthdate: reg.birthdate,
-    team: reg.team,
-    resultTime: '',
-    place: '',
-    points: 0,
-    status: '',
-  }));
-  race.packEntries = [];
-  race.resultsMode = 'places';
-}
-
-function regenerateRaces(meet) {
-  const oldByKey = new Map(
-    (meet.races || []).map(r => [
-      `${r.type}|${r.groupId}|${r.divisionKey}|${r.distanceLabel}|${r.label}`,
-      r
-    ])
-  );
-
-  const newRaces = [];
-  let orderCounter = 1;
-
-  for (const group of meet.groups || []) {
-    for (const divisionKey of STANDARD_KEYS) {
-      const cfg = group.divisions?.[divisionKey];
-      if (!cfg?.enabled) continue;
-
-      const distances = getMeetDistances(meet, group.id, divisionKey);
-      distances.forEach(distanceLabel => {
-        const key = `standard|${group.id}|${divisionKey}|${distanceLabel}|`;
-        const existing = oldByKey.get(key);
-
-        const race = existing ? { ...existing } : {
-          id: `race_${crypto.randomBytes(5).toString('hex')}`,
-          type: 'standard',
-          scoringBucket: 'inline',
-          label: '',
-          groupId: group.id,
-          groupLabel: group.label,
-          divisionKey,
-          distanceLabel,
-          dayIndex: 1,
-          blockId: '',
-          laneEntries: [],
-          packEntries: [],
-          resultsMode: 'places',
-          status: 'open',
-          notes: '',
-          isFinal: true,
-          closedAt: '',
-          minAge: group.minAge,
-          maxAge: group.maxAge,
-          gender: group.gender,
-        };
-
-        race.scoringBucket = 'inline';
-        race.groupId = group.id;
-        race.groupLabel = group.label;
-        race.divisionKey = divisionKey;
-        race.distanceLabel = distanceLabel;
-        race.orderHint = orderCounter++;
-        buildRaceEntriesForRace(meet, race);
-        newRaces.push(race);
-      });
-    }
-  }
-
-  if (meet.openEnabled) {
-    for (const group of meet.openGroups || []) {
-      if (!group.enabled) continue;
-
-      const distances = getSpecialDistances(meet.openGroups, group.id);
-      distances.forEach(distanceLabel => {
-        const key = `open_pack|${group.id}|open|${distanceLabel}|`;
-        const existing = oldByKey.get(key);
-
-        const race = existing ? { ...existing } : {
-          id: `race_${crypto.randomBytes(5).toString('hex')}`,
-          type: 'open_pack',
-          scoringBucket: 'open',
-          label: '',
-          groupId: group.id,
-          groupLabel: group.label,
-          divisionKey: 'open',
-          distanceLabel,
-          dayIndex: 1,
-          blockId: '',
-          laneEntries: [],
-          packEntries: [],
-          resultsMode: 'places',
-          status: 'open',
-          notes: '',
-          isFinal: true,
-          closedAt: '',
-          minAge: group.minAge,
-          maxAge: group.maxAge,
-          gender: group.gender,
-        };
-
-        race.scoringBucket = 'open';
-        race.groupId = group.id;
-        race.groupLabel = group.label;
-        race.divisionKey = 'open';
-        race.distanceLabel = distanceLabel;
-        race.minAge = group.minAge;
-        race.maxAge = group.maxAge;
-        race.gender = group.gender;
-        race.orderHint = orderCounter++;
-        buildRaceEntriesForRace(meet, race);
-        newRaces.push(race);
-      });
-    }
-  }
-
-  if (meet.quadEnabled) {
-    for (const group of meet.quadGroups || []) {
-      if (!group.enabled) continue;
-
-      const distances = getSpecialDistances(meet.quadGroups, group.id);
-      distances.forEach(distanceLabel => {
-        const key = `quad|${group.id}|quad|${distanceLabel}|`;
-        const existing = oldByKey.get(key);
-
-        const race = existing ? { ...existing } : {
-          id: `race_${crypto.randomBytes(5).toString('hex')}`,
-          type: 'quad',
-          scoringBucket: 'quad',
-          label: '',
-          groupId: group.id,
-          groupLabel: group.label,
-          divisionKey: 'quad',
-          distanceLabel,
-          dayIndex: 1,
-          blockId: '',
-          laneEntries: [],
-          packEntries: [],
-          resultsMode: 'places',
-          status: 'open',
-          notes: '',
-          isFinal: true,
-          closedAt: '',
-          minAge: group.minAge,
-          maxAge: group.maxAge,
-          gender: group.gender,
-        };
-
-        race.scoringBucket = 'quad';
-        race.groupId = group.id;
-        race.groupLabel = group.label;
-        race.divisionKey = 'quad';
-        race.distanceLabel = distanceLabel;
-        race.minAge = group.minAge;
-        race.maxAge = group.maxAge;
-        race.gender = group.gender;
-        race.orderHint = orderCounter++;
-        buildRaceEntriesForRace(meet, race);
-        newRaces.push(race);
-      });
-    }
-  }
-
-  if (meet.timeTrialsEnabled) {
-    const ttGroups = [...OPEN_TT_GROUPS].sort((a, b) => {
-      if (a.minAge !== b.minAge) return a.minAge - b.minAge;
-      return a.label.localeCompare(b.label);
-    });
-
-    ttGroups.forEach(group => {
-      const key = `time_trial|${group.id}|time_trial||Time Trial`;
-      const existing = oldByKey.get(key);
-
-      const race = existing ? { ...existing } : {
-        id: `race_${crypto.randomBytes(5).toString('hex')}`,
-        type: 'time_trial',
-        scoringBucket: 'time_trial',
-        label: 'Time Trial',
-        groupId: group.id,
-        groupLabel: group.label,
-        divisionKey: 'time_trial',
-        distanceLabel: '',
-        dayIndex: 1,
-        blockId: '',
-        laneEntries: [],
-        packEntries: [],
-        resultsMode: 'time',
-        status: 'open',
-        notes: '',
-        isFinal: true,
-        closedAt: '',
-        minAge: group.minAge,
-        maxAge: group.maxAge,
-        gender: group.gender,
-      };
-
-      race.scoringBucket = 'time_trial';
-      race.groupId = group.id;
-      race.groupLabel = group.label;
-      race.divisionKey = 'time_trial';
-      race.label = 'Time Trial';
-      race.distanceLabel = '';
-      race.minAge = group.minAge;
-      race.maxAge = group.maxAge;
-      race.gender = group.gender;
-      race.orderHint = orderCounter++;
-      buildRaceEntriesForRace(meet, race);
-      newRaces.push(race);
+  for (const entry of race.laneEntries || []) {
+    const place = normalizePlaceValue(entry.place);
+    if (place == null || place > 4) continue;
+    results.push({
+      registrationId: entry.registrationId,
+      skaterName: entry.skaterName,
+      team: entry.team,
+      place,
     });
   }
 
-  const validRaceIds = new Set(newRaces.map(r => r.id));
-  meet.blocks = (meet.blocks || []).map(block => ({
-    ...block,
-    raceIds: (block.raceIds || []).filter(id => validRaceIds.has(id)),
-  }));
+  const grouped = new Map();
+  for (const item of results) {
+    if (!grouped.has(item.place)) grouped.set(item.place, []);
+    grouped.get(item.place).push(item);
+  }
 
-  for (const race of newRaces) {
-    if (race.blockId) {
-      const block = (meet.blocks || []).find(b => b.id === race.blockId);
-      if (!block || !(block.raceIds || []).includes(race.id)) race.blockId = '';
+  const scored = [];
+  const occupiedPlaces = Array.from(grouped.keys()).sort((a, b) => a - b);
+
+  for (const place of occupiedPlaces) {
+    const tied = grouped.get(place) || [];
+    if (!tied.length) continue;
+
+    let pointPool = 0;
+    for (let i = 0; i < tied.length; i++) {
+      const effectivePlace = place + i;
+      pointPool += Number(STANDARD_POINTS[effectivePlace] || 0);
+    }
+
+    const each = tied.length ? (pointPool / tied.length) : 0;
+
+    for (const skater of tied) {
+      scored.push({
+        ...skater,
+        points: each,
+      });
     }
   }
 
-  meet.races = newRaces;
+  return scored;
 }
 
-function ensureDefaultBlock(meet) {
-  if (!Array.isArray(meet.blocks) || meet.blocks.length === 0) {
-    meet.blocks = [{
-      id: `block_${crypto.randomBytes(4).toString('hex')}`,
-      name: 'Block 1',
-      day: 'Day 1',
-      notes: '',
-      raceIds: [],
-    }];
-  }
-}
-
-function rebuildRaceAssignments(meet) {
-  const validRaceIds = new Set((meet.races || []).map(r => r.id));
-  for (const block of meet.blocks || []) {
-    block.raceIds = (block.raceIds || []).filter(id => validRaceIds.has(id));
-  }
+function computeMeetStandings(meet) {
+  const standings = {};
+  const divisions = {};
+  const regMap = new Map((meet.registrations || []).map(r => [Number(r.id), r]));
 
   for (const race of meet.races || []) {
-    if (!race.blockId) continue;
-    const block = (meet.blocks || []).find(b => b.id === race.blockId);
-    if (!block) {
-      race.blockId = '';
-      continue;
-    }
-    if (!(block.raceIds || []).includes(race.id)) block.raceIds.push(race.id);
-  }
-}
+    if (!race.isFinal) continue;
+    if (!race.countsForOverall) continue;
+    if (String(race.status || '') !== 'closed') continue;
 
-function getUnassignedRaces(meet) {
-  return (meet.races || []).filter(r => !r.blockId);
-}
-
-function assignRaceToBlock(meet, raceId, blockId) {
-  const race = (meet.races || []).find(r => r.id === raceId);
-  const block = (meet.blocks || []).find(b => b.id === blockId);
-  if (!race || !block) return false;
-
-  if (race.blockId) {
-    const oldBlock = (meet.blocks || []).find(b => b.id === race.blockId);
-    if (oldBlock) {
-      oldBlock.raceIds = (oldBlock.raceIds || []).filter(id => id !== race.id);
-    }
-  }
-
-  race.blockId = block.id;
-  if (!(block.raceIds || []).includes(race.id)) block.raceIds.push(race.id);
-  return true;
-}
-
-function unassignRaceFromBlock(meet, raceId) {
-  const race = (meet.races || []).find(r => r.id === raceId);
-  if (!race) return false;
-
-  if (race.blockId) {
-    const block = (meet.blocks || []).find(b => b.id === race.blockId);
-    if (block) block.raceIds = (block.raceIds || []).filter(id => id !== race.id);
-  }
-
-  race.blockId = '';
-  return true;
-}
-
-function deleteBlockAndReturnRaces(meet, blockId) {
-  const block = (meet.blocks || []).find(b => b.id === blockId);
-  if (!block) return false;
-
-  for (const raceId of block.raceIds || []) {
-    const race = (meet.races || []).find(r => r.id === raceId);
-    if (race) race.blockId = '';
-  }
-
-  meet.blocks = (meet.blocks || []).filter(b => b.id !== blockId);
-  ensureDefaultBlock(meet);
-  return true;
-}
-
-function getOrderedRaceDayRaces(meet) {
-  const ordered = [];
-
-  for (const block of meet.blocks || []) {
-    const races = (block.raceIds || [])
-      .map(id => (meet.races || []).find(r => r.id === id))
-      .filter(Boolean)
-      .sort((a, b) => (a.orderHint || 0) - (b.orderHint || 0));
-    ordered.push(...races);
-  }
-
-  const assignedIds = new Set(ordered.map(r => r.id));
-  const leftovers = (meet.races || [])
-    .filter(r => !assignedIds.has(r.id))
-    .sort((a, b) => (a.orderHint || 0) - (b.orderHint || 0));
-
-  ordered.push(...leftovers);
-  return ordered;
-}
-
-function sortTimeRows(rows) {
-  return [...rows].sort((a, b) => {
-    const aNum = Number(a.resultTime || 999999);
-    const bNum = Number(b.resultTime || 999999);
-    return aNum - bNum;
-  });
-}function applyRacePoints(race) {
-  if (race.type === 'time_trial') {
-    const ranked = sortTimeRows(
-      (race.laneEntries || []).filter(entry => String(entry.resultTime || '').trim())
-    );
-
-    ranked.forEach((entry, idx) => {
-      entry.place = idx + 1;
-      entry.points = 0;
-    });
-    return;
-  }
-
-  if (race.type === 'open_pack') {
-    (race.packEntries || []).forEach(entry => {
-      entry.points = 0;
-    });
-    return;
-  }
-
-  if (race.type === 'quad') {
-    (race.packEntries || []).forEach(entry => {
-      const place = Number(entry.place || 0);
-      entry.points = place > 0 ? scorePlaceToPoints(place) : 0;
-    });
-    return;
-  }
-
-  (race.laneEntries || []).forEach(entry => {
-    const place = Number(entry.place || 0);
-    entry.points = place > 0 ? scorePlaceToPoints(place) : 0;
-  });
-}
-
-function buildInlineStandings(meet) {
-  const closed = (meet.races || []).filter(r =>
-    r.type === 'standard' &&
-    r.isFinal !== false &&
-    String(r.status || '') === 'closed'
-  );
-
-  const grouped = {};
-
-  for (const race of closed) {
-    const bucketKey = `${race.groupId}|${race.divisionKey}`;
-    if (!grouped[bucketKey]) {
-      grouped[bucketKey] = {
-        key: bucketKey,
+    const bucketKey = `${race.groupId}|${race.division}`;
+    if (!divisions[bucketKey]) {
+      divisions[bucketKey] = {
         groupId: race.groupId,
         groupLabel: race.groupLabel,
-        divisionKey: race.divisionKey,
-        rows: {},
+        division: race.division,
+        races: [],
       };
     }
+    divisions[bucketKey].races.push(race);
 
-    for (const entry of race.laneEntries || []) {
-      if (!entry.registrationId) continue;
-      const reg = (meet.registrations || []).find(r => r.id === entry.registrationId);
-      if (!reg) continue;
+    const scored = scoreRaceByStandardPoints(race);
+    if (!standings[bucketKey]) standings[bucketKey] = {};
 
-      if (!grouped[bucketKey].rows[entry.registrationId]) {
-        grouped[bucketKey].rows[entry.registrationId] = {
-          registrationId: entry.registrationId,
-          meetNumber: reg.meetNumber,
-          skaterName: reg.name,
-          team: reg.team,
+    for (const row of scored) {
+      const regKey = String(row.registrationId || row.skaterName || crypto.randomBytes(3).toString('hex'));
+      const reg = regMap.get(Number(row.registrationId));
+
+      if (!standings[bucketKey][regKey]) {
+        standings[bucketKey][regKey] = {
+          registrationId: row.registrationId,
+          skaterName: row.skaterName,
+          team: row.team,
+          sponsor: reg?.sponsor || '',
           totalPoints: 0,
-          racePlaces: [],
+          raceScores: [],
         };
       }
 
-      grouped[bucketKey].rows[entry.registrationId].totalPoints += Number(entry.points || 0);
-      grouped[bucketKey].rows[entry.registrationId].racePlaces.push(Number(entry.place || 999));
+      standings[bucketKey][regKey].totalPoints += Number(row.points || 0);
+      standings[bucketKey][regKey].raceScores.push({
+        raceId: race.id,
+        distanceLabel: race.distanceLabel,
+        place: row.place,
+        points: row.points,
+      });
     }
   }
 
-  return Object.values(grouped).map(section => {
-    const rows = Object.values(section.rows)
+  const output = Object.keys(divisions).map(key => {
+    const rows = Object.values(standings[key] || {})
       .sort((a, b) => {
         if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
-
-        const aBest = Math.min(...a.racePlaces, 999);
-        const bBest = Math.min(...b.racePlaces, 999);
-        if (aBest !== bBest) return aBest - bBest;
-
-        const aWins = a.racePlaces.filter(p => p === 1).length;
-        const bWins = b.racePlaces.filter(p => p === 1).length;
-        if (bWins !== aWins) return bWins - aWins;
-
         return String(a.skaterName || '').localeCompare(String(b.skaterName || ''));
       })
       .map((row, idx) => ({
@@ -1422,1265 +774,4105 @@ function buildInlineStandings(meet) {
       }));
 
     return {
-      groupId: section.groupId,
-      groupLabel: section.groupLabel,
-      divisionKey: section.divisionKey,
-      rows,
+      key,
+      groupId: divisions[key].groupId,
+      groupLabel: divisions[key].groupLabel,
+      division: divisions[key].division,
+      races: divisions[key].races.sort((a, b) => Number(a.dayIndex || 0) - Number(b.dayIndex || 0)),
+      standings: rows,
     };
   }).sort((a, b) => {
-    const g = String(a.groupLabel || '').localeCompare(String(b.groupLabel || ''));
-    if (g !== 0) return g;
-    return String(a.divisionKey || '').localeCompare(String(b.divisionKey || ''));
+    const byGroup = String(a.groupLabel).localeCompare(String(b.groupLabel));
+    if (byGroup !== 0) return byGroup;
+    return String(a.division).localeCompare(String(b.division));
   });
+
+  return output;
 }
 
-function buildQuadStandings(meet) {
-  const closed = (meet.races || []).filter(r =>
-    r.type === 'quad' &&
-    r.isFinal !== false &&
-    String(r.status || '') === 'closed'
-  );
-
-  const grouped = {};
-
-  for (const race of closed) {
-    const bucketKey = race.groupId;
-    if (!grouped[bucketKey]) {
-      grouped[bucketKey] = {
-        key: bucketKey,
-        groupId: race.groupId,
-        groupLabel: race.groupLabel,
-        rows: {},
-      };
-    }
-
-    for (const entry of race.packEntries || []) {
-      if (!entry.registrationId) continue;
-      const reg = (meet.registrations || []).find(r => r.id === entry.registrationId);
-      if (!reg) continue;
-
-      if (!grouped[bucketKey].rows[entry.registrationId]) {
-        grouped[bucketKey].rows[entry.registrationId] = {
-          registrationId: entry.registrationId,
-          meetNumber: reg.meetNumber,
-          skaterName: reg.name,
-          team: reg.team,
-          totalPoints: 0,
-          racePlaces: [],
-        };
-      }
-
-      grouped[bucketKey].rows[entry.registrationId].totalPoints += Number(entry.points || 0);
-      grouped[bucketKey].rows[entry.registrationId].racePlaces.push(Number(entry.place || 999));
-    }
-  }
-
-  return Object.values(grouped).map(section => {
-    const rows = Object.values(section.rows)
-      .sort((a, b) => {
-        if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
-
-        const aBest = Math.min(...a.racePlaces, 999);
-        const bBest = Math.min(...b.racePlaces, 999);
-        if (aBest !== bBest) return aBest - bBest;
-
-        const aWins = a.racePlaces.filter(p => p === 1).length;
-        const bWins = b.racePlaces.filter(p => p === 1).length;
-        if (bWins !== aWins) return bWins - aWins;
-
-        return String(a.skaterName || '').localeCompare(String(b.skaterName || ''));
-      })
-      .map((row, idx) => ({
-        ...row,
-        overallPlace: idx + 1,
-      }));
-
-    return {
-      groupId: section.groupId,
-      groupLabel: section.groupLabel,
-      rows,
-    };
-  }).sort((a, b) => String(a.groupLabel || '').localeCompare(String(b.groupLabel || '')));
-}
-
-function buildOpenResults(meet) {
+function computeOpenResults(meet) {
   return (meet.races || [])
-    .filter(r => r.type === 'open_pack' && String(r.status || '') === 'closed')
-    .sort((a, b) => (a.orderHint || 0) - (b.orderHint || 0))
+    .filter(r => isOpenDivision(r.division) && r.isFinal && String(r.status || '') === 'closed')
+    .sort((a, b) => {
+      const byGroup = String(a.groupLabel || '').localeCompare(String(b.groupLabel || ''));
+      if (byGroup !== 0) return byGroup;
+      return Number(a.dayIndex || 0) - Number(b.dayIndex || 0);
+    })
     .map(race => ({
-      raceId: race.id,
-      title: getRaceDisplayTitle(race),
-      rows: [...(race.packEntries || [])]
-        .filter(entry => Number(entry.place || 0) > 0)
+      race,
+      rows: (race.laneEntries || [])
+        .filter(x => String(x.place || '').trim())
         .sort((a, b) => Number(a.place || 999) - Number(b.place || 999)),
     }));
 }
 
-function rebuildTimeTrialOpenResults(meet) {
-  const ttRaces = (meet.races || []).filter(r => r.type === 'time_trial');
-  const rows = [];
+function recentClosedRaces(meet, count = 5) {
+  return (meet.races || [])
+    .filter(r => String(r.status || '') === 'closed')
+    .sort((a, b) => new Date(b.closedAt || 0).getTime() - new Date(a.closedAt || 0).getTime())
+    .slice(0, count);
+}
 
-  for (const race of ttRaces) {
-    for (const entry of race.laneEntries || []) {
-      if (!entry.registrationId) continue;
-      if (!String(entry.resultTime || '').trim()) continue;
+function orderedRaces(meet) {
+  const raceById = new Map((meet.races || []).map(r => [r.id, r]));
+  const out = [];
 
-      const reg = (meet.registrations || []).find(r => r.id === entry.registrationId);
-      if (!reg) continue;
-      if (!reg.ttOpenGroupId) continue;
+  for (const block of meet.blocks || []) {
+    for (const raceId of block.raceIds || []) {
+      const race = raceById.get(raceId);
+      if (race) {
+        out.push({
+          ...race,
+          blockId: block.id,
+          blockName: block.name,
+          blockDay: block.day,
+          blockType: block.type || 'race',
+          blockNotes: block.notes || '',
+        });
+      }
+    }
+  }
 
-      rows.push({
-        registrationId: reg.id,
-        meetNumber: reg.meetNumber,
-        skaterName: reg.name,
-        team: reg.team,
-        birthdate: reg.birthdate,
-        age: reg.calculatedAge,
-        openGroupId: reg.ttOpenGroupId,
-        openGroupLabel: reg.ttOpenGroupLabel,
-        resultTime: String(entry.resultTime || '').trim(),
-        sourceRaceId: race.id,
-        sourceRaceLabel: getRaceDisplayTitle(race),
+  const assigned = new Set(out.map(r => r.id));
+  for (const race of meet.races || []) {
+    if (!assigned.has(race.id)) {
+      out.push({
+        ...race,
+        blockId: '',
+        blockName: 'Unassigned',
+        blockDay: '',
+        blockType: 'race',
+        blockNotes: '',
       });
     }
   }
 
-  const grouped = {};
-  for (const row of rows) {
-    if (!grouped[row.openGroupId]) {
-      grouped[row.openGroupId] = {
-        id: row.openGroupId,
-        label: row.openGroupLabel,
-        rows: [],
-      };
-    }
-    grouped[row.openGroupId].rows.push(row);
-  }
-
-  const orderedGroups = Object.values(grouped)
-    .map(group => ({
-      ...group,
-      rows: sortTimeRows(group.rows).map((row, idx) => ({
-        ...row,
-        place: idx + 1,
-      })),
-    }))
-    .sort((a, b) => String(a.label || '').localeCompare(String(b.label || '')));
-
-  meet.results.timeTrialsByOpenGroup = orderedGroups;
+  return out;
 }
 
-function rebuildAllResults(meet) {
-  for (const race of meet.races || []) applyRacePoints(race);
-  meet.results.inlineStandings = buildInlineStandings(meet);
-  meet.results.quadStandings = buildQuadStandings(meet);
-  meet.results.openResults = buildOpenResults(meet);
-  rebuildTimeTrialOpenResults(meet);
-}
-
-function getCurrentRaceBundle(meet) {
-  const ordered = getOrderedRaceDayRaces(meet);
+function currentRaceInfo(meet) {
+  const ordered = orderedRaces(meet);
   let idx = ordered.findIndex(r => r.id === meet.currentRaceId);
+  if (idx < 0) idx = Number.isFinite(meet.currentRaceIndex) ? meet.currentRaceIndex : -1;
+  if (idx < 0 && ordered.length) idx = 0;
 
-  if (idx < 0) {
-    idx = Number.isFinite(meet.currentRaceIndex) ? meet.currentRaceIndex : -1;
-  }
-
-  if (idx < 0 && ordered.length > 0) idx = 0;
-
-  const current = idx >= 0 ? ordered[idx] : null;
-  const next = idx >= 0 ? ordered[idx + 1] || null : null;
-  const upcoming = idx >= 0 ? ordered.slice(idx + 2, idx + 7) : ordered.slice(0, 5);
-
-  return { ordered, idx, current, next, upcoming };
+  return {
+    ordered,
+    idx,
+    current: idx >= 0 ? ordered[idx] : null,
+    next: idx >= 0 && ordered[idx + 1] ? ordered[idx + 1] : null,
+    coming: idx >= 0 ? ordered.slice(idx + 2, idx + 5) : ordered.slice(0, 3),
+  };
 }
 
 function ensureCurrentRace(meet) {
-  const bundle = getCurrentRaceBundle(meet);
-  if (bundle.current) {
-    meet.currentRaceId = bundle.current.id;
-    meet.currentRaceIndex = bundle.idx;
-  } else {
+  const info = currentRaceInfo(meet);
+  if (info.current && meet.currentRaceId !== info.current.id) {
+    meet.currentRaceId = info.current.id;
+    meet.currentRaceIndex = info.idx;
+  }
+}
+
+function laneRowsForRace(race, meet) {
+  const out = [];
+  const maxLanes = String(race.division || '') === 'open'
+    ? Math.max((race.laneEntries || []).length, 1)
+    : Math.max(1, Number(meet.lanes) || 4);
+
+  for (let lane = 1; lane <= maxLanes; lane++) {
+    const existing = (race.laneEntries || []).find(x => Number(x.lane) === lane) || {};
+    out.push({
+      lane,
+      registrationId: existing.registrationId || '',
+      helmetNumber: existing.helmetNumber || '',
+      skaterName: existing.skaterName || '',
+      team: existing.team || '',
+      place: existing.place || '',
+      time: existing.time || '',
+      status: existing.status || '',
+    });
+  }
+
+  return out;
+}
+
+function registrationSortKey(reg) {
+  return [
+    String(reg.team || ''),
+    String(reg.name || ''),
+    Number(reg.age || 0),
+    Number(reg.id || 0),
+  ].join('|');
+}
+
+function distributeByTeam(entries, heatCount) {
+  const buckets = Array.from({ length: heatCount }, () => []);
+  const teamMap = new Map();
+
+  for (const entry of entries) {
+    const team = String(entry.team || 'Independent');
+    if (!teamMap.has(team)) teamMap.set(team, []);
+    teamMap.get(team).push(entry);
+  }
+
+  const teamGroups = Array.from(teamMap.values()).sort((a, b) => b.length - a.length);
+
+  for (const group of teamGroups) {
+    for (const skater of group) {
+      let bestIdx = 0;
+      let bestScore = Infinity;
+
+      for (let i = 0; i < buckets.length; i++) {
+        const bucket = buckets[i];
+        const sameTeamCount = bucket.filter(x => String(x.team || 'Independent') === String(skater.team || 'Independent')).length;
+        const sizeScore = bucket.length;
+        const score = sameTeamCount * 100 + sizeScore;
+
+        if (score < bestScore) {
+          bestScore = score;
+          bestIdx = i;
+        }
+      }
+
+      buckets[bestIdx].push(skater);
+    }
+  }
+
+  return buckets;
+}
+
+function buildHeatRaceShell(baseRace, stage, heatNumber, suffixOrder) {
+  return {
+    ...baseRace,
+    id: 'r' + crypto.randomBytes(6).toString('hex'),
+    orderHint: Number(baseRace.orderHint || 0) + suffixOrder / 100,
+    stage,
+    heatNumber: stage === 'final' ? 0 : heatNumber,
+    isFinal: stage === 'final',
+    laneEntries: [],
+    status: 'open',
+    closedAt: '',
+  };
+}
+
+function shouldSplitIntoHeats(baseRace, entryCount, laneCount) {
+  if (isOpenDivision(baseRace.division)) return false;
+  return entryCount > laneCount;
+}
+
+function buildRaceSetForEntries(baseRace, regs, laneCount) {
+  const sorted = [...regs].sort((a, b) => registrationSortKey(a).localeCompare(registrationSortKey(b)));
+
+  if (isOpenDivision(baseRace.division)) {
+    return [{
+      ...baseRace,
+      stage: 'final',
+      heatNumber: 0,
+      isFinal: true,
+      startType: 'rolling',
+      countsForOverall: false,
+      laneEntries: sorted.map((reg, idx) => ({
+        lane: idx + 1,
+        registrationId: reg.id,
+        helmetNumber: reg.helmetNumber,
+        skaterName: reg.name,
+        team: reg.team,
+        place: '',
+        time: '',
+        status: '',
+      })),
+    }];
+  }
+
+  if (!shouldSplitIntoHeats(baseRace, sorted.length, laneCount)) {
+    return [{
+      ...baseRace,
+      stage: 'final',
+      heatNumber: 0,
+      isFinal: true,
+      startType: 'standing',
+      countsForOverall: true,
+      laneEntries: sorted.slice(0, laneCount).map((reg, idx) => ({
+        lane: idx + 1,
+        registrationId: reg.id,
+        helmetNumber: reg.helmetNumber,
+        skaterName: reg.name,
+        team: reg.team,
+        place: '',
+        time: '',
+        status: '',
+      })),
+    }];
+  }
+
+  const heatCount = Math.ceil(sorted.length / laneCount);
+  const buckets = distributeByTeam(sorted, heatCount).map(bucket => bucket.slice(0, laneCount));
+
+  const raceSet = [];
+
+  buckets.forEach((bucket, idx) => {
+    const heatRace = buildHeatRaceShell(baseRace, 'heat', idx + 1, idx + 1);
+    heatRace.startType = 'standing';
+    heatRace.countsForOverall = false;
+    heatRace.laneEntries = bucket.map((reg, laneIdx) => ({
+      lane: laneIdx + 1,
+      registrationId: reg.id,
+      helmetNumber: reg.helmetNumber,
+      skaterName: reg.name,
+      team: reg.team,
+      place: '',
+      time: '',
+      status: '',
+    }));
+    raceSet.push(heatRace);
+  });
+
+  const finalRace = buildHeatRaceShell(baseRace, 'final', 0, 99);
+  finalRace.startType = 'standing';
+  finalRace.countsForOverall = true;
+  finalRace.laneEntries = [];
+  raceSet.push(finalRace);
+
+  return raceSet;
+}
+
+function generateBaseRacesForMeet(meet) {
+  const oldMap = new Map(
+    (meet.races || [])
+      .filter(r => r.stage !== 'heat' && r.stage !== 'final' && r.stage !== 'semi')
+      .map(r => [baseRaceKey(r.groupId, r.division, r.dayIndex, r.distanceLabel), r])
+  );
+
+  const races = [];
+  let orderHint = 1;
+
+  for (const group of meet.groups || []) {
+    for (const divKey of ['novice', 'elite', 'open']) {
+      const div = group.divisions?.[divKey];
+      if (!div || !div.enabled) continue;
+
+      const distances = normalizeDistances(div.distances);
+      for (let i = 0; i < 4; i++) {
+        const distance = distances[i];
+        if (!distance) continue;
+
+        const key = baseRaceKey(group.id, divKey, i + 1, distance);
+        const old = oldMap.get(key);
+        const isOpen = isOpenDivision(divKey);
+
+        races.push({
+          id: old?.id || ('r' + crypto.randomBytes(6).toString('hex')),
+          orderHint: orderHint++,
+
+          groupId: group.id,
+          groupLabel: group.label,
+          ages: group.ages,
+          division: divKey,
+          distanceLabel: distance,
+          dayIndex: i + 1,
+          cost: Number(div.cost || 0),
+
+          stage: isOpen ? 'final' : (old?.stage || 'race'),
+          heatNumber: isOpen ? 0 : Number(old?.heatNumber || 0),
+          parentRaceKey: old?.parentRaceKey || key,
+          startType: isOpen ? 'rolling' : (old?.startType || 'standing'),
+          countsForOverall: isOpen ? false : (typeof old?.countsForOverall === 'boolean' ? old.countsForOverall : true),
+
+          laneEntries: Array.isArray(old?.laneEntries) ? old.laneEntries : [],
+          resultsMode: old?.resultsMode || 'places',
+          status: old?.status || 'open',
+          notes: String(old?.notes || ''),
+          isFinal: isOpen ? true : !!old?.isFinal,
+          closedAt: old?.closedAt || '',
+        });
+      }
+    }
+  }
+
+  const validIds = new Set(races.map(r => r.id));
+
+  meet.blocks = (meet.blocks || []).map(block => ({
+    ...block,
+    raceIds: (block.raceIds || []).filter(rid => validIds.has(rid)),
+  }));
+
+  meet.races = races;
+  if (!validIds.has(meet.currentRaceId)) {
     meet.currentRaceId = '';
     meet.currentRaceIndex = -1;
   }
+  meet.updatedAt = nowIso();
 }
 
-function getVisibleRaceDayTabs(user, meet) {
-  const tabs = [];
+function rebuildRaceAssignments(meet) {
+  ensureRegistrationTotalsAndNumbers(meet);
 
-  if (hasRole(user, USER_ROLES.SUPER_ADMIN) || hasRole(user, USER_ROLES.MEET_DIRECTOR)) {
-    tabs.push({ key: 'director', label: 'Director', href: `/portal/meet/${meet.id}/race-day/director` });
-    tabs.push({ key: 'judges', label: 'Judges', href: `/portal/meet/${meet.id}/race-day/judges` });
-    tabs.push({ key: 'announcer', label: 'Announcer', href: `/portal/meet/${meet.id}/race-day/announcer` });
-    tabs.push({ key: 'coach', label: 'Coach', href: `/portal/meet/${meet.id}/race-day/coach` });
-    tabs.push({ key: 'live', label: 'Live', href: `/portal/meet/${meet.id}/race-day/live` });
-    return tabs;
+  const laneCount = Math.max(1, Number(meet.lanes) || 4);
+  const originalBlocks = (meet.blocks || []).map(block => ({
+    ...block,
+    raceIds: [...(block.raceIds || [])],
+  }));
+
+  const baseRaces = (meet.races || []).filter(r => !['heat', 'semi'].includes(String(r.stage || '')));
+
+  const newRaces = [];
+
+  for (const baseRace of baseRaces) {
+    const matchingRegs = (meet.registrations || []).filter(reg =>
+      String(reg.divisionGroupId || '') === String(baseRace.groupId || '') &&
+      divisionEnabledForRegistration(reg, baseRace.division)
+    );
+
+    const raceSet = buildRaceSetForEntries(baseRace, matchingRegs, laneCount);
+    newRaces.push(...raceSet);
   }
 
-  if (hasRole(user, USER_ROLES.JUDGE)) {
-    tabs.push({ key: 'judges', label: 'Judges', href: `/portal/meet/${meet.id}/race-day/judges` });
-    tabs.push({ key: 'live', label: 'Live', href: `/portal/meet/${meet.id}/race-day/live` });
-  }
+  const mappedBlocks = originalBlocks.map(block => {
+    const nextRaceIds = [];
 
-  if (hasRole(user, USER_ROLES.ANNOUNCER)) {
-    tabs.push({ key: 'announcer', label: 'Announcer', href: `/portal/meet/${meet.id}/race-day/announcer` });
-    tabs.push({ key: 'live', label: 'Live', href: `/portal/meet/${meet.id}/race-day/live` });
-  }
+    for (const oldRid of block.raceIds || []) {
+      const oldRace = (meet.races || []).find(r => r.id === oldRid);
+      if (!oldRace) continue;
 
-  if (hasRole(user, USER_ROLES.COACH)) {
-    tabs.push({ key: 'coach', label: 'Coach', href: `/portal/meet/${meet.id}/race-day/coach` });
-    tabs.push({ key: 'live', label: 'Live', href: `/portal/meet/${meet.id}/race-day/live` });
-  }
+      const parentKey = oldRace.parentRaceKey || baseRaceKey(oldRace.groupId, oldRace.division, oldRace.dayIndex, oldRace.distanceLabel);
+      const replacements = newRaces.filter(r => (r.parentRaceKey || '') === parentKey);
 
-  if (hasRole(user, USER_ROLES.CHECKIN)) {
-    tabs.push({ key: 'live', label: 'Live', href: `/portal/meet/${meet.id}/race-day/live` });
-  }
+      for (const rep of replacements) {
+        if (!nextRaceIds.includes(rep.id)) nextRaceIds.push(rep.id);
+      }
+    }
 
-  return tabs;
+    return { ...block, raceIds: nextRaceIds };
+  });
+
+  meet.races = newRaces;
+  meet.blocks = mappedBlocks;
+  meet.updatedAt = nowIso();
+  ensureCurrentRace(meet);
 }
 
-function raceDayTabs(user, meet, currentTab) {
-  const items = getVisibleRaceDayTabs(user, meet);
+function racingSoonLabel(delta) {
+  if (delta <= 0) return 'NOW';
+  if (delta === 1) return 'ON DECK';
+  if (delta === 2) return '2 RACES AWAY';
+  if (delta === 3) return '3 RACES AWAY';
+  return `${delta} RACES AWAY`;
+}
+
+function coachVisibleMeets(db, user) {
+  if (hasRole(user, 'super_admin')) return db.meets;
+  if (hasRole(user, 'meet_director')) {
+    return db.meets.filter(m => Number(m.createdByUserId) === Number(user.id));
+  }
+  if (hasRole(user, 'coach')) {
+    return db.meets.filter(m =>
+      (m.registrations || []).some(r => String(r.team || '').trim().toLowerCase() === String(user.team || '').trim().toLowerCase())
+    );
+  }
+  return [];
+}
+
+function coachTeamRegistrations(meet, coachTeam) {
+  const teamKey = String(coachTeam || '').trim().toLowerCase();
+  return (meet.registrations || []).filter(r => String(r.team || '').trim().toLowerCase() === teamKey);
+}
+
+function coachUpcomingForMeet(meet, coachTeam) {
+  const regs = coachTeamRegistrations(meet, coachTeam);
+  const regIds = new Set(regs.map(r => Number(r.id)));
+  const info = currentRaceInfo(meet);
+
+  return info.ordered
+    .map((race, idx) => {
+      const matched = (race.laneEntries || []).filter(le => regIds.has(Number(le.registrationId)));
+      if (!matched.length) return null;
+
+      return {
+        race,
+        raceIndex: idx,
+        delta: idx - info.idx,
+        skaters: matched.map(m => ({
+          registrationId: m.registrationId,
+          skaterName: m.skaterName,
+          helmetNumber: m.helmetNumber,
+          team: m.team,
+        })),
+      };
+    })
+    .filter(Boolean)
+    .filter(x => x.delta >= 0)
+    .slice(0, 12);
+}
+
+function coachRecentResultsForMeet(meet, coachTeam) {
+  const regs = coachTeamRegistrations(meet, coachTeam);
+  const regIds = new Set(regs.map(r => Number(r.id)));
+
+  return recentClosedRaces(meet, 12)
+    .map(race => {
+      const matched = (race.laneEntries || []).filter(le => regIds.has(Number(le.registrationId)));
+      if (!matched.length) return null;
+      return { race, skaters: matched };
+    })
+    .filter(Boolean);
+}
+
+function coachStandingsForMeet(meet, coachTeam) {
+  const standings = computeMeetStandings(meet);
+  const teamKey = String(coachTeam || '').trim().toLowerCase();
+
+  return standings
+    .map(section => ({
+      ...section,
+      standings: (section.standings || []).filter(
+        row => String(row.team || '').trim().toLowerCase() === teamKey
+      ),
+    }))
+    .filter(section => (section.standings || []).length > 0);
+}
+
+function announcerBoxHtml(current, lanes) {
+  if (!current) return `<div class="muted">No race selected.</div>`;
+
+  const laneLines = lanes
+    .filter(l => l.skaterName)
+    .map(l => `
+      <div style="padding:10px 0;border-top:1px solid rgba(255,255,255,.14)">
+        <div style="font-size:20px;font-weight:900;line-height:1.15">
+          LANE ${esc(l.lane)} — ${l.helmetNumber ? '#' + esc(l.helmetNumber) + ' ' : ''}${esc(l.skaterName)}
+        </div>
+        <div style="font-size:16px;opacity:.95">${esc(l.team || '')}</div>
+        ${l.sponsor ? `<div style="font-size:14px;opacity:.85">Sponsored by ${esc(l.sponsor)}</div>` : ''}
+      </div>
+    `).join('');
+
   return `
-    <div class="actions" style="margin-bottom:18px;">
-      ${items.map(item => `
-        <a class="btn ${currentTab === item.key ? 'btn-primary' : 'btn-ghost'}" href="${item.href}">
-          ${esc(item.label)}
-        </a>
+    <div class="codeBox" style="font-size:18px;line-height:1.45;padding:18px">
+      <div style="font-size:13px;letter-spacing:.08em;text-transform:uppercase;opacity:.8;font-weight:900">Now Racing</div>
+      <div style="font-size:34px;line-height:1.02;font-weight:900;margin-top:6px">${esc(current.groupLabel)}</div>
+      <div style="font-size:21px;margin-top:8px">${esc(cap(current.division))} • ${esc(current.distanceLabel)} • ${esc(raceDisplayStage(current))}</div>
+      <div style="font-size:15px;opacity:.9;margin-top:6px">${esc(cap(current.startType))} Start</div>
+      <div style="margin-top:16px;border-top:1px solid rgba(255,255,255,.18)"></div>
+      <div style="font-size:13px;letter-spacing:.08em;text-transform:uppercase;opacity:.8;font-weight:900;margin-top:12px">Lanes</div>
+      ${laneLines || `<div style="padding-top:10px;font-size:16px">No skaters entered yet.</div>`}
+    </div>
+  `;
+}
+
+function navHtml(user) {
+  return `
+    <div class="topbar">
+      <div class="brandWrap">
+        <div class="brandMark">SSM</div>
+        <div class="brandText">SpeedSkateMeet</div>
+      </div>
+      <div class="nav">
+        <a class="pill" href="/">Home</a>
+        <a class="pill" href="/meets">Find a Meet</a>
+        <a class="pill" href="/rinks">Find a Rink</a>
+        <a class="pill" href="/live">Live Race Day</a>
+        ${user
+          ? `<a class="pill solid" href="/portal">Portal</a><a class="pill" href="/admin/logout">Logout</a>`
+          : `<a class="pill solid" href="/admin/login">Admin Login</a>`
+        }
+      </div>
+    </div>
+  `;
+}
+
+function meetTabs(meet, active) {
+  if (!meet) return '';
+  const tabs = [
+    ['builder', 'Meet Builder', `/portal/meet/${meet.id}/builder`],
+    ['blocks', 'Block Builder', `/portal/meet/${meet.id}/blocks`],
+    ['registered', 'Registered', `/portal/meet/${meet.id}/registered`],
+    ['checkin', 'Check-In', `/portal/meet/${meet.id}/checkin`],
+    ['race-day', 'Race Day', `/portal/meet/${meet.id}/race-day/director`],
+    ['results', 'Results', `/portal/meet/${meet.id}/results`],
+  ];
+
+  return `
+    <div class="meetTabs">
+      ${tabs.map(([key, label, href]) => `
+        <a class="meetTab ${active === key ? 'active' : ''}" href="${href}">${label}</a>
       `).join('')}
     </div>
   `;
-}function loginPage(error = '') {
-  return layout('Login', `
-    <div class="grid grid-2" style="align-items:center;">
-      <div class="hero" style="min-height:520px;">
-        <div>
-          <h1>Run your meet like you mean it.</h1>
-          <p>
-            Registration, blocks, check-in, race day control, judges, live results, and clean printouts —
-            all in one place.
-          </p>
+}
+
+function pageShell({ title, bodyHtml, user, meet, activeTab }) {
+  return `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${esc(title)}</title>
+    <style>
+      :root {
+        --bg:#eef4ff;
+        --bg2:#f7f9fc;
+        --card:#ffffff;
+        --text:#0f172a;
+        --muted:#64748b;
+        --line:#dbe3ee;
+        --blue:#2563EB;
+        --orange:#F97316;
+        --green:#12b76a;
+        --yellow:#f5b301;
+        --red:#d92d20;
+        --dark:#0F172A;
+        --shadow:0 14px 34px rgba(15,23,42,.10);
+        --radius:18px;
+      }
+      * { box-sizing:border-box; }
+      body {
+        margin:0;
+        font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial;
+        color:var(--text);
+        background:linear-gradient(180deg,var(--bg),var(--bg2));
+      }
+      a { text-decoration:none; color:var(--blue); }
+      .topbar {
+        max-width:1280px;
+        margin:18px auto 0;
+        padding:0 18px;
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:18px;
+      }
+      .brandWrap { display:flex; align-items:center; gap:12px; }
+      .brandMark {
+        width:44px; height:44px; border-radius:14px;
+        background:linear-gradient(135deg,var(--dark),var(--blue));
+        display:flex; align-items:center; justify-content:center;
+        color:#fff; font-weight:900; letter-spacing:.6px;
+        box-shadow:var(--shadow);
+      }
+      .brandText { font-weight:900; font-size:22px; letter-spacing:-.5px; }
+      .nav { display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end; }
+      .pill {
+        border:1px solid #c7d2fe;
+        padding:10px 14px;
+        border-radius:999px;
+        background:rgba(255,255,255,.8);
+        font-weight:800;
+        color:#1d4ed8;
+      }
+      .pill.solid {
+        background:var(--dark);
+        color:#fff;
+        border-color:var(--dark);
+      }
+      .wrap {
+        max-width:1280px;
+        margin:22px auto 64px;
+        padding:0 18px;
+      }
+      .meetTabs {
+        display:flex;
+        gap:10px;
+        flex-wrap:wrap;
+        margin:12px 0 18px;
+      }
+      .meetTab {
+        padding:11px 14px;
+        border-radius:14px;
+        background:rgba(255,255,255,.8);
+        border:1px solid var(--line);
+        font-weight:900;
+        color:#1e293b;
+      }
+      .meetTab.active {
+        background:var(--blue);
+        border-color:var(--blue);
+        color:#fff;
+      }
+      h1 { margin:14px 0 10px; font-size:42px; letter-spacing:-1px; }
+      h2 { margin:0 0 8px; font-size:28px; letter-spacing:-.5px; }
+      h3 { margin:0 0 8px; font-size:20px; }
+      .card {
+        background:var(--card);
+        border:1px solid rgba(148,163,184,.24);
+        border-radius:var(--radius);
+        box-shadow:var(--shadow);
+        padding:18px;
+      }
+      .spacer { height:14px; }
+      .muted { color:var(--muted); }
+      .danger { color:var(--red); font-weight:900; }
+      .good { color:var(--green); font-weight:900; }
+      .note { font-size:13px; color:var(--muted); }
+      .small { font-size:12px; }
+
+      .row { display:flex; gap:14px; flex-wrap:wrap; align-items:flex-start; }
+      .between { justify-content:space-between; }
+      .center { align-items:center; }
+
+      .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+      .grid3 { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+      .grid4 { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; }
+      @media(max-width:1000px) { .grid4,.grid3 { grid-template-columns:1fr 1fr; } }
+      @media(max-width:860px) {
+        .grid2,.grid3,.grid4 { grid-template-columns:1fr; }
+        .topbar { display:block; }
+        .nav { margin-top:12px; }
+      }
+
+      label {
+        display:block;
+        font-size:13px;
+        font-weight:900;
+        margin-bottom:6px;
+        color:#0f172a;
+      }
+      input, select, textarea {
+        width:100%;
+        padding:12px 12px;
+        border-radius:12px;
+        border:1px solid var(--line);
+        font-size:15px;
+        outline:none;
+        background:#fff;
+      }
+      input:focus, select:focus, textarea:focus {
+        border-color:#93c5fd;
+        box-shadow:0 0 0 4px rgba(147,197,253,.28);
+      }
+      textarea { min-height:100px; resize:vertical; }
+      input[type=checkbox], input[type=radio] {
+        width:auto;
+        transform:scale(1.05);
+      }
+
+      .btn, .btn2, .btnDanger, .btnGood {
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        border:0;
+        border-radius:12px;
+        padding:12px 16px;
+        font-weight:900;
+        cursor:pointer;
+      }
+      .btn { background:var(--blue); color:#fff; }
+      .btn2 { background:#fff; color:#1e40af; border:2px solid #c7d2fe; }
+      .btnDanger { background:#fff; color:#b42318; border:2px solid #fecaca; }
+      .btnGood { background:#fff; color:#067647; border:2px solid #a6f4c5; }
+
+      .hr { height:1px; background:rgba(148,163,184,.25); margin:14px 0; }
+
+      .chip {
+        display:inline-flex;
+        align-items:center;
+        gap:6px;
+        padding:8px 11px;
+        border-radius:999px;
+        background:#f8fbff;
+        border:1px solid var(--line);
+        font-weight:900;
+      }
+
+      .table { width:100%; border-collapse:collapse; }
+      .table th, .table td {
+        padding:11px 10px;
+        border-bottom:1px solid var(--line);
+        text-align:left;
+        vertical-align:top;
+      }
+      .table th {
+        font-size:12px;
+        text-transform:uppercase;
+        color:#475569;
+        letter-spacing:.05em;
+      }
+
+      .groupCard {
+        padding:16px;
+        border-radius:16px;
+        border:1px solid rgba(148,163,184,.25);
+        background:#fff;
+      }
+
+      .bb { display:grid; grid-template-columns:1.25fr .85fr; gap:16px; }
+      @media(max-width:1040px) { .bb { grid-template-columns:1fr; } }
+
+      .block {
+        border:1px solid rgba(148,163,184,.25);
+        background:#fff;
+        border-radius:16px;
+        padding:14px;
+      }
+      .blockHead {
+        display:flex;
+        justify-content:space-between;
+        align-items:center;
+        gap:10px;
+        flex-wrap:wrap;
+      }
+
+      .dropZone {
+        min-height:42px;
+        padding:8px;
+        border-radius:14px;
+        border:2px dashed rgba(148,163,184,.35);
+        background:#f8fbff;
+      }
+      .dropZone.over {
+        border-color:#7cb3ff;
+        background:#eaf3ff;
+      }
+
+      .raceItem {
+        border:1px solid rgba(148,163,184,.25);
+        background:#fff;
+        border-radius:14px;
+        padding:10px;
+        margin:8px 0;
+        cursor:grab;
+      }
+      .raceItem.activeCurrent {
+        border-color:var(--orange);
+        box-shadow:0 0 0 3px rgba(249,115,22,.15);
+      }
+      .raceMeta {
+        font-size:12px;
+        color:var(--muted);
+        margin-top:3px;
+      }
+
+      .rightCol { position:sticky; top:12px; align-self:start; }
+
+      .subTabs {
+        display:flex;
+        gap:10px;
+        flex-wrap:wrap;
+        margin-bottom:14px;
+      }
+      .subTab {
+        padding:11px 14px;
+        border-radius:12px;
+        background:#fff;
+        border:1px solid var(--line);
+        font-weight:900;
+        color:#0f172a;
+      }
+      .subTab.active {
+        background:var(--blue);
+        color:#fff;
+        border-color:var(--blue);
+      }
+
+      .statusCard {
+        border-radius:18px;
+        padding:16px;
+        color:#fff;
+        box-shadow:var(--shadow);
+      }
+      .statusCard.green { background:linear-gradient(135deg,#0ea765,#18c77a); }
+      .statusCard.yellow { background:linear-gradient(135deg,#d29600,#f7ba10); }
+      .statusCard.blue { background:linear-gradient(135deg,#0f4cd3,#3a82ff); }
+      .statusCard.orange { background:linear-gradient(135deg,#ea580c,#fb923c); }
+      .statusCard.gray { background:linear-gradient(135deg,#475467,#667085); }
+
+      .statusLabel {
+        font-size:12px;
+        opacity:.9;
+        text-transform:uppercase;
+        letter-spacing:.08em;
+        font-weight:900;
+      }
+      .statusTitle {
+        font-size:24px;
+        font-weight:900;
+        margin-top:5px;
+        line-height:1.1;
+      }
+
+      .filters {
+        display:grid;
+        grid-template-columns:1.2fr .8fr .8fr;
+        gap:10px;
+      }
+      @media(max-width:860px) { .filters { grid-template-columns:1fr; } }
+
+      .hidden { display:none !important; }
+      .actionRow { display:flex; gap:8px; flex-wrap:wrap; }
+      .stackForm { display:flex; flex-direction:column; gap:14px; }
+      .codeBox {
+        background:#0b1220;
+        color:#dbeafe;
+        padding:12px;
+        border-radius:12px;
+        font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial;
+        overflow:auto;
+        white-space:normal;
+      }
+      .resultsPodium {
+        display:grid;
+        grid-template-columns:repeat(3,1fr);
+        gap:12px;
+      }
+      @media(max-width:860px) { .resultsPodium { grid-template-columns:1fr; } }
+      .podiumCard {
+        border:1px solid var(--line);
+        border-radius:16px;
+        padding:14px;
+        background:#fff;
+      }
+    </style>
+  </head>
+  <body>
+    ${navHtml(user)}
+    <div class="wrap">
+      ${meetTabs(meet, activeTab)}
+      ${bodyHtml}
+      <div class="spacer"></div>
+      <div class="note small">Data file: ${esc(DATA_FILE)}</div>
+    </div>
+  </body>
+</html>`;
+}
+
+function publicMeetCards(db) {
+  const publicMeets = (db.meets || []).filter(m => m.isPublic);
+
+  return publicMeets.map(m => {
+    const rink = (db.rinks || []).find(r => Number(r.id) === Number(m.rinkId));
+    return `
+      <div class="card">
+        <div class="row between">
+          <div>
+            <h2>${esc(m.meetName || 'Meet')}</h2>
+            <div class="muted">
+              ${esc(m.date || 'Date TBD')}
+              ${m.startTime ? ` • ${esc(m.startTime)}` : ''}
+            </div>
+            <div class="note">
+              ${rink ? `${esc(rink.name)} • ${esc(rink.city)}, ${esc(rink.state)}` : ''}
+            </div>
+          </div>
+          <div class="row">
+            <span class="chip">Races: ${esc((m.races || []).length)}</span>
+            <span class="chip">Blocks: ${esc((m.blocks || []).length)}</span>
+          </div>
+        </div>
+        <div class="spacer"></div>
+        <div class="row">
+          <a class="btn2" href="/meet/${m.id}/register">Register</a>
+          <a class="btn2" href="/meet/${m.id}/live">View Live</a>
+          <a class="btn2" href="/meet/${m.id}/results">Results</a>
         </div>
       </div>
-      <div class="card card-pad">
-        <h2 style="margin-top:0;">Portal Login</h2>
-        <p class="muted">Sign in to access your meet tools.</p>
-        ${error ? `<div class="pill bad" style="margin-bottom:16px;">${esc(error)}</div>` : ''}
-        <form class="stack" method="post" action="/admin/login">
+    `;
+  }).join('<div class="spacer"></div>');
+}
+
+function resultsSectionHtml(section) {
+  const podium = section.standings.slice(0, 3).map(row => `
+    <div class="podiumCard">
+      <div class="muted small">#${row.overallPlace}</div>
+      <h3>${esc(row.skaterName || 'Unknown')}</h3>
+      <div>${esc(row.team || '')}</div>
+      ${sponsorLineHtml(row.sponsor)}
+      <div class="good">${Number(row.totalPoints || 0)} pts</div>
+    </div>
+  `).join('');
+
+  const raceRows = section.races.map(race => `
+    <tr>
+      <td>${esc(race.distanceLabel)}</td>
+      <td>${esc(cap(race.division))}</td>
+      <td>${esc(raceDisplayStage(race))}</td>
+      <td>${esc(cap(race.startType))}</td>
+      <td>${esc(race.status)}</td>
+    </tr>
+  `).join('');
+
+  const standingsRows = section.standings.map(row => `
+    <tr>
+      <td>${row.overallPlace}</td>
+      <td>
+        ${esc(row.skaterName || '')}
+        ${sponsorLineHtml(row.sponsor)}
+      </td>
+      <td>${esc(row.team || '')}</td>
+      <td>${Number(row.totalPoints || 0)}</td>
+    </tr>
+  `).join('');
+
+  return `
+    <div class="card">
+      <div class="row between">
+        <div>
+          <h2 style="margin:0">${esc(section.groupLabel)} — ${esc(cap(section.division))}</h2>
+          <div class="muted small">Finals-only scoring • 30 / 20 / 10 / 5</div>
+        </div>
+        <div class="chip">Champion: ${section.standings[0] ? esc(section.standings[0].skaterName) : '—'}</div>
+      </div>
+
+      <div class="spacer"></div>
+
+      <div class="resultsPodium">
+        ${podium || `<div class="muted">No scored finals yet.</div>`}
+      </div>
+
+      <div class="hr"></div>
+
+      <div class="grid2">
+        <div>
+          <h3>Final Distances</h3>
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Distance</th>
+                <th>Class</th>
+                <th>Stage</th>
+                <th>Start</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${raceRows || `<tr><td colspan="5" class="muted">No final races yet.</td></tr>`}
+            </tbody>
+          </table>
+        </div>
+
+        <div>
+          <h3>Standings</h3>
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Place</th>
+                <th>Skater</th>
+                <th>Team</th>
+                <th>Points</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${standingsRows || `<tr><td colspan="4" class="muted">No standings yet.</td></tr>`}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  `;
+}app.get('/', (req, res) => {
+  const data = getSessionUser(req);
+
+  const body = `
+    <h1>SpeedSkateMeet</h1>
+    <div class="grid2">
+      <div class="card">
+        <h2>Built for real rink race days</h2>
+        <div class="muted">Meet Builder → Block Builder → Registered → Check-In → Race Day → Results.</div>
+        <div class="spacer"></div>
+        <div class="row">
+          <a class="btn" href="/meets">Find a Meet</a>
+          <a class="btn2" href="/rinks">Find a Rink</a>
+          <a class="btn2" href="/live">Live Race Day</a>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Modern inline meet management</h2>
+        <div class="note">
+          Live results, heats, finals, block scheduling, coach tools, sponsor support, QR-ready public pages, and automatic standings.
+        </div>
+        <div class="spacer"></div>
+        ${data ? `<a class="btn" href="/portal">Go to Portal</a>` : `<a class="btn" href="/admin/login">Admin Login</a>`}
+      </div>
+    </div>
+  `;
+
+  res.send(pageShell({
+    title: 'Home',
+    user: data?.user || null,
+    bodyHtml: body,
+  }));
+});
+
+app.get('/meets', (req, res) => {
+  const db = loadDb();
+  const data = getSessionUser(req);
+
+  res.send(pageShell({
+    title: 'Find a Meet',
+    user: data?.user || null,
+    bodyHtml: `
+      <h1>Find a Meet</h1>
+      ${publicMeetCards(db) || `<div class="card"><div class="muted">No meets yet.</div></div>`}
+    `,
+  }));
+});
+
+app.get('/rinks', (req, res) => {
+  const db = loadDb();
+  const data = getSessionUser(req);
+
+  const cards = db.rinks.map(r => `
+    <div class="card">
+      <div class="row between">
+        <div>
+          <h2>${esc(r.name)}</h2>
+          <div><b>Address:</b> ${esc(r.address || '')}</div>
+          <div><b>Phone:</b> ${esc(r.phone || '')}</div>
+          <div><b>City/State:</b> ${esc(r.city || '')}, ${esc(r.state || '')}</div>
+          ${r.website ? `<div><b>Website:</b> <a href="https://${esc(r.website)}" target="_blank" rel="noreferrer">${esc(r.website)}</a></div>` : ''}
+        </div>
+        ${
+          data?.user && (hasRole(data.user, 'super_admin') || hasRole(data.user, 'meet_director'))
+            ? `<a class="btn2" href="/portal/rinks">Edit Rinks</a>`
+            : ''
+        }
+      </div>
+    </div>
+  `).join('<div class="spacer"></div>');
+
+  res.send(pageShell({
+    title: 'Rinks',
+    user: data?.user || null,
+    bodyHtml: `<h1>Rinks</h1>${cards}`,
+  }));
+});
+
+app.get('/live', (req, res) => {
+  const db = loadDb();
+  const data = getSessionUser(req);
+
+  const publicMeets = (db.meets || []).filter(m => m.isPublic);
+  const cards = publicMeets.map(m => {
+    const rink = db.rinks.find(r => Number(r.id) === Number(m.rinkId));
+    return `
+      <div class="card">
+        <h2>${esc(m.meetName)}</h2>
+        <div class="muted">${rink ? `${esc(rink.city)}, ${esc(rink.state)}` : ''}</div>
+        <div class="spacer"></div>
+        <div class="row">
+          <a class="btn" href="/meet/${m.id}/live">Open Live Board</a>
+          <a class="btn2" href="/meet/${m.id}/results">Results</a>
+        </div>
+      </div>
+    `;
+  }).join('<div class="spacer"></div>');
+
+  res.send(pageShell({
+    title: 'Live Race Day',
+    user: data?.user || null,
+    bodyHtml: `<h1>Live Race Day</h1>${cards || `<div class="card"><div class="muted">No live meets yet.</div></div>`}`,
+  }));
+});
+
+app.get('/admin/login', (req, res) => {
+  const body = `
+    <h1>Admin Login</h1>
+    <div class="card">
+      <form method="POST" action="/admin/login">
+        <div class="grid2">
           <div>
             <label>Username</label>
             <input name="username" autocomplete="username" required />
           </div>
           <div>
             <label>Password</label>
-            <input type="password" name="password" autocomplete="current-password" required />
-          </div>
-          <button class="btn-primary" type="submit">Login</button>
-        </form>
-      </div>
-    </div>
-  `, { hideNav: false });
-}
-
-function homePage(user) {
-  return layout('Home', `
-    <div class="hero">
-      <div>
-        <div class="pill" style="margin-bottom:16px;">Meet management for real race day chaos</div>
-        <h1>Build. Register. Race.</h1>
-        <p>
-          SpeedSkateMeet helps you build meets, manage registration, check in skaters,
-          control race day, and publish live results without the clipboard circus.
-        </p>
-        <div class="hero-actions">
-          <a class="btn btn-primary" href="${user ? roleHomePath(user) : '/admin/login'}">${user ? 'Open Portal' : 'Portal Login'}</a>
-          <a class="btn btn-ghost" href="/find-a-meet">Find a Meet</a>
-        </div>
-      </div>
-    </div>
-
-    <div class="grid grid-3">
-      <div class="card card-pad">
-        <h3 style="margin-top:0;">Build a Meet</h3>
-        <p class="muted">Create divisions, blocks, race-day flow, and meet settings in one place.</p>
-        <div class="actions">
-          <a class="btn btn-primary" href="${user ? roleHomePath(user) : '/admin/login'}">Open Portal</a>
-        </div>
-      </div>
-
-      <div class="card card-pad">
-        <h3 style="margin-top:0;">Find a Meet</h3>
-        <p class="muted">Share your meet publicly and make it easy for skaters to register fast.</p>
-        <div class="actions">
-          <a class="btn btn-primary" href="/find-a-meet">Browse Meets</a>
-        </div>
-      </div>
-
-      <div class="card card-pad">
-        <h3 style="margin-top:0;">Live Results</h3>
-        <p class="muted">Keep judges, announcers, coaches, and parents synced with what’s happening now.</p>
-        <div class="actions">
-          <a class="btn btn-primary" href="/find-a-meet">View Public Results</a>
-        </div>
-      </div>
-    </div>
-  `, { user });
-}
-
-function portalPage(user, db) {
-  const myMeets = getAssignedMeetsForUser(db, user)
-    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
-
-  return layout('Portal', `
-    <div class="section-title">
-      <div>
-        <h2>Portal</h2>
-        <div class="muted">Choose a meet to manage.</div>
-      </div>
-      <div class="actions">
-        <a class="btn btn-primary" href="/portal/new-meet">+ New Meet</a>
-        <a class="btn btn-ghost" href="/portal/users">Users</a>
-        <a class="btn btn-ghost" href="/portal/rinks">Rinks</a>
-      </div>
-    </div>
-
-    <div class="grid grid-4">
-      <div class="stat"><div class="k">Your Meets</div><div class="v">${myMeets.length}</div></div>
-      <div class="stat"><div class="k">Published</div><div class="v">${myMeets.filter(m => m.showOnFindAMeet).length}</div></div>
-      <div class="stat"><div class="k">Drafts</div><div class="v">${myMeets.filter(m => m.status === 'Draft').length}</div></div>
-      <div class="stat"><div class="k">Total Registrations</div><div class="v">${myMeets.reduce((sum, m) => sum + (m.registrations?.length || 0), 0)}</div></div>
-    </div>
-
-    <div class="section-title">
-      <h2>Your Meets</h2>
-      <div class="muted">Open a meet first, then choose where you want to work.</div>
-    </div>
-
-    <div class="grid">
-      ${myMeets.length === 0 ? `
-        <div class="card card-pad">
-          <h3 style="margin-top:0;">No meets yet</h3>
-          <p class="muted">Create your first meet to get rolling.</p>
-          <a class="btn btn-primary" href="/portal/new-meet">Create Meet</a>
-        </div>
-      ` : myMeets.map(meet => `
-        <div class="card card-pad">
-          <div class="grid grid-4" style="align-items:center;">
-            <div>
-              <div class="pill ${meet.status === 'Published' ? 'ok' : 'warn'}">${esc(meet.status || 'Draft')}</div>
-              <h3 style="margin:12px 0 6px;">${esc(meet.meetName || 'Untitled Meet')}</h3>
-              <div class="mini">${meet.date ? esc(formatDateHuman(meet.date)) : 'No date set'} · ${esc(meet.startTime || 'No start time')}</div>
-            </div>
-            <div class="subtle">
-              <div class="mini">Registrations</div>
-              <div style="font-size:1.5rem;font-weight:900;">${meet.registrations?.length || 0}</div>
-            </div>
-            <div class="subtle">
-              <div class="mini">Races</div>
-              <div style="font-size:1.5rem;font-weight:900;">${meet.races?.length || 0}</div>
-            </div>
-            <div class="actions" style="justify-content:flex-end;">
-              <a class="btn btn-primary" href="/portal/meet/${meet.id}">Open Meet</a>
-              <a class="btn btn-ghost" href="/results/${meet.id}" target="_blank">Results</a>
-              <a class="btn btn-ghost" href="/live/${meet.id}" target="_blank">Public Live</a>
-              <form class="inline" method="post" action="/portal/meet/${meet.id}/delete" onsubmit="return confirm('Delete this meet? This cannot be undone.');">
-                <button class="btn btn-danger" type="submit">Delete Meet</button>
-              </form>
-            </div>
+            <input name="password" type="password" autocomplete="current-password" required />
           </div>
         </div>
-      `).join('')}
-    </div>
-  `, { user });
-}
-
-function rolePortalPage(user, db, roleName, roleKey, openPath) {
-  const meets = getAssignedMeetsForUser(db, user)
-    .filter(meet => {
-      if (hasRole(user, USER_ROLES.SUPER_ADMIN) || hasRole(user, USER_ROLES.MEET_DIRECTOR)) return true;
-      return (meet.assignments?.[roleKey] || []).includes(user.id);
-    })
-    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
-
-  return layout(`${roleName} Portal`, `
-    <div class="section-title">
-      <div>
-        <h2>${esc(roleName)} Portal</h2>
-        <div class="muted">Choose the meet you need.</div>
-      </div>
-    </div>
-
-    <div class="grid">
-      ${meets.length === 0 ? `
-        <div class="card card-pad">
-          <h3 style="margin-top:0;">No assigned meets</h3>
-          <p class="muted">You do not have any meets assigned yet.</p>
-        </div>
-      ` : meets.map(meet => `
-        <div class="card card-pad">
-          <div class="grid grid-4" style="align-items:center;">
-            <div>
-              <div class="pill ${meet.status === 'Published' ? 'ok' : 'warn'}">${esc(meet.status || 'Draft')}</div>
-              <h3 style="margin:12px 0 6px;">${esc(meet.meetName || 'Untitled Meet')}</h3>
-              <div class="mini">${meet.date ? esc(formatDateHuman(meet.date)) : 'No date set'} · ${esc(meet.startTime || 'No start time')}</div>
-            </div>
-            <div class="subtle">
-              <div class="mini">Registrations</div>
-              <div style="font-size:1.5rem;font-weight:900;">${meet.registrations?.length || 0}</div>
-            </div>
-            <div class="subtle">
-              <div class="mini">Current Race</div>
-              <div style="font-size:1rem;font-weight:800;">${esc(getCurrentRaceBundle(meet).current ? getRaceDisplayTitle(getCurrentRaceBundle(meet).current) : 'Not set')}</div>
-            </div>
-            <div class="actions" style="justify-content:flex-end;">
-              <a class="btn btn-primary" href="${openPath(meet)}">Open</a>
-            </div>
-          </div>
-        </div>
-      `).join('')}
-    </div>
-  `, { user });
-}
-
-function meetDashboardPage(user, meet) {
-  const regCount = meet.registrations?.length || 0;
-  const raceCount = meet.races?.length || 0;
-  const blockCount = meet.blocks?.length || 0;
-  const checkedInCount = (meet.registrations || []).filter(r => r.checkIn?.checkedIn).length;
-
-  return layout(`Open Meet — ${meet.meetName}`, `
-    <div class="section-title">
-      <div>
-        <div class="pill ${meet.status === 'Published' ? 'ok' : 'warn'}">${esc(meet.status || 'Draft')}</div>
-        <h2 style="margin-top:12px;">${esc(meet.meetName || 'Untitled Meet')}</h2>
-        <div class="muted">
-          ${meet.date ? esc(formatDateHuman(meet.date)) : 'No date set'} ·
-          ${esc(meet.startTime || 'No start time')} ·
-          Age Rule: ${esc(meet.ageRule || AGE_RULES.USARS)}
-        </div>
-      </div>
-      <div class="actions">
-        <a class="btn btn-ghost" href="/portal">← Back to Portal</a>
-        <a class="btn btn-ghost" href="/live/${meet.id}" target="_blank">Public Live</a>
-        <a class="btn btn-ghost" href="/results/${meet.id}" target="_blank">Results</a>
-      </div>
-    </div>
-
-    <div class="grid grid-4">
-      <div class="stat"><div class="k">Registrations</div><div class="v">${regCount}</div></div>
-      <div class="stat"><div class="k">Checked In</div><div class="v">${checkedInCount}</div></div>
-      <div class="stat"><div class="k">Races</div><div class="v">${raceCount}</div></div>
-      <div class="stat"><div class="k">Blocks</div><div class="v">${blockCount}</div></div>
-    </div>
-
-    <div class="section-title">
-      <h2>Meet Tools</h2>
-      <div class="muted">Open the section you want instead of jumping straight into the build tabs.</div>
-    </div>
-
-    <div class="grid grid-4">
-      <a class="card card-pad" href="/portal/meet/${meet.id}/builder">
-        <h3 style="margin-top:0;">Meet Builder</h3>
-        <p class="muted">Meet settings, age rule, divisions, costs, TT toggle, open, quad, and more.</p>
-      </a>
-
-      <a class="card card-pad" href="/portal/meet/${meet.id}/builder/open">
-        <h3 style="margin-top:0;">Open Builder</h3>
-        <p class="muted">Separate open setup from inline divisions.</p>
-      </a>
-
-      <a class="card card-pad" href="/portal/meet/${meet.id}/builder/quad">
-        <h3 style="margin-top:0;">Quad Builder</h3>
-        <p class="muted">Separate quad setup from inline divisions.</p>
-      </a>
-
-      <a class="card card-pad" href="/portal/meet/${meet.id}/blocks">
-        <h3 style="margin-top:0;">Block Builder</h3>
-        <p class="muted">Assign races to blocks and shape race-day flow.</p>
-      </a>
-
-      <a class="card card-pad" href="/portal/meet/${meet.id}/registered">
-        <h3 style="margin-top:0;">Registered</h3>
-        <p class="muted">View, edit, delete, and print racer registration info.</p>
-      </a>
-
-      <a class="card card-pad" href="/portal/meet/${meet.id}/check-in">
-        <h3 style="margin-top:0;">Check In</h3>
-        <p class="muted">Check skaters in quickly on meet day.</p>
-      </a>
-
-      <a class="card card-pad" href="/portal/meet/${meet.id}/race-day/director">
-        <h3 style="margin-top:0;">Race Day</h3>
-        <p class="muted">Director, judges, announcer, coach, and live views.</p>
-      </a>
-
-      <a class="card card-pad" href="/results/${meet.id}" target="_blank">
-        <h3 style="margin-top:0;">Results</h3>
-        <p class="muted">Public-facing standings and time trial open-group results.</p>
-      </a>
-
-      <a class="card card-pad" href="/live/${meet.id}" target="_blank">
-        <h3 style="margin-top:0;">Public Live</h3>
-        <p class="muted">Show current race, on deck, and live action publicly.</p>
-      </a>
-
-      <div class="card card-pad">
-        <h3 style="margin-top:0;">Meet Actions</h3>
-        <div class="actions">
-          <form class="inline" method="post" action="/portal/meet/${meet.id}/publish-toggle">
-            <button class="btn ${meet.showOnFindAMeet ? 'btn-gold' : 'btn-primary'}" type="submit">
-              ${meet.showOnFindAMeet ? 'Hide from Find a Meet' : 'Publish to Find a Meet'}
-            </button>
-          </form>
-          <form class="inline" method="post" action="/portal/meet/${meet.id}/delete" onsubmit="return confirm('Delete this meet? This cannot be undone.');">
-            <button class="btn btn-danger" type="submit">Delete Meet</button>
-          </form>
-        </div>
-      </div>
-    </div>
-  `, { user });
-}function meetBuilderTabs(meet, active) {
-  const items = [
-    { key: 'main', label: 'Meet Builder', href: `/portal/meet/${meet.id}/builder` },
-    { key: 'open', label: 'Open Builder', href: `/portal/meet/${meet.id}/builder/open` },
-    { key: 'quad', label: 'Quad Builder', href: `/portal/meet/${meet.id}/builder/quad` },
-    { key: 'blocks', label: 'Block Builder', href: `/portal/meet/${meet.id}/blocks` },
-  ];
-
-  return `
-    <div class="actions" style="margin-bottom:18px;">
-      ${items.map(item => `
-        <a class="btn ${active === item.key ? 'btn-primary' : 'btn-ghost'}" href="${item.href}">
-          ${esc(item.label)}
-        </a>
-      `).join('')}
+        <div class="spacer"></div>
+        <button class="btn" type="submit">Login</button>
+      </form>
     </div>
   `;
-}
-
-function stickySaveBar(meet, saveLabel = 'Save Meet', backHref = '', backLabel = '') {
-  return `
-    <div class="sticky-save">
-      <button class="btn btn-primary" type="submit">${esc(saveLabel)}</button>
-      ${backHref ? `<a class="btn btn-ghost" href="${backHref}">${esc(backLabel || 'Back')}</a>` : ''}
-    </div>
-  `;
-}
-
-function meetBuilderPage(user, meet, db) {
-  const rinkOptions = (db.rinks || []).map(rink =>
-    `<option value="${rink.id}" ${selected(meet.rinkId, rink.id)}>${esc(rink.name)} (${esc(rink.city)}, ${esc(rink.state)})</option>`
-  ).join('');
-
-  const ageRuleOptions = Object.values(AGE_RULES).map(rule =>
-    `<option value="${esc(rule)}" ${selected(meet.ageRule, rule)}>${esc(rule)}</option>`
-  ).join('');
-
-  return layout(`Meet Builder — ${meet.meetName}`, `
-    <div class="section-title">
-      <div>
-        <h2>Meet Builder</h2>
-        <div class="muted">Main setup for the whole meet.</div>
-      </div>
-    </div>
-
-    ${meetBuilderTabs(meet, 'main')}
-
-    <form class="stack" method="post" action="/portal/meet/${meet.id}/builder/save">
-      ${stickySaveBar(meet, 'Save Meet', roleBackHref(user, meet), roleBackLabel(user))}
-
-      <div class="card card-pad">
-        <h3 style="margin-top:0;">Event Info</h3>
-        <div class="row row-3">
-          <div>
-            <label>Meet Name</label>
-            <input name="meetName" value="${esc(meet.meetName || '')}" required />
-          </div>
-          <div>
-            <label>Meet Date</label>
-            <input type="date" name="date" value="${esc(meet.date || '')}" />
-          </div>
-          <div>
-            <label>Start Time</label>
-            <input type="time" name="startTime" value="${esc(meet.startTime || '')}" />
-          </div>
-        </div>
-
-        <div class="row row-2" style="margin-top:14px;">
-          <div>
-            <label>Registration Close Date</label>
-            <input type="date" name="registrationCloseDate" value="${esc(meet.registrationCloseDate || '')}" />
-          </div>
-          <div>
-            <label>Registration Close Time</label>
-            <input type="time" name="registrationCloseTime" value="${esc(meet.registrationCloseTime || '')}" />
-          </div>
-        </div>
-      </div>
-
-      <div class="card card-pad">
-        <h3 style="margin-top:0;">Competition Rules</h3>
-        <div class="row row-3">
-          <div>
-            <label>Age Rule</label>
-            <select name="ageRule" onchange="toggleCustomAgeRule(this.value)">
-              ${ageRuleOptions}
-            </select>
-          </div>
-          <div id="customAgeRuleWrap" style="${meet.ageRule === AGE_RULES.CUSTOM ? '' : 'display:none;'}">
-            <label>Custom Age Cutoff Date</label>
-            <input type="date" name="customAgeCutoffDate" value="${esc(meet.customAgeCutoffDate || '')}" />
-          </div>
-          <div>
-            <label>Status</label>
-            <select name="status">
-              <option value="Draft" ${selected(meet.status, 'Draft')}>Draft</option>
-              <option value="Published" ${selected(meet.status, 'Published')}>Published</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="row row-3" style="margin-top:14px;">
-          <div>
-            <label>Track Length</label>
-            <input name="trackLength" value="${esc(meet.trackLength || 100)}" />
-          </div>
-          <div>
-            <label>Lane Count</label>
-            <input name="lanes" value="${esc(meet.lanes || 4)}" />
-          </div>
-          <div>
-            <label>Rink</label>
-            <select name="rinkId">
-              ${rinkOptions}
-            </select>
-          </div>
-        </div>
-
-        <div class="divider"></div>
-
-        <div class="actions">
-          <label class="pill"><input type="checkbox" name="timeTrialsEnabled" ${checked(meet.timeTrialsEnabled)}> Time Trials</label>
-          <label class="pill"><input type="checkbox" name="openEnabled" ${checked(meet.openEnabled)}> Open</label>
-          <label class="pill"><input type="checkbox" name="quadEnabled" ${checked(meet.quadEnabled)}> Quad</label>
-          <label class="pill"><input type="checkbox" name="relaysEnabled" ${checked(meet.relaysEnabled)}> Relays</label>
-          <label class="pill"><input type="checkbox" name="allowDayOfRegistration" ${checked(meet.allowDayOfRegistration)}> Day Of Registration</label>
-          <label class="pill"><input type="checkbox" name="judgesPanelRequired" ${checked(meet.judgesPanelRequired)}> Judges Panel</label>
-          <label class="pill"><input type="checkbox" name="showOnFindAMeet" ${checked(meet.showOnFindAMeet)}> Show on Find a Meet</label>
-        </div>
-
-        <div style="margin-top:14px;">
-          <label>Meet Notes</label>
-          <textarea name="meetNotes">${esc(meet.meetNotes || '')}</textarea>
-        </div>
-      </div>
-
-      <div class="section-title">
-        <div>
-          <h2>Inline Divisions</h2>
-          <div class="muted">Keep this look exactly the same.</div>
-        </div>
-      </div>
-
-      ${(meet.groups || []).map((group, idx) => `
-        <div class="card card-pad">
-          <div class="section-title" style="margin:0 0 16px;">
-            <div>
-              <h3 style="margin:0;">${esc(group.label)}</h3>
-              <div class="mini">${esc(group.ages)}</div>
-            </div>
-          </div>
-
-          <div class="grid grid-2">
-            ${STANDARD_DIVISION_KEYS.map(key => {
-              const div = group.divisions?.[key] || buildDivisionTemplate();
-              return `
-                <div class="subtle">
-                  <div class="actions" style="justify-content:space-between;">
-                    <strong>${raceDivisionPretty(key)}</strong>
-                    <label class="pill"><input type="checkbox" name="g_${idx}_${key}_enabled" ${checked(div.enabled)}> Enabled</label>
-                  </div>
-
-                  <div style="margin-top:12px;">
-                    <label>Cost</label>
-                    <input name="g_${idx}_${key}_cost" value="${esc(div.cost || 0)}" />
-                  </div>
-
-                  <div style="margin-top:12px;">
-                    <label>Distance 1</label>
-                    <input name="g_${idx}_${key}_d1" value="${esc(div.distances?.[0] || '')}" />
-                  </div>
-
-                  <div style="margin-top:12px;">
-                    <label>Distance 2</label>
-                    <input name="g_${idx}_${key}_d2" value="${esc(div.distances?.[1] || '')}" />
-                  </div>
-
-                  <div style="margin-top:12px;">
-                    <label>Distance 3</label>
-                    <input name="g_${idx}_${key}_d3" value="${esc(div.distances?.[2] || '')}" />
-                  </div>
-
-                  <div style="margin-top:12px;">
-                    <label>Distance 4</label>
-                    <input name="g_${idx}_${key}_d4" value="${esc(div.distances?.[3] || '')}" />
-                  </div>
-                </div>
-              `;
-            }).join('')}
-          </div>
-        </div>
-      `).join('')}
-
-      <div class="actions">
-        <button class="btn btn-primary" type="submit">Save Meet Builder</button>
-        <a class="btn btn-ghost" href="/portal/meet/${meet.id}/blocks">Go to Block Builder</a>
-      </div>
-    </form>
-
-    <script>
-      function toggleCustomAgeRule(value) {
-        const wrap = document.getElementById('customAgeRuleWrap');
-        if (!wrap) return;
-        wrap.style.display = value === ${JSON.stringify(AGE_RULES.CUSTOM)} ? '' : 'none';
-      }
-    </script>
-  `, { user });
-}
-
-function specialBuilderPage(user, meet, groups, kind) {
-  const title = kind === 'open' ? 'Open Builder' : 'Quad Builder';
-  const savePath = kind === 'open'
-    ? `/portal/meet/${meet.id}/builder/open/save`
-    : `/portal/meet/${meet.id}/builder/quad/save`;
-
-  return layout(`${title} — ${meet.meetName}`, `
-    <div class="section-title">
-      <div>
-        <h2>${title}</h2>
-        <div class="muted">${kind === 'open' ? 'Separate open setup from inline divisions.' : 'Separate quad setup from inline divisions.'}</div>
-      </div>
-    </div>
-
-    ${meetBuilderTabs(meet, kind)}
-
-    <form class="stack" method="post" action="${savePath}">
-      ${stickySaveBar(meet, `Save ${title}`, roleBackHref(user, meet), roleBackLabel(user))}
-
-      ${(groups || []).map((group, idx) => `
-        <div class="card card-pad">
-          <div class="section-title" style="margin:0 0 16px;">
-            <div>
-              <h3 style="margin:0;">${esc(group.label)}</h3>
-              <div class="mini">${esc(group.gender)} · ${group.minAge}-${group.maxAge}</div>
-            </div>
-          </div>
-
-          <div class="subtle">
-            <div class="actions" style="justify-content:space-between;">
-              <strong>${esc(group.label)}</strong>
-              <label class="pill"><input type="checkbox" name="${kind}_${idx}_enabled" ${checked(group.enabled)}> Enabled</label>
-            </div>
-
-            <div style="margin-top:12px;">
-              <label>Cost</label>
-              <input name="${kind}_${idx}_cost" value="${esc(group.cost || 0)}" />
-            </div>
-
-            <div style="margin-top:12px;">
-              <label>Distance 1</label>
-              <input name="${kind}_${idx}_d1" value="${esc(group.distances?.[0] || '')}" />
-            </div>
-
-            <div style="margin-top:12px;">
-              <label>Distance 2</label>
-              <input name="${kind}_${idx}_d2" value="${esc(group.distances?.[1] || '')}" />
-            </div>
-
-            <div style="margin-top:12px;">
-              <label>Distance 3</label>
-              <input name="${kind}_${idx}_d3" value="${esc(group.distances?.[2] || '')}" />
-            </div>
-
-            <div style="margin-top:12px;">
-              <label>Distance 4</label>
-              <input name="${kind}_${idx}_d4" value="${esc(group.distances?.[3] || '')}" />
-            </div>
-          </div>
-        </div>
-      `).join('')}
-
-      <div class="actions">
-        <button class="btn btn-primary" type="submit">Save ${title}</button>
-        <a class="btn btn-ghost" href="/portal/meet/${meet.id}/blocks">Go to Block Builder</a>
-      </div>
-    </form>
-  `, { user });
-}
-
-function blockBuilderPage(user, meet) {
-  ensureDefaultBlock(meet);
-  rebuildRaceAssignments(meet);
-
-  const blocksHtml = (meet.blocks || []).map(block => {
-    const races = (block.raceIds || [])
-      .map(id => (meet.races || []).find(r => r.id === id))
-      .filter(Boolean)
-      .sort((a, b) => (a.orderHint || 0) - (b.orderHint || 0));
-
-    return `
-      <div class="card card-pad">
-        <div class="section-title" style="margin:0 0 14px;">
-          <div>
-            <h3 style="margin:0;">${esc(block.name)}</h3>
-            <div class="mini">${esc(block.day || 'Day 1')}</div>
-          </div>
-          <div class="actions">
-            <form class="inline" method="post" action="/portal/meet/${meet.id}/block/${block.id}/delete" onsubmit="return confirm('Delete this block and return its races to Unassigned?');">
-              <button class="btn btn-danger" type="submit">Delete Block</button>
-            </form>
-          </div>
-        </div>
-
-        <form class="stack" method="post" action="/portal/meet/${meet.id}/block/${block.id}/meta">
-          <div class="row row-2">
-            <div>
-              <label>Block Name</label>
-              <input name="name" value="${esc(block.name)}" />
-            </div>
-            <div>
-              <label>Day</label>
-              <select name="day">
-                <option value="Day 1" ${selected(block.day, 'Day 1')}>Day 1</option>
-                <option value="Day 2" ${selected(block.day, 'Day 2')}>Day 2</option>
-                <option value="Day 3" ${selected(block.day, 'Day 3')}>Day 3</option>
-              </select>
-            </div>
-          </div>
-          <div>
-            <label>Block Notes</label>
-            <input name="notes" value="${esc(block.notes || '')}" />
-          </div>
-          <button class="btn btn-ghost" type="submit">Save Block Info</button>
-        </form>
-
-        <div class="divider"></div>
-
-        <div class="grid">
-          ${races.length === 0 ? `<div class="mini">No races in this block yet.</div>` : races.map(race => `
-            <div class="subtle">
-              <div class="actions" style="justify-content:space-between;">
-                <div>
-                  <strong>${esc(getRaceDisplayTitle(race))}</strong>
-                  <div class="mini">${esc(raceTypeLabel(race))}</div>
-                </div>
-                <form class="inline" method="post" action="/portal/meet/${meet.id}/race/${race.id}/unassign">
-                  <button class="btn btn-ghost" type="submit">Unassign</button>
-                </form>
-              </div>
-            </div>
-          `).join('')}
-        </div>
-      </div>
-    `;
-  }).join('');
-
-  const unassigned = getUnassignedRaces(meet)
-    .sort((a, b) => (a.orderHint || 0) - (b.orderHint || 0));
-
-  const scheduleItems = [...(meet.scheduleItems || [])].sort((a, b) => Number(a.order || 0) - Number(b.order || 0));
-
-  return layout(`Block Builder — ${meet.meetName}`, `
-    <div class="section-title">
-      <div>
-        <h2>Block Builder</h2>
-        <div class="muted">Use the old block workflow with the current look.</div>
-      </div>
-      <div class="actions">
-        <a class="btn btn-ghost" href="/portal/meet/${meet.id}">${roleBackLabel(user)}</a>
-        <form class="inline" method="post" action="/portal/meet/${meet.id}/blocks/new">
-          <button class="btn btn-primary" type="submit">+ Add Block</button>
-        </form>
-      </div>
-    </div>
-
-    ${meetBuilderTabs(meet, 'blocks')}
-
-    <div class="sticky-save">
-      <a class="btn btn-primary" href="/portal/meet/${meet.id}/builder">Save Meet</a>
-      <a class="btn btn-ghost" href="/portal/meet/${meet.id}">${roleBackLabel(user)}</a>
-    </div>
-
-    <div class="grid grid-2">
-      <div class="grid">
-        ${blocksHtml}
-      </div>
-
-      <div class="grid">
-        <div class="card card-pad">
-          <h3 style="margin-top:0;">Unassigned Races</h3>
-          <p class="muted">Assign races into blocks below.</p>
-
-          ${unassigned.length === 0 ? `<div class="mini">No unassigned races.</div>` : unassigned.map(race => `
-            <div class="subtle" style="margin-bottom:12px;">
-              <div class="actions" style="justify-content:space-between; align-items:center;">
-                <div>
-                  <strong>${esc(getRaceDisplayTitle(race))}</strong>
-                  <div class="mini">${esc(raceTypeLabel(race))}</div>
-                </div>
-                <form class="inline" method="post" action="/portal/meet/${meet.id}/race/${race.id}/assign">
-                  <select name="blockId" style="width:auto; min-width:140px; display:inline-block;">
-                    ${(meet.blocks || []).map(block => `<option value="${block.id}">${esc(block.name)}</option>`).join('')}
-                  </select>
-                  <button class="btn btn-primary" type="submit">Assign</button>
-                </form>
-              </div>
-            </div>
-          `).join('')}
-        </div>
-
-        <div class="card card-pad">
-          <h3 style="margin-top:0;">Schedule Items</h3>
-          <p class="muted">Lunch, practice, awards, and breaks live here. They do not create blocks.</p>
-
-          <form class="stack" method="post" action="/portal/meet/${meet.id}/schedule-item/new">
-            <div class="row row-2">
-              <div>
-                <label>Label</label>
-                <input name="label" placeholder="Lunch / Practice / Awards" required />
-              </div>
-              <div>
-                <label>Day</label>
-                <select name="day">
-                  <option value="Day 1">Day 1</option>
-                  <option value="Day 2">Day 2</option>
-                  <option value="Day 3">Day 3</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="row row-2">
-              <div>
-                <label>Type</label>
-                <select name="kind">
-                  <option value="break">Break</option>
-                  <option value="practice">Practice</option>
-                  <option value="lunch">Lunch</option>
-                  <option value="awards">Awards</option>
-                  <option value="warmup">Warmup</option>
-                  <option value="other">Other</option>
-                </select>
-              </div>
-              <div>
-                <label>Order</label>
-                <input name="order" value="${scheduleItems.length + 1}" />
-              </div>
-            </div>
-
-            <div>
-              <label>Notes</label>
-              <input name="notes" />
-            </div>
-
-            <button class="btn btn-primary" type="submit">Add Schedule Item</button>
-          </form>
-
-          <div class="divider"></div>
-
-          ${scheduleItems.length === 0 ? `<div class="mini">No schedule items yet.</div>` : scheduleItems.map(item => `
-            <div class="subtle" style="margin-bottom:12px;">
-              <div class="actions" style="justify-content:space-between;">
-                <div>
-                  <strong>${esc(item.label)}</strong>
-                  <div class="mini">${esc(item.day)} · ${esc(item.kind)}</div>
-                </div>
-                <form class="inline" method="post" action="/portal/meet/${meet.id}/schedule-item/${item.id}/delete" onsubmit="return confirm('Delete this schedule item?');">
-                  <button class="btn btn-danger" type="submit">Delete</button>
-                </form>
-              </div>
-              ${item.notes ? `<div class="mini" style="margin-top:8px;">${esc(item.notes)}</div>` : ''}
-            </div>
-          `).join('')}
-        </div>
-      </div>
-    </div>
-  `, { user });
-}app.get('/', (req, res) => {
-  const data = getSessionUser(req);
-  if (data?.user) return res.redirect(roleHomePath(data.user));
-  return res.send(homePage(null));
-});
-
-app.get('/admin/login', (req, res) => {
-  const data = getSessionUser(req);
-  if (data?.user) return res.redirect(roleHomePath(data.user));
-  return res.send(loginPage(''));
+  res.send(pageShell({ title: 'Admin Login', user: null, bodyHtml: body }));
 });
 
 app.post('/admin/login', (req, res) => {
   const db = loadDb();
   const username = String(req.body.username || '').trim();
-  const password = String(req.body.password || '');
+  const password = String(req.body.password || '').trim();
 
-  const user = db.users.find(u =>
-    String(u.username || '').trim() === username &&
-    String(u.password || '') === password &&
-    u.active !== false
+  const user = db.users.find(
+    u => u.username === username && u.password === password && u.active !== false
   );
 
-  if (!user) return res.send(loginPage('Invalid username or password.'));
+  if (!user) {
+    return res.send(pageShell({
+      title: 'Admin Login',
+      user: null,
+      bodyHtml: `
+        <h1>Admin Login</h1>
+        <div class="card">
+          <div class="danger">Invalid login.</div>
+          <div class="spacer"></div>
+          <a class="btn2" href="/admin/login">Try again</a>
+        </div>
+      `,
+    }));
+  }
 
   const token = crypto.randomBytes(24).toString('hex');
-  db.sessions = (db.sessions || []).filter(s => s.userId !== user.id);
+  db.sessions = db.sessions.filter(s => s.userId !== user.id);
   db.sessions.push({
     token,
     userId: user.id,
     createdAt: nowIso(),
     expiresAt: new Date(Date.now() + SESSION_TTL_MS).toISOString(),
   });
+
   saveDb(db);
   setCookie(res, SESSION_COOKIE, token, Math.floor(SESSION_TTL_MS / 1000));
-  return res.redirect(roleHomePath(user));
+  res.redirect('/portal');
 });
 
 app.get('/admin/logout', (req, res) => {
-  const cookies = parseCookies(req);
-  const token = cookies[SESSION_COOKIE];
   const db = loadDb();
-  db.sessions = (db.sessions || []).filter(s => s.token !== token);
+  const token = parseCookies(req)[SESSION_COOKIE];
+  db.sessions = db.sessions.filter(s => s.token !== token);
   saveDb(db);
   clearCookie(res, SESSION_COOKIE);
-  return res.redirect('/admin/login');
+  res.redirect('/');
 });
 
-app.get('/portal', requireRole(USER_ROLES.SUPER_ADMIN, USER_ROLES.MEET_DIRECTOR), (req, res) => {
-  res.send(portalPage(req.user, req.db));
+app.get('/portal', requireRole('meet_director', 'judge', 'coach'), (req, res) => {
+  const visibleMeets = coachVisibleMeets(req.db, req.user);
+
+  const cards = visibleMeets.map(meet => {
+    const rink = req.db.rinks.find(r => Number(r.id) === Number(meet.rinkId));
+    const standings = computeMeetStandings(meet);
+
+    return `
+      <div class="card">
+        <div class="row between">
+          <div>
+            <h2 style="margin:0">${esc(meet.meetName)}</h2>
+            <div class="muted small">
+              ${rink ? `${esc(rink.city)}, ${esc(rink.state)}` : ''} • Meet ID: ${esc(meet.id)}
+            </div>
+            <div class="note">
+              ${meet.isPublic ? 'Public meet' : 'Private meet'} • Status: ${esc(meet.status || 'draft')}
+            </div>
+          </div>
+          <div class="row">
+            <span class="chip">Races: ${esc((meet.races || []).length)}</span>
+            <span class="chip">Regs: ${esc((meet.registrations || []).length)}</span>
+            <span class="chip">Blocks: ${esc((meet.blocks || []).length)}</span>
+            <span class="chip">Standings: ${esc(standings.length)}</span>
+          </div>
+        </div>
+        <div class="spacer"></div>
+        <div class="row">
+          ${
+            canEditMeet(req.user, meet)
+              ? `<a class="btn" href="/portal/meet/${meet.id}/builder">Open Meet</a>`
+              : `<a class="btn2" href="/portal/meet/${meet.id}/coach">Open Coach Panel</a>`
+          }
+          <a class="btn2" href="/meet/${meet.id}/live">Public Live</a>
+          <a class="btn2" href="/portal/meet/${meet.id}/results">Results</a>
+          ${
+            canEditMeet(req.user, meet)
+              ? `<a class="btnDanger" href="/portal/meet/${meet.id}/delete-confirm">Delete Meet</a>`
+              : ''
+          }
+        </div>
+      </div>
+    `;
+  }).join('<div class="spacer"></div>');
+
+  const body = `
+    <h1>Director Portal</h1>
+    <div class="muted">Nothing appears until you build a meet.</div>
+    <div class="spacer"></div>
+    <div class="row">
+      ${
+        hasRole(req.user, 'super_admin') || hasRole(req.user, 'meet_director')
+          ? `<form method="POST" action="/portal/create-meet"><button class="btn" type="submit">Build New Meet</button></form>`
+          : ''
+      }
+      ${
+        hasRole(req.user, 'super_admin') || hasRole(req.user, 'meet_director')
+          ? `<a class="btn2" href="/portal/rinks">Add / Edit Rinks</a>`
+          : ''
+      }
+      ${(hasRole(req.user, 'coach') || hasRole(req.user, 'super_admin') || hasRole(req.user, 'meet_director')) ? `<a class="btn2" href="/portal/coach">Coach Portal</a>` : ''}
+      ${hasRole(req.user, 'super_admin') ? `<a class="btn2" href="/portal/users">Users</a>` : ''}
+    </div>
+    <div class="spacer"></div>
+    ${cards || `<div class="card"><div class="muted">No meets yet. Click “Build New Meet”.</div></div>`}
+  `;
+
+  res.send(pageShell({
+    title: 'Portal',
+    user: req.user,
+    bodyHtml: body,
+  }));
 });
 
-app.get('/judge', requireRole(USER_ROLES.JUDGE, USER_ROLES.SUPER_ADMIN, USER_ROLES.MEET_DIRECTOR), (req, res) => {
-  res.send(rolePortalPage(req.user, req.db, 'Judge', 'judges', meet => `/portal/meet/${meet.id}/race-day/judges`));
+app.get('/portal/coach', requireRole('coach', 'meet_director', 'super_admin'), (req, res) => {
+  const meets = coachVisibleMeets(req.db, req.user);
+
+  const cards = meets.map(meet => {
+    const upcoming = coachUpcomingForMeet(meet, req.user.team);
+    const recent = coachRecentResultsForMeet(meet, req.user.team);
+    const regs = coachTeamRegistrations(meet, req.user.team);
+
+    return `
+      <div class="card">
+        <div class="row between">
+          <div>
+            <h2 style="margin:0">${esc(meet.meetName)}</h2>
+            <div class="muted small">${esc(req.user.team || '')}</div>
+            <div class="note">${esc(meet.date || '')} ${meet.startTime ? `• ${esc(meet.startTime)}` : ''}</div>
+          </div>
+          <div class="row">
+            <span class="chip">My Skaters: ${regs.length}</span>
+            <span class="chip">Racing Soon: ${upcoming.length}</span>
+          </div>
+        </div>
+
+        <div class="spacer"></div>
+
+        <div class="row">
+          <a class="btn" href="/portal/meet/${meet.id}/coach">Open Coach Panel</a>
+          <a class="btn2" href="/meet/${meet.id}/live">Public Live</a>
+          <a class="btn2" href="/meet/${meet.id}/results">Public Results</a>
+        </div>
+
+        ${
+          upcoming.length
+            ? `
+              <div class="hr"></div>
+              <h3>Racing Soon</h3>
+              ${upcoming.slice(0, 3).map(item => `
+                <div class="groupCard">
+                  <div style="font-weight:900">${item.skaters.map(s => esc(s.skaterName)).join(', ')}</div>
+                  <div class="muted">${esc(item.race.groupLabel)} • ${esc(cap(item.race.division))} • ${esc(item.race.distanceLabel)} • ${esc(raceDisplayStage(item.race))}</div>
+                  <div class="good">${esc(racingSoonLabel(item.delta))}</div>
+                </div>
+              `).join('<div class="spacer"></div>')}
+            `
+            : `
+              <div class="hr"></div>
+              <div class="muted">No team races queued right now.</div>
+            `
+        }
+
+        ${
+          recent.length
+            ? `
+              <div class="hr"></div>
+              <h3>Recent Team Results</h3>
+              ${recent.slice(0, 2).map(item => `
+                <div class="groupCard">
+                  <div style="font-weight:900">${esc(item.race.groupLabel)} • ${esc(cap(item.race.division))} • ${esc(item.race.distanceLabel)}</div>
+                  ${item.skaters.map(sk => `
+                    <div class="note">
+                      ${esc(sk.skaterName || '')} ${sk.place ? `• Place ${esc(sk.place)}` : ''} ${sk.time ? `• ${esc(sk.time)}` : ''}
+                    </div>
+                  `).join('')}
+                </div>
+              `).join('<div class="spacer"></div>')}
+            `
+            : ''
+        }
+      </div>
+    `;
+  }).join('<div class="spacer"></div>');
+
+  res.send(pageShell({
+    title: 'Coach Portal',
+    user: req.user,
+    bodyHtml: `
+      <h1>Coach Portal</h1>
+      <div class="muted">Track your team, see who is racing soon, and follow results without digging through the full meet.</div>
+      <div class="spacer"></div>
+      ${cards || `<div class="card"><div class="muted">No meets found yet for ${esc(req.user.team || 'your team')}.</div></div>`}
+    `,
+  }));
 });
 
-app.get('/announcer', requireRole(USER_ROLES.ANNOUNCER, USER_ROLES.SUPER_ADMIN, USER_ROLES.MEET_DIRECTOR), (req, res) => {
-  res.send(rolePortalPage(req.user, req.db, 'Announcer', 'announcers', meet => `/portal/meet/${meet.id}/race-day/announcer`));
+app.get('/portal/meet/:meetId/coach', requireRole('coach', 'meet_director', 'super_admin'), (req, res) => {
+  const meet = getMeetOr404(req.db, req.params.meetId);
+  if (!meet) return res.redirect('/portal');
+
+  const team = String(req.user.team || '').trim();
+  const regs = coachTeamRegistrations(meet, team);
+  const upcoming = coachUpcomingForMeet(meet, team);
+  const recent = coachRecentResultsForMeet(meet, team);
+  const standings = coachStandingsForMeet(meet, team);
+
+  const info = currentRaceInfo(meet);
+
+  const rosterRows = regs.map(reg => {
+    const assignedRaces = orderedRaces(meet).filter(r =>
+      (r.laneEntries || []).some(le => Number(le.registrationId) === Number(reg.id))
+    );
+
+    return `
+      <tr>
+        <td>
+          ${esc(reg.name)}
+          ${sponsorLineHtml(reg.sponsor || '')}
+        </td>
+        <td>${esc(reg.divisionGroupLabel || '')}</td>
+        <td>${['novice', 'elite', 'open'].filter(k => reg.options?.[k]).map(cap).join(', ') || '—'}</td>
+        <td>${reg.helmetNumber ? '#' + esc(reg.helmetNumber) : ''}</td>
+        <td>${reg.checkedIn ? '✔' : '—'}</td>
+        <td>${reg.paid ? '✔' : '—'}</td>
+        <td>
+          ${assignedRaces.slice(0, 3).map(r => `
+            <div class="note">${esc(cap(r.division))} • ${esc(r.distanceLabel)} • ${esc(raceDisplayStage(r))}</div>
+          `).join('') || `<span class="muted">None</span>`}
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  const upcomingCards = upcoming.map(item => `
+    <div class="groupCard">
+      <div class="row between">
+        <div>
+          <div style="font-weight:900">${esc(item.race.groupLabel)} • ${esc(cap(item.race.division))}</div>
+          <div class="muted">${esc(item.race.distanceLabel)} • ${esc(raceDisplayStage(item.race))}</div>
+          <div class="note">${esc(item.race.blockName || 'Unassigned')} ${item.race.blockDay ? `• ${esc(item.race.blockDay)}` : ''}</div>
+        </div>
+        <div class="chip">${esc(racingSoonLabel(item.delta))}</div>
+      </div>
+
+      <div class="spacer"></div>
+
+      ${item.skaters.map(sk => {
+        const reg = regs.find(r => Number(r.id) === Number(sk.registrationId));
+        return `
+          <div style="padding:8px 0;border-top:1px solid var(--line)">
+            <div style="font-weight:900">${sk.helmetNumber ? '#' + esc(sk.helmetNumber) + ' ' : ''}${esc(sk.skaterName)}</div>
+            <div class="muted">${esc(sk.team || '')}</div>
+            ${sponsorLineHtml(reg?.sponsor || '')}
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `).join('<div class="spacer"></div>');
+
+  const recentCards = recent.map(item => `
+    <div class="groupCard">
+      <div style="font-weight:900">${esc(item.race.groupLabel)} • ${esc(cap(item.race.division))} • ${esc(item.race.distanceLabel)} • ${esc(raceDisplayStage(item.race))}</div>
+      <div class="note">${esc(item.race.closedAt || '')}</div>
+      <div class="spacer"></div>
+      ${item.skaters
+        .sort((a, b) => Number(a.place || 999) - Number(b.place || 999))
+        .map(sk => {
+          const reg = regs.find(r => Number(r.id) === Number(sk.registrationId));
+          return `
+            <div style="padding:8px 0;border-top:1px solid var(--line)">
+              <div style="font-weight:900">
+                ${sk.place ? esc(sk.place) + '. ' : ''}${esc(sk.skaterName || '')}
+              </div>
+              <div class="muted">${esc(sk.team || '')}${sk.time ? ` • ${esc(sk.time)}` : ''}</div>
+              ${sponsorLineHtml(reg?.sponsor || '')}
+            </div>
+          `;
+        }).join('')}
+    </div>
+  `).join('<div class="spacer"></div>');
+
+  const standingsCards = standings.map(section => `
+    <div class="card">
+      <div class="row between">
+        <div>
+          <h2 style="margin:0">${esc(section.groupLabel)} — ${esc(cap(section.division))}</h2>
+          <div class="muted small">Your team standings only</div>
+        </div>
+      </div>
+
+      <div class="spacer"></div>
+
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Place</th>
+            <th>Skater</th>
+            <th>Team</th>
+            <th>Points</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${section.standings.map(row => `
+            <tr>
+              <td>${row.overallPlace}</td>
+              <td>
+                ${esc(row.skaterName || '')}
+                ${sponsorLineHtml(row.sponsor || '')}
+              </td>
+              <td>${esc(row.team || '')}</td>
+              <td>${Number(row.totalPoints || 0)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `).join('<div class="spacer"></div>');
+
+  const body = `
+    <h1>Coach Panel</h1>
+    <div class="row between">
+      <div>
+        <div class="muted">${esc(meet.meetName)}</div>
+        <h2 style="margin:6px 0 0">${esc(team || 'Coach Team')}</h2>
+      </div>
+      <div class="row">
+        <span class="chip">Current Race: ${info.current ? esc(info.current.groupLabel) + ' • ' + esc(cap(info.current.division)) : '—'}</span>
+        <a class="btn2" href="/portal/coach">Back to Coach Portal</a>
+      </div>
+    </div>
+
+    <div class="spacer"></div>
+
+    <div class="grid2">
+      <div class="card">
+        <h2>My Skaters Racing Soon</h2>
+        <div class="muted">The fastest way to know when your skaters need to be ready.</div>
+        <div class="spacer"></div>
+        ${upcomingCards || `<div class="muted">No upcoming races for ${esc(team)} right now.</div>`}
+      </div>
+
+      <div class="card">
+        <h2>Recent Team Results</h2>
+        <div class="muted">Closed races involving your skaters.</div>
+        <div class="spacer"></div>
+        ${recentCards || `<div class="muted">No closed races yet for ${esc(team)}.</div>`}
+      </div>
+    </div>
+
+    <div class="spacer"></div>
+
+    <div class="card">
+      <h2>Team Roster</h2>
+      <div class="muted">Skaters, classes, sponsor, helmet, and assigned races.</div>
+      <div class="spacer"></div>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Skater</th>
+            <th>Division</th>
+            <th>Classes</th>
+            <th>Helmet</th>
+            <th>Checked In</th>
+            <th>Paid</th>
+            <th>Assigned Races</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rosterRows || `<tr><td colspan="7" class="muted">No team skaters found.</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+
+    ${standingsCards ? `<div class="spacer"></div><h1 style="font-size:30px">My Team Standings</h1>${standingsCards}` : ''}
+  `;
+
+  res.send(pageShell({
+    title: 'Coach Panel',
+    user: req.user,
+    meet,
+    bodyHtml: body,
+  }));
 });
 
-app.get('/coach', requireRole(USER_ROLES.COACH, USER_ROLES.SUPER_ADMIN, USER_ROLES.MEET_DIRECTOR), (req, res) => {
-  res.send(rolePortalPage(req.user, req.db, 'Coach', 'coaches', meet => `/portal/meet/${meet.id}/race-day/coach`));
-});
-
-app.get('/checkin', requireRole(USER_ROLES.CHECKIN, USER_ROLES.SUPER_ADMIN, USER_ROLES.MEET_DIRECTOR), (req, res) => {
-  res.send(rolePortalPage(req.user, req.db, 'Check-In', 'checkin', meet => `/portal/meet/${meet.id}/check-in`));
-});
-
-app.get('/portal/new-meet', requireRole(USER_ROLES.SUPER_ADMIN, USER_ROLES.MEET_DIRECTOR), (req, res) => {
+app.post('/portal/create-meet', requireRole('meet_director'), (req, res) => {
   const meet = defaultMeet(req.user.id);
-  meet.id = nextId(req.db.meets || []);
+  meet.id = nextId(req.db.meets);
   req.db.meets.push(meet);
   saveDb(req.db);
-  return res.redirect(`/portal/meet/${meet.id}/builder`);
+  res.redirect(`/portal/meet/${meet.id}/builder`);
 });
 
-app.get('/portal/meet/:meetId', requireRole(USER_ROLES.SUPER_ADMIN, USER_ROLES.MEET_DIRECTOR), (req, res) => {
-  const meet = getMeetOr404(req.db, req.params.meetId);
-  if (!meet || !canEditMeet(req.user, meet)) return res.redirect('/portal');
-  return res.send(meetDashboardPage(req.user, meet));
-});
-
-app.get('/portal/meet/:meetId/builder', requireRole(USER_ROLES.SUPER_ADMIN, USER_ROLES.MEET_DIRECTOR), (req, res) => {
-  const meet = getMeetOr404(req.db, req.params.meetId);
-  if (!meet || !canEditMeet(req.user, meet)) return res.redirect('/portal');
-  return res.send(meetBuilderPage(req.user, meet, req.db));
-});
-
-app.get('/portal/meet/:meetId/builder/open', requireRole(USER_ROLES.SUPER_ADMIN, USER_ROLES.MEET_DIRECTOR), (req, res) => {
-  const meet = getMeetOr404(req.db, req.params.meetId);
-  if (!meet || !canEditMeet(req.user, meet)) return res.redirect('/portal');
-  return res.send(specialBuilderPage(req.user, meet, meet.openGroups || [], 'open'));
-});
-
-app.get('/portal/meet/:meetId/builder/quad', requireRole(USER_ROLES.SUPER_ADMIN, USER_ROLES.MEET_DIRECTOR), (req, res) => {
-  const meet = getMeetOr404(req.db, req.params.meetId);
-  if (!meet || !canEditMeet(req.user, meet)) return res.redirect('/portal');
-  return res.send(specialBuilderPage(req.user, meet, meet.quadGroups || [], 'quad'));
-});
-
-app.get('/portal/meet/:meetId/blocks', requireRole(USER_ROLES.SUPER_ADMIN, USER_ROLES.MEET_DIRECTOR), (req, res) => {
-  const meet = getMeetOr404(req.db, req.params.meetId);
-  if (!meet || !canEditMeet(req.user, meet)) return res.redirect('/portal');
-  return res.send(blockBuilderPage(req.user, meet));
-});
-
-app.post('/portal/meet/:meetId/builder/save', requireRole(USER_ROLES.SUPER_ADMIN, USER_ROLES.MEET_DIRECTOR), (req, res) => {
+app.get('/portal/meet/:meetId/delete-confirm', requireRole('meet_director'), (req, res) => {
   const meet = getMeetOr404(req.db, req.params.meetId);
   if (!meet || !canEditMeet(req.user, meet)) return res.redirect('/portal');
 
-  meet.meetName = String(req.body.meetName || '').trim() || 'New Meet';
+  const body = `
+    <h1>Delete Meet</h1>
+    <div class="card">
+      <div class="danger">
+        This will permanently delete this meet and all of its races, blocks, and registrations.
+      </div>
+      <div class="spacer"></div>
+      <h2>${esc(meet.meetName)}</h2>
+      <div class="spacer"></div>
+      <form method="POST" action="/portal/meet/${meet.id}/delete">
+        <button class="btnDanger" type="submit">Delete Meet Permanently</button>
+        <a class="btn2" href="/portal">Cancel</a>
+      </form>
+    </div>
+  `;
+
+  res.send(pageShell({
+    title: 'Delete Meet',
+    user: req.user,
+    bodyHtml: body,
+  }));
+});
+
+app.post('/portal/meet/:meetId/delete', requireRole('meet_director'), (req, res) => {
+  const meet = getMeetOr404(req.db, req.params.meetId);
+  if (!meet || !canEditMeet(req.user, meet)) return res.redirect('/portal');
+
+  req.db.meets = req.db.meets.filter(m => Number(m.id) !== Number(req.params.meetId));
+  saveDb(req.db);
+  res.redirect('/portal');
+});
+
+app.get('/portal/users', requireRole('super_admin'), (req, res) => {
+  const rows = req.db.users.map(u => `
+    <tr>
+      <td>${esc(u.displayName || u.username)}</td>
+      <td>${esc(u.username)}</td>
+      <td>${esc((u.roles || []).join(', '))}</td>
+      <td>${esc(u.team || '')}</td>
+      <td>${u.active === false ? 'Off' : 'On'}</td>
+    </tr>
+  `).join('');
+
+  const body = `
+    <h1>Users</h1>
+    <div class="card">
+      <form method="POST" action="/portal/users/new">
+        <div class="grid4">
+          <div>
+            <label>Name</label>
+            <input name="displayName" required />
+          </div>
+          <div>
+            <label>Username</label>
+            <input name="username" required />
+          </div>
+          <div>
+            <label>Password / PIN</label>
+            <input name="password" required />
+          </div>
+          <div>
+            <label>Team</label>
+            <input name="team" list="teams-users" value="Midwest Racing" />
+          </div>
+        </div>
+
+        <datalist id="teams-users">
+          ${TEAM_LIST.map(t => `<option value="${esc(t)}"></option>`).join('')}
+        </datalist>
+
+        <div class="spacer"></div>
+        <div class="row">
+          <label><input type="checkbox" name="roles" value="meet_director" /> Meet Director</label>
+          <label><input type="checkbox" name="roles" value="judge" /> Judge</label>
+          <label><input type="checkbox" name="roles" value="coach" /> Coach</label>
+        </div>
+
+        <div class="spacer"></div>
+        <button class="btn" type="submit">Add User</button>
+      </form>
+
+      <div class="hr"></div>
+
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Username</th>
+            <th>Roles</th>
+            <th>Team</th>
+            <th>Active</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+
+  res.send(pageShell({
+    title: 'Users',
+    user: req.user,
+    bodyHtml: body,
+  }));
+});
+
+app.post('/portal/users/new', requireRole('super_admin'), (req, res) => {
+  const rolesRaw = req.body.roles;
+  const roles = Array.isArray(rolesRaw) ? rolesRaw : (rolesRaw ? [rolesRaw] : []);
+
+  req.db.users.push({
+    id: nextId(req.db.users),
+    displayName: String(req.body.displayName || '').trim(),
+    username: String(req.body.username || '').trim(),
+    password: String(req.body.password || '').trim(),
+    team: String(req.body.team || 'Midwest Racing').trim(),
+    roles,
+    active: true,
+    createdAt: nowIso(),
+  });
+
+  saveDb(req.db);
+  res.redirect('/portal/users');
+});
+
+function rinkForm(rink, action, title) {
+  return `
+    <h1>${esc(title)}</h1>
+    <div class="card">
+      <form method="POST" action="${action}">
+        <div class="grid2">
+          <div>
+            <label>Name</label>
+            <input name="name" value="${esc(rink.name || '')}" required />
+          </div>
+          <div>
+            <label>Phone</label>
+            <input name="phone" value="${esc(rink.phone || '')}" />
+          </div>
+          <div>
+            <label>Address</label>
+            <input name="address" value="${esc(rink.address || '')}" />
+          </div>
+          <div>
+            <label>Website</label>
+            <input name="website" value="${esc(rink.website || '')}" />
+          </div>
+          <div>
+            <label>City</label>
+            <input name="city" value="${esc(rink.city || '')}" />
+          </div>
+          <div>
+            <label>State</label>
+            <input name="state" value="${esc(rink.state || '')}" />
+          </div>
+          <div>
+            <label>Team</label>
+            <input name="team" value="${esc(rink.team || '')}" />
+          </div>
+        </div>
+
+        <div class="spacer"></div>
+
+        <label>Notes</label>
+        <textarea name="notes">${esc(rink.notes || '')}</textarea>
+
+        <div class="spacer"></div>
+
+        <button class="btn" type="submit">Save Rink</button>
+        <a class="btn2" href="/portal/rinks">Back</a>
+      </form>
+    </div>
+  `;
+}
+
+app.get('/portal/rinks', requireRole('meet_director'), (req, res) => {
+  const rows = req.db.rinks.map(r => `
+    <tr>
+      <td>${esc(r.name)}</td>
+      <td>${esc(r.city || '')}, ${esc(r.state || '')}</td>
+      <td>${esc(r.phone || '')}</td>
+      <td><a class="btn2 small" href="/portal/rinks/${r.id}/edit">Edit</a></td>
+    </tr>
+  `).join('');
+
+  const body = `
+    <h1>Rink Admin</h1>
+    <div class="card">
+      <div class="row between">
+        <h2 style="margin:0">Rinks</h2>
+        <a class="btn" href="/portal/rinks/new">Add Rink</a>
+      </div>
+
+      <div class="spacer"></div>
+
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>City/State</th>
+            <th>Phone</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+
+  res.send(pageShell({
+    title: 'Rink Admin',
+    user: req.user,
+    bodyHtml: body,
+  }));
+});
+
+app.get('/portal/rinks/new', requireRole('meet_director'), (req, res) => {
+  res.send(pageShell({
+    title: 'Add Rink',
+    user: req.user,
+    bodyHtml: rinkForm({}, '/portal/rinks/new', 'Add Rink'),
+  }));
+});
+
+app.post('/portal/rinks/new', requireRole('meet_director'), (req, res) => {
+  req.db.rinks.push({
+    id: nextId(req.db.rinks),
+    name: String(req.body.name || '').trim(),
+    phone: String(req.body.phone || '').trim(),
+    address: String(req.body.address || '').trim(),
+    website: String(req.body.website || '').trim(),
+    city: String(req.body.city || '').trim(),
+    state: String(req.body.state || '').trim(),
+    team: String(req.body.team || '').trim(),
+    notes: String(req.body.notes || '').trim(),
+  });
+
+  sanitizeRinks(req.db);
+  saveDb(req.db);
+  res.redirect('/portal/rinks');
+});
+
+app.get('/portal/rinks/:id/edit', requireRole('meet_director'), (req, res) => {
+  const rink = req.db.rinks.find(r => Number(r.id) === Number(req.params.id));
+  if (!rink) return res.redirect('/portal/rinks');
+
+  res.send(pageShell({
+    title: 'Edit Rink',
+    user: req.user,
+    bodyHtml: rinkForm(rink, `/portal/rinks/${rink.id}/edit`, 'Edit Rink'),
+  }));
+});
+
+app.post('/portal/rinks/:id/edit', requireRole('meet_director'), (req, res) => {
+  const rink = req.db.rinks.find(r => Number(r.id) === Number(req.params.id));
+  if (!rink) return res.redirect('/portal/rinks');
+
+  Object.assign(rink, {
+    name: String(req.body.name || '').trim(),
+    phone: String(req.body.phone || '').trim(),
+    address: String(req.body.address || '').trim(),
+    website: String(req.body.website || '').trim(),
+    city: String(req.body.city || '').trim(),
+    state: String(req.body.state || '').trim(),
+    team: String(req.body.team || '').trim(),
+    notes: String(req.body.notes || '').trim(),
+  });
+
+  sanitizeRinks(req.db);
+  saveDb(req.db);
+  res.redirect('/portal/rinks');
+});app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res) => {
+  const meet = getMeetOr404(req.db, req.params.meetId);
+  if (!meet) return res.redirect('/portal');
+
+  if (!canEditMeet(req.user, meet)) {
+    return res.status(403).send(pageShell({
+      title: 'Forbidden',
+      user: req.user,
+      bodyHtml: `
+        <h1>Forbidden</h1>
+        <div class="card">
+          <div class="danger">Only the meet owner can edit this meet.</div>
+        </div>
+      `,
+    }));
+  }
+
+  const rinkOptions = req.db.rinks.map(r => `
+    <option value="${r.id}" ${Number(meet.rinkId) === Number(r.id) ? 'selected' : ''}>
+      ${esc(r.name)} (${esc(r.city || '')}, ${esc(r.state || '')})
+    </option>
+  `).join('');
+
+  const groupsHtml = meet.groups.map((group, gi) => {
+    const divCards = ['novice', 'elite', 'open'].map(divKey => {
+      const div = group.divisions[divKey];
+      return `
+        <div class="groupCard">
+          <div class="row between">
+            <label style="margin:0">
+              <input type="checkbox" name="g_${gi}_${divKey}_enabled" ${div.enabled ? 'checked' : ''} />
+              ${divKey.toUpperCase()}
+            </label>
+            <div style="min-width:140px">
+              <label>Cost</label>
+              <input name="g_${gi}_${divKey}_cost" value="${esc(div.cost)}" />
+            </div>
+          </div>
+
+          <div class="spacer"></div>
+
+          <div class="grid4">
+            <div>
+              <label>D1</label>
+              <input name="g_${gi}_${divKey}_d1" value="${esc(div.distances[0] || '')}" />
+            </div>
+            <div>
+              <label>D2</label>
+              <input name="g_${gi}_${divKey}_d2" value="${esc(div.distances[1] || '')}" />
+            </div>
+            <div>
+              <label>D3</label>
+              <input name="g_${gi}_${divKey}_d3" value="${esc(div.distances[2] || '')}" />
+            </div>
+            <div>
+              <label>D4</label>
+              <input name="g_${gi}_${divKey}_d4" value="${esc(div.distances[3] || '')}" />
+            </div>
+          </div>
+          ${divKey === 'open' ? `<div class="note">Open runs as one rolling-start final with no lane limit and separate results.</div>` : ``}
+        </div>
+      `;
+    }).join('<div class="spacer"></div>');
+
+    return `
+      <div class="card">
+        <div class="row between">
+          <div>
+            <h3>${esc(group.label)}</h3>
+            <div class="muted">${esc(group.ages)}</div>
+          </div>
+        </div>
+        <div class="hr"></div>
+        ${divCards}
+      </div>
+    `;
+  }).join('<div class="spacer"></div>');
+
+  const body = `
+    <h1>Meet Builder</h1>
+    <form method="POST" action="/portal/meet/${meet.id}/builder/save" class="stackForm">
+      <div class="card">
+        <div class="row between">
+          <h2 style="margin:0">Meet Setup</h2>
+          <button class="btn" type="submit">Save Meet & Generate Race List</button>
+        </div>
+
+        <div class="spacer"></div>
+
+        <div class="grid3">
+          <div>
+            <label>Meet Name</label>
+            <input name="meetName" value="${esc(meet.meetName)}" required />
+          </div>
+
+          <div>
+            <label>Date</label>
+            <input type="date" name="date" value="${esc(meet.date)}" />
+          </div>
+
+          <div>
+            <label>Start Time</label>
+            <input type="time" name="startTime" value="${esc(meet.startTime)}" />
+          </div>
+
+          <div>
+            <label>Registration Close Date</label>
+            <input type="date" name="registrationCloseDate" value="${esc(meet.registrationCloseAt ? meet.registrationCloseAt.slice(0, 10) : '')}" />
+          </div>
+
+          <div>
+            <label>Registration Close Time</label>
+            <input type="time" name="registrationCloseTime" value="${esc(meet.registrationCloseAt ? meet.registrationCloseAt.slice(11, 16) : '')}" />
+          </div>
+
+          <div>
+            <label>Rink</label>
+            <select name="rinkId">${rinkOptions}</select>
+          </div>
+
+          <div>
+            <label>Track Length</label>
+            <input name="trackLength" value="${esc(meet.trackLength)}" />
+          </div>
+
+          <div>
+            <label>Lanes</label>
+            <input name="lanes" value="${esc(meet.lanes)}" />
+          </div>
+
+          <div>
+            <label>Status</label>
+            <select name="status">
+              <option value="draft" ${meet.status === 'draft' ? 'selected' : ''}>Draft</option>
+              <option value="published" ${meet.status === 'published' ? 'selected' : ''}>Published</option>
+              <option value="live" ${meet.status === 'live' ? 'selected' : ''}>Live</option>
+              <option value="complete" ${meet.status === 'complete' ? 'selected' : ''}>Complete</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="hr"></div>
+
+        <div class="row">
+          <label><input type="checkbox" name="timeTrialsEnabled" ${meet.timeTrialsEnabled ? 'checked' : ''} /> Time Trials</label>
+          <label><input type="checkbox" name="relayEnabled" ${meet.relayEnabled ? 'checked' : ''} /> Relays</label>
+          <label><input type="checkbox" name="judgesPanelRequired" ${meet.judgesPanelRequired ? 'checked' : ''} /> Judges Panel Required</label>
+          <label><input type="checkbox" name="isPublic" ${meet.isPublic ? 'checked' : ''} /> Show on Find a Meet</label>
+        </div>
+
+        <div class="spacer"></div>
+
+        <label>Meet Notes</label>
+        <textarea name="notes">${esc(meet.notes || '')}</textarea>
+
+        <div class="spacer"></div>
+
+        <label>Relay Notes</label>
+        <textarea name="relayNotes">${esc(meet.relayNotes || '')}</textarea>
+      </div>
+
+      ${groupsHtml}
+
+      <div class="card">
+        <div class="row between">
+          <div class="muted">
+            Saving now keeps divisions, distances, race costs, challenge-up logic, open rules, and race generation together.
+          </div>
+          <button class="btn" type="submit">Save Meet & Generate Race List</button>
+        </div>
+      </div>
+    </form>
+  `;
+
+  res.send(pageShell({
+    title: 'Meet Builder',
+    user: req.user,
+    meet,
+    activeTab: 'builder',
+    bodyHtml: body,
+  }));
+});
+
+app.post('/portal/meet/:meetId/builder/save', requireRole('meet_director'), (req, res) => {
+  const meet = getMeetOr404(req.db, req.params.meetId);
+  if (!meet) return res.redirect('/portal');
+  if (!canEditMeet(req.user, meet)) return res.status(403).send('Forbidden');
+
+  meet.meetName = String(req.body.meetName || 'New Meet').trim();
   meet.date = String(req.body.date || '').trim();
   meet.startTime = String(req.body.startTime || '').trim();
-  meet.registrationCloseDate = String(req.body.registrationCloseDate || '').trim();
-  meet.registrationCloseTime = String(req.body.registrationCloseTime || '').trim();
-  meet.status = String(req.body.status || 'Draft').trim();
-  meet.trackLength = parseNumber(req.body.trackLength, 100);
-  meet.lanes = parseNumber(req.body.lanes, 4);
-  meet.rinkId = parseNumber(req.body.rinkId, 1);
-  meet.ageRule = String(req.body.ageRule || AGE_RULES.USARS);
-  meet.customAgeCutoffDate = String(req.body.customAgeCutoffDate || '').trim();
+  meet.registrationCloseAt = combineDateTime(req.body.registrationCloseDate, req.body.registrationCloseTime);
+
+  meet.rinkId = Number(req.body.rinkId || 1);
+  meet.trackLength = Number(req.body.trackLength || 100);
+  meet.lanes = Number(req.body.lanes || 4);
+
   meet.timeTrialsEnabled = !!req.body.timeTrialsEnabled;
-  meet.openEnabled = !!req.body.openEnabled;
-  meet.quadEnabled = !!req.body.quadEnabled;
-  meet.relaysEnabled = !!req.body.relaysEnabled;
-  meet.allowDayOfRegistration = !!req.body.allowDayOfRegistration;
+  meet.relayEnabled = !!req.body.relayEnabled;
   meet.judgesPanelRequired = !!req.body.judgesPanelRequired;
-  meet.showOnFindAMeet = !!req.body.showOnFindAMeet;
-  meet.meetNotes = String(req.body.meetNotes || '').trim();
 
-  (meet.groups || []).forEach((group, idx) => {
-    STANDARD_DIVISION_KEYS.forEach(key => {
-      group.divisions[key].enabled = !!req.body[`g_${idx}_${key}_enabled`];
-      group.divisions[key].cost = parseNumber(req.body[`g_${idx}_${key}_cost`], 0);
-      group.divisions[key].distances = [
-        String(req.body[`g_${idx}_${key}_d1`] || '').trim(),
-        String(req.body[`g_${idx}_${key}_d2`] || '').trim(),
-        String(req.body[`g_${idx}_${key}_d3`] || '').trim(),
-        String(req.body[`g_${idx}_${key}_d4`] || '').trim(),
-      ];
-    });
+  meet.isPublic = !!req.body.isPublic;
+  meet.status = String(req.body.status || 'draft');
+
+  meet.notes = String(req.body.notes || '');
+  meet.relayNotes = String(req.body.relayNotes || '');
+
+  meet.groups.forEach((group, gi) => {
+    for (const divKey of ['novice', 'elite', 'open']) {
+      const enabled = !!req.body[`g_${gi}_${divKey}_enabled`];
+      const cost = Number(String(req.body[`g_${gi}_${divKey}_cost`] || '0').trim() || 0);
+      const d1 = String(req.body[`g_${gi}_${divKey}_d1`] || '').trim();
+      const d2 = String(req.body[`g_${gi}_${divKey}_d2`] || '').trim();
+      const d3 = String(req.body[`g_${gi}_${divKey}_d3`] || '').trim();
+      const d4 = String(req.body[`g_${gi}_${divKey}_d4`] || '').trim();
+
+      group.divisions[divKey] = {
+        enabled,
+        cost,
+        distances: [d1, d2, d3, d4],
+      };
+    }
   });
 
-  rebuildAllRegistrationDerivedFields(meet);
-  regenerateRaces(meet);
+  generateBaseRacesForMeet(meet);
   rebuildRaceAssignments(meet);
-  rebuildAllResults(meet);
+  ensureAtLeastOneBlock(meet);
+  ensureCurrentRace(meet);
+
   saveDb(req.db);
-  return res.redirect(`/portal/meet/${meet.id}/builder`);
+  res.redirect(`/portal/meet/${meet.id}/blocks`);
 });
 
-app.post('/portal/meet/:meetId/builder/open/save', requireRole(USER_ROLES.SUPER_ADMIN, USER_ROLES.MEET_DIRECTOR), (req, res) => {
+app.get('/meet/:meetId/register', (req, res) => {
+  const db = loadDb();
+  const meet = getMeetOr404(db, req.params.meetId);
+  const data = getSessionUser(req);
+
+  if (!meet) return res.redirect('/meets');
+  if (!meet.isPublic) return res.redirect('/meets');
+
+  const closed = isRegistrationClosed(meet);
+
+  const body = `
+    <h1>Register</h1>
+    <div class="card">
+      <h2>${esc(meet.meetName)}</h2>
+      <div class="muted">${esc(meet.date || '')} ${meet.startTime ? `• ${esc(meet.startTime)}` : ''}</div>
+      <div class="spacer"></div>
+
+      ${
+        closed
+          ? `<div class="danger">Registration Closed</div>`
+          : `
+            <form method="POST" action="/meet/${meet.id}/register">
+              <div class="grid3">
+                <div>
+                  <label>Skater Name</label>
+                  <input name="name" required />
+                </div>
+                <div>
+                  <label>Age</label>
+                  <input name="age" required />
+                </div>
+                <div>
+                  <label>Gender</label>
+                  <select name="gender">
+                    <option value="boys">Boy</option>
+                    <option value="girls">Girl</option>
+                    <option value="men">Men</option>
+                    <option value="women">Women</option>
+                  </select>
+                  <div class="note">Note: Ages 16+ are listed as Men/Women divisions.</div>
+                </div>
+                <div>
+                  <label>Team</label>
+                  <input name="team" list="teams-register" value="Midwest Racing" />
+                </div>
+                <div>
+                  <label>Sponsor (optional)</label>
+                  <input name="sponsor" placeholder="Bones Bearings" />
+                </div>
+              </div>
+
+              <datalist id="teams-register">
+                ${TEAM_LIST.map(t => `<option value="${esc(t)}"></option>`).join('')}
+              </datalist>
+
+              <div class="spacer"></div>
+
+              <div class="row">
+                <label><input type="checkbox" name="challengeUp" /> Challenge Up</label>
+                <label><input type="checkbox" name="novice" /> Novice</label>
+                <label><input type="checkbox" name="elite" /> Elite</label>
+                <label><input type="checkbox" name="open" /> Open</label>
+                <label><input type="checkbox" name="timeTrials" /> Time Trials</label>
+                <label><input type="checkbox" name="relays" /> Relays</label>
+              </div>
+
+              <div class="spacer"></div>
+
+              <button class="btn" type="submit">Register Skater</button>
+            </form>
+          `
+      }
+    </div>
+  `;
+
+  res.send(pageShell({
+    title: 'Register',
+    user: data?.user || null,
+    bodyHtml: body,
+  }));
+});
+
+app.post('/meet/:meetId/register', (req, res) => {
+  const db = loadDb();
+  const meet = getMeetOr404(db, req.params.meetId);
+
+  if (!meet) return res.redirect('/meets');
+  if (!meet.isPublic) return res.redirect('/meets');
+  if (isRegistrationClosed(meet)) return res.redirect(`/meet/${meet.id}/register`);
+
+  const gender = String(req.body.gender || '').trim() || 'boys';
+  const baseGroup = findAgeGroup(meet.groups, req.body.age, gender);
+  const finalGroup = challengeAdjustedGroup(meet, baseGroup, !!req.body.challengeUp);
+
+  const meetNumber =
+    (meet.registrations || []).reduce((max, r) => Math.max(max, Number(r.meetNumber) || 0), 0) + 1;
+
+  const reg = {
+    id: nextId(meet.registrations),
+    createdAt: nowIso(),
+
+    name: String(req.body.name || '').trim(),
+    age: Number(req.body.age || 0),
+    gender,
+    team: String(req.body.team || 'Midwest Racing').trim() || 'Midwest Racing',
+    sponsor: String(req.body.sponsor || '').trim(),
+
+    divisionGroupId: finalGroup?.id || '',
+    divisionGroupLabel: finalGroup?.label || 'Unassigned',
+
+    originalDivisionGroupId: baseGroup?.id || '',
+    originalDivisionGroupLabel: baseGroup?.label || '',
+
+    meetNumber,
+    helmetNumber: nextHelmetNumber(meet),
+
+    paid: false,
+    checkedIn: false,
+    totalCost: 0,
+
+    options: {
+      challengeUp: !!req.body.challengeUp,
+      novice: !!req.body.novice,
+      elite: !!req.body.elite,
+      open: !!req.body.open,
+      timeTrials: !!req.body.timeTrials,
+      relays: !!req.body.relays,
+    },
+  };
+
+  meet.registrations.push(reg);
+  rebuildRaceAssignments(meet);
+  ensureCurrentRace(meet);
+  saveDb(db);
+
+  res.redirect(`/meet/${meet.id}/register?ok=1`);
+});
+
+function registrationForm(meet, reg, action, title) {
+  const gender = reg.gender || 'boys';
+
+  return `
+    <h1>${esc(title)}</h1>
+    <div class="card">
+      <form method="POST" action="${action}">
+        <div class="grid3">
+          <div>
+            <label>Skater Name</label>
+            <input name="name" value="${esc(reg.name || '')}" required />
+          </div>
+          <div>
+            <label>Age</label>
+            <input name="age" value="${esc(reg.age || '')}" required />
+          </div>
+          <div>
+            <label>Gender</label>
+            <select name="gender">
+              <option value="boys" ${gender === 'boys' ? 'selected' : ''}>Boy</option>
+              <option value="girls" ${gender === 'girls' ? 'selected' : ''}>Girl</option>
+              <option value="men" ${gender === 'men' ? 'selected' : ''}>Men</option>
+              <option value="women" ${gender === 'women' ? 'selected' : ''}>Women</option>
+            </select>
+            <div class="note">Note: Ages 16+ are listed as Men/Women divisions.</div>
+          </div>
+          <div>
+            <label>Team</label>
+            <input name="team" list="teams-edit" value="${esc(reg.team || 'Midwest Racing')}" />
+          </div>
+          <div>
+            <label>Sponsor (optional)</label>
+            <input name="sponsor" value="${esc(reg.sponsor || '')}" />
+          </div>
+        </div>
+
+        <datalist id="teams-edit">
+          ${TEAM_LIST.map(t => `<option value="${esc(t)}"></option>`).join('')}
+        </datalist>
+
+        <div class="spacer"></div>
+
+        <div class="row">
+          <label><input type="checkbox" name="challengeUp" ${reg.options?.challengeUp ? 'checked' : ''} /> Challenge Up</label>
+          <label><input type="checkbox" name="novice" ${reg.options?.novice ? 'checked' : ''} /> Novice</label>
+          <label><input type="checkbox" name="elite" ${reg.options?.elite ? 'checked' : ''} /> Elite</label>
+          <label><input type="checkbox" name="open" ${reg.options?.open ? 'checked' : ''} /> Open</label>
+          <label><input type="checkbox" name="timeTrials" ${reg.options?.timeTrials ? 'checked' : ''} /> Time Trials</label>
+          <label><input type="checkbox" name="relays" ${reg.options?.relays ? 'checked' : ''} /> Relays</label>
+        </div>
+
+        <div class="spacer"></div>
+
+        <button class="btn" type="submit">Save Racer</button>
+        <a class="btn2" href="/portal/meet/${meet.id}/registered">Back</a>
+      </form>
+    </div>
+  `;
+}
+
+app.get('/portal/meet/:meetId/registered', requireRole('meet_director'), (req, res) => {
+  const meet = getMeetOr404(req.db, req.params.meetId);
+  if (!meet) return res.redirect('/portal');
+  if (!canEditMeet(req.user, meet)) return res.status(403).send('Forbidden');
+
+  ensureRegistrationTotalsAndNumbers(meet);
+  saveDb(req.db);
+
+  const rows = (meet.registrations || []).map(r => `
+    <tr>
+      <td>${esc(r.meetNumber)}</td>
+      <td>${esc(r.helmetNumber)}</td>
+      <td>
+        ${esc(r.name)}
+        ${sponsorLineHtml(r.sponsor || '')}
+      </td>
+      <td>${esc(r.age)}</td>
+      <td>${esc(r.team)}</td>
+      <td>
+        ${esc(r.divisionGroupLabel || '')}
+        ${r.options?.challengeUp ? `<div class="note">Challenge Up from ${esc(r.originalDivisionGroupLabel || '')}</div>` : ``}
+      </td>
+      <td>${['challengeUp', 'novice', 'elite', 'open', 'timeTrials', 'relays'].filter(k => r.options?.[k]).join(', ') || '-'}</td>
+      <td>$${esc(r.totalCost)}</td>
+      <td>${r.paid ? '✔' : '—'}</td>
+      <td>${r.checkedIn ? '✔' : '—'}</td>
+      <td>
+        <div class="actionRow">
+          <a class="btn2 small" href="/portal/meet/${meet.id}/registered/${r.id}/edit">Edit</a>
+          <a class="btnDanger small" href="/portal/meet/${meet.id}/registered/${r.id}/delete">Delete</a>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+
+  const body = `
+    <h1>Registered</h1>
+    <div class="card">
+      <div class="row between">
+        <div>
+          <h2 style="margin:0">${esc(meet.meetName)}</h2>
+          <div class="muted small">
+            Registration close: ${meet.registrationCloseAt ? esc(meet.registrationCloseAt.replace('T', ' ')) : 'Not set'}
+          </div>
+        </div>
+        <div class="row">
+          <form method="POST" action="/portal/meet/${meet.id}/assign-races">
+            <button class="btn2" type="submit">Build Race Assignments</button>
+          </form>
+          <a class="btn" href="/meet/${meet.id}/register" target="_blank">Open Public Registration</a>
+          <a class="btn2" href="/portal/meet/${meet.id}/registered/print-race-list" target="_blank">Print Race List</a>
+        </div>
+      </div>
+
+      <div class="spacer"></div>
+
+      <table class="table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Helmet</th>
+            <th>Name</th>
+            <th>Age</th>
+            <th>Team</th>
+            <th>Division</th>
+            <th>Entries</th>
+            <th>Total</th>
+            <th>Paid</th>
+            <th>Checked In</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows || `<tr><td colspan="11" class="muted">No registrations yet.</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  res.send(pageShell({
+    title: 'Registered',
+    user: req.user,
+    meet,
+    activeTab: 'registered',
+    bodyHtml: body,
+  }));
+});
+
+app.get('/portal/meet/:meetId/registered/:regId/edit', requireRole('meet_director'), (req, res) => {
   const meet = getMeetOr404(req.db, req.params.meetId);
   if (!meet || !canEditMeet(req.user, meet)) return res.redirect('/portal');
 
-  (meet.openGroups || []).forEach((group, idx) => {
-    group.enabled = !!req.body[`open_${idx}_enabled`];
-    group.cost = parseNumber(req.body[`open_${idx}_cost`], 0);
-    group.distances = [
-      String(req.body[`open_${idx}_d1`] || '').trim(),
-      String(req.body[`open_${idx}_d2`] || '').trim(),
-      String(req.body[`open_${idx}_d3`] || '').trim(),
-      String(req.body[`open_${idx}_d4`] || '').trim(),
-    ];
-  });
+  const reg = (meet.registrations || []).find(r => Number(r.id) === Number(req.params.regId));
+  if (!reg) return res.redirect(`/portal/meet/${meet.id}/registered`);
 
-  regenerateRaces(meet);
-  rebuildRaceAssignments(meet);
-  rebuildAllResults(meet);
-  saveDb(req.db);
-  return res.redirect(`/portal/meet/${meet.id}/builder/open`);
+  res.send(pageShell({
+    title: 'Edit Racer',
+    user: req.user,
+    meet,
+    activeTab: 'registered',
+    bodyHtml: registrationForm(meet, reg, `/portal/meet/${meet.id}/registered/${reg.id}/edit`, 'Edit Racer'),
+  }));
 });
 
-app.post('/portal/meet/:meetId/builder/quad/save', requireRole(USER_ROLES.SUPER_ADMIN, USER_ROLES.MEET_DIRECTOR), (req, res) => {
+app.post('/portal/meet/:meetId/registered/:regId/edit', requireRole('meet_director'), (req, res) => {
   const meet = getMeetOr404(req.db, req.params.meetId);
   if (!meet || !canEditMeet(req.user, meet)) return res.redirect('/portal');
 
-  (meet.quadGroups || []).forEach((group, idx) => {
-    group.enabled = !!req.body[`quad_${idx}_enabled`];
-    group.cost = parseNumber(req.body[`quad_${idx}_cost`], 0);
-    group.distances = [
-      String(req.body[`quad_${idx}_d1`] || '').trim(),
-      String(req.body[`quad_${idx}_d2`] || '').trim(),
-      String(req.body[`quad_${idx}_d3`] || '').trim(),
-      String(req.body[`quad_${idx}_d4`] || '').trim(),
-    ];
-  });
+  const reg = (meet.registrations || []).find(r => Number(r.id) === Number(req.params.regId));
+  if (!reg) return res.redirect(`/portal/meet/${meet.id}/registered`);
 
-  regenerateRaces(meet);
+  const gender = String(req.body.gender || '').trim() || 'boys';
+  const baseGroup = findAgeGroup(meet.groups, req.body.age, gender);
+  const finalGroup = challengeAdjustedGroup(meet, baseGroup, !!req.body.challengeUp);
+
+  reg.name = String(req.body.name || '').trim();
+  reg.age = Number(req.body.age || 0);
+  reg.gender = gender;
+  reg.team = String(req.body.team || 'Midwest Racing').trim() || 'Midwest Racing';
+  reg.sponsor = String(req.body.sponsor || '').trim();
+
+  reg.originalDivisionGroupId = baseGroup?.id || '';
+  reg.originalDivisionGroupLabel = baseGroup?.label || '';
+  reg.divisionGroupId = finalGroup?.id || '';
+  reg.divisionGroupLabel = finalGroup?.label || 'Unassigned';
+
+  reg.options = {
+    challengeUp: !!req.body.challengeUp,
+    novice: !!req.body.novice,
+    elite: !!req.body.elite,
+    open: !!req.body.open,
+    timeTrials: !!req.body.timeTrials,
+    relays: !!req.body.relays,
+  };
+
   rebuildRaceAssignments(meet);
-  rebuildAllResults(meet);
   saveDb(req.db);
-  return res.redirect(`/portal/meet/${meet.id}/builder/quad`);
+  res.redirect(`/portal/meet/${meet.id}/registered`);
 });
 
-app.post('/portal/meet/:meetId/blocks/new', requireRole(USER_ROLES.SUPER_ADMIN, USER_ROLES.MEET_DIRECTOR), (req, res) => {
+app.get('/portal/meet/:meetId/registered/:regId/delete', requireRole('meet_director'), (req, res) => {
   const meet = getMeetOr404(req.db, req.params.meetId);
   if (!meet || !canEditMeet(req.user, meet)) return res.redirect('/portal');
 
+  const reg = (meet.registrations || []).find(r => Number(r.id) === Number(req.params.regId));
+  if (!reg) return res.redirect(`/portal/meet/${meet.id}/registered`);
+
+  const body = `
+    <h1>Delete Racer</h1>
+    <div class="card">
+      <div class="danger">
+        This will remove ${esc(reg.name)} from registrations and race assignments.
+      </div>
+      <div class="spacer"></div>
+      <form method="POST" action="/portal/meet/${meet.id}/registered/${reg.id}/delete">
+        <button class="btnDanger" type="submit">Delete Racer</button>
+        <a class="btn2" href="/portal/meet/${meet.id}/registered">Cancel</a>
+      </form>
+    </div>
+  `;
+
+  res.send(pageShell({
+    title: 'Delete Racer',
+    user: req.user,
+    meet,
+    activeTab: 'registered',
+    bodyHtml: body,
+  }));
+});
+
+app.post('/portal/meet/:meetId/registered/:regId/delete', requireRole('meet_director'), (req, res) => {
+  const meet = getMeetOr404(req.db, req.params.meetId);
+  if (!meet || !canEditMeet(req.user, meet)) return res.redirect('/portal');
+
+  meet.registrations = (meet.registrations || []).filter(r => Number(r.id) !== Number(req.params.regId));
+  rebuildRaceAssignments(meet);
+  saveDb(req.db);
+
+  res.redirect(`/portal/meet/${meet.id}/registered`);
+});
+
+app.post('/portal/meet/:meetId/assign-races', requireRole('meet_director'), (req, res) => {
+  const meet = getMeetOr404(req.db, req.params.meetId);
+  if (!meet || !canEditMeet(req.user, meet)) return res.redirect('/portal');
+
+  rebuildRaceAssignments(meet);
+  ensureCurrentRace(meet);
+  saveDb(req.db);
+
+  res.redirect(`/portal/meet/${meet.id}/registered`);
+});
+
+app.get('/portal/meet/:meetId/checkin', requireRole('meet_director'), (req, res) => {
+  const meet = getMeetOr404(req.db, req.params.meetId);
+  if (!meet) return res.redirect('/portal');
+  if (!canEditMeet(req.user, meet)) return res.status(403).send('Forbidden');
+
+  ensureRegistrationTotalsAndNumbers(meet);
+  saveDb(req.db);
+
+  const totalOwed = (meet.registrations || []).reduce((sum, r) => sum + Number(r.totalCost || 0), 0);
+  const totalPaid = (meet.registrations || []).filter(r => r.paid).reduce((sum, r) => sum + Number(r.totalCost || 0), 0);
+
+  const rows = (meet.registrations || []).map(r => `
+    <tr class="checkin-row" data-name="${esc(String(r.name || '').toLowerCase())}" data-team="${esc(String(r.team || '').toLowerCase())}">
+      <td>${esc(r.meetNumber)}</td>
+      <td>
+        ${esc(r.name)}
+        ${sponsorLineHtml(r.sponsor || '')}
+      </td>
+      <td>${esc(r.team)}</td>
+      <td>${esc(r.divisionGroupLabel)}</td>
+      <td>
+        <form method="POST" action="/portal/meet/${meet.id}/checkin/helmet/${r.id}" class="checkin-form row center">
+          <input style="max-width:90px" name="helmetNumber" value="${esc(r.helmetNumber)}" />
+          <button class="btn2 small" type="submit">Save</button>
+        </form>
+      </td>
+      <td>$${esc(r.totalCost)}</td>
+      <td>
+        <form method="POST" action="/portal/meet/${meet.id}/checkin/toggle-paid/${r.id}" class="checkin-form">
+          <button class="${r.paid ? 'btnGood' : 'btn2'} small" type="submit">
+            ${r.paid ? 'Paid' : 'Mark Paid'}
+          </button>
+        </form>
+      </td>
+      <td>
+        <form method="POST" action="/portal/meet/${meet.id}/checkin/toggle-checkin/${r.id}" class="checkin-form">
+          <button class="${r.checkedIn ? 'btnGood' : 'btn2'} small" type="submit">
+            ${r.checkedIn ? 'Checked In' : 'Check In'}
+          </button>
+        </form>
+      </td>
+    </tr>
+  `).join('');
+
+  const body = `
+    <h1>Check-In</h1>
+    <div class="card">
+      <div class="row between">
+        <div>
+          <h2 style="margin:0">${esc(meet.meetName)}</h2>
+          <div class="muted">Money, helmet numbers, sponsor visibility, and meet check-in all in one place.</div>
+        </div>
+        <div class="row">
+          <form method="POST" action="/portal/meet/${meet.id}/checkin/reassign-helmets">
+            <button class="btn2" type="submit">Reassign Helmet Numbers</button>
+          </form>
+        </div>
+      </div>
+
+      <div class="spacer"></div>
+
+      <div class="row">
+        <span class="chip">Registrations: ${(meet.registrations || []).length}</span>
+        <span class="chip">Total Owed: $${totalOwed}</span>
+        <span class="chip">Paid: $${totalPaid}</span>
+        <span class="chip">Checked In: ${(meet.registrations || []).filter(r => r.checkedIn).length}</span>
+      </div>
+
+      <div class="spacer"></div>
+
+      <div class="grid3">
+        <div>
+          <label>Search skater</label>
+          <input id="checkinSearch" placeholder="jan / nash / dale" oninput="applyCheckinFilters()" />
+        </div>
+        <div>
+          <label>Team filter</label>
+          <input id="checkinTeam" placeholder="midwest / infinity" oninput="applyCheckinFilters()" />
+        </div>
+        <div>
+          <label>Status</label>
+          <select id="checkinStatus" onchange="applyCheckinFilters()">
+            <option value="all">All</option>
+            <option value="not_paid">Not Paid</option>
+            <option value="not_checked">Not Checked In</option>
+            <option value="checked">Checked In</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="spacer"></div>
+
+      <table class="table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Name</th>
+            <th>Team</th>
+            <th>Division</th>
+            <th>Helmet #</th>
+            <th>Total</th>
+            <th>Paid</th>
+            <th>Checked In</th>
+          </tr>
+        </thead>
+        <tbody id="checkinTableBody">
+          ${rows || `<tr><td colspan="8" class="muted">No registrations yet.</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+
+    <script>
+      const savedScrollY = sessionStorage.getItem('checkinScrollY');
+      if (savedScrollY !== null) {
+        window.scrollTo(0, parseInt(savedScrollY, 10));
+        sessionStorage.removeItem('checkinScrollY');
+      }
+
+      document.querySelectorAll('.checkin-form').forEach(form => {
+        form.addEventListener('submit', () => {
+          sessionStorage.setItem('checkinScrollY', String(window.scrollY));
+        });
+      });
+
+      function applyCheckinFilters() {
+        const nameQ = (document.getElementById('checkinSearch').value || '').toLowerCase().trim();
+        const teamQ = (document.getElementById('checkinTeam').value || '').toLowerCase().trim();
+        const status = document.getElementById('checkinStatus').value;
+
+        document.querySelectorAll('.checkin-row').forEach(row => {
+          const name = row.getAttribute('data-name') || '';
+          const team = row.getAttribute('data-team') || '';
+          const paidText = row.children[6]?.innerText || '';
+          const checkedText = row.children[7]?.innerText || '';
+
+          const matchesName = !nameQ || name.includes(nameQ);
+          const matchesTeam = !teamQ || team.includes(teamQ);
+
+          let matchesStatus = true;
+          if (status === 'not_paid') matchesStatus = !/paid/i.test(paidText);
+          if (status === 'not_checked') matchesStatus = !/checked in/i.test(checkedText);
+          if (status === 'checked') matchesStatus = /checked in/i.test(checkedText);
+
+          row.classList.toggle('hidden', !(matchesName && matchesTeam && matchesStatus));
+        });
+      }
+    </script>
+  `;
+
+  res.send(pageShell({
+    title: 'Check-In',
+    user: req.user,
+    meet,
+    activeTab: 'checkin',
+    bodyHtml: body,
+  }));
+});
+
+app.post('/portal/meet/:meetId/checkin/toggle-paid/:regId', requireRole('meet_director'), (req, res) => {
+  const meet = getMeetOr404(req.db, req.params.meetId);
+  if (!meet || !canEditMeet(req.user, meet)) return res.redirect('/portal');
+
+  const reg = (meet.registrations || []).find(r => Number(r.id) === Number(req.params.regId));
+  if (reg) reg.paid = !reg.paid;
+
+  saveDb(req.db);
+  res.redirect(`/portal/meet/${meet.id}/checkin`);
+});
+
+app.post('/portal/meet/:meetId/checkin/toggle-checkin/:regId', requireRole('meet_director'), (req, res) => {
+  const meet = getMeetOr404(req.db, req.params.meetId);
+  if (!meet || !canEditMeet(req.user, meet)) return res.redirect('/portal');
+
+  const reg = (meet.registrations || []).find(r => Number(r.id) === Number(req.params.regId));
+  if (reg) reg.checkedIn = !reg.checkedIn;
+
+  saveDb(req.db);
+  res.redirect(`/portal/meet/${meet.id}/checkin`);
+});
+
+app.post('/portal/meet/:meetId/checkin/helmet/:regId', requireRole('meet_director'), (req, res) => {
+  const meet = getMeetOr404(req.db, req.params.meetId);
+  if (!meet || !canEditMeet(req.user, meet)) return res.redirect('/portal');
+
+  const reg = (meet.registrations || []).find(r => Number(r.id) === Number(req.params.regId));
+  if (reg) reg.helmetNumber = Number(req.body.helmetNumber || '') || '';
+
+  rebuildRaceAssignments(meet);
+  saveDb(req.db);
+  res.redirect(`/portal/meet/${meet.id}/checkin`);
+});
+
+app.post('/portal/meet/:meetId/checkin/reassign-helmets', requireRole('meet_director'), (req, res) => {
+  const meet = getMeetOr404(req.db, req.params.meetId);
+  if (!meet || !canEditMeet(req.user, meet)) return res.redirect('/portal');
+
+  let n = 1;
+  for (const reg of meet.registrations || []) {
+    reg.helmetNumber = n++;
+  }
+
+  rebuildRaceAssignments(meet);
+  saveDb(req.db);
+  res.redirect(`/portal/meet/${meet.id}/checkin`);
+});app.get('/portal/meet/:meetId/blocks', requireRole('meet_director'), (req, res) => {
+  const meet = getMeetOr404(req.db, req.params.meetId);
+  if (!meet) return res.redirect('/portal');
+
+  if (!canEditMeet(req.user, meet)) {
+    return res.status(403).send(pageShell({
+      title: 'Forbidden',
+      user: req.user,
+      bodyHtml: `
+        <h1>Forbidden</h1>
+        <div class="card">
+          <div class="danger">Only the meet owner can edit this meet.</div>
+        </div>
+      `,
+    }));
+  }
+
+  ensureAtLeastOneBlock(meet);
+  ensureCurrentRace(meet);
+  saveDb(req.db);
+
+  const raceById = new Map((meet.races || []).map(r => [r.id, r]));
+  const assigned = new Set();
+
+  for (const block of meet.blocks || []) {
+    for (const rid of block.raceIds || []) assigned.add(rid);
+  }
+
+  const unassigned = (meet.races || []).filter(r => !assigned.has(r.id));
+
+  const blocksHtml = (meet.blocks || []).map(block => `
+    <div class="block">
+      <div class="blockHead">
+        <div>
+          <div style="font-weight:900;font-size:18px">${esc(block.name)}</div>
+          <div class="muted small">${esc(block.day || 'Day 1')} • ${esc((block.type || 'race').toUpperCase())}</div>
+        </div>
+        <div class="row">
+          <button class="btn2 small" type="button" onclick="renameBlock('${esc(block.id)}')">Rename</button>
+          <button class="btnDanger small" type="button" onclick="deleteBlock('${esc(block.id)}')">Delete</button>
+        </div>
+      </div>
+
+      <div class="spacer"></div>
+
+      <div class="grid3">
+        <div>
+          <label>Day</label>
+          <select onchange="setBlockDay('${esc(block.id)}', this.value)">
+            ${['Day 1', 'Day 2', 'Day 3'].map(day => `
+              <option value="${day}" ${block.day === day ? 'selected' : ''}>${day}</option>
+            `).join('')}
+          </select>
+        </div>
+
+        <div>
+          <label>Block Type</label>
+          <select onchange="setBlockType('${esc(block.id)}', this.value)">
+            ${['race', 'break', 'lunch', 'awards', 'practice'].map(type => `
+              <option value="${type}" ${(block.type || 'race') === type ? 'selected' : ''}>${type}</option>
+            `).join('')}
+          </select>
+        </div>
+
+        <div>
+          <label>Block Notes</label>
+          <input
+            value="${esc(block.notes || '')}"
+            onblur="setBlockNotes('${esc(block.id)}', this.value)"
+            placeholder="short novice / lunch / awards"
+          />
+        </div>
+      </div>
+
+      <div class="spacer"></div>
+
+      <div class="dropZone" data-drop-block="${esc(block.id)}">
+        ${
+          (block.raceIds || []).map(rid => {
+            const race = raceById.get(rid);
+            if (!race) return '';
+
+            const isCurrent = meet.currentRaceId === race.id;
+            return `
+              <div
+                class="raceItem ${isCurrent ? 'activeCurrent' : ''}"
+                draggable="${(block.type || 'race') === 'race' ? 'true' : 'false'}"
+                data-race-id="${esc(race.id)}"
+              >
+                <div style="font-weight:900">
+                  ${esc(race.groupLabel)} • ${esc(cap(race.division))}
+                </div>
+                <div class="raceMeta">
+                  ${esc(race.distanceLabel)} • D${esc(race.dayIndex)} • ${esc(raceDisplayStage(race))} • ${esc(cap(race.startType))} Start
+                </div>
+              </div>
+            `;
+          }).join('') || `<div class="note">${(block.type || 'race') === 'race' ? 'Drop races here…' : 'Non-race block.'}</div>`
+        }
+      </div>
+    </div>
+  `).join('<div class="spacer"></div>');
+
+  const unassignedHtml = unassigned.map(race => `
+    <div
+      class="raceItem ${meet.currentRaceId === race.id ? 'activeCurrent' : ''}"
+      draggable="true"
+      data-race-id="${esc(race.id)}"
+      data-group-label="${esc(String(race.groupLabel || '').toLowerCase())}"
+      data-division="${esc(race.division)}"
+      data-day-index="${esc(race.dayIndex)}"
+    >
+      <div style="font-weight:900">${esc(race.groupLabel)} • ${esc(cap(race.division))}</div>
+      <div class="raceMeta">
+        ${esc(race.distanceLabel)} • D${esc(race.dayIndex)} • ${esc(raceDisplayStage(race))} • ${esc(cap(race.startType))} Start
+      </div>
+    </div>
+  `).join('');
+
+  const body = `
+    <h1>Block Builder</h1>
+
+    <div class="card">
+      <div class="row between">
+        <div>
+          <h2 style="margin:0">${esc(meet.meetName)}</h2>
+          <div class="muted small">
+            Drag and drop races into blocks. Filters stay remembered now.
+          </div>
+        </div>
+        <div class="row">
+          <button class="btn2" type="button" onclick="addBlock()">Add Block</button>
+          <form method="POST" action="/portal/meet/${meet.id}/assign-races">
+            <button class="btn2" type="submit">Rebuild Race Assignments</button>
+          </form>
+          <a class="btn" href="/portal/meet/${meet.id}/registered/print-race-list" target="_blank">Print Race List</a>
+        </div>
+      </div>
+
+      <div class="spacer"></div>
+
+      <div class="row">
+        <span class="chip">Races: ${(meet.races || []).length}</span>
+        <span class="chip" id="unassignedCountChip">Unassigned: ${unassigned.length}</span>
+        <span class="chip">Blocks: ${(meet.blocks || []).length}</span>
+      </div>
+    </div>
+
+    <div class="spacer"></div>
+
+    <div class="bb">
+      <div>${blocksHtml}</div>
+
+      <div class="rightCol">
+        <div class="card">
+          <h2 style="margin:0">Unassigned Races</h2>
+          <div class="spacer"></div>
+
+          <div class="filters">
+            <div>
+              <label>Search division</label>
+              <input id="raceSearch" placeholder="elementary / freshman / girls" oninput="applyRaceFilters()" />
+            </div>
+
+            <div>
+              <label>Class</label>
+              <select id="classFilter" onchange="applyRaceFilters()">
+                <option value="all">All</option>
+                <option value="novice">Novice</option>
+                <option value="elite">Elite</option>
+                <option value="open">Open</option>
+              </select>
+            </div>
+
+            <div>
+              <label>Distance</label>
+              <select id="distanceFilter" onchange="applyRaceFilters()">
+                <option value="all">All</option>
+                <option value="1">D1</option>
+                <option value="2">D2</option>
+                <option value="3">D3</option>
+                <option value="4">D4</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="hr"></div>
+
+          <div class="dropZone" data-drop-block="__unassigned__" id="unassignedZone">
+            ${unassignedHtml || `<div class="note">No unassigned races.</div>`}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let dragRaceId = null;
+      const meetId = ${JSON.stringify(meet.id)};
+
+      function saveBlockFilters() {
+        localStorage.setItem('ssm_block_search', document.getElementById('raceSearch').value || '');
+        localStorage.setItem('ssm_block_class', document.getElementById('classFilter').value || 'all');
+        localStorage.setItem('ssm_block_distance', document.getElementById('distanceFilter').value || 'all');
+      }
+
+      function restoreBlockFilters() {
+        document.getElementById('raceSearch').value = localStorage.getItem('ssm_block_search') || '';
+        document.getElementById('classFilter').value = localStorage.getItem('ssm_block_class') || 'all';
+        document.getElementById('distanceFilter').value = localStorage.getItem('ssm_block_distance') || 'all';
+      }
+
+      function attachDnD() {
+        document.querySelectorAll('.raceItem').forEach(el => {
+          if (el.getAttribute('draggable') !== 'true') return;
+
+          el.addEventListener('dragstart', e => {
+            dragRaceId = el.getAttribute('data-race-id');
+            e.dataTransfer.setData('text/plain', dragRaceId);
+            saveBlockFilters();
+          });
+        });
+
+        document.querySelectorAll('.dropZone').forEach(zone => {
+          zone.addEventListener('dragover', e => {
+            e.preventDefault();
+            zone.classList.add('over');
+          });
+
+          zone.addEventListener('dragleave', () => {
+            zone.classList.remove('over');
+          });
+
+          zone.addEventListener('drop', async e => {
+            e.preventDefault();
+            zone.classList.remove('over');
+
+            const raceId = e.dataTransfer.getData('text/plain') || dragRaceId;
+            const destBlockId = zone.getAttribute('data-drop-block');
+
+            saveBlockFilters();
+
+            const res = await fetch('/api/meet/' + meetId + '/blocks/move-race', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ raceId, destBlockId }),
+            });
+
+            if (res.ok) location.reload();
+            else alert('Move failed');
+          });
+        });
+      }
+
+      async function addBlock() {
+        saveBlockFilters();
+        const res = await fetch('/api/meet/' + meetId + '/blocks/add', { method: 'POST' });
+        if (res.ok) location.reload();
+      }
+
+      async function renameBlock(id) {
+        const name = prompt('Block name:');
+        if (!name) return;
+        saveBlockFilters();
+
+        const res = await fetch('/api/meet/' + meetId + '/blocks/update-meta', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ blockId: id, name }),
+        });
+
+        if (res.ok) location.reload();
+      }
+
+      async function deleteBlock(id) {
+        if (!confirm('Delete this block? Its races will move back to Unassigned.')) return;
+        saveBlockFilters();
+
+        const res = await fetch('/api/meet/' + meetId + '/blocks/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ blockId: id }),
+        });
+
+        if (res.ok) location.reload();
+      }
+
+      async function setBlockDay(id, day) {
+        saveBlockFilters();
+        await fetch('/api/meet/' + meetId + '/blocks/update-meta', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ blockId: id, day }),
+        });
+      }
+
+      async function setBlockType(id, type) {
+        saveBlockFilters();
+        await fetch('/api/meet/' + meetId + '/blocks/update-meta', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ blockId: id, type }),
+        });
+        location.reload();
+      }
+
+      async function setBlockNotes(id, notes) {
+        saveBlockFilters();
+        await fetch('/api/meet/' + meetId + '/blocks/update-meta', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ blockId: id, notes }),
+        });
+      }
+
+      function applyRaceFilters() {
+        saveBlockFilters();
+
+        const q = (document.getElementById('raceSearch').value || '').toLowerCase().trim();
+        const klass = document.getElementById('classFilter').value;
+        const dist = document.getElementById('distanceFilter').value;
+
+        const items = Array.from(document.querySelectorAll('#unassignedZone .raceItem'));
+        let visible = 0;
+
+        for (const item of items) {
+          const matchesSearch = !q || (item.getAttribute('data-group-label') || '').includes(q);
+          const matchesClass = klass === 'all' || item.getAttribute('data-division') === klass;
+          const matchesDist = dist === 'all' || item.getAttribute('data-day-index') === dist;
+
+          const show = matchesSearch && matchesClass && matchesDist;
+          item.classList.toggle('hidden', !show);
+          if (show) visible += 1;
+        }
+
+        document.getElementById('unassignedCountChip').textContent = 'Unassigned: ' + visible;
+      }
+
+      restoreBlockFilters();
+      attachDnD();
+      applyRaceFilters();
+    </script>
+  `;
+
+  res.send(pageShell({
+    title: 'Block Builder',
+    user: req.user,
+    meet,
+    activeTab: 'blocks',
+    bodyHtml: body,
+  }));
+});
+
+app.post('/api/meet/:meetId/blocks/add', requireRole('meet_director'), (req, res) => {
+  const meet = getMeetOr404(req.db, req.params.meetId);
+  if (!meet || !canEditMeet(req.user, meet)) return res.status(403).send('Forbidden');
+
+  const n = (meet.blocks || []).length + 1;
   meet.blocks.push({
-    id: `block_${crypto.randomBytes(4).toString('hex')}`,
-    name: `Block ${(meet.blocks || []).length + 1}`,
+    id: 'b' + n,
+    name: 'Block ' + n,
     day: 'Day 1',
+    type: 'race',
     notes: '',
     raceIds: [],
   });
 
+  meet.updatedAt = nowIso();
   saveDb(req.db);
-  return res.redirect(`/portal/meet/${meet.id}/blocks`);
+  res.json({ ok: true });
 });
 
-app.post('/portal/meet/:meetId/block/:blockId/meta', requireRole(USER_ROLES.SUPER_ADMIN, USER_ROLES.MEET_DIRECTOR), (req, res) => {
+app.post('/api/meet/:meetId/blocks/update-meta', requireRole('meet_director'), (req, res) => {
   const meet = getMeetOr404(req.db, req.params.meetId);
-  if (!meet || !canEditMeet(req.user, meet)) return res.redirect('/portal');
+  if (!meet || !canEditMeet(req.user, meet)) return res.status(403).send('Forbidden');
 
-  const block = (meet.blocks || []).find(b => b.id === req.params.blockId);
-  if (block) {
-    block.name = String(req.body.name || block.name).trim() || block.name;
-    block.day = String(req.body.day || block.day).trim() || 'Day 1';
-    block.notes = String(req.body.notes || '').trim();
+  const block = (meet.blocks || []).find(b => b.id === String(req.body.blockId || ''));
+  if (!block) return res.status(404).send('Not found');
+
+  if (typeof req.body.name === 'string' && req.body.name.trim()) block.name = String(req.body.name).trim();
+  if (typeof req.body.day === 'string' && req.body.day.trim()) block.day = String(req.body.day).trim();
+  if (typeof req.body.type === 'string' && req.body.type.trim()) block.type = String(req.body.type).trim();
+  if (typeof req.body.notes === 'string') block.notes = String(req.body.notes);
+
+  meet.updatedAt = nowIso();
+  saveDb(req.db);
+  res.json({ ok: true });
+});
+
+app.post('/api/meet/:meetId/blocks/delete', requireRole('meet_director'), (req, res) => {
+  const meet = getMeetOr404(req.db, req.params.meetId);
+  if (!meet || !canEditMeet(req.user, meet)) return res.status(403).send('Forbidden');
+
+  const blockId = String(req.body.blockId || '');
+  const block = (meet.blocks || []).find(b => b.id === blockId);
+  if (!block) return res.status(404).send('Block not found');
+
+  meet.blocks = (meet.blocks || []).filter(b => b.id !== blockId);
+  ensureAtLeastOneBlock(meet);
+  ensureCurrentRace(meet);
+  meet.updatedAt = nowIso();
+
+  saveDb(req.db);
+  res.json({ ok: true });
+});
+
+app.post('/api/meet/:meetId/blocks/move-race', requireRole('meet_director'), (req, res) => {
+  const meet = getMeetOr404(req.db, req.params.meetId);
+  if (!meet || !canEditMeet(req.user, meet)) return res.status(403).send('Forbidden');
+
+  const raceId = String(req.body.raceId || '');
+  const destBlockId = String(req.body.destBlockId || '');
+
+  for (const block of meet.blocks || []) {
+    block.raceIds = (block.raceIds || []).filter(id => id !== raceId);
+  }
+
+  if (destBlockId !== '__unassigned__') {
+    const block = (meet.blocks || []).find(b => b.id === destBlockId);
+    if (!block) return res.status(404).send('Block not found');
+    if ((block.type || 'race') !== 'race') return res.status(400).send('Cannot drop races into non-race blocks');
+    block.raceIds.push(raceId);
+  }
+
+  ensureCurrentRace(meet);
+  meet.updatedAt = nowIso();
+  saveDb(req.db);
+
+  res.json({ ok: true });
+});
+
+function raceDaySubTabs(meet, active) {
+  const subs = [
+    ['director', 'Director', `/portal/meet/${meet.id}/race-day/director`],
+    ['judges', 'Judges', `/portal/meet/${meet.id}/race-day/judges`],
+    ['announcer', 'Announcer', `/portal/meet/${meet.id}/race-day/announcer`],
+    ['live', 'Live', `/portal/meet/${meet.id}/race-day/live`],
+  ];
+
+  return `
+    <div class="subTabs">
+      ${subs.map(([k, label, href]) => `
+        <a class="subTab ${active === k ? 'active' : ''}" href="${href}">${label}</a>
+      `).join('')}
+    </div>
+  `;
+}
+
+app.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director', 'judge', 'coach'), (req, res) => {
+  const meet = getMeetOr404(req.db, req.params.meetId);
+  if (!meet) return res.redirect('/portal');
+
+  const mode = String(req.params.mode || 'director');
+  const info = currentRaceInfo(meet);
+  const current = info.current;
+  const currentLanes = current ? laneRowsForRace(current, meet) : [];
+  const recent = recentClosedRaces(meet, 5);
+  const regMap = new Map((meet.registrations || []).map(r => [Number(r.id), r]));
+
+  let body = `<h1>Race Day</h1>${raceDaySubTabs(meet, mode)}`;
+
+  if (mode === 'director') {
+    const raceOptions = info.ordered.map((r, idx) => `
+      <option value="${r.id}" ${r.id === meet.currentRaceId ? 'selected' : ''}>
+        ${idx + 1}. ${r.groupLabel} — ${cap(r.division)} — ${r.distanceLabel} — ${raceDisplayStage(r)}
+      </option>
+    `).join('');
+
+    body += `
+      <div class="grid3">
+        <div class="statusCard orange">
+          <div class="statusLabel">Current Race</div>
+          <div class="statusTitle">${current ? esc(current.groupLabel) : 'No race selected'}</div>
+          <div>${current ? `${esc(cap(current.division))} • ${esc(current.distanceLabel)} • ${esc(raceDisplayStage(current))}` : ''}</div>
+        </div>
+
+        <div class="statusCard yellow">
+          <div class="statusLabel">On Deck</div>
+          <div class="statusTitle">${info.next ? esc(info.next.groupLabel) : '—'}</div>
+          <div>${info.next ? `${esc(cap(info.next.division))} • ${esc(info.next.distanceLabel)}` : ''}</div>
+        </div>
+
+        <div class="statusCard blue">
+          <div class="statusLabel">Meet Progress</div>
+          <div class="statusTitle">${Math.max(info.idx + 1, 0)} of ${info.ordered.length}</div>
+          <div>${meet.raceDayPaused ? 'Paused' : 'Running'}</div>
+        </div>
+      </div>
+
+      <div class="spacer"></div>
+
+      <div class="card">
+        <div class="grid3">
+          <div>
+            <label>Set Current Race</label>
+            <select onchange="setCurrentRace(this.value)">${raceOptions}</select>
+          </div>
+
+          <div class="row" style="align-items:end">
+            <button class="btn2" type="button" onclick="moveCurrent(-1)">Previous Race</button>
+            <button class="btn" type="button" onclick="moveCurrent(1)">Next Race</button>
+          </div>
+
+          <div class="row" style="align-items:end">
+            <button class="btn2" type="button" onclick="pauseMeet()">${meet.raceDayPaused ? 'Resume Meet' : 'Pause Meet'}</button>
+            ${
+              current && current.status === 'closed'
+                ? `<button class="btnDanger" type="button" onclick="unlockRace('${current.id}')">Unlock Race</button>`
+                : ''
+            }
+          </div>
+        </div>
+      </div>
+
+      <div class="spacer"></div>
+
+      <div class="grid2">
+        <div class="card">
+          <h2>Current Race Details</h2>
+          ${
+            current
+              ? `
+                <div class="row">
+                  <span class="chip">${esc(current.blockName || 'Unassigned')}</span>
+                  <span class="chip">${esc(current.blockDay || '')}</span>
+                  <span class="chip">${esc(cap(current.division))}</span>
+                  <span class="chip">${esc(raceDisplayStage(current))}</span>
+                  <span class="chip">${esc(cap(current.startType))} Start</span>
+                  <span class="chip">Status: ${esc(current.status)}</span>
+                </div>
+
+                <div class="spacer"></div>
+
+                <table class="table">
+                  <thead>
+                    <tr>
+                      <th>Lane</th>
+                      <th>Helmet</th>
+                      <th>Skater</th>
+                      <th>Team</th>
+                      <th>Place/Time</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${currentLanes.map(l => {
+                      const reg = regMap.get(Number(l.registrationId));
+                      return `
+                        <tr>
+                          <td>${l.lane}</td>
+                          <td>${l.helmetNumber ? '#' + esc(l.helmetNumber) : ''}</td>
+                          <td>
+                            ${esc(l.skaterName || '')}
+                            ${sponsorLineHtml(reg?.sponsor || '')}
+                          </td>
+                          <td>${esc(l.team || '')}</td>
+                          <td>${esc(current.resultsMode === 'times' ? l.time : l.place)}</td>
+                          <td>${esc(l.status || '')}</td>
+                        </tr>
+                      `;
+                    }).join('')}
+                  </tbody>
+                </table>
+              `
+              : `<div class="muted">No race selected yet.</div>`
+          }
+        </div>
+
+        <div class="card">
+          <h2>Coming Up</h2>
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Race</th>
+                <th>Division</th>
+                <th>Class</th>
+                <th>Distance</th>
+                <th>Block</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${
+                info.coming.map((r, i) => `
+                  <tr>
+                    <td>${info.idx + i + 3}</td>
+                    <td>${esc(r.groupLabel)}</td>
+                    <td>${esc(cap(r.division))}</td>
+                    <td>${esc(r.distanceLabel)}</td>
+                    <td>${esc(r.blockName || 'Unassigned')}</td>
+                  </tr>
+                `).join('') || `<tr><td colspan="5" class="muted">Nothing queued.</td></tr>`
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="spacer"></div>
+
+      <div class="card">
+        <h2>Recent Results</h2>
+        ${
+          recent.map(r => `
+            <div style="margin-bottom:12px">
+              <div style="font-weight:900">${esc(r.groupLabel)} — ${esc(cap(r.division))} — ${esc(r.distanceLabel)} — ${esc(raceDisplayStage(r))}</div>
+              <div class="note">${esc(r.closedAt || '')}</div>
+            </div>
+          `).join('') || `<div class="muted">No recent closed races yet.</div>`
+        }
+      </div>
+
+      <script>
+        async function setCurrentRace(raceId) {
+          const res = await fetch('/api/meet/${meet.id}/race-day/set-current', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ raceId }),
+          });
+          if (res.ok) location.reload();
+        }
+
+        async function moveCurrent(dir) {
+          const res = await fetch('/api/meet/${meet.id}/race-day/step', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ direction: dir }),
+          });
+          if (res.ok) location.reload();
+        }
+
+        async function pauseMeet() {
+          const res = await fetch('/api/meet/${meet.id}/race-day/toggle-pause', { method: 'POST' });
+          if (res.ok) location.reload();
+        }
+
+        async function unlockRace(raceId) {
+          const res = await fetch('/api/meet/${meet.id}/race-day/unlock-race', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ raceId }),
+          });
+          if (res.ok) location.reload();
+        }
+      </script>
+    `;
+  } else if (mode === 'judges') {
+    body += `
+      <div class="card">
+        <h2>
+          ${
+            current
+              ? `Race ${Math.max(info.idx + 1, 1)} — ${esc(current.groupLabel)} — ${esc(cap(current.division))} — ${esc(current.distanceLabel)}`
+              : 'No race selected'
+          }
+        </h2>
+        <div class="muted">Judges always land on the current race. Save, then close race when done.</div>
+      </div>
+
+      <div class="spacer"></div>
+
+      ${
+        current
+          ? `
+            <div class="card">
+              <form method="POST" action="/portal/meet/${meet.id}/race-day/judges/save">
+                <input type="hidden" name="raceId" value="${esc(current.id)}" />
+
+                <div class="row">
+                  <label><input type="radio" name="resultsMode" value="places" ${current.resultsMode !== 'times' ? 'checked' : ''} /> Places</label>
+                  <label><input type="radio" name="resultsMode" value="times" ${current.resultsMode === 'times' ? 'checked' : ''} /> Times</label>
+                </div>
+
+                <div class="spacer"></div>
+
+                <table class="table">
+                  <thead>
+                    <tr>
+                      <th>Lane</th>
+                      <th>Helmet</th>
+                      <th>Skater</th>
+                      <th>Team</th>
+                      <th>Place</th>
+                      <th>Time</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${currentLanes.map(l => {
+                      const reg = regMap.get(Number(l.registrationId));
+                      return `
+                        <tr>
+                          <td>${l.lane}</td>
+                          <td>${l.helmetNumber ? '#' + esc(l.helmetNumber) : ''}</td>
+                          <td>
+                            <input name="skaterName_${l.lane}" value="${esc(l.skaterName)}" />
+                            ${reg?.sponsor ? `<div class="note">Sponsor: ${esc(reg.sponsor)}</div>` : ''}
+                          </td>
+                          <td><input name="team_${l.lane}" value="${esc(l.team)}" /></td>
+                          <td><input name="place_${l.lane}" value="${esc(l.place)}" /></td>
+                          <td><input name="time_${l.lane}" value="${esc(l.time)}" /></td>
+                          <td>
+                            <select name="status_${l.lane}">
+                              <option value="" ${!l.status ? 'selected' : ''}>—</option>
+                              <option value="DNS" ${l.status === 'DNS' ? 'selected' : ''}>DNS</option>
+                              <option value="DQ" ${l.status === 'DQ' ? 'selected' : ''}>DQ</option>
+                              <option value="Scratch" ${l.status === 'Scratch' ? 'selected' : ''}>Scratch</option>
+                            </select>
+                          </td>
+                        </tr>
+                      `;
+                    }).join('')}
+                  </tbody>
+                </table>
+
+                <div class="spacer"></div>
+
+                <label>Race Notes / Officials Report</label>
+                <textarea name="notes">${esc(current.notes || '')}</textarea>
+
+                <div class="spacer"></div>
+
+                <div class="row">
+                  <button class="btn2" type="submit" name="action" value="save">Save</button>
+                  <button class="btn" type="submit" name="action" value="close">Close Race</button>
+                </div>
+              </form>
+            </div>
+          `
+          : `<div class="card"><div class="muted">No race selected yet.</div></div>`
+      }
+    `;
+  } else if (mode === 'announcer') {
+    body += `
+      <div class="grid3">
+        <div class="statusCard orange">
+          <div class="statusLabel">Current Race</div>
+          <div class="statusTitle">${current ? esc(current.groupLabel) : '—'}</div>
+          <div>${current ? `${esc(cap(current.division))} • ${esc(current.distanceLabel)}` : ''}</div>
+        </div>
+
+        <div class="statusCard yellow">
+          <div class="statusLabel">On Deck</div>
+          <div class="statusTitle">${info.next ? esc(info.next.groupLabel) : '—'}</div>
+          <div>${info.next ? `${esc(cap(info.next.division))} • ${esc(info.next.distanceLabel)}` : ''}</div>
+        </div>
+
+        <div class="statusCard blue">
+          <div class="statusLabel">Coming Up</div>
+          <div class="statusTitle">${info.coming[0] ? esc(info.coming[0].groupLabel) : '—'}</div>
+          <div>${info.coming[0] ? `${esc(cap(info.coming[0].division))} • ${esc(info.coming[0].distanceLabel)}` : ''}</div>
+        </div>
+      </div>
+
+      <div class="spacer"></div>
+
+      <div class="card">
+        <h2>Announcer Read Box</h2>
+        ${announcerBoxHtml(current, currentLanes.map(l => {
+          const reg = regMap.get(Number(l.registrationId));
+          return { ...l, sponsor: reg?.sponsor || '' };
+        }))}
+      </div>
+    `;
+  } else {
+    body += `
+      <div class="grid3">
+        <div class="statusCard orange">
+          <div class="statusLabel">Current Race</div>
+          <div class="statusTitle">${current ? esc(current.groupLabel) : '—'}</div>
+          <div>${current ? `${esc(cap(current.division))} • ${esc(current.distanceLabel)} • Race ${Math.max(info.idx + 1, 1)} of ${info.ordered.length}` : ''}</div>
+        </div>
+
+        <div class="statusCard yellow">
+          <div class="statusLabel">On Deck</div>
+          <div class="statusTitle">${info.next ? esc(info.next.groupLabel) : '—'}</div>
+          <div>${info.next ? `${esc(cap(info.next.division))} • ${esc(info.next.distanceLabel)}` : ''}</div>
+        </div>
+
+        <div class="statusCard blue">
+          <div class="statusLabel">Recent Result</div>
+          <div class="statusTitle">${recent[0] ? esc(recent[0].groupLabel) : 'Waiting'}</div>
+          <div>${recent[0] ? `${esc(cap(recent[0].division))} • ${esc(recent[0].distanceLabel)}` : ''}</div>
+        </div>
+      </div>
+
+      <div class="spacer"></div>
+
+      <div class="card">
+        ${
+          current
+            ? `
+              <h2>${esc(current.groupLabel)} — ${esc(cap(current.division))} — ${esc(current.distanceLabel)}</h2>
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Lane</th>
+                    <th>Helmet</th>
+                    <th>Skater</th>
+                    <th>Team</th>
+                    <th>${current.resultsMode === 'times' ? 'Time' : 'Place'}</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${currentLanes.map(l => {
+                    const reg = regMap.get(Number(l.registrationId));
+                    return `
+                      <tr>
+                        <td>${l.lane}</td>
+                        <td>${l.helmetNumber ? '#' + esc(l.helmetNumber) : ''}</td>
+                        <td>
+                          ${esc(l.skaterName)}
+                          ${sponsorLineHtml(reg?.sponsor || '')}
+                        </td>
+                        <td>${esc(l.team)}</td>
+                        <td>${esc(current.resultsMode === 'times' ? l.time : l.place)}</td>
+                        <td>${esc(l.status)}</td>
+                      </tr>
+                    `;
+                  }).join('')}
+                </tbody>
+              </table>
+            `
+            : `<div class="muted">No live race selected.</div>`
+        }
+      </div>
+    `;
+  }
+
+  res.send(pageShell({
+    title: 'Race Day',
+    user: req.user,
+    meet,
+    activeTab: 'race-day',
+    bodyHtml: body,
+  }));
+});
+
+app.post('/portal/meet/:meetId/race-day/judges/save', requireRole('judge', 'meet_director'), (req, res) => {
+  const meet = getMeetOr404(req.db, req.params.meetId);
+  if (!meet) return res.redirect('/portal');
+
+  const race = (meet.races || []).find(r => r.id === String(req.body.raceId || ''));
+  if (!race) return res.redirect(`/portal/meet/${meet.id}/race-day/judges`);
+
+  const laneCount = isOpenDivision(race.division)
+    ? Math.max((race.laneEntries || []).length, 1)
+    : Math.max(1, Number(meet.lanes) || 4);
+
+  const laneEntries = [];
+
+  for (let i = 1; i <= laneCount; i++) {
+    const existing = (race.laneEntries || []).find(x => Number(x.lane) === i) || {};
+    laneEntries.push({
+      lane: i,
+      registrationId: existing.registrationId || '',
+      helmetNumber: existing.helmetNumber || '',
+      skaterName: String(req.body[`skaterName_${i}`] || '').trim(),
+      team: String(req.body[`team_${i}`] || '').trim(),
+      place: String(req.body[`place_${i}`] || '').trim(),
+      time: String(req.body[`time_${i}`] || '').trim(),
+      status: String(req.body[`status_${i}`] || '').trim(),
+    });
+  }
+
+  race.laneEntries = laneEntries;
+  race.resultsMode = String(req.body.resultsMode || 'places') === 'times' ? 'times' : 'places';
+  race.notes = String(req.body.notes || '');
+  race.status = req.body.action === 'close' ? 'closed' : 'open';
+  race.closedAt = req.body.action === 'close' ? nowIso() : race.closedAt;
+
+  meet.updatedAt = nowIso();
+
+  if (req.body.action === 'close') {
+    const info = currentRaceInfo(meet);
+    if (info.current && info.current.id === race.id) {
+      const next = info.ordered[info.idx + 1];
+      if (next) {
+        meet.currentRaceId = next.id;
+        meet.currentRaceIndex = info.idx + 1;
+      }
+    }
   }
 
   saveDb(req.db);
-  return res.redirect(`/portal/meet/${meet.id}/blocks`);
+  res.redirect(`/portal/meet/${meet.id}/race-day/judges`);
 });
 
-app.post('/portal/meet/:meetId/block/:blockId/delete', requireRole(USER_ROLES.SUPER_ADMIN, USER_ROLES.MEET_DIRECTOR), (req, res) => {
+app.post('/api/meet/:meetId/race-day/set-current', requireRole('meet_director'), (req, res) => {
   const meet = getMeetOr404(req.db, req.params.meetId);
-  if (!meet || !canEditMeet(req.user, meet)) return res.redirect('/portal');
-  deleteBlockAndReturnRaces(meet, req.params.blockId);
+  if (!meet || !canEditMeet(req.user, meet)) return res.status(403).send('Forbidden');
+
+  const ordered = orderedRaces(meet);
+  const idx = ordered.findIndex(r => r.id === String(req.body.raceId || ''));
+  if (idx < 0) return res.status(404).send('Race not found');
+
+  meet.currentRaceId = ordered[idx].id;
+  meet.currentRaceIndex = idx;
+  meet.updatedAt = nowIso();
+
   saveDb(req.db);
-  return res.redirect(`/portal/meet/${meet.id}/blocks`);
+  res.json({ ok: true });
 });
 
-app.post('/portal/meet/:meetId/race/:raceId/assign', requireRole(USER_ROLES.SUPER_ADMIN, USER_ROLES.MEET_DIRECTOR), (req, res) => {
+app.post('/api/meet/:meetId/race-day/step', requireRole('meet_director'), (req, res) => {
   const meet = getMeetOr404(req.db, req.params.meetId);
-  if (!meet || !canEditMeet(req.user, meet)) return res.redirect('/portal');
-  assignRaceToBlock(meet, req.params.raceId, req.body.blockId);
+  if (!meet || !canEditMeet(req.user, meet)) return res.status(403).send('Forbidden');
+
+  const info = currentRaceInfo(meet);
+  let idx = info.idx;
+  const dir = Number(req.body.direction || 1);
+
+  idx = Math.max(0, Math.min(info.ordered.length - 1, idx + (dir >= 0 ? 1 : -1)));
+  if (info.ordered[idx]) {
+    meet.currentRaceId = info.ordered[idx].id;
+    meet.currentRaceIndex = idx;
+  }
+
+  meet.updatedAt = nowIso();
   saveDb(req.db);
-  return res.redirect(`/portal/meet/${meet.id}/blocks`);
+  res.json({ ok: true });
 });
 
-app.post('/portal/meet/:meetId/race/:raceId/unassign', requireRole(USER_ROLES.SUPER_ADMIN, USER_ROLES.MEET_DIRECTOR), (req, res) => {
+app.post('/api/meet/:meetId/race-day/toggle-pause', requireRole('meet_director'), (req, res) => {
   const meet = getMeetOr404(req.db, req.params.meetId);
-  if (!meet || !canEditMeet(req.user, meet)) return res.redirect('/portal');
-  unassignRaceFromBlock(meet, req.params.raceId);
+  if (!meet || !canEditMeet(req.user, meet)) return res.status(403).send('Forbidden');
+
+  meet.raceDayPaused = !meet.raceDayPaused;
   saveDb(req.db);
-  return res.redirect(`/portal/meet/${meet.id}/blocks`);
+  res.json({ ok: true });
 });
 
-app.post('/portal/meet/:meetId/schedule-item/new', requireRole(USER_ROLES.SUPER_ADMIN, USER_ROLES.MEET_DIRECTOR), (req, res) => {
+app.post('/api/meet/:meetId/race-day/unlock-race', requireRole('meet_director'), (req, res) => {
   const meet = getMeetOr404(req.db, req.params.meetId);
-  if (!meet || !canEditMeet(req.user, meet)) return res.redirect('/portal');
+  if (!meet || !canEditMeet(req.user, meet)) return res.status(403).send('Forbidden');
 
-  meet.scheduleItems.push({
-    id: `schedule_${crypto.randomBytes(4).toString('hex')}`,
-    label: String(req.body.label || '').trim() || 'Schedule Item',
-    kind: String(req.body.kind || 'break').trim(),
-    day: String(req.body.day || 'Day 1').trim(),
-    notes: String(req.body.notes || '').trim(),
-    order: parseNumber(req.body.order, (meet.scheduleItems || []).length + 1),
-  });
+  const race = (meet.races || []).find(r => r.id === String(req.body.raceId || ''));
+  if (!race) return res.status(404).send('Race not found');
+
+  race.status = 'open';
+  race.closedAt = '';
+
+  meet.currentRaceId = race.id;
+  meet.currentRaceIndex = orderedRaces(meet).findIndex(r => r.id === race.id);
 
   saveDb(req.db);
-  return res.redirect(`/portal/meet/${meet.id}/blocks`);
+  res.json({ ok: true });
 });
 
-app.post('/portal/meet/:meetId/schedule-item/:itemId/delete', requireRole(USER_ROLES.SUPER_ADMIN, USER_ROLES.MEET_DIRECTOR), (req, res) => {
+app.get('/portal/meet/:meetId/results', requireRole('meet_director', 'judge', 'coach'), (req, res) => {
+  const meet = getMeetOr404(req.db, req.params.meetId);
+  if (!meet) return res.redirect('/portal');
+
+  const sections = computeMeetStandings(meet);
+  const openSections = computeOpenResults(meet);
+
+  const body = `
+    <h1>Results</h1>
+
+    <div class="card">
+      <div class="row between">
+        <div>
+          <h2 style="margin:0">${esc(meet.meetName)}</h2>
+          <div class="muted small">Meet status: ${esc(cap(meet.status || 'draft'))}</div>
+        </div>
+        <div class="row">
+          ${
+            hasRole(req.user, 'super_admin') || canEditMeet(req.user, meet)
+              ? (
+                  meet.status === 'complete'
+                    ? `<form method="POST" action="/portal/meet/${meet.id}/reopen"><button class="btn2" type="submit">Reopen Meet</button></form>`
+                    : `<form method="POST" action="/portal/meet/${meet.id}/finalize"><button class="btn" type="submit">Finalize Meet</button></form>`
+                )
+              : ''
+          }
+          <a class="btn2" href="/portal/meet/${meet.id}/results/print" target="_blank">Print Closed-Meet Results</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="spacer"></div>
+
+    ${sections.map(resultsSectionHtml).join('<div class="spacer"></div>') || `
+      <div class="card">
+        <div class="muted">No final standings yet. Close final races to generate points.</div>
+      </div>
+    `}
+
+    ${
+      openSections.length
+        ? `
+          <div class="spacer"></div>
+          <h1 style="font-size:30px">Open Results</h1>
+          ${openSections.map(section => `
+            <div class="card">
+              <div class="row between">
+                <div>
+                  <h2 style="margin:0">${esc(section.race.groupLabel)} — Open</h2>
+                  <div class="muted small">${esc(section.race.distanceLabel)} • ${esc(cap(section.race.startType))} Start</div>
+                </div>
+                <div class="chip">Winner: ${section.rows[0] ? esc(section.rows[0].skaterName) : '—'}</div>
+              </div>
+
+              <div class="spacer"></div>
+
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Place</th>
+                    <th>Skater</th>
+                    <th>Team</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${
+                    section.rows.map(row => {
+                      const reg = (meet.registrations || []).find(r => Number(r.id) === Number(row.registrationId));
+                      return `
+                        <tr>
+                          <td>${esc(row.place)}</td>
+                          <td>
+                            ${esc(row.skaterName || '')}
+                            ${sponsorLineHtml(reg?.sponsor || '')}
+                          </td>
+                          <td>${esc(row.team || '')}</td>
+                        </tr>
+                      `;
+                    }).join('') || `<tr><td colspan="3" class="muted">No open results yet.</td></tr>`
+                  }
+                </tbody>
+              </table>
+            </div>
+          `).join('<div class="spacer"></div>')}
+        `
+        : ''
+    }
+  `;
+
+  res.send(pageShell({
+    title: 'Results',
+    user: req.user,
+    meet,
+    activeTab: 'results',
+    bodyHtml: body,
+  }));
+});
+
+app.post('/portal/meet/:meetId/finalize', requireRole('meet_director'), (req, res) => {
   const meet = getMeetOr404(req.db, req.params.meetId);
   if (!meet || !canEditMeet(req.user, meet)) return res.redirect('/portal');
-  meet.scheduleItems = (meet.scheduleItems || []).filter(item => item.id !== req.params.itemId);
+
+  meet.status = 'complete';
+  meet.updatedAt = nowIso();
+
   saveDb(req.db);
-  return res.redirect(`/portal/meet/${meet.id}/blocks`);
+  res.redirect(`/portal/meet/${meet.id}/results`);
+});
+
+app.post('/portal/meet/:meetId/reopen', requireRole('meet_director'), (req, res) => {
+  const meet = getMeetOr404(req.db, req.params.meetId);
+  if (!meet || !canEditMeet(req.user, meet)) return res.redirect('/portal');
+
+  meet.status = 'live';
+  meet.updatedAt = nowIso();
+
+  saveDb(req.db);
+  res.redirect(`/portal/meet/${meet.id}/results`);
+});
+
+app.get('/meet/:meetId/results', (req, res) => {
+  const db = loadDb();
+  const meet = getMeetOr404(db, req.params.meetId);
+  const data = getSessionUser(req);
+
+  if (!meet) return res.redirect('/meets');
+  if (!meet.isPublic) return res.redirect('/meets');
+
+  const sections = computeMeetStandings(meet);
+  const openSections = computeOpenResults(meet);
+
+  const body = `
+    <h1>${esc(meet.meetName)} Results</h1>
+    ${sections.map(resultsSectionHtml).join('<div class="spacer"></div>') || `
+      <div class="card">
+        <div class="muted">No final standings yet. Results will appear as final races close.</div>
+      </div>
+    `}
+    ${
+      openSections.length
+        ? `
+          <div class="spacer"></div>
+          <h1 style="font-size:30px">Open Results</h1>
+          ${openSections.map(section => `
+            <div class="card">
+              <div class="row between">
+                <div>
+                  <h2 style="margin:0">${esc(section.race.groupLabel)} — Open</h2>
+                  <div class="muted small">${esc(section.race.distanceLabel)} • ${esc(cap(section.race.startType))} Start</div>
+                </div>
+                <div class="chip">Winner: ${section.rows[0] ? esc(section.rows[0].skaterName) : '—'}</div>
+              </div>
+
+              <div class="spacer"></div>
+
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Place</th>
+                    <th>Skater</th>
+                    <th>Team</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${
+                    section.rows.map(row => {
+                      const reg = (meet.registrations || []).find(r => Number(r.id) === Number(row.registrationId));
+                      return `
+                        <tr>
+                          <td>${esc(row.place)}</td>
+                          <td>
+                            ${esc(row.skaterName || '')}
+                            ${sponsorLineHtml(reg?.sponsor || '')}
+                          </td>
+                          <td>${esc(row.team || '')}</td>
+                        </tr>
+                      `;
+                    }).join('') || `<tr><td colspan="3" class="muted">No open results yet.</td></tr>`
+                  }
+                </tbody>
+              </table>
+            </div>
+          `).join('<div class="spacer"></div>')}
+        `
+        : ''
+    }
+  `;
+
+  res.send(pageShell({
+    title: 'Results',
+    user: data?.user || null,
+    bodyHtml: body,
+  }));
+});
+
+app.get('/portal/meet/:meetId/results/print', requireRole('meet_director', 'judge', 'coach'), (req, res) => {
+  const meet = getMeetOr404(req.db, req.params.meetId);
+  if (!meet) return res.redirect('/portal');
+
+  const sections = computeMeetStandings(meet);
+  const openSections = computeOpenResults(meet);
+
+  const html = `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Closed Meet Results</title>
+    <style>
+      body { font-family: Arial, sans-serif; padding: 18px; color: #111; font-size: 12px; }
+      h1, h2, h3 { margin: 0 0 8px 0; }
+      .meta { margin: 4px 0 10px; color: #444; }
+      .section { margin-bottom: 28px; }
+      table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+      th, td { padding: 6px 8px; border-bottom: 1px solid #ddd; text-align: left; vertical-align: top; }
+      th { font-size: 11px; text-transform: uppercase; color: #555; letter-spacing: .05em; }
+      .note { font-size: 11px; color: #666; margin-top: 2px; }
+    </style>
+  </head>
+  <body>
+    <h1>${esc(meet.meetName)} — Closed Meet Results</h1>
+    <div class="meta">${esc(meet.date || '')} ${meet.startTime ? `• ${esc(meet.startTime)}` : ''}</div>
+
+    ${
+      sections.map(section => `
+        <div class="section">
+          <h2>${esc(section.groupLabel)} — ${esc(cap(section.division))}</h2>
+          <div class="meta">Champion: ${section.standings[0] ? esc(section.standings[0].skaterName) : '—'}</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Place</th>
+                <th>Skater</th>
+                <th>Team</th>
+                <th>Points</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${
+                section.standings.map(row => `
+                  <tr>
+                    <td>${row.overallPlace}</td>
+                    <td>
+                      ${esc(row.skaterName || '')}
+                      ${row.sponsor ? `<div class="note">Sponsor: ${esc(row.sponsor)}</div>` : ''}
+                    </td>
+                    <td>${esc(row.team || '')}</td>
+                    <td>${Number(row.totalPoints || 0)}</td>
+                  </tr>
+                `).join('') || `<tr><td colspan="4">No standings yet.</td></tr>`
+              }
+            </tbody>
+          </table>
+        </div>
+      `).join('')
+    }
+
+    ${
+      openSections.length
+        ? `
+          <h1 style="font-size:22px">Open Results</h1>
+          ${openSections.map(section => `
+            <div class="section">
+              <h2>${esc(section.race.groupLabel)} — Open</h2>
+              <div class="meta">${esc(section.race.distanceLabel)} • ${esc(cap(section.race.startType))} Start</div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Place</th>
+                    <th>Skater</th>
+                    <th>Team</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${
+                    section.rows.map(row => {
+                      const reg = (meet.registrations || []).find(r => Number(r.id) === Number(row.registrationId));
+                      return `
+                        <tr>
+                          <td>${esc(row.place)}</td>
+                          <td>
+                            ${esc(row.skaterName || '')}
+                            ${reg?.sponsor ? `<div class="note">Sponsor: ${esc(reg.sponsor)}</div>` : ''}
+                          </td>
+                          <td>${esc(row.team || '')}</td>
+                        </tr>
+                      `;
+                    }).join('') || `<tr><td colspan="3">No open results yet.</td></tr>`
+                  }
+                </tbody>
+              </table>
+            </div>
+          `).join('')}
+        `
+        : ''
+    }
+  </body>
+</html>`;
+
+  res.send(html);
+});
+
+app.get('/meet/:meetId/live', (req, res) => {
+  const db = loadDb();
+  const meet = getMeetOr404(db, req.params.meetId);
+  const data = getSessionUser(req);
+
+  if (!meet) return res.redirect('/meets');
+  if (!meet.isPublic) return res.redirect('/meets');
+
+  const info = currentRaceInfo(meet);
+  const current = info.current;
+  const lanes = current ? laneRowsForRace(current, meet) : [];
+  const recent = recentClosedRaces(meet, 5);
+  const regMap = new Map((meet.registrations || []).map(r => [Number(r.id), r]));
+
+  const body = `
+    <h1>${esc(meet.meetName)}</h1>
+
+    <div class="grid3">
+      <div class="statusCard orange">
+        <div class="statusLabel">Current Race</div>
+        <div class="statusTitle">${current ? esc(current.groupLabel) : '—'}</div>
+        <div>${current ? `${esc(cap(current.division))} • ${esc(current.distanceLabel)} • Race ${Math.max(info.idx + 1, 1)} of ${info.ordered.length}` : ''}</div>
+      </div>
+
+      <div class="statusCard yellow">
+        <div class="statusLabel">On Deck</div>
+        <div class="statusTitle">${info.next ? esc(info.next.groupLabel) : '—'}</div>
+        <div>${info.next ? `${esc(cap(info.next.division))} • ${esc(info.next.distanceLabel)}` : ''}</div>
+      </div>
+
+      <div class="statusCard blue">
+        <div class="statusLabel">Coming Up</div>
+        <div class="statusTitle">${info.coming[0] ? esc(info.coming[0].groupLabel) : '—'}</div>
+        <div>${info.coming[0] ? `${esc(cap(info.coming[0].division))} • ${esc(info.coming[0].distanceLabel)}` : ''}</div>
+      </div>
+    </div>
+
+    <div class="spacer"></div>
+
+    <div class="card">
+      ${
+        current
+          ? `
+            <h2>${esc(current.groupLabel)} — ${esc(cap(current.division))} — ${esc(current.distanceLabel)}</h2>
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Lane</th>
+                  <th>Helmet</th>
+                  <th>Skater</th>
+                  <th>Team</th>
+                  <th>${current.resultsMode === 'times' ? 'Time' : 'Place'}</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${lanes.map(l => {
+                  const reg = regMap.get(Number(l.registrationId));
+                  return `
+                    <tr>
+                      <td>${l.lane}</td>
+                      <td>${l.helmetNumber ? '#' + esc(l.helmetNumber) : ''}</td>
+                      <td>
+                        ${esc(l.skaterName)}
+                        ${sponsorLineHtml(reg?.sponsor || '')}
+                      </td>
+                      <td>${esc(l.team)}</td>
+                      <td>${esc(current.resultsMode === 'times' ? l.time : l.place)}</td>
+                      <td>${esc(l.status)}</td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+          `
+          : `<div class="muted">No race selected.</div>`
+      }
+    </div>
+
+    <div class="spacer"></div>
+
+    <div class="card">
+      <h2>Recent Results</h2>
+      ${
+        recent.map(r => `
+          <div style="margin-bottom:14px">
+            <div style="font-weight:900">${esc(r.groupLabel)} — ${esc(cap(r.division))} — ${esc(r.distanceLabel)} — ${esc(raceDisplayStage(r))}</div>
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Place</th>
+                  <th>Skater</th>
+                  <th>Team</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${
+                  (r.laneEntries || [])
+                    .filter(x => String(x.place || '').trim())
+                    .sort((a, b) => Number(a.place || 999) - Number(b.place || 999))
+                    .slice(0, 4)
+                    .map(x => {
+                      const reg = regMap.get(Number(x.registrationId));
+                      return `
+                        <tr>
+                          <td>${esc(x.place)}</td>
+                          <td>
+                            ${esc(x.skaterName || '')}
+                            ${sponsorLineHtml(reg?.sponsor || '')}
+                          </td>
+                          <td>${esc(x.team || '')}</td>
+                        </tr>
+                      `;
+                    }).join('') || `<tr><td colspan="3" class="muted">No results entered.</td></tr>`
+                }
+              </tbody>
+            </table>
+          </div>
+        `).join('') || `<div class="muted">No recent results yet.</div>`
+      }
+    </div>
+
+    <div class="spacer"></div>
+
+    <div class="card">
+      <div class="muted">This page updates automatically during the meet.</div>
+    </div>
+
+    <script>
+      setTimeout(() => {
+        window.location.reload();
+      }, 5000);
+    </script>
+  `;
+
+  res.send(pageShell({
+    title: 'Live',
+    user: data?.user || null,
+    bodyHtml: body,
+  }));
+});
+
+app.get('/portal/meet/:meetId/registered/print-race-list', requireRole('meet_director'), (req, res) => {
+  const meet = getMeetOr404(req.db, req.params.meetId);
+  if (!meet) return res.redirect('/portal');
+
+  const blocksByDay = {};
+  for (const block of meet.blocks || []) {
+    const day = block.day || 'Day 1';
+    if (!blocksByDay[day]) blocksByDay[day] = [];
+    blocksByDay[day].push(block);
+  }
+
+  let raceNo = 1;
+  const daySections = Object.keys(blocksByDay).sort().map(day => {
+    const blockSections = blocksByDay[day].map(block => {
+      const raceRows = (block.raceIds || []).map(rid => {
+        const race = (meet.races || []).find(r => r.id === rid);
+        if (!race) return '';
+
+        return `
+          <tr>
+            <td>${raceNo++}</td>
+            <td>${esc(race.groupLabel)}</td>
+            <td>${esc(race.distanceLabel)}</td>
+            <td>${esc(cap(race.division))}</td>
+            <td>${esc(raceDisplayStage(race))}</td>
+            <td>${esc(cap(race.startType))}</td>
+            <td>$${esc(race.cost)}</td>
+          </tr>
+        `;
+      }).join('');
+
+      return `
+        <div class="blockWrap">
+          <h3>${esc(block.name)} <span class="muted">(${esc((block.type || 'race').toUpperCase())})</span></h3>
+          ${block.notes ? `<div class="meta">${esc(block.notes)}</div>` : ''}
+          ${
+            (block.type || 'race') !== 'race'
+              ? `<div class="meta">Non-race block</div>`
+              : `
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Race</th>
+                      <th>Division</th>
+                      <th>Distance</th>
+                      <th>Class</th>
+                      <th>Stage</th>
+                      <th>Start</th>
+                      <th>Cost</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${raceRows || `<tr><td colspan="7">No races in this block.</td></tr>`}
+                  </tbody>
+                </table>
+              `
+          }
+        </div>
+      `;
+    }).join('');
+
+    return `
+      <div class="daySection">
+        <h2>${esc(day)}</h2>
+        ${blockSections}
+      </div>
+    `;
+  }).join('');
+
+  const html = `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Race List</title>
+    <style>
+      body { font-family: Arial, sans-serif; padding: 18px; color: #111; font-size: 12px; }
+      h1, h2, h3 { margin: 0 0 8px 0; }
+      .meta { margin: 4px 0 10px; color: #444; }
+      .daySection { margin-bottom: 28px; }
+      .blockWrap { margin-bottom: 22px; }
+      table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+      th, td { padding: 6px 8px; border-bottom: 1px solid #ddd; text-align: left; }
+      th { font-size: 11px; text-transform: uppercase; color: #555; letter-spacing: .05em; }
+    </style>
+  </head>
+  <body>
+    <h1>${esc(meet.meetName)}</h1>
+    <div class="meta">${esc(meet.date || '')} ${meet.startTime ? `• ${esc(meet.startTime)}` : ''}</div>
+    ${daySections || '<div>No blocks yet.</div>'}
+  </body>
+</html>`;
+
+  res.send(html);
 });
 
 app.listen(PORT, HOST, () => {
-  console.log(`SpeedSkateMeet running on http://${HOST}:${PORT}`);
+  console.log(`SpeedSkateMeet v17 listening on ${HOST}:${PORT}`);
+  console.log(`Data file: ${DATA_FILE}`);
 });
