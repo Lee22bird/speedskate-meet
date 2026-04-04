@@ -1000,6 +1000,14 @@ function pageShell({ title, bodyHtml, user, meet, activeTab }) {
     .group-card      { padding: 18px; border-radius: var(--radius); border: 1.5px solid var(--border2); background: #fff; }
     .open-group-card { padding: 18px; border-radius: var(--radius); border: 1.5px solid #fed7aa; background: #fffaf5; }
     .quad-group-card { padding: 18px; border-radius: var(--radius); border: 1.5px solid #d8b4fe; background: #faf5ff; }
+    .group-pair-row  { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+    @media(max-width: 900px) { .group-pair-row { grid-template-columns: 1fr; } }
+    .group-pair-col  { background: #fff; border: 1.5px solid var(--border2); border-radius: var(--radius-lg); padding: 16px; }
+    .group-pair-header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 2px solid var(--border); }
+    .group-pair-name { font-family: 'Barlow Condensed', sans-serif; font-size: 22px; font-weight: 700; color: var(--navy); }
+    .group-pair-age  { font-size: 12px; color: var(--muted); font-weight: 600; }
+    .group-div-card  { border: 1.5px solid var(--border); border-radius: var(--radius-sm); padding: 12px; margin-bottom: 10px; background: var(--off); }
+    .group-div-card:last-child { margin-bottom: 0; }
 
     /* ── Block Builder ────────────────────────────────────────────── */
     .bb-grid { display: grid; grid-template-columns: 1.3fr .85fr; gap: 18px; }
@@ -1065,7 +1073,7 @@ function pageShell({ title, bodyHtml, user, meet, activeTab }) {
     .hero-gradient { position: absolute; inset: 0; background: linear-gradient(to top, rgba(15,31,61,.95) 40%, rgba(15,31,61,.20) 100%); }
     .hero-content { position: relative; z-index: 1; padding: 36px; }
     .hero-content-centered { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 36px; text-align: center; }
-    .hero-logo { height: 160px; width: auto; max-width: 90%; display: block; filter: drop-shadow(0 4px 24px rgba(0,0,0,.5)); }
+    .hero-logo { height: 220px; width: auto; max-width: 92%; display: block; filter: drop-shadow(0 6px 32px rgba(0,0,0,.6)); }
     .hero-eyebrow { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .15em; color: var(--orange); margin-bottom: 8px; }
     .hero-title { font-family: 'Barlow Condensed',sans-serif; font-size: 64px; font-weight: 900; line-height: .95; letter-spacing: -1px; color: #fff; }
     .hero-title span { color: var(--orange); }
@@ -1586,35 +1594,42 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
   const openEnabledCount=(meet.openGroups||[]).filter(g=>g.enabled).length;
   const quadEnabledCount=(meet.quadGroups||[]).filter(g=>g.enabled).length;
 
-  const groupsHtml=meet.groups.map((group,gi)=>{
-    const divCards=['novice','elite'].map(divKey=>{
-      const div=group.divisions[divKey];
-      const colors={novice:'var(--sky2)',elite:'var(--navy)',open:'var(--orange)'};
-      return `
-        <div class="group-card">
-          <div class="row between center" style="margin-bottom:10px">
-            <div style="font-weight:700;font-size:15px;color:${colors[divKey]}">${divKey.toUpperCase()}</div>
-            ${toggleSwitch(`g_${gi}_${divKey}_enabled`, div.enabled)}
-          </div>
-          <div class="form-grid cols-2" style="margin-bottom:8px">
-            <div><label>Cost</label><input name="g_${gi}_${divKey}_cost" value="${esc(div.cost)}" placeholder="0" /></div>
-          </div>
-          <div class="form-grid cols-4">
-            <div><label>D1</label><input name="g_${gi}_${divKey}_d1" value="${esc(div.distances[0]||'')}" placeholder="200m" /></div>
-            <div><label>D2</label><input name="g_${gi}_${divKey}_d2" value="${esc(div.distances[1]||'')}" placeholder="500m" /></div>
-            <div><label>D3</label><input name="g_${gi}_${divKey}_d3" value="${esc(div.distances[2]||'')}" placeholder="1000m" /></div>
-            <div><label>D4</label><input name="g_${gi}_${divKey}_d4" value="${esc(div.distances[3]||'')}" placeholder="1500m" /></div>
-          </div>
-        </div>`;
-    }).join('<div class="spacer-sm"></div>');
-    return `
-      <div class="card">
-        <div class="row between" style="margin-bottom:12px">
-          <div><h3 style="margin:0">${esc(group.label)}</h3><div class="note">${esc(group.ages)}</div></div>
-        </div>
-        <div class="stack">${divCards}</div>
-      </div>`;
-  }).join('<div class="spacer-sm"></div>');
+  function divCardHtml(group, gi, divKey) {
+    const div=group.divisions[divKey];
+    const colors={novice:'var(--sky2)',elite:'var(--navy)'};
+    return '<div class="group-div-card">' +
+      '<div class="row between center" style="margin-bottom:10px">' +
+        '<div style="font-weight:700;font-size:14px;color:'+colors[divKey]+'">'+divKey.toUpperCase()+'</div>' +
+        toggleSwitch('g_'+gi+'_'+divKey+'_enabled', div.enabled) +
+      '</div>' +
+      '<div style="display:flex;gap:8px;align-items:flex-end">' +
+        '<div style="width:80px;flex-shrink:0"><label>Cost $</label><input name="g_'+gi+'_'+divKey+'_cost" value="'+esc(div.cost)+'" placeholder="0" /></div>' +
+        '<div style="flex:1"><label>D1</label><input name="g_'+gi+'_'+divKey+'_d1" value="'+esc(div.distances[0]||'')+'" placeholder="200m" /></div>' +
+        '<div style="flex:1"><label>D2</label><input name="g_'+gi+'_'+divKey+'_d2" value="'+esc(div.distances[1]||'')+'" placeholder="500m" /></div>' +
+        '<div style="flex:1"><label>D3</label><input name="g_'+gi+'_'+divKey+'_d3" value="'+esc(div.distances[2]||'')+'" placeholder="1000m" /></div>' +
+        '<input type="hidden" name="g_'+gi+'_'+divKey+'_d4" value="'+esc(div.distances[3]||'')+'" />' +
+      '</div>' +
+    '</div>';
+  }
+  const groupsRows=[];
+  for(let i=0;i<meet.groups.length;i+=2) {
+    const L=meet.groups[i]; const R=meet.groups[i+1];
+    const Lcards=['novice','elite'].map(d=>divCardHtml(L,i,d)).join('');
+    const Rcards=R?['novice','elite'].map(d=>divCardHtml(R,i+1,d)).join(''):'';
+    groupsRows.push(
+      '<div class="group-pair-row">' +
+        '<div class="group-pair-col">' +
+          '<div class="group-pair-header"><span class="group-pair-name">'+esc(L.label)+'</span><span class="group-pair-age">'+esc(L.ages)+'</span></div>' +
+          Lcards +
+        '</div>' +
+        (R?'<div class="group-pair-col">' +
+          '<div class="group-pair-header"><span class="group-pair-name">'+esc(R.label)+'</span><span class="group-pair-age">'+esc(R.ages)+'</span></div>' +
+          Rcards +
+        '</div>':'') +
+      '</div>'
+    );
+  }
+  const groupsHtml=groupsRows.join('');
 
   res.send(pageShell({title:'Meet Builder',user:req.user,meet,activeTab:'builder', bodyHtml:`
     <div class="page-header"><h1>Meet Builder</h1><div class="sub">${esc(meet.meetName)}</div></div>
