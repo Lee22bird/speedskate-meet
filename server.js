@@ -41,6 +41,20 @@ const TEAM_LIST = [
 
 const STANDARD_POINTS = { 1: 30, 2: 20, 3: 10, 4: 5 };
 
+// USARS SR150.1: age is birth year subtracted from Jan 1 of competition year
+function usarsAge(birthdate, meetDate) {
+  const refYear = meetDate ? new Date(meetDate).getFullYear() : new Date().getFullYear();
+  if (!birthdate) return null;
+  const bd = new Date(birthdate);
+  if (isNaN(bd.getTime())) return null;
+  return refYear - bd.getFullYear();
+}
+
+function ageForReg(reg, meet) {
+  if (reg.birthdate) return usarsAge(reg.birthdate, meet?.date) ?? Number(reg.age||0);
+  return Number(reg.age||0);
+}
+
 const OPEN_GROUP_DEFAULTS = [
   { id: 'open_juv_girls',   label: 'Juvenile Girls',  ages: '9 & Under',  gender: 'girls', defaultDistance: '1500m' },
   { id: 'open_juv_boys',    label: 'Juvenile Boys',   ages: '9 & Under',  gender: 'boys',  defaultDistance: '1500m' },
@@ -56,6 +70,7 @@ function makeOpenGroupsTemplate() {
   return OPEN_GROUP_DEFAULTS.map(g => ({
     id: g.id, label: g.label, ages: g.ages, gender: g.gender,
     enabled: false, distance: g.defaultDistance, cost: 0,
+    timeTrial: false, ttDistance: '',
   }));
 }
 
@@ -203,7 +218,8 @@ function normalizeOpenGroups(raw) {
   return defaults.map(def=>{
     const saved=raw.find(r=>r.id===def.id); if(!saved) return def;
     return {id:def.id,label:def.label,ages:def.ages,gender:def.gender,
-      enabled:!!saved.enabled, distance:String(saved.distance||def.defaultDistance||'').trim(), cost:Number(saved.cost||0)};
+      enabled:!!saved.enabled, distance:String(saved.distance||def.defaultDistance||'').trim(), cost:Number(saved.cost||0),
+      timeTrial:!!saved.timeTrial, ttDistance:String(saved.ttDistance||'').trim()};
   });
 }
 
@@ -264,7 +280,7 @@ function migrateMeet(meet,fallbackOwnerId) {
     laneEntries:Array.isArray(r.laneEntries)?r.laneEntries:[],
     resultsMode:String(r.resultsMode||'places'), status:String(r.status||'open'),
     notes:String(r.notes||''), isFinal:!!r.isFinal, closedAt:String(r.closedAt||''),
-    isOpenRace:!!r.isOpenRace, isQuadRace:!!r.isQuadRace,
+    isOpenRace:!!r.isOpenRace, isQuadRace:!!r.isQuadRace, isTimeTrial:!!r.isTimeTrial,
   }));
   meet.blocks=meet.blocks.map((b,idx)=>({
     id:String(b.id||('b'+(idx+1))), name:String(b.name||`Block ${idx+1}`),
@@ -278,7 +294,7 @@ function migrateMeet(meet,fallbackOwnerId) {
     divisionGroupId:String(reg.divisionGroupId||''), divisionGroupLabel:String(reg.divisionGroupLabel||''),
     originalDivisionGroupId:String(reg.originalDivisionGroupId||reg.divisionGroupId||''),
     originalDivisionGroupLabel:String(reg.originalDivisionGroupLabel||reg.divisionGroupLabel||''),
-    meetNumber:Number(reg.meetNumber||idx+1),
+    meetNumber:Number(reg.meetNumber||idx+1), birthdate:String(reg.birthdate||''),
     helmetNumber:reg.helmetNumber===''||reg.helmetNumber==null?'':Number(reg.helmetNumber),
     paid:!!reg.paid, checkedIn:!!reg.checkedIn, totalCost:Number(reg.totalCost||0),
     options:{challengeUp:!!reg.options?.challengeUp, novice:!!reg.options?.novice,
@@ -604,17 +620,35 @@ function generateBaseRacesForMeet(meet) {
 }
 
 function generateOpenRacesForMeet(meet) {
-  const nonOpenRaces=(meet.races||[]).filter(r=>!r.isOpenRace); const openRaces=[]; let orderHint=9000;
+  const nonOpenRaces=(meet.races||[]).filter(r=>!r.isOpenRace&&!r.isTimeTrial);
+  const openRaces=[]; let orderHint=9000;
+  // Open group order: youngest→oldest for TT ordering
+  const TT_ORDER=['open_juv_girls','open_juv_boys','open_fresh_girls','open_fresh_boys','open_sr_ladies','open_sr_men','open_mast_ladies','open_mast_men'];
   for(const og of meet.openGroups||[]) {
     if(!og.enabled||!og.distance) continue;
-    const existingRace=(meet.races||[]).find(r=>r.isOpenRace&&r.groupId===og.id);
+    const existingRace=(meet.races||[]).find(r=>r.isOpenRace&&r.groupId===og.id&&!r.isTimeTrial);
     openRaces.push({id:existingRace?.id||('r'+crypto.randomBytes(6).toString('hex')),orderHint:orderHint++,
       groupId:og.id,groupLabel:og.label,ages:og.ages,division:'open',distanceLabel:og.distance,dayIndex:1,cost:Number(og.cost||0),
       stage:'final',heatNumber:0,parentRaceKey:`open|${og.id}`,startType:'rolling',countsForOverall:false,
       laneEntries:Array.isArray(existingRace?.laneEntries)?existingRace.laneEntries:[],
       resultsMode:existingRace?.resultsMode||'places',status:existingRace?.status||'open',
       notes:String(existingRace?.notes||''),isFinal:true,closedAt:existingRace?.closedAt||'',
-      isOpenRace:true,isQuadRace:false});
+      isOpenRace:true,isQuadRace:false,isTimeTrial:false});
+  }
+  // Time Trial races — one per enabled group with timeTrial=true
+  let ttOrderHint=9500;
+  const ttSorted=[...(meet.openGroups||[])].sort((a,b)=>TT_ORDER.indexOf(a.id)-TT_ORDER.indexOf(b.id));
+  for(const og of ttSorted) {
+    if(!og.timeTrial) continue;
+    const dist=og.ttDistance||og.distance||'';
+    const existingTT=(meet.races||[]).find(r=>r.isTimeTrial&&r.groupId===og.id);
+    openRaces.push({id:existingTT?.id||('r'+crypto.randomBytes(6).toString('hex')),orderHint:ttOrderHint++,
+      groupId:og.id,groupLabel:og.label+' — Time Trial',ages:og.ages,division:'open',distanceLabel:dist,dayIndex:1,cost:0,
+      stage:'final',heatNumber:0,parentRaceKey:`tt|${og.id}`,startType:'individual',countsForOverall:false,
+      laneEntries:Array.isArray(existingTT?.laneEntries)?existingTT.laneEntries:[],
+      resultsMode:'times',status:existingTT?.status||'open',
+      notes:String(existingTT?.notes||''),isFinal:true,closedAt:existingTT?.closedAt||'',
+      isOpenRace:false,isQuadRace:false,isTimeTrial:true});
   }
   meet.races=[...nonOpenRaces,...openRaces]; meet.updatedAt=nowIso();
 }
@@ -1028,6 +1062,7 @@ function pageShell({ title, bodyHtml, user, meet, activeTab }) {
     .race-item { border: 1.5px solid var(--border); background: #fff; border-radius: var(--radius-sm); padding: 11px 13px; margin: 6px 0; cursor: grab; transition: box-shadow .15s, transform .15s; }
     .race-item:hover { box-shadow: var(--shadow); transform: translateY(-1px); }
     .race-item.open-item  { border-color: #fed7aa; background: #fffaf5; }
+    .race-item.tt-item    { border-color: #bae6fd; background: #f0f9ff; }
     .race-item.quad-item  { border-color: #d8b4fe; background: #faf5ff; }
     .race-item.active-now { border-color: var(--orange); box-shadow: 0 0 0 3px rgba(249,115,22,.15); }
     .race-label { font-weight: 700; font-size: 14px; color: var(--navy); }
@@ -1753,7 +1788,8 @@ app.get('/portal/meet/:meetId/open-builder', requireRole('meet_director'), (req,
   const enabledCount=meet.openGroups.filter(g=>g.enabled).length;
   const groupCards=meet.openGroups.map((og,i)=>{
     const def=OPEN_GROUP_DEFAULTS[i];
-    const liveRace=(meet.races||[]).find(r=>r.isOpenRace&&r.groupId===og.id);
+    const liveRace=(meet.races||[]).find(r=>r.isOpenRace&&r.groupId===og.id&&!r.isTimeTrial);
+    const liveTT=(meet.races||[]).find(r=>r.isTimeTrial&&r.groupId===og.id);
     return `
       <div class="open-group-card">
         <div class="row between center" style="margin-bottom:12px">
@@ -1761,20 +1797,30 @@ app.get('/portal/meet/:meetId/open-builder', requireRole('meet_director'), (req,
             <div style="font-weight:700;font-size:16px;color:var(--navy)">${esc(og.label)}</div>
             <div class="note">${esc(og.ages)}</div>
           </div>
-          ${toggleSwitch(`og_${i}_enabled`, og.enabled, 'Enable')}
+          ${toggleSwitch(`og_${i}_enabled`, og.enabled, 'Open Race')}
+        </div>
+        <div class="form-grid cols-3" style="margin-bottom:14px">
+          <div>
+            <label>Open Distance</label>
+            <input name="og_${i}_distance" value="${esc(og.distance)}" placeholder="${esc(def?.defaultDistance||'')}" />
+          </div>
+          <div><label>Cost ($)</label><input name="og_${i}_cost" value="${esc(og.cost)}" placeholder="0" /></div>
+          <div style="display:flex;align-items:flex-end">
+            ${liveRace?`<div class="chip chip-green">Open Entries: ${(liveRace.laneEntries||[]).length}</div>`:`<div class="note">Open race generated on save.</div>`}
+          </div>
+        </div>
+        <div class="hr"></div>
+        <div class="row between center" style="margin:10px 0 10px">
+          <div style="font-weight:700;font-size:14px;color:var(--sky2)">⏱ Time Trial</div>
+          ${toggleSwitch(`og_${i}_timeTrial`, og.timeTrial, 'Enable Time Trial')}
         </div>
         <div class="form-grid cols-3">
           <div>
-            <label>Distance</label>
-            <input name="og_${i}_distance" value="${esc(og.distance)}" placeholder="${esc(def?.defaultDistance||'')}" />
-            <div class="note">Default: ${esc(def?.defaultDistance||'')}</div>
+            <label>TT Distance</label>
+            <input name="og_${i}_ttDistance" value="${esc(og.ttDistance||'')}" placeholder="e.g. 300m" ${!og.timeTrial?'style="opacity:.5"':''} />
           </div>
-          <div>
-            <label>Cost ($)</label>
-            <input name="og_${i}_cost" value="${esc(og.cost)}" placeholder="0" />
-          </div>
-          <div style="display:flex;align-items:flex-end">
-            ${liveRace?`<div><div class="chip chip-green">Entries: ${(liveRace.laneEntries||[]).length}</div><div class="note" style="margin-top:4px">Status: ${esc(liveRace.status)}</div></div>`:`<div class="note">Race generated on save.</div>`}
+          <div style="display:flex;align-items:flex-end;gap:6px">
+            ${liveTT?`<div><div class="chip chip-sky">⏱ ${(liveTT.laneEntries||[]).length} times posted</div><div class="note" style="margin-top:4px">Status: ${esc(liveTT.status)}</div></div>`:`<div class="note">TT race generated on save.</div>`}
           </div>
         </div>
       </div>`;
@@ -1823,6 +1869,8 @@ app.post('/portal/meet/:meetId/open-builder/save', requireRole('meet_director'),
     og.enabled=!!req.body[`og_${i}_enabled`];
     og.distance=String(req.body[`og_${i}_distance`]||'').trim()||og.distance;
     og.cost=Number(String(req.body[`og_${i}_cost`]||'0').trim()||0);
+    og.timeTrial=!!req.body[`og_${i}_timeTrial`];
+    og.ttDistance=String(req.body[`og_${i}_ttDistance`]||'').trim();
   });
   generateOpenRacesForMeet(meet); ensureAtLeastOneBlock(meet); ensureCurrentRace(meet);
   saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/open-builder`);
@@ -1929,7 +1977,7 @@ app.get('/meet/:meetId/register', (req, res) => {
         <form method="POST" action="/meet/${meet.id}/register" class="stack">
           <div class="form-grid cols-3">
             <div><label>Skater Name</label><input name="name" required /></div>
-            <div><label>Age</label><input name="age" type="number" required /></div>
+            <div><label>Date of Birth</label><input type="date" name="birthdate" required /><div class="note">Used for USARS division placement (age as of Jan 1)</div></div>
             <div>
               <label>Gender</label>
               <select name="gender">
@@ -1959,12 +2007,14 @@ app.post('/meet/:meetId/register', (req, res) => {
   const db=loadDb(); const meet=getMeetOr404(db,req.params.meetId);
   if(!meet||!meet.isPublic||isRegistrationClosed(meet)) return res.redirect(`/meet/${req.params.meetId}/register`);
   const gender=String(req.body.gender||'').trim()||'boys';
-  const baseGroup=findAgeGroup(meet.groups,req.body.age,gender);
+  const birthdate=String(req.body.birthdate||'').trim();
+  const compAge=usarsAge(birthdate,meet.date)||Number(req.body.age||0);
+  const baseGroup=findAgeGroup(meet.groups,compAge,gender);
   const finalGroup=challengeAdjustedGroup(meet,baseGroup,!!req.body.challengeUp);
   const meetNumber=(meet.registrations||[]).reduce((max,r)=>Math.max(max,Number(r.meetNumber)||0),0)+1;
   meet.registrations.push({
     id:nextId(meet.registrations),createdAt:nowIso(),
-    name:String(req.body.name||'').trim(),age:Number(req.body.age||0),gender,
+    name:String(req.body.name||'').trim(),birthdate,age:compAge,gender,
     team:String(req.body.team||'Midwest Racing').trim()||'Midwest Racing',
     sponsor:String(req.body.sponsor||'').trim(),
     divisionGroupId:finalGroup?.id||'',divisionGroupLabel:finalGroup?.label||'Unassigned',
@@ -1986,7 +2036,7 @@ function registrationForm(meet,reg,action,title) {
         <form method="POST" action="${action}" class="stack">
           <div class="form-grid cols-3">
             <div><label>Skater Name</label><input name="name" value="${esc(reg.name||'')}" required /></div>
-            <div><label>Age</label><input name="age" value="${esc(reg.age||'')}" required /></div>
+            <div><label>Date of Birth</label><input type="date" name="birthdate" value="${esc(reg.birthdate||'')}" /><div class="note">USARS age as of Jan 1 — ${reg.birthdate?'Age '+ageForReg(reg,meet):'no birthdate yet'}</div></div>
             <div><label>Gender</label>
               <select name="gender">
                 <option value="boys"  ${gender==='boys' ?'selected':''}>Boy</option>
@@ -2073,9 +2123,11 @@ app.post('/portal/meet/:meetId/registered/:regId/edit', requireRole('meet_direct
   const reg=(meet.registrations||[]).find(r=>Number(r.id)===Number(req.params.regId));
   if(!reg) return res.redirect(`/portal/meet/${meet.id}/registered`);
   const gender=String(req.body.gender||'').trim()||'boys';
-  const baseGroup=findAgeGroup(meet.groups,req.body.age,gender);
+  const birthdate=String(req.body.birthdate||'').trim()||reg.birthdate||'';
+  const compAge=usarsAge(birthdate,meet.date)||Number(reg.age||0);
+  const baseGroup=findAgeGroup(meet.groups,compAge,gender);
   const finalGroup=challengeAdjustedGroup(meet,baseGroup,!!req.body.challengeUp);
-  Object.assign(reg,{name:String(req.body.name||'').trim(),age:Number(req.body.age||0),gender,team:String(req.body.team||'Midwest Racing').trim()||'Midwest Racing',sponsor:String(req.body.sponsor||'').trim(),originalDivisionGroupId:baseGroup?.id||'',originalDivisionGroupLabel:baseGroup?.label||'',divisionGroupId:finalGroup?.id||'',divisionGroupLabel:finalGroup?.label||'Unassigned',options:{challengeUp:!!req.body.challengeUp,novice:!!req.body.novice,elite:!!req.body.elite,open:!!req.body.open,timeTrials:!!req.body.timeTrials,relays:!!req.body.relays}});
+  Object.assign(reg,{name:String(req.body.name||'').trim(),birthdate,age:compAge,gender,team:String(req.body.team||'Midwest Racing').trim()||'Midwest Racing',sponsor:String(req.body.sponsor||'').trim(),originalDivisionGroupId:baseGroup?.id||'',originalDivisionGroupLabel:baseGroup?.label||'',divisionGroupId:finalGroup?.id||'',divisionGroupLabel:finalGroup?.label||'Unassigned',options:{challengeUp:!!req.body.challengeUp,novice:!!req.body.novice,elite:!!req.body.elite,open:!!req.body.open,timeTrials:!!req.body.timeTrials,relays:!!req.body.relays}});
   rebuildRaceAssignments(meet); saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/registered`);
 });
 
@@ -2241,8 +2293,8 @@ app.get('/portal/meet/:meetId/blocks', requireRole('meet_director'), (req, res) 
   const breakIcons={break:'☕',lunch:'🍽️',awards:'🏆',practice:'⛸️'};
 
   function raceItemHtml(race,isCurrent,draggable=true) {
-    const tag=race.isOpenRace?'🏁 ':race.isQuadRace?'🛼 ':'';
-    const cls=race.isOpenRace?'open-item':race.isQuadRace?'quad-item':'';
+    const tag=race.isTimeTrial?'⏱ ':race.isOpenRace?'🏁 ':race.isQuadRace?'🛼 ':'';
+    const cls=race.isTimeTrial?'tt-item':race.isOpenRace?'open-item':race.isQuadRace?'quad-item':'';
     return `
       <div class="race-item ${isCurrent?'active-now':''} ${cls}" draggable="${draggable}"
         data-race-id="${esc(race.id)}"
@@ -2313,6 +2365,7 @@ app.get('/portal/meet/:meetId/blocks', requireRole('meet_director'), (req, res) 
           <span class="chip">Inline: ${(meet.races||[]).filter(r=>!r.isOpenRace&&!r.isQuadRace).length}</span>
           <span class="chip chip-orange">🏁 Open: ${(meet.races||[]).filter(r=>r.isOpenRace).length}</span>
           <span class="chip chip-purple">🛼 Quad: ${(meet.races||[]).filter(r=>r.isQuadRace).length}</span>
+          <span class="chip chip-sky">⏱ TT: ${(meet.races||[]).filter(r=>r.isTimeTrial).length}</span>
           <span class="chip" id="unassignedChip">Unassigned: ${unassigned.length}</span>
         </div>
         <div class="action-row">
@@ -2606,6 +2659,45 @@ app.post('/portal/meet/:meetId/race-day/judges/save', requireRole('judge','meet_
   saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/race-day/judges`);
 });
 
+app.post('/portal/meet/:meetId/race-day/judges/tt-post', requireRole('judge','meet_director'), (req, res) => {
+  const meet=getMeetOr404(req.db,req.params.meetId);
+  if(!meet) return res.redirect('/portal');
+  const race=(meet.races||[]).find(r=>r.id===String(req.body.raceId||'')&&r.isTimeTrial);
+  if(!race) return res.redirect(`/portal/meet/${req.params.meetId}/race-day/judges`);
+  const time=String(req.body.time||'').trim();
+  const regId=String(req.body.registrationId||'').trim();
+  const skaterName=String(req.body.skaterName||'').trim();
+  const helmetNumber=String(req.body.helmetNumber||'').trim();
+  const team=String(req.body.team||'').trim();
+  if(!time) return res.redirect(`/portal/meet/${meet.id}/race-day/judges`);
+  // Remove existing entry for this skater if re-posting
+  if(regId) race.laneEntries=(race.laneEntries||[]).filter(e=>String(e.registrationId||'')!==regId);
+  // Assign a pseudo-lane as running order number
+  const nextLane=(race.laneEntries||[]).length+1;
+  race.laneEntries.push({lane:nextLane,registrationId:regId,helmetNumber,skaterName,team,time,place:'',status:''});
+  // Auto-assign places by time (fastest=1)
+  const sorted=[...race.laneEntries].sort((a,b)=>parseFloat(a.time||'999')-parseFloat(b.time||'999'));
+  sorted.forEach((e,i)=>{ const orig=race.laneEntries.find(x=>x.lane===e.lane); if(orig) orig.place=String(i+1); });
+  if(req.body.action==='close') { race.status='closed'; race.closedAt=nowIso(); race.isFinal=true; }
+  meet.updatedAt=nowIso(); saveDb(req.db);
+  res.redirect(`/portal/meet/${meet.id}/race-day/judges`);
+});
+
+app.post('/portal/meet/:meetId/race-day/judges/tt-remove', requireRole('judge','meet_director'), (req, res) => {
+  const meet=getMeetOr404(req.db,req.params.meetId);
+  if(!meet) return res.redirect('/portal');
+  const race=(meet.races||[]).find(r=>r.id===String(req.body.raceId||'')&&r.isTimeTrial);
+  if(!race) return res.redirect(`/portal/meet/${req.params.meetId}/race-day/judges`);
+  const regId=String(req.body.registrationId||'');
+  race.laneEntries=(race.laneEntries||[]).filter(e=>String(e.registrationId||'')!==regId);
+  // Re-number lanes and re-assign places
+  race.laneEntries.forEach((e,i)=>e.lane=i+1);
+  const sorted=[...race.laneEntries].sort((a,b)=>parseFloat(a.time||'999')-parseFloat(b.time||'999'));
+  sorted.forEach((e,i)=>{ const orig=race.laneEntries.find(x=>x.lane===e.lane); if(orig) orig.place=String(i+1); });
+  meet.updatedAt=nowIso(); saveDb(req.db);
+  res.redirect(`/portal/meet/${meet.id}/race-day/judges`);
+});
+
 app.post('/api/meet/:meetId/race-day/set-current', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet||!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
@@ -2778,7 +2870,21 @@ app.get('/meet/:meetId/live', (req, res) => {
           </div>`).join('')||`<div class="muted">No recent results yet.</div>`}
       </div>
     </div>
-    <script>setTimeout(()=>location.reload(),5000);</script>`}));
+    ${current&&current.isTimeTrial?(`
+    <div class="card" style="margin-top:16px">
+      <h2 style="margin-bottom:4px">⏱ ${esc(current.groupLabel)}</h2>
+      <div class="note" style="margin-bottom:14px">${esc(current.distanceLabel)} • Live Top 3</div>
+      <div class="podium-grid">
+        ${[...((current.laneEntries||[]).slice().sort((a,b)=>parseFloat(a.time||'999')-parseFloat(b.time||'999')))].slice(0,3).map((e,i)=>`
+          <div class="podium-card">
+            <div class="podium-place">${['🥇','🥈','🥉'][i]}</div>
+            <div class="podium-name">${esc(e.skaterName||'')}</div>
+            <div class="podium-team">${esc(e.team||'')}</div>
+            <div style="font-family:'Barlow Condensed',sans-serif;font-size:32px;font-weight:900;color:var(--sky2);margin-top:6px">${esc(e.time)}</div>
+          </div>`).join('')||'<div class="muted">No times posted yet.</div>'}
+      </div>
+    </div>`):''}
+    <script>setTimeout(()=>location.reload(),4000);</script>`}));
 });
 
 // ── Print Race List ───────────────────────────────────────────────────────────
