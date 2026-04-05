@@ -171,7 +171,7 @@ function defaultMeet(ownerUserId) {
     meetName:'New Meet', date:'', startTime:'', registrationCloseAt:'',
     rinkId:1, trackLength:100, lanes:4,
     timeTrialsEnabled:false, relayEnabled:false, judgesPanelRequired:true,
-    notes:'', relayNotes:'', isPublic:false, status:'draft',
+    notes:'', relayNotes:'', isPublic:false, status:'draft', tiebreaker:'d2',
     groups:baseGroups(), openGroups:makeOpenGroupsTemplate(), quadGroups:makeQuadGroupsTemplate(),
     races:[], blocks:[], registrations:[],
     currentRaceId:'', currentRaceIndex:-1, raceDayPaused:false,
@@ -248,6 +248,7 @@ function migrateMeet(meet,fallbackOwnerId) {
   if(typeof meet.relayEnabled!=='boolean') meet.relayEnabled=false;
   if(typeof meet.judgesPanelRequired!=='boolean') meet.judgesPanelRequired=true;
   if(typeof meet.notes!=='string') meet.notes='';
+  if(!meet.tiebreaker) meet.tiebreaker='d2';
   if(typeof meet.relayNotes!=='string') meet.relayNotes='';
   if(typeof meet.isPublic!=='boolean') meet.isPublic=false;
   if(typeof meet.status!=='string') meet.status='draft';
@@ -450,10 +451,46 @@ function scoreRaceByStandardPoints(race) {
   } return scored;
 }
 
+// SR832 tiebreaker point weights: [short, middle, long]
+const SR832_WEIGHTS = {
+  1: [96, 108, 120.75],   // 1st place
+  2: [64,  72,  80.5 ],   // 2nd place
+  3: [32,  36,  40.25],   // 3rd place
+  4: [16,  18,  20.125],  // 4th place
+};
+
+function computeTiebreakerScore(raceScores, races, mode) {
+  // Sort races by dayIndex to get short/middle/long order
+  const sorted = [...races].sort((a,b)=>Number(a.dayIndex||0)-Number(b.dayIndex||0));
+  const raceOrder = new Map(sorted.map((r,i)=>[r.id, i])); // 0=short,1=mid,2=long
+
+  if(mode==='d2') {
+    // D2 middle race tiebreaker: find place in middle race (index 1)
+    const midRace = sorted[1] || sorted[0];
+    if(!midRace) return 0;
+    const midScore = raceScores.find(s=>s.raceId===midRace.id);
+    // Lower place = better (1st beats 2nd), return negative so sort works
+    return -(midScore?.place||999);
+  }
+
+  // SR832 full formula
+  let total=0;
+  for(const rs of raceScores) {
+    const pos = raceOrder.get(rs.raceId); // 0=short,1=mid,2=long
+    if(pos==null) continue;
+    const place = Number(rs.place||0);
+    const weights = SR832_WEIGHTS[place];
+    if(!weights) continue;
+    total += weights[Math.min(pos, 2)];
+  }
+  return total;
+}
+
 function computeMeetStandings(meet) {
+  const tbMode = meet.tiebreaker || 'd2';
   const standings={}; const divisions={}; const regMap=new Map((meet.registrations||[]).map(r=>[Number(r.id),r]));
   for(const race of meet.races||[]) {
-    if(race.isOpenRace||race.isQuadRace) continue;
+    if(race.isOpenRace||race.isQuadRace||race.isTimeTrial) continue;
     if(!race.isFinal||!race.countsForOverall) continue;
     if(String(race.status||'')!=='closed') continue;
     const bucketKey=`${race.groupId}|${race.division}`;
@@ -466,12 +503,44 @@ function computeMeetStandings(meet) {
       const reg=regMap.get(Number(row.registrationId));
       if(!standings[bucketKey][regKey]) standings[bucketKey][regKey]={registrationId:row.registrationId,skaterName:row.skaterName,team:row.team,sponsor:reg?.sponsor||'',totalPoints:0,raceScores:[]};
       standings[bucketKey][regKey].totalPoints+=Number(row.points||0);
-      standings[bucketKey][regKey].raceScores.push({raceId:race.id,distanceLabel:race.distanceLabel,place:row.place,points:row.points});
+      standings[bucketKey][regKey].raceScores.push({raceId:race.id,distanceLabel:race.distanceLabel,dayIndex:race.dayIndex,place:row.place,points:row.points});
     }
   }
   return Object.keys(divisions).map(key=>{
-    const rows=Object.values(standings[key]||{}).sort((a,b)=>b.totalPoints!==a.totalPoints?b.totalPoints-a.totalPoints:String(a.skaterName||'').localeCompare(String(b.skaterName||''))).map((row,idx)=>({...row,overallPlace:idx+1}));
-    return {key,groupId:divisions[key].groupId,groupLabel:divisions[key].groupLabel,division:divisions[key].division,races:divisions[key].races.sort((a,b)=>Number(a.dayIndex||0)-Number(b.dayIndex||0)),standings:rows};
+    const divRaces=divisions[key].races.sort((a,b)=>Number(a.dayIndex||0)-Number(b.dayIndex||0));
+    const allRows=Object.values(standings[key]||{});
+
+    // Sort: primary = totalPoints desc, tiebreaker when tied
+    allRows.sort((a,b)=>{
+      if(b.totalPoints!==a.totalPoints) return b.totalPoints-a.totalPoints;
+      // Tied — apply tiebreaker
+      const tbA=computeTiebreakerScore(a.raceScores,divRaces,tbMode);
+      const tbB=computeTiebreakerScore(b.raceScores,divRaces,tbMode);
+      if(tbMode==='d2') {
+        // For d2 mode tbScore is negative place — higher (less negative) wins
+        if(tbA!==tbB) return tbB-tbA; // less negative = better place = wins
+      } else {
+        if(tbA!==tbB) return tbB-tbA; // higher SR832 score wins
+      }
+      return String(a.skaterName||'').localeCompare(String(b.skaterName||''));
+    });
+
+    // Assign places, detect ties and runoff needed
+    const rows=allRows.map((row,idx,arr)=>{
+      const prev=arr[idx-1];
+      const isTied=prev&&prev.totalPoints===row.totalPoints;
+      const tbA=isTied?computeTiebreakerScore(row.raceScores,divRaces,tbMode):null;
+      const tbB=isTied?computeTiebreakerScore(prev.raceScores,divRaces,tbMode):null;
+      const tbResolved=isTied&&tbA!==tbB;
+      const runoffNeeded=isTied&&tbA===tbB;
+      return {...row,overallPlace:idx+1,
+        tiebreakerUsed:tbResolved,
+        tiebreakerScore:isTied?(tbMode==='sr832'?computeTiebreakerScore(row.raceScores,divRaces,'sr832'):null):null,
+        runoffNeeded};
+    });
+
+    return {key,groupId:divisions[key].groupId,groupLabel:divisions[key].groupLabel,
+      division:divisions[key].division,races:divRaces,standings:rows,tbMode};
   }).sort((a,b)=>{const byGroup=String(a.groupLabel).localeCompare(String(b.groupLabel));return byGroup!==0?byGroup:String(a.division).localeCompare(String(b.division));});
 }
 
@@ -1103,12 +1172,12 @@ function pageShell({ title, bodyHtml, user, meet, activeTab }) {
       min-height: 360px; display: flex; align-items: flex-end;
       background: var(--navy); margin-bottom: 28px; box-shadow: var(--shadow-lg);
     }
-    .hero-centered { align-items: center; justify-content: center; min-height: 420px; }
+    .hero-centered { align-items: center; justify-content: center; min-height: 520px; }
     .hero-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .40; }
     .hero-gradient { position: absolute; inset: 0; background: linear-gradient(to top, rgba(15,31,61,.95) 40%, rgba(15,31,61,.20) 100%); }
     .hero-content { position: relative; z-index: 1; padding: 36px; }
     .hero-content-centered { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 36px; text-align: center; }
-    .hero-logo { height: 220px; width: auto; max-width: 92%; display: block; filter: drop-shadow(0 6px 32px rgba(0,0,0,.6)); }
+    .hero-logo { height: 260px; width: auto; max-width: 88%; display: block; filter: drop-shadow(0 6px 32px rgba(0,0,0,.6)); flex-shrink: 0; }
     .hero-eyebrow { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .15em; color: var(--orange); margin-bottom: 8px; }
     .hero-title { font-family: 'Barlow Condensed',sans-serif; font-size: 64px; font-weight: 900; line-height: .95; letter-spacing: -1px; color: #fff; }
     .hero-title span { color: var(--orange); }
@@ -1144,6 +1213,9 @@ function pageShell({ title, bodyHtml, user, meet, activeTab }) {
     .note      { font-size: 12px; color: var(--muted); }
     .small     { font-size: 12px; }
     .sponsor-line { font-size: 12px; color: var(--sky2); margin-top: 2px; }
+    .tb-badge { display:inline-block; font-size:10px; font-weight:700; padding:2px 6px; border-radius:999px; background:#fef9c3; color:#92400e; border:1px solid #fde68a; margin-left:5px; vertical-align:middle; }
+    .tb-badge.tb-runoff { background:#fee2e2; color:#991b1b; border-color:#fca5a5; }
+    .runoff-row td { background:#fff7ed; }
     .hidden    { display: none !important; }
     .text-orange { color: var(--orange); }
     .text-sky    { color: var(--sky2); }
@@ -1169,20 +1241,29 @@ function pageShell({ title, bodyHtml, user, meet, activeTab }) {
 // ── Shared render helpers ─────────────────────────────────────────────────────
 
 function resultsSectionHtml(section) {
+  const tbMode = section.tbMode || 'd2';
+  const tbLabel = tbMode==='sr832' ? 'SR832 Formula' : 'D2 Middle Race';
+  const hasTiebreaker = section.standings.some(r=>r.tiebreakerUsed||r.runoffNeeded);
   const podium = section.standings.slice(0,3).map((row,i) => `
     <div class="podium-card">
       <div class="podium-place">${['🥇','🥈','🥉'][i]||row.overallPlace}</div>
-      <div class="podium-name">${esc(row.skaterName||'Unknown')}</div>
+      <div class="podium-name">${esc(row.skaterName||'Unknown')}${row.tiebreakerUsed?`<span class="tb-badge">TB</span>`:''}${row.runoffNeeded?`<span class="tb-badge tb-runoff">Run-off</span>`:''}</div>
       <div class="podium-team">${esc(row.team||'')}</div>
       ${sponsorLineHtml(row.sponsor)}
       <div class="podium-pts">${Number(row.totalPoints||0)} pts</div>
     </div>`).join('');
   const standingsRows = section.standings.map(row=>`
-    <tr>
+    <tr${row.runoffNeeded?' class="runoff-row"':''}>
       <td><strong>${row.overallPlace}</strong></td>
-      <td>${esc(row.skaterName||'')}${sponsorLineHtml(row.sponsor)}</td>
+      <td>
+        ${esc(row.skaterName||'')}
+        ${row.tiebreakerUsed?`<span class="tb-badge">TB ${tbLabel}</span>`:''}
+        ${row.runoffNeeded?`<span class="tb-badge tb-runoff">⚠️ Run-off required</span>`:''}
+        ${sponsorLineHtml(row.sponsor)}
+      </td>
       <td>${esc(row.team||'')}</td>
-      <td><strong>${Number(row.totalPoints||0)}</strong></td>
+      <td><strong>${Number(row.totalPoints||0)}</strong>${row.tiebreakerScore!=null?`<div class="note">TB: ${row.tiebreakerScore.toFixed(2)}</div>`:''}
+      </td>
     </tr>`).join('');
   return `
     <div class="card">
@@ -1711,6 +1792,13 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
               <option value="complete"  ${meet.status==='complete' ?'selected':''}>Complete</option>
             </select>
           </div>
+          <div><label>Tiebreaker Rule</label>
+            <select name="tiebreaker">
+              <option value="d2"    ${(meet.tiebreaker||'d2')==='d2'   ?'selected':''}>D2 Middle Race (local standard)</option>
+              <option value="sr832" ${meet.tiebreaker==='sr832'?'selected':''}>USARS SR832 Formula (regionals/nationals)</option>
+            </select>
+            <div class="note">D2 = most common at local meets. SR832 = official weighted formula.</div>
+          </div>
         </div>
         <div class="toggle-group">
           <div class="toggle-row">
@@ -1765,6 +1853,7 @@ app.post('/portal/meet/:meetId/builder/save', requireRole('meet_director'), (req
   meet.status=String(req.body.status||'draft');
   meet.notes=String(req.body.notes||'');
   meet.relayNotes=String(req.body.relayNotes||'');
+  meet.tiebreaker=String(req.body.tiebreaker||'d2')==='sr832'?'sr832':'d2';
   meet.groups.forEach((group,gi)=>{
     for(const divKey of ['novice','elite']) {
       group.divisions[divKey]={
