@@ -2781,7 +2781,7 @@ app.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','judg
     body+=`
       <div class="stat-grid" style="margin-bottom:16px">
         <div class="stat-card orange"><div class="stat-label">Current Race</div><div class="stat-value">${current?esc(current.groupLabel):'—'}</div><div class="stat-sub">${current?`${esc(cap(current.division))} • ${esc(current.distanceLabel)} • ${esc(raceDisplayStage(current))}`:''}</div></div>
-        <div class="stat-card yellow"><div class="stat-label">On Deck</div><div class="stat-value">${info.next?esc(info.next.groupLabel):'—'}</div><div class="stat-sub">${info.next?`${esc(cap(info.next.division))} • ${esc(info.next.distanceLabel)}`:''}</div></div>
+        <div class="stat-card yellow"><div class="stat-label">In Staging</div><div class="stat-value">${info.next?esc(info.next.groupLabel):'—'}</div><div class="stat-sub">${info.next?`${esc(cap(info.next.division))} • ${esc(info.next.distanceLabel)}`:''}</div></div>
         <div class="stat-card navy"><div class="stat-label">Progress</div><div class="stat-value">${Math.max(info.idx+1,0)} <span style="font-size:18px;opacity:.6">/ ${info.ordered.length}</span></div><div class="stat-sub">${meet.raceDayPaused?'⏸ Paused':'▶ Running'}</div></div>
       </div>
       <div class="card" style="margin-bottom:16px">
@@ -2876,7 +2876,7 @@ app.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','judg
     body+=`
       <div class="stat-grid" style="margin-bottom:16px">
         <div class="stat-card orange"><div class="stat-label">Current Race</div><div class="stat-value">${current?esc(current.groupLabel):'—'}</div><div class="stat-sub">${current?`${esc(cap(current.division))} • ${esc(current.distanceLabel)}`:''}</div></div>
-        <div class="stat-card yellow"><div class="stat-label">On Deck</div><div class="stat-value">${info.next?esc(info.next.groupLabel):'—'}</div><div class="stat-sub">${info.next?`${esc(cap(info.next.division))} • ${esc(info.next.distanceLabel)}`:''}</div></div>
+        <div class="stat-card yellow"><div class="stat-label">In Staging</div><div class="stat-value">${info.next?esc(info.next.groupLabel):'—'}</div><div class="stat-sub">${info.next?`${esc(cap(info.next.division))} • ${esc(info.next.distanceLabel)}`:''}</div></div>
         <div class="stat-card sky"><div class="stat-label">After That</div><div class="stat-value">${info.coming[0]?esc(info.coming[0].groupLabel):'—'}</div><div class="stat-sub">${info.coming[0]?`${esc(cap(info.coming[0].division))} • ${esc(info.coming[0].distanceLabel)}`:''}</div></div>
       </div>
       ${announcerBoxHtml(current,currentLanes.map(l=>{const reg=regMap.get(Number(l.registrationId));return{...l,sponsor:reg?.sponsor||''};}))}`; 
@@ -2884,7 +2884,7 @@ app.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','judg
     body+=`
       <div class="stat-grid" style="margin-bottom:16px">
         <div class="stat-card orange"><div class="stat-label">Current Race</div><div class="stat-value">${current?esc(current.groupLabel):'—'}</div><div class="stat-sub">${current?`${esc(cap(current.division))} • Race ${Math.max(info.idx+1,1)} of ${info.ordered.length}`:''}</div></div>
-        <div class="stat-card yellow"><div class="stat-label">On Deck</div><div class="stat-value">${info.next?esc(info.next.groupLabel):'—'}</div><div class="stat-sub">${info.next?`${esc(cap(info.next.division))} • ${esc(info.next.distanceLabel)}`:''}</div></div>
+        <div class="stat-card yellow"><div class="stat-label">In Staging</div><div class="stat-value">${info.next?esc(info.next.groupLabel):'—'}</div><div class="stat-sub">${info.next?`${esc(cap(info.next.division))} • ${esc(info.next.distanceLabel)}`:''}</div></div>
         <div class="stat-card green"><div class="stat-label">Last Result</div><div class="stat-value">${recent[0]?esc(recent[0].groupLabel):'Waiting'}</div><div class="stat-sub">${recent[0]?`${esc(cap(recent[0].division))} • ${esc(recent[0].distanceLabel)}`:''}</div></div>
       </div>`;
   }
@@ -3100,7 +3100,7 @@ app.get('/meet/:meetId/tv', (req, res) => {
   const sidebarHtml = isTT ?
     '<div class="tv-sidebar-section"><div class="tv-sidebar-label">⏱ Live Top 3</div><div class="tv-podium" style="gap:8px">'+ttTop3Html+'</div></div>'
     :
-    (info.next ? '<div class="tv-sidebar-section"><div class="tv-sidebar-label">On Deck</div><div class="tv-next-name">'+esc(info.next.groupLabel)+'</div><div class="tv-next-meta">'+esc(cap(info.next.division))+' • '+esc(info.next.distanceLabel)+'</div></div>' : '') +
+    (info.next ? '<div class="tv-sidebar-section"><div class="tv-sidebar-label">In Staging</div><div class="tv-next-name">'+esc(info.next.groupLabel)+'</div><div class="tv-next-meta">'+esc(cap(info.next.division))+' • '+esc(info.next.distanceLabel)+'</div></div>' : '') +
     (info.coming.length ? '<div class="tv-sidebar-section"><div class="tv-sidebar-label">Coming Up</div>' +
       info.coming.slice(0,4).map(r=>'<div class="tv-coming-item">'+esc(r.groupLabel)+' — '+esc(cap(r.division))+' • '+esc(r.distanceLabel)+'</div>').join('') +
       '</div>' : '');
@@ -3245,7 +3245,7 @@ app.get('/meet/:meetId/alerts', (req, res) => {
     ${err?`<div class="card" style="border-left:4px solid var(--red);margin-bottom:16px"><div class="danger">❌ ${esc(decodeURIComponent(err))}</div></div>`:''}
     <div class="card">
       <h2 style="margin-bottom:6px">Sign up for race alerts</h2>
-      <div class="note" style="margin-bottom:16px">Get a text when your skater is 2 races away, on deck, and when their result posts. Reply STOP anytime to unsubscribe.</div>
+      <div class="note" style="margin-bottom:16px">Get a text when your skater is 2 races away, in staging, and when their result posts. Reply STOP anytime to unsubscribe.</div>
       <form method="POST" action="/meet/${meet.id}/alerts/subscribe" class="stack">
         <div class="form-grid cols-2">
           <div>
@@ -3275,7 +3275,7 @@ app.get('/meet/:meetId/alerts', (req, res) => {
       <h3 style="margin-bottom:8px">What you'll receive</h3>
       <div class="stack">
         <div class="toggle-row"><div><div class="toggle-row-label">🏁 2 Races Away</div><div class="toggle-row-desc">"Heads up! Jane Smith races in 2 — Elementary Girls Elite 500m"</div></div></div>
-        <div class="toggle-row"><div><div class="toggle-row-label">⚡ On Deck</div><div class="toggle-row-desc">"Get to the line! Jane Smith is ON DECK"</div></div></div>
+        <div class="toggle-row"><div><div class="toggle-row-label">⚡ In Staging</div><div class="toggle-row-desc">"Jane Smith is IN STAGING — get to the line now!"</div></div></div>
         <div class="toggle-row"><div><div class="toggle-row-label">✅ Result Posted</div><div class="toggle-row-desc">"Jane Smith — 🥇 1st place! 30 pts earned | 50 pts total"</div></div></div>
       </div>
     </div>`}));
@@ -3296,7 +3296,7 @@ app.post('/meet/:meetId/alerts/subscribe', (req, res) => {
   meet.textAlerts.push({id:crypto.randomBytes(6).toString('hex'),registrationId:regId,skaterName:reg.name,phone,createdAt:nowIso()});
   meet.updatedAt=nowIso(); saveDb(db);
   // Send confirmation text
-  sendSms(phone, `✅ You're signed up for alerts for ${reg.name}!\nYou'll get texts 2 races away, on deck, and when results post.\n${meet.meetName}\nReply STOP to unsubscribe.`);
+  sendSms(phone, `✅ You're signed up for alerts for ${reg.name}!\nYou'll get texts 2 races away, in staging, and when results post.\n${meet.meetName}\nReply STOP to unsubscribe.`);
   res.redirect(`/meet/${meet.id}/alerts?ok=${encodeURIComponent(reg.name)}`);
 });
 
@@ -3318,7 +3318,7 @@ app.get('/meet/:meetId/live', (req, res) => {
       <div style="display:flex;gap:16px;margin-top:16px;flex-wrap:wrap">
         <div><div class="live-race-label">Current Race</div><div class="live-race-name">${current?esc(current.groupLabel):'—'}</div>${current?`<div style="opacity:.75;font-size:14px">${esc(cap(current.division))} • ${esc(current.distanceLabel)} • Race ${Math.max(info.idx+1,1)} of ${info.ordered.length}</div>`:''}</div>
         <div style="width:1px;background:rgba(255,255,255,.15)"></div>
-        <div><div class="live-race-label">On Deck</div><div class="live-race-name">${info.next?esc(info.next.groupLabel):'—'}</div>${info.next?`<div style="opacity:.75;font-size:14px">${esc(cap(info.next.division))} • ${esc(info.next.distanceLabel)}</div>`:''}</div>
+        <div><div class="live-race-label">In Staging</div><div class="live-race-name">${info.next?esc(info.next.groupLabel):'—'}</div>${info.next?`<div style="opacity:.75;font-size:14px">${esc(cap(info.next.division))} • ${esc(info.next.distanceLabel)}</div>`:''}</div>
       </div>
     </div>
     <div class="grid-2">
