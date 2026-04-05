@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="480" viewBox="0 0 1600 480" role="img" aria-label="SpeedSkate Meet logo">
+  <defs>
+    <linearGradient id="g1" x1="0" x2="1">
+      <stop offset="0%" stop-color="#00A3FF" />
+      <stop offset="100%" stop-color="#0066FF" />
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="6" stdDeviation="10" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+
+  <rect width="100%" height="100%" fill="transparent" />
+
+  <!-- swoosh mark -->
+  <g transform="translate(120,80)" filter="url(#shadow)">
+    <path d="M0 160 C120 60, 320 20, 420 30 C540 42, 680 110, 760 130 C820 145, 940 140, 1100 60"
+          fill="none" stroke="url(#g1)" stroke-width="38" stroke-linecap="round" stroke-linejoin="round" opacity="0.98" />
+    <circle cx="1080" cy="60" r="26" fill="#FFD166" stroke="#F59E0B" stroke-width="4"/>
+  </g>
+
+  <!-- skater glyph (stylized) -->
+  <g transform="translate(520,160) scale(1.2)">
+    <path d="M78 10 C78 4, 74 0, 68 0 C62 0, 58 4, 58 10 C58 16, 62 20, 68 20 C74 20, 78 16, 78 10 Z" fill="#222"/>
+    <path d="M20 80 C42 62, 68 50, 92 46 C116 42, 138 44, 150 58 C164 74, 170 94, 172 116 L168 120 C166 102, 154 86, 136 74 C118 62, 92 58, 70 64 C48 70, 30 86, 20 110 Z" fill="#0f172a" opacity="0.95"/>
+    <path d="M30 118 L162 118" stroke="#0f172a" stroke-width="6" stroke-linecap="round"/>
+    <path d="M46 132 L152 132" stroke="#94a3b8" stroke-width="6" stroke-linecap="round"/>
+  </g>
+
+  <!-- text -->
+  <g transform="translate(300,320)">
+    <text x="0" y="0" font-family="Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial" font-weight="700" font-size="62" fill="#061826">SpeedSkate</text>
+    <text x="0" y="60" font-family="Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial" font-weight="600" font-size="32" fill="#274155">Meet</text>
+  </g>
+
+  <!-- subtle accent text -->
+  <text x="1400" y="440" font-family="Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial" font-size="18" fill="#6b7280" text-anchor="end">Est. 2026</text>
+</svg>
