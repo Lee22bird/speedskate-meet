@@ -372,7 +372,7 @@ function migrateMeet(meet,fallbackOwnerId) {
     laneEntries:Array.isArray(r.laneEntries)?r.laneEntries:[],
     resultsMode:String(r.resultsMode||'places'), status:String(r.status||'open'),
     notes:String(r.notes||''), isFinal:!!r.isFinal, closedAt:String(r.closedAt||''),
-    isOpenRace:!!r.isOpenRace, isQuadRace:!!r.isQuadRace, isTimeTrial:!!r.isTimeTrial,
+    isOpenRace:!!r.isOpenRace, isQuadRace:!!r.isQuadRace, isTimeTrial:!!r.isTimeTrial, isRelayRace:!!r.isRelayRace,
   }));
   meet.blocks=meet.blocks.map((b,idx)=>({
     id:String(b.id||('b'+(idx+1))), name:String(b.name||`Block ${idx+1}`),
@@ -838,7 +838,7 @@ function rebuildRaceAssignments(meet) {
   ensureRegistrationTotalsAndNumbers(meet);
   const laneCount=Math.max(1,Number(meet.lanes)||4);
   const originalBlocks=(meet.blocks||[]).map(block=>({...block,raceIds:[...(block.raceIds||[])]}));
-  const baseRaces=(meet.races||[]).filter(r=>!r.isOpenRace&&!r.isQuadRace&&!['heat','semi'].includes(String(r.stage||'')));
+  const baseRaces=(meet.races||[]).filter(r=>!r.isOpenRace&&!r.isQuadRace&&!r.isTimeTrial&&!r.isRelayRace&&!['heat','semi'].includes(String(r.stage||'')));
   const newRaces=[];
   for(const baseRace of baseRaces) {
     const matchingRegs=(meet.registrations||[]).filter(reg=>String(reg.divisionGroupId||'')===String(baseRace.groupId||'')&&divisionEnabledForRegistration(reg,baseRace.division));
@@ -846,12 +846,16 @@ function rebuildRaceAssignments(meet) {
   }
   const quadBaseRaces=(meet.races||[]).filter(r=>r.isQuadRace&&!['heat','semi'].includes(String(r.stage||'')));
   for(const baseRace of quadBaseRaces) { const raceSet=buildRaceSetForEntries(baseRace,[],laneCount); newRaces.push(...raceSet); }
-  const openRaces=(meet.races||[]).filter(r=>r.isOpenRace); newRaces.push(...openRaces);
+  const openRaces=(meet.races||[]).filter(r=>r.isOpenRace||r.isTimeTrial||r.isRelayRace);
+  newRaces.push(...openRaces);
   const mappedBlocks=originalBlocks.map(block=>{
     const nextRaceIds=[];
     for(const oldRid of block.raceIds||[]) {
       const oldRace=(meet.races||[]).find(r=>r.id===oldRid); if(!oldRace) continue;
-      if(oldRace.isOpenRace){if(!nextRaceIds.includes(oldRace.id)) nextRaceIds.push(oldRace.id);continue;}
+      // Preserve open/TT/relay races as-is
+      if(oldRace.isOpenRace||oldRace.isTimeTrial||oldRace.isRelayRace){
+        if(!nextRaceIds.includes(oldRace.id)) nextRaceIds.push(oldRace.id); continue;
+      }
       const parentKey=oldRace.parentRaceKey||baseRaceKey(oldRace.groupId,oldRace.division,oldRace.dayIndex,oldRace.distanceLabel);
       const replacements=newRaces.filter(r=>(r.parentRaceKey||'')===parentKey);
       for(const rep of replacements) if(!nextRaceIds.includes(rep.id)) nextRaceIds.push(rep.id);
@@ -957,6 +961,7 @@ function meetTabs(meet, active) {
     ['builder','Meet Builder',`/portal/meet/${meet.id}/builder`],
     ['open-builder','Open Builder',`/portal/meet/${meet.id}/open-builder`],
     ['quad-builder','Quad Builder',`/portal/meet/${meet.id}/quad-builder`],
+    ['relay-builder','Relay Builder',`/portal/meet/${meet.id}/relay-builder`],
     ['blocks','Block Builder',`/portal/meet/${meet.id}/blocks`],
     ['registered','Registered',`/portal/meet/${meet.id}/registered`],
     ['checkin','Check-In',`/portal/meet/${meet.id}/checkin`],
@@ -1223,6 +1228,7 @@ function pageShell({ title, bodyHtml, user, meet, activeTab }) {
     .race-item:hover { box-shadow: var(--shadow); transform: translateY(-1px); }
     .race-item.open-item  { border-color: #fed7aa; background: #fffaf5; }
     .race-item.tt-item    { border-color: #bae6fd; background: #f0f9ff; }
+    .race-item.relay-item { border-color: #93c5fd; background: #eff6ff; }
     .race-item.quad-item  { border-color: #d8b4fe; background: #faf5ff; }
     .race-item.active-now { border-color: var(--orange); box-shadow: 0 0 0 3px rgba(249,115,22,.15); }
     .race-label { font-weight: 700; font-size: 14px; color: var(--navy); }
@@ -1268,7 +1274,7 @@ function pageShell({ title, bodyHtml, user, meet, activeTab }) {
     .hero-gradient { position: absolute; inset: 0; background: linear-gradient(to top, rgba(15,31,61,.95) 40%, rgba(15,31,61,.20) 100%); }
     .hero-content { position: relative; z-index: 1; padding: 36px; }
     .hero-content-centered { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 36px; text-align: center; }
-    .hero-logo { height: auto; width: 680px; max-width: 88%; display: block; filter: drop-shadow(0 6px 32px rgba(0,0,0,.6)); flex-shrink: 0; }
+    .hero-logo { height: auto; width: 1000px; max-width: 92vw; display: block; filter: drop-shadow(0 6px 32px rgba(0,0,0,.6)); flex-shrink: 0; }
     .hero-eyebrow { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .15em; color: var(--orange); margin-bottom: 8px; }
     .hero-title { font-family: 'Barlow Condensed',sans-serif; font-size: 64px; font-weight: 900; line-height: .95; letter-spacing: -1px; color: #fff; }
     .hero-title span { color: var(--orange); }
@@ -1873,6 +1879,7 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
   const rinkOptions=req.db.rinks.map(r=>`<option value="${r.id}" ${Number(meet.rinkId)===Number(r.id)?'selected':''}>${esc(r.name)} (${esc(r.city||'')}, ${esc(r.state||'')})</option>`).join('');
   const openEnabledCount=(meet.openGroups||[]).filter(g=>g.enabled).length;
   const quadEnabledCount=(meet.quadGroups||[]).filter(g=>g.enabled).length;
+  const savedFlash=req.query.saved?'<div class="card" style="border-left:4px solid var(--green);margin-bottom:12px"><div class="good">✅ Meet saved successfully.</div></div>':'';
 
   function divCardHtml(group, gi, divKey) {
     const div=group.divisions[divKey];
@@ -1913,6 +1920,7 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
 
   res.send(pageShell({title:'Meet Builder',user:req.user,meet,activeTab:'builder', bodyHtml:`
     <div class="page-header"><h1>Meet Builder</h1><div class="sub">${esc(meet.meetName)}</div></div>
+    ${savedFlash}
     <div class="grid-2" style="margin-bottom:16px">
       <div class="card card-accent" style="border-left-color:var(--orange)">
         <div class="row between center">
@@ -1937,7 +1945,10 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
       <div class="card">
         <div class="row between" style="margin-bottom:16px">
           <h2 style="margin:0">Meet Setup</h2>
-          <button class="btn-orange" type="submit">Save & Generate Races</button>
+          <div class="action-row">
+            <button class="btn2" type="submit" formaction="/portal/meet/${meet.id}/builder/save-meet">Save Meet</button>
+            <button class="btn-orange" type="submit" onclick="return confirmRebuild()">Rebuild Races ⚠️</button>
+          </div>
         </div>
         <div class="form-grid cols-3" style="margin-bottom:14px">
           <div><label>Meet Name</label><input name="meetName" value="${esc(meet.meetName)}" required /></div>
@@ -1992,43 +2003,154 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
       ${groupsHtml}
       <div class="card">
         <div class="row between center">
-          <div class="muted">Saving regenerates the race list from your divisions.</div>
-          <button class="btn-orange" type="submit">Save & Generate Races</button>
+          <div class="muted"><strong>Save Meet</strong> — saves settings only. <strong>Rebuild Races</strong> — regenerates races from divisions. <span style="color:var(--red)">⚠️ Clears block assignments.</span></div>
+          <div class="action-row">
+            <button class="btn2" type="submit" formaction="/portal/meet/${meet.id}/builder/save-meet">Save Meet</button>
+            <button class="btn-orange" type="submit" onclick="return confirmRebuild()">Rebuild Races ⚠️</button>
+          </div>
         </div>
       </div>
     </form>`}));
 });
 
+function saveMeetFields(meet, body) {
+  meet.meetName=String(body.meetName||'New Meet').trim();
+  meet.date=String(body.date||'').trim();
+  meet.startTime=String(body.startTime||'').trim();
+  meet.registrationCloseAt=combineDateTime(body.registrationCloseDate,body.registrationCloseTime);
+  meet.rinkId=Number(body.rinkId||1);
+  meet.trackLength=Number(body.trackLength||100);
+  meet.lanes=Number(body.lanes||4);
+  meet.timeTrialsEnabled=!!body.timeTrialsEnabled;
+  meet.relayEnabled=!!body.relayEnabled;
+  meet.judgesPanelRequired=!!body.judgesPanelRequired;
+  meet.isPublic=!!body.isPublic;
+  meet.status=String(body.status||'draft');
+  meet.notes=String(body.notes||'');
+  meet.relayNotes=String(body.relayNotes||'');
+  meet.tiebreaker=String(body.tiebreaker||'d2')==='sr832'?'sr832':'d2';
+  meet.groups.forEach((group,gi)=>{
+    for(const divKey of ['novice','elite']) {
+      group.divisions[divKey]={
+        enabled:!!body[`g_${gi}_${divKey}_enabled`],
+        cost:Number(String(body[`g_${gi}_${divKey}_cost`]||'0').trim()||0),
+        distances:[String(body[`g_${gi}_${divKey}_d1`]||'').trim(),String(body[`g_${gi}_${divKey}_d2`]||'').trim(),String(body[`g_${gi}_${divKey}_d3`]||'').trim(),String(body[`g_${gi}_${divKey}_d4`]||'').trim()],
+      };
+    }
+  });
+  meet.updatedAt=nowIso();
+}
+
+// Save meet fields only — does NOT touch races or blocks
+app.post('/portal/meet/:meetId/builder/save-meet', requireRole('meet_director'), (req, res) => {
+  const meet=getMeetOr404(req.db,req.params.meetId);
+  if(!meet) return res.redirect('/portal');
+  if(!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
+  saveMeetFields(meet, req.body);
+  saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/builder?saved=1`);
+});
+
+// Save AND rebuild races — warns user first via confirm dialog in the UI
 app.post('/portal/meet/:meetId/builder/save', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet) return res.redirect('/portal');
   if(!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
-  meet.meetName=String(req.body.meetName||'New Meet').trim();
-  meet.date=String(req.body.date||'').trim();
-  meet.startTime=String(req.body.startTime||'').trim();
-  meet.registrationCloseAt=combineDateTime(req.body.registrationCloseDate,req.body.registrationCloseTime);
-  meet.rinkId=Number(req.body.rinkId||1);
-  meet.trackLength=Number(req.body.trackLength||100);
-  meet.lanes=Number(req.body.lanes||4);
-  meet.timeTrialsEnabled=!!req.body.timeTrialsEnabled;
-  meet.relayEnabled=!!req.body.relayEnabled;
-  meet.judgesPanelRequired=!!req.body.judgesPanelRequired;
-  meet.isPublic=!!req.body.isPublic;
-  meet.status=String(req.body.status||'draft');
-  meet.notes=String(req.body.notes||'');
-  meet.relayNotes=String(req.body.relayNotes||'');
-  meet.tiebreaker=String(req.body.tiebreaker||'d2')==='sr832'?'sr832':'d2';
-  meet.groups.forEach((group,gi)=>{
-    for(const divKey of ['novice','elite']) {
-      group.divisions[divKey]={
-        enabled:!!req.body[`g_${gi}_${divKey}_enabled`],
-        cost:Number(String(req.body[`g_${gi}_${divKey}_cost`]||'0').trim()||0),
-        distances:[String(req.body[`g_${gi}_${divKey}_d1`]||'').trim(),String(req.body[`g_${gi}_${divKey}_d2`]||'').trim(),String(req.body[`g_${gi}_${divKey}_d3`]||'').trim(),String(req.body[`g_${gi}_${divKey}_d4`]||'').trim()],
-      };
-    }
-  });
+  saveMeetFields(meet, req.body);
   generateBaseRacesForMeet(meet); rebuildRaceAssignments(meet); ensureAtLeastOneBlock(meet); ensureCurrentRace(meet);
   saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/blocks`);
+});
+
+
+// ── Relay Builder ─────────────────────────────────────────────────────────────
+
+app.get('/portal/meet/:meetId/relay-builder', requireRole('meet_director'), (req, res) => {
+  const meet=getMeetOr404(req.db,req.params.meetId);
+  if(!meet) return res.redirect('/portal');
+  if(!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
+  const relayRaces=(meet.races||[]).filter(r=>r.isRelayRace);
+  const relayRows=relayRaces.map(r=>`
+    <tr>
+      <td><strong>${esc(r.groupLabel)}</strong></td>
+      <td>${esc(r.distanceLabel)}</td>
+      <td>${esc(r.notes||'—')}</td>
+      <td><span class="chip chip-${r.status==='closed'?'green':'sky'}">${esc(r.status)}</span></td>
+      <td>
+        <form method="POST" action="/portal/meet/${meet.id}/relay-builder/delete" style="display:inline">
+          <input type="hidden" name="raceId" value="${esc(r.id)}" />
+          <button class="btn-danger btn-sm" type="submit">Delete</button>
+        </form>
+      </td>
+    </tr>`).join('');
+
+  res.send(pageShell({title:'Relay Builder',user:req.user,meet,activeTab:'relay-builder', bodyHtml:`
+    <div class="builder-banner" style="background:linear-gradient(135deg,#1d4ed8 0%,#3b82f6 100%);margin-bottom:18px">
+      <h2>🔄 Relay Builder</h2>
+      <div class="sub">Create relay races manually. Judges fill in team names and skaters on race day.</div>
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <h2 style="margin-bottom:14px">Add Relay Race</h2>
+        <form method="POST" action="/portal/meet/${meet.id}/relay-builder/add" class="stack">
+          <div><label>Relay Name</label><input name="name" placeholder="e.g. Senior 4 Man Relay" required /></div>
+          <div><label>Distance</label><input name="distance" placeholder="e.g. 4000m" required /></div>
+          <div><label>Notes (optional)</label><input name="notes" placeholder="e.g. Mixed relay, 4 skaters" /></div>
+          <div><button class="btn-sky" type="submit">+ Add Relay Race</button></div>
+        </form>
+      </div>
+      <div class="card">
+        <h2 style="margin-bottom:6px">How it works</h2>
+        <div class="stack" style="margin-top:8px">
+          <div class="toggle-row"><div><div class="toggle-row-label">1. Add relay races here</div><div class="toggle-row-desc">Name it whatever — Senior 4 Man, Freshman 4 Girl, Junior 2 Mix, etc.</div></div></div>
+          <div class="toggle-row"><div><div class="toggle-row-label">2. Drag into Block Builder</div><div class="toggle-row-desc">Relay races show up in the unassigned pile tagged with 🔄</div></div></div>
+          <div class="toggle-row"><div><div class="toggle-row-label">3. Judges fill in on race day</div><div class="toggle-row-desc">Team name, skater names, and place — all manual on the judges panel</div></div></div>
+          <div class="toggle-row"><div><div class="toggle-row-label">4. Results show separately</div><div class="toggle-row-desc">Relay results don't count toward overall standings points</div></div></div>
+        </div>
+      </div>
+    </div>
+    ${relayRaces.length?`
+    <div class="card" style="margin-top:16px">
+      <div class="row between" style="margin-bottom:12px">
+        <h2 style="margin:0">Relay Races (${relayRaces.length})</h2>
+        <span class="chip chip-sky">🔄 Manual fill-in on race day</span>
+      </div>
+      <table class="table">
+        <thead><tr><th>Name</th><th>Distance</th><th>Notes</th><th>Status</th><th></th></tr></thead>
+        <tbody>${relayRows}</tbody>
+      </table>
+    </div>`:''}`}));
+});
+
+app.post('/portal/meet/:meetId/relay-builder/add', requireRole('meet_director'), (req, res) => {
+  const meet=getMeetOr404(req.db,req.params.meetId);
+  if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
+  const name=String(req.body.name||'').trim();
+  const distance=String(req.body.distance||'').trim();
+  const notes=String(req.body.notes||'').trim();
+  if(!name||!distance) return res.redirect(`/portal/meet/${meet.id}/relay-builder`);
+  const orderHint=9800+(meet.races||[]).filter(r=>r.isRelayRace).length;
+  meet.races.push({
+    id:'r'+crypto.randomBytes(6).toString('hex'), orderHint,
+    groupId:'relay_'+crypto.randomBytes(4).toString('hex'),
+    groupLabel:name, ages:'', division:'relay', distanceLabel:distance,
+    dayIndex:1, cost:0, stage:'final', heatNumber:0,
+    parentRaceKey:'relay_'+crypto.randomBytes(4).toString('hex'),
+    startType:'standing', countsForOverall:false,
+    laneEntries:[], resultsMode:'places', status:'open',
+    notes, isFinal:true, closedAt:'',
+    isOpenRace:false, isQuadRace:false, isTimeTrial:false, isRelayRace:true,
+  });
+  meet.updatedAt=nowIso(); saveDb(req.db);
+  res.redirect(`/portal/meet/${meet.id}/relay-builder`);
+});
+
+app.post('/portal/meet/:meetId/relay-builder/delete', requireRole('meet_director'), (req, res) => {
+  const meet=getMeetOr404(req.db,req.params.meetId);
+  if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
+  const raceId=String(req.body.raceId||'');
+  meet.races=(meet.races||[]).filter(r=>r.id!==raceId);
+  meet.blocks=(meet.blocks||[]).map(b=>({...b,raceIds:(b.raceIds||[]).filter(id=>id!==raceId)}));
+  meet.updatedAt=nowIso(); saveDb(req.db);
+  res.redirect(`/portal/meet/${meet.id}/relay-builder`);
 });
 
 // ── Open Builder ──────────────────────────────────────────────────────────────
@@ -2348,7 +2470,7 @@ app.get('/portal/meet/:meetId/registered', requireRole('meet_director'), (req, r
       <div class="row between" style="margin-bottom:14px">
         <div class="note">Registration close: ${meet.registrationCloseAt?esc(meet.registrationCloseAt.replace('T',' ')):'Not set'}</div>
         <div class="action-row">
-          <form method="POST" action="/portal/meet/${meet.id}/assign-races"><button class="btn2" type="submit">Rebuild Assignments</button></form>
+          <form method="POST" action="/portal/meet/${meet.id}/assign-races" onsubmit="return confirm('Rebuild will re-split heats and reassign lanes.\n\nYour block structure will be preserved but lane assignments will change.\n\nContinue?')"><button class="btn2" type="submit">Rebuild Assignments</button></form>
           <a class="btn-orange" href="/meet/${meet.id}/register" target="_blank">Public Registration</a>
           <a class="btn2" href="/portal/meet/${meet.id}/registered/print-race-list" target="_blank">Print Race List</a>
         </div>
@@ -2546,8 +2668,8 @@ app.get('/portal/meet/:meetId/blocks', requireRole('meet_director'), (req, res) 
   const breakIcons={break:'☕',lunch:'🍽️',awards:'🏆',practice:'⛸️'};
 
   function raceItemHtml(race,isCurrent,draggable=true) {
-    const tag=race.isTimeTrial?'⏱ ':race.isOpenRace?'🏁 ':race.isQuadRace?'🛼 ':'';
-    const cls=race.isTimeTrial?'tt-item':race.isOpenRace?'open-item':race.isQuadRace?'quad-item':'';
+    const tag=race.isTimeTrial?'⏱ ':race.isRelayRace?'🔄 ':race.isOpenRace?'🏁 ':race.isQuadRace?'🛼 ':'';
+    const cls=race.isTimeTrial?'tt-item':race.isRelayRace?'relay-item':race.isOpenRace?'open-item':race.isQuadRace?'quad-item':'';
     return `
       <div class="race-item ${isCurrent?'active-now':''} ${cls}" draggable="${draggable}"
         data-race-id="${esc(race.id)}"
@@ -2619,6 +2741,7 @@ app.get('/portal/meet/:meetId/blocks', requireRole('meet_director'), (req, res) 
           <span class="chip chip-orange">🏁 Open: ${(meet.races||[]).filter(r=>r.isOpenRace).length}</span>
           <span class="chip chip-purple">🛼 Quad: ${(meet.races||[]).filter(r=>r.isQuadRace).length}</span>
           <span class="chip chip-sky">⏱ TT: ${(meet.races||[]).filter(r=>r.isTimeTrial).length}</span>
+          <span class="chip" style="border-color:#93c5fd;color:#1d4ed8">🔄 Relays: ${(meet.races||[]).filter(r=>r.isRelayRace).length}</span>
           <span class="chip" id="unassignedChip">Unassigned: ${unassigned.length}</span>
         </div>
         <div class="action-row">
@@ -2630,7 +2753,7 @@ app.get('/portal/meet/:meetId/blocks', requireRole('meet_director'), (req, res) 
             <button class="btn2 btn-sm" onclick="addDivider('awards','🏆 Awards')">🏆 Awards</button>
             <button class="btn2 btn-sm" onclick="addDivider('practice','⛸️ Practice')">⛸️ Practice</button>
           </div>
-          <form method="POST" action="/portal/meet/${meet.id}/assign-races"><button class="btn2" type="submit">Rebuild</button></form>
+          <form method="POST" action="/portal/meet/${meet.id}/assign-races" onsubmit="return confirm('Rebuild will re-split heats and reassign lanes.\n\nYour block structure is preserved.\n\nContinue?')"><button class="btn2" type="submit">Rebuild</button></form>
           <a class="btn-orange" href="/portal/meet/${meet.id}/registered/print-race-list" target="_blank">Print Race List</a>
         </div>
       </div>
