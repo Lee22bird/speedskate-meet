@@ -15,6 +15,94 @@ const DATA_DIR = fs.existsSync('/data') ? '/data' : __dirname;
 const DATA_FILE = process.env.SSM_DATA_FILE || path.join(DATA_DIR, 'ssm_db.json');
 
 const SESSION_COOKIE = 'ssm_sess';
+
+// ── Twilio ────────────────────────────────────────────────────────────────────
+const TWILIO_SID    = process.env.TWILIO_ACCOUNT_SID;
+const TWILIO_TOKEN  = process.env.TWILIO_AUTH_TOKEN;
+const TWILIO_FROM   = process.env.TWILIO_FROM_NUMBER;
+const TWILIO_READY  = !!(TWILIO_SID && TWILIO_TOKEN && TWILIO_FROM);
+
+async function sendSms(to, body) {
+  if(!TWILIO_READY) { console.log('[SMS disabled] To:', to, '\n', body); return; }
+  try {
+    const creds = Buffer.from(TWILIO_SID+':'+TWILIO_TOKEN).toString('base64');
+    const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${TWILIO_SID}/Messages.json`, {
+      method: 'POST',
+      headers: { 'Authorization': 'Basic '+creds, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ To: to, From: TWILIO_FROM, Body: body }).toString(),
+    });
+    const data = await res.json();
+    if(data.error_code) console.error('[SMS error]', data.error_code, data.message);
+    else console.log('[SMS sent]', to, data.sid);
+  } catch(err) { console.error('[SMS exception]', err.message); }
+}
+
+function normalizePhone(raw) {
+  const digits = String(raw||'').replace(/\D/g,'');
+  if(digits.length===10) return '+1'+digits;
+  if(digits.length===11&&digits[0]==='1') return '+'+digits;
+  return null;
+}
+
+// Fire alerts when race advances — check 2-away and on-deck subscriptions
+async function fireRaceAlerts(meet, newIdx, ordered) {
+  const subs = meet.textAlerts || [];
+  if(!subs.length) return;
+
+  // On deck (delta=1) and 2 away (delta=2)
+  for(const delta of [1,2]) {
+    const targetRace = ordered[newIdx + delta];
+    if(!targetRace) continue;
+    // Find subs for skaters in this race
+    for(const entry of targetRace.laneEntries||[]) {
+      const regId = String(entry.registrationId||'');
+      const matched = subs.filter(s=>String(s.registrationId||'')===regId);
+      for(const sub of matched) {
+        const msg = delta===1
+          ? `⚡ Get to the line! ${entry.skaterName} is ON DECK\n${targetRace.groupLabel} • ${cap(targetRace.division)} • ${targetRace.distanceLabel}\n${meet.meetName}`
+          : `🏁 Heads up! ${entry.skaterName} races in 2\n${targetRace.groupLabel} • ${cap(targetRace.division)} • ${targetRace.distanceLabel}\n${meet.meetName}`;
+        sendSms(sub.phone, msg);
+      }
+    }
+  }
+}
+
+// Fire result alerts when a race closes
+async function fireResultAlerts(meet, race) {
+  const subs = meet.textAlerts || [];
+  if(!subs.length) return;
+  // Get standings for points context
+  const standings = computeMeetStandings(meet);
+  const bucketKey = `${race.groupId}|${race.division}`;
+  const section = standings.find(s=>s.key===bucketKey);
+
+  for(const entry of race.laneEntries||[]) {
+    if(!entry.place||!entry.registrationId) continue;
+    const regId = String(entry.registrationId||'');
+    const matched = subs.filter(s=>String(s.registrationId||'')===regId);
+    if(!matched.length) continue;
+
+    const place = Number(entry.place);
+    const placeEmoji = place===1?'🥇':place===2?'🥈':place===3?'🥉':`${place}th`;
+    const pts = STANDARD_POINTS[place];
+    const skaterRow = section?.standings.find(r=>String(r.registrationId||'')===regId);
+    const totalPts = skaterRow?.totalPoints;
+
+    let msg;
+    if(race.isTimeTrial) {
+      const sorted=[...(race.laneEntries||[])].sort((a,b)=>parseFloat(a.time||'999')-parseFloat(b.time||'999'));
+      const ttPlace = sorted.findIndex(e=>String(e.registrationId||'')===regId)+1;
+      msg = `⏱ ${entry.skaterName} — ${entry.time}\n${race.groupLabel}\nCurrent standing: ${ttPlace===1?'🥇':ttPlace===2?'🥈':ttPlace===3?'🥉':ttPlace+'th'} place\n${meet.meetName}`;
+    } else if(race.isOpenRace||race.countsForOverall===false) {
+      msg = `✅ ${entry.skaterName} — ${placeEmoji} place!\n${race.groupLabel} • ${cap(race.division)} • ${race.distanceLabel}\nPlacement only\n${meet.meetName} 🏁`;
+    } else if(pts) {
+      msg = `✅ ${entry.skaterName} — ${placeEmoji} place!\n${race.groupLabel} • ${cap(race.division)} • ${race.distanceLabel}\n${pts} pts earned${totalPts!=null?' | '+totalPts+' pts total':''}\n${meet.meetName} 🏁`;
+    } else {
+      msg = `✅ ${entry.skaterName} — ${placeEmoji} place!\n${race.groupLabel} • ${cap(race.division)} • ${race.distanceLabel}\n${meet.meetName} 🏁`;
+    }
+    for(const sub of matched) sendSms(sub.phone, msg);
+  }
+}
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 14;
 
 const ADMIN_USERNAME = 'Lbird22';
@@ -270,6 +358,7 @@ function migrateMeet(meet,fallbackOwnerId) {
   if(typeof meet.currentRaceId!=='string') meet.currentRaceId='';
   if(typeof meet.currentRaceIndex!=='number') meet.currentRaceIndex=-1;
   if(typeof meet.raceDayPaused!=='boolean') meet.raceDayPaused=false;
+  if(!Array.isArray(meet.textAlerts)) meet.textAlerts=[];
   meet.races=meet.races.map((r,idx)=>({
     id:r.id||('r'+crypto.randomBytes(6).toString('hex')), orderHint:Number(r.orderHint||idx+1),
     groupId:String(r.groupId||''), groupLabel:String(r.groupLabel||''), ages:String(r.ages||''),
@@ -1225,6 +1314,10 @@ function pageShell({ title, bodyHtml, user, meet, activeTab }) {
     .filters-row { display: grid; grid-template-columns: 1.2fr .8fr .8fr; gap: 10px; }
     @media(max-width:700px){.filters-row{grid-template-columns:1fr;}}
     .footer-note { font-size: 11px; color: var(--muted); margin-top: 40px; padding-top: 14px; border-top: 1px solid var(--border); }
+    .live-tabs { display:flex; gap:8px; margin-bottom:18px; flex-wrap:wrap; }
+    .live-tab { padding:10px 18px; border-radius:var(--radius-sm); font-weight:700; font-size:14px; border:1.5px solid var(--border2); color:var(--navy); background:#fff; text-decoration:none; }
+    .live-tab:hover { background:var(--off); color:var(--navy); }
+    .live-tab.active { background:var(--navy); color:#fff; border-color:var(--navy); }
   </style>
 </head>
 <body>
@@ -2629,6 +2722,7 @@ app.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','judg
           </div>
           <div class="action-row" style="align-self:flex-end">
             <button class="btn2" onclick="pauseMeet()">${meet.raceDayPaused?'▶ Resume':'⏸ Pause'}</button>
+            <a class="btn-sky" href="/meet/${meet.id}/tv" target="_blank">📺 TV Display</a>
             ${current&&current.status==='closed'?`<button class="btn-danger" onclick="unlockRace('${current.id}')">Unlock Race</button>`:''}
           </div>
         </div>
@@ -2769,6 +2863,11 @@ app.post('/portal/meet/:meetId/race-day/judges/tt-post', requireRole('judge','me
   sorted.forEach((e,i)=>{ const orig=race.laneEntries.find(x=>x.lane===e.lane); if(orig) orig.place=String(i+1); });
   if(req.body.action==='close') { race.status='closed'; race.closedAt=nowIso(); race.isFinal=true; }
   meet.updatedAt=nowIso(); saveDb(req.db);
+  // Fire TT result alert for this skater
+  if(regId) {
+    const entry=race.laneEntries.find(e=>String(e.registrationId||'')===regId);
+    if(entry) fireResultAlerts(meet, race);
+  }
   res.redirect(`/portal/meet/${meet.id}/race-day/judges`);
 });
 
@@ -2801,7 +2900,9 @@ app.post('/api/meet/:meetId/race-day/step', requireRole('meet_director'), (req, 
   const info=currentRaceInfo(meet); const dir=Number(req.body.direction||1);
   const idx=Math.max(0,Math.min(info.ordered.length-1,info.idx+(dir>=0?1:-1)));
   if(info.ordered[idx]){meet.currentRaceId=info.ordered[idx].id;meet.currentRaceIndex=idx;}
-  meet.updatedAt=nowIso(); saveDb(req.db); res.json({ok:true});
+  meet.updatedAt=nowIso(); saveDb(req.db);
+  fireRaceAlerts(meet, idx, info.ordered);
+  res.json({ok:true});
 });
 
 app.post('/api/meet/:meetId/race-day/toggle-pause', requireRole('meet_director'), (req, res) => {
@@ -2884,12 +2985,144 @@ app.post('/portal/meet/:meetId/reopen', requireRole('meet_director'), (req, res)
   meet.status='live'; meet.updatedAt=nowIso(); saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/results`);
 });
 
+
+// ── TV Display ────────────────────────────────────────────────────────────────
+app.get('/meet/:meetId/tv', (req, res) => {
+  const db=loadDb(); const meet=getMeetOr404(db,req.params.meetId);
+  if(!meet) return res.redirect('/meets');
+  const info=currentRaceInfo(meet);
+  const current=info.current;
+  const lanes=current?laneRowsForRace(current,meet):[];
+  const recent=recentClosedRaces(meet,1);
+  const lastRace=recent[0];
+  const lastResults=lastRace?(lastRace.laneEntries||[]).filter(x=>x.place).sort((a,b)=>Number(a.place||999)-Number(b.place||999)).slice(0,3):[];
+  const isTT=!!(current&&current.isTimeTrial);
+  const ttSorted=isTT?[...(current.laneEntries||[])].sort((a,b)=>parseFloat(a.time||'999')-parseFloat(b.time||'999')):[];
+
+  const lanesHtml = lanes.filter(l=>l.skaterName).map(l=>
+    '<div class="tv-lane">' +
+    '<div class="tv-lane-num">'+l.lane+'</div>' +
+    '<div class="tv-helmet">'+(l.helmetNumber?'#'+esc(l.helmetNumber):'')+'</div>' +
+    '<div style="flex:1"><div class="tv-skater-name">'+esc(l.skaterName)+'</div><div class="tv-team">'+esc(l.team||'')+'</div></div>' +
+    '</div>'
+  ).join('') || '<div style="opacity:.4;font-size:24px;margin-top:20px">No skaters entered yet</div>';
+
+  const ttTop3Html = ttSorted.slice(0,3).map((e,i)=>
+    '<div class="tv-podium-row" style="padding:10px 14px">' +
+    '<div class="tv-podium-medal" style="font-size:28px">'+(['🥇','🥈','🥉'][i])+'</div>' +
+    '<div style="flex:1"><div style="font-family:Barlow Condensed,sans-serif;font-size:26px;font-weight:900">'+esc(e.skaterName)+'</div>' +
+    '<div style="font-size:13px;color:rgba(255,255,255,.5)">'+esc(e.team||'')+'</div></div>' +
+    '<div style="font-family:Barlow Condensed,sans-serif;font-size:28px;font-weight:900;color:#38BDF8">'+esc(e.time)+'</div>' +
+    '</div>'
+  ).join('') || '<div style="opacity:.4;font-size:16px">No times yet</div>';
+
+  const lastResultHtml = lastResults.map(e=>
+    '<div class="tv-footer-place">' +
+    '<span class="tv-footer-medal">'+(e.place==='1'?'🥇':e.place==='2'?'🥈':e.place==='3'?'🥉':e.place+'.')+'</span>' +
+    '<span class="tv-footer-name">'+esc(e.skaterName||'')+'</span>' +
+    (e.time?'<span style="color:#38BDF8;font-weight:700">'+esc(e.time)+'</span>':'') +
+    '</div>'
+  ).join('');
+
+  const sidebarHtml = isTT ?
+    '<div class="tv-sidebar-section"><div class="tv-sidebar-label">⏱ Live Top 3</div><div class="tv-podium" style="gap:8px">'+ttTop3Html+'</div></div>'
+    :
+    (info.next ? '<div class="tv-sidebar-section"><div class="tv-sidebar-label">On Deck</div><div class="tv-next-name">'+esc(info.next.groupLabel)+'</div><div class="tv-next-meta">'+esc(cap(info.next.division))+' • '+esc(info.next.distanceLabel)+'</div></div>' : '') +
+    (info.coming.length ? '<div class="tv-sidebar-section"><div class="tv-sidebar-label">Coming Up</div>' +
+      info.coming.slice(0,4).map(r=>'<div class="tv-coming-item">'+esc(r.groupLabel)+' — '+esc(cap(r.division))+' • '+esc(r.distanceLabel)+'</div>').join('') +
+      '</div>' : '');
+
+  const currentLabel = isTT ? '⏱ TIME TRIAL — NOW RUNNING' : '▶ NOW RACING';
+  const currentMeta = esc(cap(current&&current.division||''))+' • '+esc(current&&current.distanceLabel||'')+(isTT?' • Individual':' • '+(current?esc(cap(current.startType)):'')+ ' Start');
+
+  const mainHtml = !current ?
+    '<div class="tv-current" style="grid-column:1/-1;align-items:center;justify-content:center;display:flex;flex-direction:column;gap:16px;opacity:.4"><img src="/public/images/branding/ssm-logo.png" style="height:120px"/><div style="font-family:Barlow Condensed,sans-serif;font-size:48px;font-weight:900;letter-spacing:2px">STAND BY</div></div>'
+    :
+    '<div class="tv-current">' +
+      '<div><div class="tv-now-label">'+currentLabel+'</div>' +
+      '<div class="tv-race-title">'+esc(current.groupLabel)+'</div>' +
+      '<div class="tv-race-meta">'+currentMeta+'</div></div>' +
+      '<div class="tv-lanes">' + (isTT ?
+        (ttSorted.length===0 ? '<div style="font-size:28px;opacity:.5;margin-top:20px">Waiting for first time...</div>' : '') :
+        lanesHtml) +
+      '</div>' +
+    '</div>' +
+    '<div class="tv-sidebar">'+sidebarHtml+'</div>';
+
+  const html = '<!doctype html><html lang="en"><head><meta charset="utf-8"/>' +
+    '<meta name="viewport" content="width=device-width,initial-scale=1"/>' +
+    '<title>TV — '+esc(meet.meetName)+'</title>' +
+    '<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;700;900&family=Barlow:wght@400;600;700&display=swap" rel="stylesheet"/>' +
+    '<style>' +
+    '*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}' +
+    'html,body{width:100%;height:100%;overflow:hidden;background:#0F1F3D;color:#fff;font-family:Barlow,sans-serif;}' +
+    '.tv-wrap{display:grid;grid-template-rows:auto 1fr auto;height:100vh;}' +
+    '.tv-header{background:#0a1628;border-bottom:3px solid #F97316;padding:12px 32px;display:flex;align-items:center;justify-content:space-between;}' +
+    '.tv-logo{height:48px;width:auto;}' +
+    '.tv-meet-name{font-family:Barlow Condensed,sans-serif;font-size:28px;font-weight:700;color:#fff;}' +
+    '.tv-progress{font-size:16px;color:rgba(255,255,255,.6);text-align:right;}' +
+    '.tv-race-num{font-family:Barlow Condensed,sans-serif;font-size:22px;font-weight:700;color:#F97316;}' +
+    '.tv-main{display:grid;grid-template-columns:1.4fr .6fr;overflow:hidden;}' +
+    '.tv-current{background:#162847;padding:32px 40px;display:flex;flex-direction:column;gap:16px;}' +
+    '.tv-now-label{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.15em;color:#F97316;}' +
+    '.tv-race-title{font-family:Barlow Condensed,sans-serif;font-size:52px;font-weight:900;line-height:1;color:#fff;}' +
+    '.tv-race-meta{font-size:22px;color:rgba(255,255,255,.75);font-weight:600;}' +
+    '.tv-lanes{display:flex;flex-direction:column;gap:8px;margin-top:8px;flex:1;}' +
+    '.tv-lane{display:flex;align-items:center;gap:16px;background:rgba(255,255,255,.07);border-radius:10px;padding:14px 20px;}' +
+    '.tv-lane-num{font-family:Barlow Condensed,sans-serif;font-size:28px;font-weight:900;color:#38BDF8;width:36px;text-align:center;flex-shrink:0;}' +
+    '.tv-helmet{font-family:Barlow Condensed,sans-serif;font-size:24px;font-weight:700;color:#F97316;width:64px;flex-shrink:0;}' +
+    '.tv-skater-name{font-family:Barlow Condensed,sans-serif;font-size:36px;font-weight:900;}' +
+    '.tv-team{font-size:16px;color:rgba(255,255,255,.6);}' +
+    '.tv-sidebar{background:#0a1628;padding:24px;display:flex;flex-direction:column;gap:16px;overflow:hidden;}' +
+    '.tv-sidebar-section{background:rgba(255,255,255,.05);border-radius:12px;padding:16px;}' +
+    '.tv-sidebar-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#38BDF8;margin-bottom:8px;}' +
+    '.tv-next-name{font-family:Barlow Condensed,sans-serif;font-size:28px;font-weight:900;line-height:1.1;}' +
+    '.tv-next-meta{font-size:14px;color:rgba(255,255,255,.65);margin-top:4px;}' +
+    '.tv-coming-item{font-size:15px;color:rgba(255,255,255,.75);padding:4px 0;border-bottom:1px solid rgba(255,255,255,.08);}' +
+    '.tv-coming-item:last-child{border:none;}' +
+    '.tv-podium{display:flex;flex-direction:column;gap:8px;}' +
+    '.tv-podium-row{display:flex;align-items:center;gap:16px;background:rgba(255,255,255,.07);border-radius:10px;padding:12px 16px;}' +
+    '.tv-footer{background:#0a1628;border-top:2px solid rgba(255,255,255,.10);padding:10px 32px;display:flex;align-items:center;gap:24px;}' +
+    '.tv-footer-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:rgba(255,255,255,.5);white-space:nowrap;}' +
+    '.tv-footer-race{font-size:14px;font-weight:700;color:rgba(255,255,255,.75);white-space:nowrap;}' +
+    '.tv-footer-results{display:flex;gap:20px;flex:1;flex-wrap:wrap;}' +
+    '.tv-footer-place{display:flex;align-items:center;gap:8px;font-size:16px;}' +
+    '.tv-footer-medal{font-size:20px;}' +
+    '.tv-footer-name{font-weight:700;}' +
+    '</style></head><body>' +
+    '<div class="tv-wrap">' +
+    '<div class="tv-header">' +
+    '<img src="/public/images/branding/ssm-logo.png" class="tv-logo" alt="SSM"/>' +
+    '<div class="tv-meet-name">'+esc(meet.meetName)+'</div>' +
+    '<div class="tv-progress">' +
+    (current?'<div class="tv-race-num">RACE '+Math.max(info.idx+1,1)+' OF '+info.ordered.length+'</div>':'') +
+    '<div style="font-size:13px;color:rgba(255,255,255,.4);margin-top:2px">'+(meet.date||'')+'</div>' +
+    '</div></div>' +
+    '<div class="tv-main">'+mainHtml+'</div>' +
+    '<div class="tv-footer">' +
+    '<div class="tv-footer-label">Last Result</div>' +
+    (lastRace ?
+      '<div class="tv-footer-race">'+esc(lastRace.groupLabel)+' • '+esc(cap(lastRace.division))+' • '+esc(lastRace.distanceLabel)+'</div>' +
+      '<div class="tv-footer-results">'+lastResultHtml+'</div>'
+      : '<div style="opacity:.4">No results yet</div>') +
+    '</div></div>' +
+    '<script>setTimeout(()=>location.reload(),4000);</script>' +
+    '</body></html>';
+
+  res.send(html);
+});
+
 app.get('/meet/:meetId/results', (req, res) => {
   const db=loadDb(); const meet=getMeetOr404(db,req.params.meetId); const data=getSessionUser(req);
   if(!meet||!meet.isPublic) return res.redirect('/meets');
   const sections=computeMeetStandings(meet); const openSections=computeOpenResults(meet); const quadSections=computeQuadStandings(meet);
   res.send(pageShell({title:'Results',user:data?.user||null, bodyHtml:`
     <div class="page-header"><h1>${esc(meet.meetName)}</h1><div class="sub">Results</div></div>
+    <div class="live-tabs">
+      <a class="live-tab" href="/meet/${meet.id}/live">Live Board</a>
+      <a class="live-tab active" href="/meet/${meet.id}/results">Results</a>
+      <a class="live-tab" href="/meet/${meet.id}/alerts">📲 Text Alerts</a>
+    </div>
     ${sections.map(resultsSectionHtml).join('<div class="spacer"></div>')||`<div class="card"><div class="muted">No standings yet.</div></div>`}
     ${openSections.length?`<div class="spacer"></div><h2 style="color:var(--orange)">🏁 Open Results</h2>${openSections.map(s=>`<div class="card" style="border-left:4px solid var(--orange);margin-bottom:14px"><h2>${esc(s.race.groupLabel)} — ${esc(s.race.distanceLabel)}</h2><table class="table"><thead><tr><th>Place</th><th>Skater</th><th>Team</th></tr></thead><tbody>${s.rows.map(r=>`<tr><td><strong>${esc(r.place)}</strong></td><td>${esc(r.skaterName||'')}</td><td>${esc(r.team||'')}</td></tr>`).join('')}</tbody></table></div>`).join('')}`:``}
     ${quadSections.length?`<div class="spacer"></div><h2 style="color:var(--purple)">🛼 Quad Results</h2>${quadSections.map(s=>`<div class="card" style="border-left:4px solid var(--purple);margin-bottom:14px"><h2>${esc(s.groupLabel)} — ${esc(s.distanceLabel)}</h2><table class="table"><thead><tr><th>Place</th><th>Skater</th><th>Team</th><th>Points</th></tr></thead><tbody>${s.standings.map(r=>`<tr><td><strong>${r.overallPlace}</strong></td><td>${esc(r.skaterName||'')}</td><td>${esc(r.team||'')}</td><td><strong>${Number(r.totalPoints||0)}</strong></td></tr>`).join('')}</tbody></table></div>`).join('')}`:``}`}));
@@ -2922,6 +3155,70 @@ app.get('/portal/meet/:meetId/results/print', requireRole('meet_director','judge
 
 // ── Public Live ───────────────────────────────────────────────────────────────
 
+app.get('/meet/:meetId/alerts', (req, res) => {
+  const db=loadDb(); const meet=getMeetOr404(db,req.params.meetId);
+  if(!meet||!meet.isPublic) return res.redirect('/meets');
+  const data=getSessionUser(req);
+  const regs=(meet.registrations||[]).slice().sort((a,b)=>String(a.name||'').localeCompare(String(b.name||'')));
+  const ok=req.query.ok; const err=req.query.err;
+  res.send(pageShell({title:'Text Alerts',user:data?.user||null, bodyHtml:`
+    <div class="page-header"><h1>📲 Text Alerts</h1><div class="sub">${esc(meet.meetName)}</div></div>
+    <div class="live-tabs">
+      <a class="live-tab" href="/meet/${meet.id}/live">Live Board</a>
+      <a class="live-tab" href="/meet/${meet.id}/results">Results</a>
+      <a class="live-tab active" href="/meet/${meet.id}/alerts">Text Alerts</a>
+    </div>
+    ${ok?`<div class="card" style="border-left:4px solid var(--green);margin-bottom:16px"><div class="good">✅ You're signed up! You'll get texts when ${esc(decodeURIComponent(ok))} is about to race and when results post.</div></div>`:''}
+    ${err?`<div class="card" style="border-left:4px solid var(--red);margin-bottom:16px"><div class="danger">❌ ${esc(decodeURIComponent(err))}</div></div>`:''}
+    <div class="card">
+      <h2 style="margin-bottom:6px">Sign up for race alerts</h2>
+      <div class="note" style="margin-bottom:16px">Get a text when your skater is 2 races away, on deck, and when their result posts. Reply STOP anytime to unsubscribe.</div>
+      <form method="POST" action="/meet/${meet.id}/alerts/subscribe" class="stack">
+        <div class="form-grid cols-2">
+          <div>
+            <label>Skater</label>
+            <select name="registrationId" required>
+              <option value="">— Select skater —</option>
+              ${regs.map(r=>`<option value="${esc(r.id)}">#${esc(r.helmetNumber||'?')} ${esc(r.name)} — ${esc(r.divisionGroupLabel||'')}</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <label>Your Cell Phone Number</label>
+            <input name="phone" type="tel" placeholder="(316) 555-1234" required />
+          </div>
+        </div>
+        <div><button class="btn-orange" type="submit">Sign Me Up →</button></div>
+      </form>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h3 style="margin-bottom:8px">What you'll receive</h3>
+      <div class="stack">
+        <div class="toggle-row"><div><div class="toggle-row-label">🏁 2 Races Away</div><div class="toggle-row-desc">"Heads up! Emma Johnson races in 2 — Elementary Girls Elite 500m"</div></div></div>
+        <div class="toggle-row"><div><div class="toggle-row-label">⚡ On Deck</div><div class="toggle-row-desc">"Get to the line! Emma Johnson is ON DECK"</div></div></div>
+        <div class="toggle-row"><div><div class="toggle-row-label">✅ Result Posted</div><div class="toggle-row-desc">"Emma Johnson — 🥇 1st place! 30 pts earned | 50 pts total"</div></div></div>
+      </div>
+    </div>`}));
+});
+
+app.post('/meet/:meetId/alerts/subscribe', (req, res) => {
+  const db=loadDb(); const meet=getMeetOr404(db,req.params.meetId);
+  if(!meet||!meet.isPublic) return res.redirect('/meets');
+  const regId=String(req.body.registrationId||'').trim();
+  const rawPhone=String(req.body.phone||'').trim();
+  const phone=normalizePhone(rawPhone);
+  if(!phone) return res.redirect(`/meet/${meet.id}/alerts?err=${encodeURIComponent('Invalid phone number. Use format: (316) 555-1234')}`);
+  const reg=(meet.registrations||[]).find(r=>Number(r.id)===Number(regId));
+  if(!reg) return res.redirect(`/meet/${meet.id}/alerts?err=${encodeURIComponent('Skater not found.')}`);
+  if(!Array.isArray(meet.textAlerts)) meet.textAlerts=[];
+  // Remove existing sub for same reg+phone combo to avoid duplicates
+  meet.textAlerts=meet.textAlerts.filter(s=>!(String(s.registrationId||'')===regId&&s.phone===phone));
+  meet.textAlerts.push({id:crypto.randomBytes(6).toString('hex'),registrationId:regId,skaterName:reg.name,phone,createdAt:nowIso()});
+  meet.updatedAt=nowIso(); saveDb(db);
+  // Send confirmation text
+  sendSms(phone, `✅ You're signed up for alerts for ${reg.name}!\nYou'll get texts 2 races away, on deck, and when results post.\n${meet.meetName}\nReply STOP to unsubscribe.`);
+  res.redirect(`/meet/${meet.id}/alerts?ok=${encodeURIComponent(reg.name)}`);
+});
+
 app.get('/meet/:meetId/live', (req, res) => {
   const db=loadDb(); const meet=getMeetOr404(db,req.params.meetId); const data=getSessionUser(req);
   if(!meet||!meet.isPublic) return res.redirect('/meets');
@@ -2930,6 +3227,11 @@ app.get('/meet/:meetId/live', (req, res) => {
   const recent=recentClosedRaces(meet,5);
   const regMap=new Map((meet.registrations||[]).map(r=>[Number(r.id),r]));
   res.send(pageShell({title:'Live',user:data?.user||null, bodyHtml:`
+    <div class="live-tabs">
+      <a class="live-tab active" href="/meet/${meet.id}/live">Live Board</a>
+      <a class="live-tab" href="/meet/${meet.id}/results">Results</a>
+      <a class="live-tab" href="/meet/${meet.id}/alerts">📲 Text Alerts</a>
+    </div>
     <div class="live-hero">
       <div class="live-meet-name">${esc(meet.meetName)}</div>
       <div style="display:flex;gap:16px;margin-top:16px;flex-wrap:wrap">
