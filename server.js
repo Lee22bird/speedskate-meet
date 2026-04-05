@@ -1651,7 +1651,7 @@ app.get('/portal/meet/:meetId/coach', requireRole('coach','meet_director','super
           <div style="font-weight:700;font-size:16px;color:var(--navy)">${esc(item.race.groupLabel)}</div>
           <div class="note">${esc(cap(item.race.division))} • ${esc(item.race.distanceLabel)} • ${esc(raceDisplayStage(item.race))}</div>
         </div>
-        <div style="font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:700;color:${statusColor}">${statusLabel}</div>
+        <div style="font-family:Barlow Condensed,sans-serif;font-size:18px;font-weight:700;color:${statusColor}">${statusLabel}</div>
       </div>
       ${skaterLines}
     </div>`;
@@ -1665,7 +1665,7 @@ app.get('/portal/meet/:meetId/coach', requireRole('coach','meet_director','super
       return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
         <div style="font-size:22px">${medal}</div>
         <div style="font-weight:700;font-size:15px;flex:1">${esc(s.skaterName||'')}</div>
-        ${s.time?`<div style="font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:700;color:var(--sky2)">${esc(s.time)}</div>`:''}
+        ${s.time?`<div style="font-family:Barlow Condensed,sans-serif;font-size:18px;font-weight:700;color:var(--sky2)">${esc(s.time)}</div>`:''}
         ${pts?`<div class="chip chip-green">+${pts}pts</div>`:''}
       </div>`;
     }).join('');
@@ -3083,7 +3083,7 @@ app.get('/meet/:meetId/tv', (req, res) => {
   const ttTop3Html = ttSorted.slice(0,3).map((e,i)=>
     '<div class="tv-podium-row" style="padding:10px 14px">' +
     '<div class="tv-podium-medal" style="font-size:28px">'+(['🥇','🥈','🥉'][i])+'</div>' +
-    '<div style="flex:1"><div style="font-family:Barlow Condensed,sans-serif;font-size:26px;font-weight:900">'+esc(e.skaterName)+'</div>' +
+    '<div style="flex:1"><div class="tv-next-name" style="font-size:26px">'+esc(e.skaterName)+'</div>' +
     '<div style="font-size:13px;color:rgba(255,255,255,.5)">'+esc(e.team||'')+'</div></div>' +
     '<div style="font-family:Barlow Condensed,sans-serif;font-size:28px;font-weight:900;color:#38BDF8">'+esc(e.time)+'</div>' +
     '</div>'
@@ -3352,7 +3352,7 @@ app.get('/meet/:meetId/live', (req, res) => {
             <div class="podium-place">${['🥇','🥈','🥉'][i]}</div>
             <div class="podium-name">${esc(e.skaterName||'')}</div>
             <div class="podium-team">${esc(e.team||'')}</div>
-            <div style="font-family:'Barlow Condensed',sans-serif;font-size:32px;font-weight:900;color:var(--sky2);margin-top:6px">${esc(e.time)}</div>
+            <div style="font-family:Barlow Condensed,sans-serif;font-size:32px;font-weight:900;color:var(--sky2);margin-top:6px">${esc(e.time)}</div>
           </div>`).join('')||'<div class="muted">No times posted yet.</div>'}
       </div>
     </div>`):''}
