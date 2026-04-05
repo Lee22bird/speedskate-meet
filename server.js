@@ -1269,19 +1269,19 @@ function pageShell({ title, bodyHtml, user, meet, activeTab }) {
       min-height: 360px; display: flex; align-items: flex-end;
       background: var(--navy); margin-bottom: 28px; box-shadow: var(--shadow-lg);
     }
-    .hero.hero-centered { min-height: 0; height: auto; align-items: center; justify-content: center; }
+    .hero.hero-centered { min-height: 0; height: auto; align-items: center; justify-content: center; padding: 0; }
     .hero-centered { align-items: center; justify-content: center; height: auto !important; min-height: 0 !important; padding: 24px 20px !important; }
-    .hero-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .40; }
+    .hero-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center top; opacity: .40; }
     .hero-gradient { position: absolute; inset: 0; background: linear-gradient(to top, rgba(15,31,61,.95) 40%, rgba(15,31,61,.20) 100%); }
     .hero-content { position: relative; z-index: 1; padding: 36px; }
-    .hero-content-centered { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 16px 20px 20px; text-align: center; }
+    .hero-content-centered { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; text-align: center; width: 100%; }
     .hero-logo { height: auto; width: 1000px; max-width: 92vw; display: block; filter: drop-shadow(0 6px 32px rgba(0,0,0,.6)); flex-shrink: 0; }
     .hero-eyebrow { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .15em; color: var(--orange); margin-bottom: 8px; }
     .hero-title { font-family: 'Barlow Condensed',sans-serif; font-size: 64px; font-weight: 900; line-height: .95; letter-spacing: -1px; color: #fff; }
     .hero-title span { color: var(--orange); }
     .hero-sub { font-size: 17px; color: rgba(255,255,255,.80); margin-top: 12px; max-width: 520px; }
     .hero-actions { display: flex; gap: 12px; margin-top: 22px; flex-wrap: wrap; }
-    .hero-actions-centered { display: flex; gap: 12px; margin-top: 14px; flex-wrap: wrap; justify-content: center; }
+    .hero-actions-centered { display: flex; gap: 12px; margin-top: 12px; flex-wrap: wrap; justify-content: center; }
     .btn-white { background: rgba(255,255,255,.15) !important; color: #fff !important; border-color: rgba(255,255,255,.35) !important; backdrop-filter: blur(4px); }
     .btn-white:hover { background: rgba(255,255,255,.25) !important; }
 
