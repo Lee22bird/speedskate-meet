@@ -58,9 +58,11 @@ async function fireRaceAlerts(meet, newIdx, ordered) {
       const regId = String(entry.registrationId||'');
       const matched = subs.filter(s=>String(s.registrationId||'')===regId);
       for(const sub of matched) {
+        const laneInfo = targetRace.isOpenRace||targetRace.isTimeTrial ? '' :
+          (entry.lane ? `\nLane ${entry.lane} • Helmet #${entry.helmetNumber||'?'}` : `\nLane TBD • Helmet #${entry.helmetNumber||'?'}`);
         const msg = delta===1
-          ? `⚡ Get to the line! ${entry.skaterName} is ON DECK\n${targetRace.groupLabel} • ${cap(targetRace.division)} • ${targetRace.distanceLabel}\n${meet.meetName}`
-          : `🏁 Heads up! ${entry.skaterName} races in 2\n${targetRace.groupLabel} • ${cap(targetRace.division)} • ${targetRace.distanceLabel}\n${meet.meetName}`;
+          ? `⚡ ${entry.skaterName} is IN STAGING\n${targetRace.groupLabel} • ${cap(targetRace.division)} • ${targetRace.distanceLabel}${laneInfo}\n${meet.meetName}`
+          : `🏁 Heads up! ${entry.skaterName} races in 2\n${targetRace.groupLabel} • ${cap(targetRace.division)} • ${targetRace.distanceLabel}${laneInfo}\n${meet.meetName}`;
         sendSms(sub.phone, msg);
       }
     }
@@ -859,7 +861,7 @@ function rebuildRaceAssignments(meet) {
 }
 
 function racingSoonLabel(delta) {
-  if(delta<=0) return 'NOW'; if(delta===1) return 'ON DECK';
+  if(delta<=0) return 'NOW'; if(delta===1) return 'IN STAGING';
   if(delta===2) return '2 RACES AWAY'; if(delta===3) return '3 RACES AWAY'; return `${delta} RACES AWAY`;
 }
 
@@ -881,7 +883,7 @@ function coachUpcomingForMeet(meet,coachTeam) {
   return info.ordered.map((race,idx)=>{
     const matched=(race.laneEntries||[]).filter(le=>regIds.has(Number(le.registrationId)));
     if(!matched.length) return null;
-    return {race,raceIndex:idx,delta:idx-info.idx,skaters:matched.map(m=>({registrationId:m.registrationId,skaterName:m.skaterName,helmetNumber:m.helmetNumber,team:m.team}))};
+    return {race,raceIndex:idx,delta:idx-info.idx,skaters:matched.map(m=>({registrationId:m.registrationId,skaterName:m.skaterName,helmetNumber:m.helmetNumber,team:m.team,lane:m.lane}))};
   }).filter(Boolean).filter(x=>x.delta>=0).slice(0,12);
 }
 
@@ -1629,37 +1631,106 @@ app.get('/portal/meet/:meetId/coach', requireRole('coach','meet_director','super
   const recent=coachRecentResultsForMeet(meet,team);
   const standings=coachStandingsForMeet(meet,team);
   const info=currentRaceInfo(meet);
+
+  // Build upcoming race cards with lane numbers
+  const upcomingCards=upcoming.map(item=>{
+    const delta=item.delta;
+    const statusLabel=racingSoonLabel(delta);
+    const statusColor=delta===0?'var(--orange)':delta===1?'var(--red)':delta===2?'var(--yellow)':'var(--muted)';
+    const skaterLines=item.skaters.map(s=>{
+      const laneStr=item.race.isOpenRace||item.race.isTimeTrial?'':(s.lane?`Lane ${esc(s.lane)}`:'Lane TBD');
+      return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+        <div style="font-weight:700;font-size:16px">${esc(s.skaterName)}</div>
+        ${s.helmetNumber?`<span class="chip">#${esc(s.helmetNumber)}</span>`:''}
+        ${laneStr?`<span class="chip chip-sky">${laneStr}</span>`:''}
+      </div>`;
+    }).join('');
+    return `<div class="card" style="margin-bottom:10px;border-left:4px solid ${statusColor}">
+      <div class="row between center" style="margin-bottom:8px">
+        <div>
+          <div style="font-weight:700;font-size:16px;color:var(--navy)">${esc(item.race.groupLabel)}</div>
+          <div class="note">${esc(cap(item.race.division))} • ${esc(item.race.distanceLabel)} • ${esc(raceDisplayStage(item.race))}</div>
+        </div>
+        <div style="font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:700;color:${statusColor}">${statusLabel}</div>
+      </div>
+      ${skaterLines}
+    </div>`;
+  }).join('');
+
+  // Build recent results cards
+  const recentCards=recent.map(item=>{
+    const rows=item.skaters.filter(s=>s.place).sort((a,b)=>Number(a.place||99)-Number(b.place||99)).map(s=>{
+      const place=Number(s.place); const pts=item.race.countsForOverall&&!item.race.isOpenRace&&!item.race.isTimeTrial?STANDARD_POINTS[place]:null;
+      const medal=place===1?'🥇':place===2?'🥈':place===3?'🥉':`${place}th`;
+      return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+        <div style="font-size:22px">${medal}</div>
+        <div style="font-weight:700;font-size:15px;flex:1">${esc(s.skaterName||'')}</div>
+        ${s.time?`<div style="font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:700;color:var(--sky2)">${esc(s.time)}</div>`:''}
+        ${pts?`<div class="chip chip-green">+${pts}pts</div>`:''}
+      </div>`;
+    }).join('');
+    return `<div class="card" style="margin-bottom:10px;border-left:4px solid var(--green)">
+      <div style="font-weight:700;font-size:15px;color:var(--navy)">${esc(item.race.groupLabel)} • ${esc(cap(item.race.division))} • ${esc(item.race.distanceLabel)}</div>
+      ${rows||`<div class="muted note">No placed results yet.</div>`}
+    </div>`;
+  }).join('');
+
+  // Roster table with lane info per race
   const rosterRows=regs.map(reg=>{
     const assignedRaces=orderedRaces(meet).filter(r=>(r.laneEntries||[]).some(le=>Number(le.registrationId)===Number(reg.id)));
+    const age=ageForReg(reg,meet);
+    const raceDetails=assignedRaces.slice(0,3).map(r=>{
+      const entry=(r.laneEntries||[]).find(le=>Number(le.registrationId)===Number(reg.id));
+      const laneStr=r.isOpenRace||r.isTimeTrial?'Open':(entry?.lane?`L${entry.lane}`:'TBD');
+      return `<div class="note">${esc(cap(r.division))} ${esc(r.distanceLabel)} <span class="chip chip-sky" style="font-size:10px;padding:2px 6px">${laneStr}</span></div>`;
+    }).join('');
     return `<tr>
-      <td>${esc(reg.name)}${sponsorLineHtml(reg.sponsor||'')}</td>
-      <td>${esc(reg.divisionGroupLabel||'')}</td>
-      <td>${['novice','elite','open'].filter(k=>reg.options?.[k]).map(cap).join(', ')||'—'}</td>
-      <td>${reg.helmetNumber?'#'+esc(reg.helmetNumber):''}</td>
-      <td>${reg.checkedIn?'<span class="good">✔</span>':'—'}</td>
-      <td>${reg.paid?'<span class="good">✔</span>':'—'}</td>
-      <td>${assignedRaces.slice(0,2).map(r=>`<div class="note">${esc(cap(r.division))} • ${esc(r.distanceLabel)}</div>`).join('')||`<span class="muted">None</span>`}</td>
+      <td><strong>${esc(reg.name)}</strong>${sponsorLineHtml(reg.sponsor||'')}</td>
+      <td>${esc(reg.divisionGroupLabel||'')}<div class="note">Age ${age}</div></td>
+      <td>${reg.helmetNumber?`<strong>#${esc(reg.helmetNumber)}</strong>`:''}</td>
+      <td>${reg.checkedIn?`<span class="good">✔ In</span>`:`<span class="muted">—</span>`}</td>
+      <td>${raceDetails||`<span class="muted">None</span>`}</td>
     </tr>`;
   }).join('');
+
   res.send(pageShell({title:'Coach Panel',user:req.user,meet, bodyHtml:`
     <div class="page-header">
       <h1>Coach Panel</h1>
       <div class="sub">${esc(meet.meetName)} • ${esc(team)}</div>
     </div>
     <div class="card" style="margin-bottom:16px">
-      <div class="row between">
-        <span class="chip">Current: ${info.current?esc(info.current.groupLabel)+' — '+esc(cap(info.current.division)):'—'}</span>
-        <a class="btn2 btn-sm" href="/portal/coach">← Back to Coach Portal</a>
+      <div class="row between center">
+        <div class="row">
+          <span class="chip chip-${info.current?'orange':'sky'}">
+            ${info.current?`▶ ${esc(info.current.groupLabel)} — ${esc(cap(info.current.division))}`:'No race running'}
+          </span>
+          ${info.next?`<span class="chip">Up next: ${esc(info.next.groupLabel)}</span>`:''}
+        </div>
+        <a class="btn2 btn-sm" href="/portal/coach">← Coach Portal</a>
       </div>
     </div>
-    <div class="card">
-      <h2>Team Roster</h2>
-      <table class="table">
-        <thead><tr><th>Skater</th><th>Division</th><th>Classes</th><th>Helmet</th><th>In</th><th>Paid</th><th>Races</th></tr></thead>
-        <tbody>${rosterRows||`<tr><td colspan="7" class="muted">No team skaters found.</td></tr>`}</tbody>
-      </table>
+    <div class="grid-2" style="margin-bottom:16px">
+      <div>
+        <h2 style="margin-bottom:12px">🏁 Your Team Racing Soon</h2>
+        ${upcomingCards||`<div class="card"><div class="muted">No upcoming races for ${esc(team)} yet.</div></div>`}
+      </div>
+      <div>
+        <h2 style="margin-bottom:12px">✅ Recent Results</h2>
+        ${recentCards||`<div class="card"><div class="muted">No results yet.</div></div>`}
+      </div>
     </div>
-    ${standings.length?`<div class="spacer"></div><h2>Team Standings</h2>${standings.map(section=>resultsSectionHtml(section)).join('<div class="spacer"></div>')}`:''}`}));
+    <div class="card" style="margin-bottom:16px">
+      <h2 style="margin-bottom:12px">Team Roster</h2>
+      <div style="overflow-x:auto">
+        <table class="table">
+          <thead><tr><th>Skater</th><th>Division</th><th>Helmet</th><th>Status</th><th>Races & Lanes</th></tr></thead>
+          <tbody>${rosterRows||`<tr><td colspan="5" class="muted">No team skaters registered.</td></tr>`}</tbody>
+        </table>
+      </div>
+    </div>
+    ${standings.length?`<h2 style="margin-bottom:12px">📊 Team Standings</h2>${standings.map(section=>resultsSectionHtml(section)).join('<div class="spacer"></div>')}
+    `:''}
+    <script>setTimeout(()=>location.reload(),8000);</script>`}));
 });
 
 // ── Meet CRUD ─────────────────────────────────────────────────────────────────
@@ -2849,6 +2920,8 @@ app.post('/portal/meet/:meetId/race-day/judges/tt-post', requireRole('judge','me
   if(!race) return res.redirect(`/portal/meet/${req.params.meetId}/race-day/judges`);
   const time=String(req.body.time||'').trim();
   const regId=String(req.body.registrationId||'').trim();
+  // fallback: try to match by skaterSearch text if regId missing
+  
   const skaterName=String(req.body.skaterName||'').trim();
   const helmetNumber=String(req.body.helmetNumber||'').trim();
   const team=String(req.body.team||'').trim();
@@ -3176,11 +3249,12 @@ app.get('/meet/:meetId/alerts', (req, res) => {
       <form method="POST" action="/meet/${meet.id}/alerts/subscribe" class="stack">
         <div class="form-grid cols-2">
           <div>
-            <label>Skater</label>
-            <select name="registrationId" required>
-              <option value="">— Select skater —</option>
-              ${regs.map(r=>`<option value="${esc(r.id)}">#${esc(r.helmetNumber||'?')} ${esc(r.name)} — ${esc(r.divisionGroupLabel||'')}</option>`).join('')}
-            </select>
+            <label>Skater — type name to search</label>
+            <input name="skaterSearch" id="skaterSearch" list="skaterList" placeholder="Type name..." autocomplete="off" oninput="fillReg(this.value)" required />
+            <datalist id="skaterList">
+              ${regs.map(r=>`<option value="${esc('#'+r.helmetNumber+' '+r.name)}">#${esc(r.helmetNumber||'?')} ${esc(r.name)} — ${esc(r.divisionGroupLabel||'')}</option>`).join('')}
+            </datalist>
+            <input type="hidden" name="registrationId" id="regIdInput" />
           </div>
           <div>
             <label>Your Cell Phone Number</label>
@@ -3189,13 +3263,20 @@ app.get('/meet/:meetId/alerts', (req, res) => {
         </div>
         <div><button class="btn-orange" type="submit">Sign Me Up →</button></div>
       </form>
+      <script>
+        const alertRegs=${JSON.stringify(regs.map(r=>({id:r.id,key:'#'+r.helmetNumber+' '+r.name})))};
+        function fillReg(val){
+          const match=alertRegs.find(r=>r.key===val||r.key.toLowerCase()===val.toLowerCase());
+          document.getElementById('regIdInput').value=match?match.id:'';
+        }
+      </script>
     </div>
     <div class="card" style="margin-top:16px">
       <h3 style="margin-bottom:8px">What you'll receive</h3>
       <div class="stack">
-        <div class="toggle-row"><div><div class="toggle-row-label">🏁 2 Races Away</div><div class="toggle-row-desc">"Heads up! Emma Johnson races in 2 — Elementary Girls Elite 500m"</div></div></div>
-        <div class="toggle-row"><div><div class="toggle-row-label">⚡ On Deck</div><div class="toggle-row-desc">"Get to the line! Emma Johnson is ON DECK"</div></div></div>
-        <div class="toggle-row"><div><div class="toggle-row-label">✅ Result Posted</div><div class="toggle-row-desc">"Emma Johnson — 🥇 1st place! 30 pts earned | 50 pts total"</div></div></div>
+        <div class="toggle-row"><div><div class="toggle-row-label">🏁 2 Races Away</div><div class="toggle-row-desc">"Heads up! Jane Smith races in 2 — Elementary Girls Elite 500m"</div></div></div>
+        <div class="toggle-row"><div><div class="toggle-row-label">⚡ On Deck</div><div class="toggle-row-desc">"Get to the line! Jane Smith is ON DECK"</div></div></div>
+        <div class="toggle-row"><div><div class="toggle-row-label">✅ Result Posted</div><div class="toggle-row-desc">"Jane Smith — 🥇 1st place! 30 pts earned | 50 pts total"</div></div></div>
       </div>
     </div>`}));
 });
