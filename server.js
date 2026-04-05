@@ -1269,7 +1269,8 @@ function pageShell({ title, bodyHtml, user, meet, activeTab }) {
       min-height: 360px; display: flex; align-items: flex-end;
       background: var(--navy); margin-bottom: 28px; box-shadow: var(--shadow-lg);
     }
-    .hero-centered { align-items: center; justify-content: center; min-height: 0; padding: 30px 20px; }
+    .hero.hero-centered { min-height: 0 !important; height: auto !important; align-items: center; }
+    .hero-centered { align-items: center; justify-content: center; height: auto !important; min-height: 0 !important; padding: 24px 20px !important; }
     .hero-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .40; }
     .hero-gradient { position: absolute; inset: 0; background: linear-gradient(to top, rgba(15,31,61,.95) 40%, rgba(15,31,61,.20) 100%); }
     .hero-content { position: relative; z-index: 1; padding: 36px; }
