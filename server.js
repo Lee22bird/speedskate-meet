@@ -321,7 +321,7 @@ function defaultDb() {
       address:'3234 S. Meridian Ave, Wichita, KS 67217',
       phone:'316-942-4555', website:'rollercitywichitaks.com', notes:'',
     }],
-    meets:[],
+    meets:[], rosters:[],
   };
 }
 
@@ -430,7 +430,7 @@ function migrateMeet(meet,fallbackOwnerId) {
     helmetNumber:reg.helmetNumber===''||reg.helmetNumber==null?'':Number(reg.helmetNumber),
     paid:!!reg.paid, checkedIn:!!reg.checkedIn, totalCost:Number(reg.totalCost||0),
     options:{challengeUp:!!reg.options?.challengeUp, novice:!!reg.options?.novice,
-      elite:!!reg.options?.elite, open:!!reg.options?.open,
+      elite:!!reg.options?.elite, open:!!reg.options?.open, quad:!!reg.options?.quad,
       timeTrials:!!reg.options?.timeTrials, relays:!!reg.options?.relays},
   }));
 }
@@ -443,6 +443,7 @@ function loadDb() {
   if(!Array.isArray(db.rinks)) db.rinks=defaultDb().rinks;
   if(!Array.isArray(db.meets)) db.meets=[];
   if(!Array.isArray(db.sessions)) db.sessions=[];
+  if(!Array.isArray(db.rosters)) db.rosters=[];
   sanitizeRinks(db);
   const fallbackOwnerId=(db.users[0]&&db.users[0].id)||1;
   db.meets.forEach(m=>migrateMeet(m,fallbackOwnerId));
@@ -480,7 +481,13 @@ function requireRole(...roles) {
 }
 
 function getMeetOr404(db,meetId) { return db.meets.find(m=>Number(m.id)===Number(meetId)); }
-function canEditMeet(user,meet) { return hasRole(user,'super_admin')||Number(meet.createdByUserId)===Number(user.id); }
+function canEditMeet(user,meet) {
+  if(hasRole(user,'super_admin')) return true;
+  if(hasRole(user,'coach')&&!hasRole(user,'meet_director')) return false;
+  if(hasRole(user,'judge')&&!hasRole(user,'meet_director')) return false;
+  if(hasRole(user,'announcer')&&!hasRole(user,'meet_director')) return false;
+  return Number(meet.createdByUserId)===Number(user.id);
+}
 
 function ensureAtLeastOneBlock(meet) {
   if(!Array.isArray(meet.blocks)) meet.blocks=[];
@@ -1659,13 +1666,51 @@ app.post('/admin/login', (req, res) => {
   const token=crypto.randomBytes(24).toString('hex');
   db.sessions=db.sessions.filter(s=>s.userId!==user.id);
   db.sessions.push({token,userId:user.id,createdAt:nowIso(),expiresAt:new Date(Date.now()+SESSION_TTL_MS).toISOString()});
-  saveDb(db); setCookie(res,SESSION_COOKIE,token,Math.floor(SESSION_TTL_MS/1000)); res.redirect('/portal');
+  saveDb(db); setCookie(res,SESSION_COOKIE,token,Math.floor(SESSION_TTL_MS/1000));
+  // Role-based redirect
+  if(hasRole(user,'coach')&&!hasRole(user,'meet_director')&&!hasRole(user,'super_admin')) return res.redirect('/portal/coach');
+  if((hasRole(user,'judge')||hasRole(user,'announcer'))&&!hasRole(user,'meet_director')&&!hasRole(user,'super_admin')) return res.redirect('/portal/meet-picker');
+  res.redirect('/portal');
 });
 
 app.get('/admin/logout', (req, res) => {
   const db=loadDb(); const token=parseCookies(req)[SESSION_COOKIE];
   db.sessions=db.sessions.filter(s=>s.token!==token);
   saveDb(db); clearCookie(res,SESSION_COOKIE); res.redirect('/');
+});
+
+
+// ── Meet Picker (judges + announcers) ─────────────────────────────────────────
+app.get('/portal/meet-picker', requireRole('judge','announcer','meet_director','super_admin'), (req, res) => {
+  const db=loadDb();
+  const isJudge=hasRole(req.user,'judge');
+  const isAnnouncer=hasRole(req.user,'announcer');
+  const role=isJudge?'judge':'announcer';
+  const target=isJudge?'judges':'announcer';
+  // Show published + live meets only
+  const meets=(db.meets||[]).filter(m=>m.isPublic&&m.status!=='draft'&&m.status!=='complete');
+  const cards=meets.map(meet=>{
+    const rink=db.rinks.find(r=>Number(r.id)===Number(meet.rinkId));
+    const info=currentRaceInfo(meet);
+    const isLive=meet.status==='live'||(info.current&&info.current.status==='open');
+    return `<div class="card" style="margin-bottom:14px;border-left:4px solid ${isLive?'var(--orange)':'var(--border2)'}">
+      <div class="row between center">
+        <div>
+          <h2 style="margin:0">${esc(meet.meetName)}</h2>
+          <div class="muted">${rink?esc(rink.name)+' • '+esc(rink.city)+', '+esc(rink.state):''} • ${esc(meet.date||'')}</div>
+          ${isLive?'<span class="chip chip-orange" style="margin-top:6px">🔴 Live Now</span>':''}
+        </div>
+        <a class="btn-orange" href="/portal/meet/${meet.id}/race-day/${target}">Enter ${isJudge?'Judges Panel':'Announcer View'}</a>
+      </div>
+    </div>`;
+  }).join('');
+  res.send(pageShell({title:isJudge?'Judge — Select Meet':'Announcer — Select Meet',user:req.user, bodyHtml:`
+    <div class="page-header">
+      <h1>${isJudge?'⚖️ Judge Portal':'📢 Announcer Portal'}</h1>
+      <div class="sub">Welcome, ${esc(req.user.displayName||req.user.username)}. Select your meet.</div>
+    </div>
+    ${meets.length?cards:`<div class="card"><div class="muted">No active meets right now.</div></div>`}
+    <div style="margin-top:24px"><a class="btn2" href="/admin/logout">Logout</a></div>`}));
 });
 
 // ── Portal Home ───────────────────────────────────────────────────────────────
@@ -1720,6 +1765,101 @@ app.get('/portal', requireRole('meet_director','judge','coach'), (req, res) => {
 });
 
 // ── Coach Portal ──────────────────────────────────────────────────────────────
+
+
+// ── Coach Roster ──────────────────────────────────────────────────────────────
+app.get('/portal/coach/roster', requireRole('coach','meet_director','super_admin'), (req, res) => {
+  const db=loadDb();
+  const teamKey=String(req.user.team||'').trim().toLowerCase();
+  const roster=(db.rosters||[]).filter(r=>String(r.team||'').trim().toLowerCase()===teamKey);
+  const ok=req.query.ok; const err=req.query.err;
+
+  const rows=roster.sort((a,b)=>String(a.name).localeCompare(String(b.name))).map(s=>`
+    <tr>
+      <td><strong>${esc(s.name)}</strong></td>
+      <td>${esc(s.birthdate||'—')}</td>
+      <td>${esc(cap(s.gender||''))}</td>
+      <td>${esc(s.team||'')}</td>
+      <td>
+        <form method="POST" action="/portal/coach/roster/delete" style="display:inline">
+          <input type="hidden" name="skaterId" value="${esc(s.id)}" />
+          <button class="btn-danger btn-sm" type="submit" onclick="return confirm('Remove ${esc(s.name)} from roster?')">Remove</button>
+        </form>
+      </td>
+    </tr>`).join('');
+
+  res.send(pageShell({title:'Team Roster',user:req.user, bodyHtml:`
+    <div class="page-header"><h1>Team Roster</h1><div class="sub">${esc(req.user.team||'')} • ${roster.length} skaters</div></div>
+    ${ok?`<div class="card" style="border-left:4px solid var(--green);margin-bottom:12px"><div class="good">✅ ${esc(decodeURIComponent(ok))}</div></div>`:''}
+    ${err?`<div class="card" style="border-left:4px solid var(--red);margin-bottom:12px"><div class="danger">❌ ${esc(decodeURIComponent(err))}</div></div>`:''}
+    <div class="grid-2" style="margin-bottom:16px">
+      <div class="card">
+        <h2 style="margin-bottom:14px">Add Skater</h2>
+        <form method="POST" action="/portal/coach/roster/add" class="stack">
+          <div class="form-grid cols-2">
+            <div><label>Skater Name</label><input name="name" required placeholder="Jane Smith" /></div>
+            <div><label>Date of Birth</label><input type="date" name="birthdate" min="1900-01-01" max="${new Date().toISOString().split('T')[0]}" required /></div>
+            <div><label>Gender</label>
+              <select name="gender">
+                <option value="girls">Girl</option>
+                <option value="boys">Boy</option>
+                <option value="women">Women</option>
+                <option value="men">Men</option>
+              </select>
+            </div>
+          </div>
+          <div><button class="btn-orange" type="submit">+ Add to Roster</button></div>
+        </form>
+      </div>
+      <div class="card">
+        <h2 style="margin-bottom:8px">About the Roster</h2>
+        <div class="stack" style="margin-top:8px">
+          <div class="toggle-row"><div><div class="toggle-row-label">Year-round</div><div class="toggle-row-desc">Your roster persists across all meets — add once, use forever</div></div></div>
+          <div class="toggle-row"><div><div class="toggle-row-label">No helmet numbers</div><div class="toggle-row-desc">Helmet numbers are meet-specific and assigned at check-in</div></div></div>
+          <div class="toggle-row"><div><div class="toggle-row-label">Register from roster</div><div class="toggle-row-desc">Coming soon — register your whole team for a meet with checkboxes</div></div></div>
+        </div>
+      </div>
+    </div>
+    ${roster.length?`
+    <div class="card">
+      <h2 style="margin-bottom:12px">Roster (${roster.length})</h2>
+      <div style="overflow-x:auto">
+        <table class="table">
+          <thead><tr><th>Name</th><th>Birthdate</th><th>Gender</th><th>Team</th><th></th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`:`<div class="card"><div class="muted">No skaters on your roster yet. Add some above!</div></div>`}
+    <div style="margin-top:16px"><a class="btn2" href="/portal/coach">← Coach Portal</a></div>`}));
+});
+
+app.post('/portal/coach/roster/add', requireRole('coach','meet_director','super_admin'), (req, res) => {
+  const db=loadDb();
+  const name=String(req.body.name||'').trim();
+  const birthdate=String(req.body.birthdate||'').trim();
+  const gender=String(req.body.gender||'girls').trim();
+  if(!name||!birthdate) return res.redirect('/portal/coach/roster?err='+encodeURIComponent('Name and birthdate required'));
+  if(!Array.isArray(db.rosters)) db.rosters=[];
+  db.rosters.push({
+    id:'rs'+crypto.randomBytes(6).toString('hex'),
+    name, birthdate, gender,
+    team:String(req.user.team||'').trim(),
+    createdByUserId:req.user.id,
+    createdAt:nowIso(),
+  });
+  saveDb(db);
+  res.redirect('/portal/coach/roster?ok='+encodeURIComponent(name+' added to roster'));
+});
+
+app.post('/portal/coach/roster/delete', requireRole('coach','meet_director','super_admin'), (req, res) => {
+  const db=loadDb();
+  const skaterId=String(req.body.skaterId||'');
+  const skater=(db.rosters||[]).find(r=>r.id===skaterId);
+  if(!skater) return res.redirect('/portal/coach/roster');
+  db.rosters=(db.rosters||[]).filter(r=>r.id!==skaterId);
+  saveDb(db);
+  res.redirect('/portal/coach/roster?ok='+encodeURIComponent(skater.name+' removed from roster'));
+});
 
 app.get('/portal/coach', requireRole('coach','meet_director','super_admin'), (req, res) => {
   const meets=coachVisibleMeets(req.db,req.user);
@@ -1964,7 +2104,7 @@ function rinkForm(rink,action,title) {
     </div>`;
 }
 
-app.get('/portal/rinks', requireRole('meet_director'), (req, res) => {
+app.get('/portal/rinks', requireRole('super_admin'), (req, res) => {
   const rows=req.db.rinks.map(r=>`
     <tr><td>${esc(r.name)}</td><td>${esc(r.city||'')}, ${esc(r.state||'')}</td>
     <td>${esc(r.phone||'')}</td><td><a class="btn2 btn-sm" href="/portal/rinks/${r.id}/edit">Edit</a></td></tr>`).join('');
@@ -2490,6 +2630,7 @@ app.get('/meet/:meetId/register', (req, res) => {
             <div class="toggle-row"><div><div class="toggle-row-label">Novice</div></div>${toggleSwitch('novice',false)}</div>
             <div class="toggle-row"><div><div class="toggle-row-label">Elite</div></div>${toggleSwitch('elite',false)}</div>
             <div class="toggle-row"><div><div class="toggle-row-label">Open</div></div>${toggleSwitch('open',false)}</div>
+            ${(meet.quadGroups||[]).some(g=>g.enabled)?`<div class="toggle-row"><div><div class="toggle-row-label">Quad</div></div>${toggleSwitch('quad',false)}</div>`:''}
             ${meet.timeTrialsEnabled?`<div class="toggle-row"><div><div class="toggle-row-label">Time Trials</div></div>${toggleSwitch('timeTrials',false)}</div>`:''}
             ${meet.relayEnabled?`<div class="toggle-row"><div><div class="toggle-row-label">Relays</div></div>${toggleSwitch('relays',false)}</div>`:''}
           </div>
@@ -2517,7 +2658,7 @@ app.post('/meet/:meetId/register', (req, res) => {
     originalDivisionGroupId:baseGroup?.id||'',originalDivisionGroupLabel:baseGroup?.label||'',
     meetNumber,helmetNumber:nextHelmetNumber(meet),
     paid:false,checkedIn:false,totalCost:0,
-    options:{challengeUp:!!req.body.challengeUp,novice:!!req.body.novice,elite:!!req.body.elite,open:!!req.body.open,timeTrials:!!req.body.timeTrials,relays:!!req.body.relays},
+    options:{challengeUp:!!req.body.challengeUp,novice:!!req.body.novice,elite:!!req.body.elite,open:!!req.body.open,quad:!!req.body.quad,timeTrials:!!req.body.timeTrials,relays:!!req.body.relays},
   });
   rebuildRaceAssignments(meet); ensureCurrentRace(meet); saveDb(db);
   // Send confirmation email to registrant
@@ -2579,6 +2720,7 @@ function registrationForm(meet,reg,action,title) {
             <div class="toggle-row"><div><div class="toggle-row-label">Novice</div></div>${toggleSwitch('novice',!!reg.options?.novice)}</div>
             <div class="toggle-row"><div><div class="toggle-row-label">Elite</div></div>${toggleSwitch('elite',!!reg.options?.elite)}</div>
             <div class="toggle-row"><div><div class="toggle-row-label">Open</div></div>${toggleSwitch('open',!!reg.options?.open)}</div>
+            ${(meet.quadGroups||[]).some(g=>g.enabled)?`<div class="toggle-row"><div><div class="toggle-row-label">Quad</div></div>${toggleSwitch('quad',!!reg.options?.quad)}</div>`:''}
             <div class="toggle-row"><div><div class="toggle-row-label">Time Trials</div></div>${toggleSwitch('timeTrials',!!reg.options?.timeTrials)}</div>
             <div class="toggle-row"><div><div class="toggle-row-label">Relays</div></div>${toggleSwitch('relays',!!reg.options?.relays)}</div>
           </div>
@@ -2603,7 +2745,7 @@ app.get('/portal/meet/:meetId/registered', requireRole('meet_director'), (req, r
       <td><strong>${esc(r.name)}</strong>${sponsorLineHtml(r.sponsor||'')}</td>
       <td>${esc(r.age)}</td><td>${esc(r.team)}</td>
       <td>${esc(r.divisionGroupLabel||'')}${r.options?.challengeUp?`<div class="note">↑ from ${esc(r.originalDivisionGroupLabel||'')}</div>`:''}</td>
-      <td>${['challengeUp','novice','elite','open','timeTrials','relays'].filter(k=>r.options?.[k]).map(k=>k==='challengeUp'?'CU':cap(k)).join(', ')||'—'}</td>
+      <td>${['challengeUp','novice','elite','open','quad','timeTrials','relays'].filter(k=>r.options?.[k]).map(k=>k==='challengeUp'?'CU':cap(k)).join(', ')||'—'}</td>
       <td>$${esc(r.totalCost)}</td>
       <td>${r.paid?`<span class="good">✔</span>`:'—'}</td>
       <td>${r.checkedIn?`<span class="good">✔</span>`:'—'}</td>
@@ -2652,7 +2794,7 @@ app.post('/portal/meet/:meetId/registered/:regId/edit', requireRole('meet_direct
   const compAge=usarsAge(birthdate,meet.date)||Number(reg.age||0);
   const baseGroup=findAgeGroup(meet.groups,compAge,gender);
   const finalGroup=challengeAdjustedGroup(meet,baseGroup,!!req.body.challengeUp);
-  Object.assign(reg,{name:String(req.body.name||'').trim(),birthdate,age:compAge,gender,team:String(req.body.team||'Midwest Racing').trim()||'Midwest Racing',sponsor:String(req.body.sponsor||'').trim(),originalDivisionGroupId:baseGroup?.id||'',originalDivisionGroupLabel:baseGroup?.label||'',divisionGroupId:finalGroup?.id||'',divisionGroupLabel:finalGroup?.label||'Unassigned',options:{challengeUp:!!req.body.challengeUp,novice:!!req.body.novice,elite:!!req.body.elite,open:!!req.body.open,timeTrials:!!req.body.timeTrials,relays:!!req.body.relays}});
+  Object.assign(reg,{name:String(req.body.name||'').trim(),birthdate,age:compAge,gender,team:String(req.body.team||'Midwest Racing').trim()||'Midwest Racing',sponsor:String(req.body.sponsor||'').trim(),originalDivisionGroupId:baseGroup?.id||'',originalDivisionGroupLabel:baseGroup?.label||'',divisionGroupId:finalGroup?.id||'',divisionGroupLabel:finalGroup?.label||'Unassigned',options:{challengeUp:!!req.body.challengeUp,novice:!!req.body.novice,elite:!!req.body.elite,open:!!req.body.open,quad:!!req.body.quad,timeTrials:!!req.body.timeTrials,relays:!!req.body.relays}});
   rebuildRaceAssignments(meet); saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/registered`);
 });
 
@@ -3066,6 +3208,13 @@ app.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','judg
 
   let body=`<div class="page-header"><h1>Race Day</h1><div class="sub">${esc(meet.meetName)}</div></div>${raceDaySubTabs(meet,mode)}`;
 
+  // Redirect judges/announcers away from director tab
+  if(mode==='director'&&!hasRole(req.user,'meet_director')&&!hasRole(req.user,'super_admin')) {
+    return res.redirect(`/portal/meet/${meet.id}/race-day/${hasRole(req.user,'judge')?'judges':'announcer'}`);
+  }
+  if(mode==='judges'&&!hasRole(req.user,'judge')&&!hasRole(req.user,'meet_director')&&!hasRole(req.user,'super_admin')) {
+    return res.redirect(`/portal/meet/${meet.id}/race-day/announcer`);
+  }
   if(mode==='director') {
     const raceOptions=info.ordered.map((r,idx)=>`<option value="${r.id}" ${r.id===meet.currentRaceId?'selected':''}>${idx+1}. ${r.groupLabel} — ${cap(r.division)} — ${r.distanceLabel} — ${raceDisplayStage(r)}</option>`).join('');
     body+=`
