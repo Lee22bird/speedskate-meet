@@ -67,7 +67,7 @@ async function sendEmail(to, subject, htmlBody, textBody) {
 function emailHtmlWrap(content) {
   return `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;color:#0F1F3D">
     <div style="background:#0F1F3D;padding:20px;border-radius:12px;text-align:center;margin-bottom:24px">
-      <img src="https://speedskatemeet.com/public/images/branding/ssm-logo.png" style="height:60px" alt="SpeedSkateMeet" />
+      <img src="https://speedskatemeet.com/public/images/branding/ssm-logo.png" style="height:60px;width:auto;max-width:280px;display:block;margin:0 auto" alt="SpeedSkateMeet" />
     </div>
     ${content}
     <div style="margin-top:32px;padding-top:16px;border-top:1px solid #e2e8f0;font-size:12px;color:#64748b;text-align:center">
@@ -1209,8 +1209,8 @@ function pageShell({ title, bodyHtml, user, meet, activeTab }) {
     }
     .toggle-input:checked + .toggle-track .toggle-thumb { transform: translateX(20px); }
     .toggle-label { font-size: 14px; font-weight: 600; color: var(--text); text-transform: none; letter-spacing: 0; }
-    .toggle-group { display: flex; flex-direction: column; gap: 12px; }
-    .toggle-row   { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border-radius: var(--radius-sm); background: var(--off); border: 1px solid var(--border); }
+    .toggle-group { display: flex; flex-direction: column; gap: 6px; }
+    .toggle-row   { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; border-radius: var(--radius-sm); background: var(--off); border: 1px solid var(--border); }
     .toggle-row-label { font-weight: 700; font-size: 14px; color: var(--navy); }
     .toggle-row-desc  { font-size: 12px; color: var(--muted); margin-top: 1px; }
 
@@ -2471,7 +2471,7 @@ app.get('/meet/:meetId/register', (req, res) => {
         <form method="POST" action="/meet/${meet.id}/register" class="stack">
           <div class="form-grid cols-3">
             <div><label>Skater Name</label><input name="name" required /></div>
-            <div><label>Date of Birth</label><input type="date" name="birthdate" required /><div class="note">Used for USARS division placement (age as of Jan 1)</div></div>
+            <div><label>Date of Birth</label><input type="date" name="birthdate" min="1900-01-01" max="2026-04-06" required /><div class="note">Used for USARS division placement (age as of Jan 1)</div></div>
             <div>
               <label>Gender</label>
               <select name="gender">
@@ -2561,7 +2561,7 @@ function registrationForm(meet,reg,action,title) {
         <form method="POST" action="${action}" class="stack">
           <div class="form-grid cols-3">
             <div><label>Skater Name</label><input name="name" value="${esc(reg.name||'')}" required /></div>
-            <div><label>Date of Birth</label><input type="date" name="birthdate" value="${esc(reg.birthdate||'')}" /><div class="note">USARS age as of Jan 1 — ${reg.birthdate?'Age '+ageForReg(reg,meet):'no birthdate yet'}</div></div>
+            <div><label>Date of Birth</label><input type="date" name="birthdate" value="${esc(reg.birthdate||'')}" min="1900-01-01" max="2026-04-06" /><div class="note">USARS age as of Jan 1 — ${reg.birthdate?'Age '+ageForReg(reg,meet):'no birthdate yet'}</div></div>
             <div><label>Gender</label>
               <select name="gender">
                 <option value="boys"  ${gender==='boys' ?'selected':''}>Boy</option>
