@@ -1381,7 +1381,6 @@ function pageShell({ title, bodyHtml, user, meet, activeTab }) {
   <div class="wrap">
     ${meetTabs(meet, activeTab)}
     ${bodyHtml}
-    <div class="footer-note">SpeedSkateMeet v19 • Data: ${esc(DATA_FILE)}</div>
   </div>
 </body>
 </html>`;
@@ -1890,6 +1889,10 @@ app.get('/portal/coach', requireRole('coach','meet_director','super_admin'), (re
   }).join('');
   res.send(pageShell({title:'Coach Portal',user:req.user, bodyHtml:`
     <div class="page-header"><h1>Coach Portal</h1><div class="sub">${esc(req.user.team||'Your Team')}</div></div>
+    <div class="action-row" style="margin-bottom:16px">
+      <a class="btn-orange" href="/portal/coach/roster">👥 Team Roster</a>
+      <a class="btn2" href="/admin/logout">Logout</a>
+    </div>
     ${cards||`<div class="card"><div class="muted">No meets found for ${esc(req.user.team||'your team')}.</div></div>`}`}));
 });
 
