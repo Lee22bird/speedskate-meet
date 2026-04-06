@@ -1946,10 +1946,7 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
       <div class="card">
         <div class="row between" style="margin-bottom:16px">
           <h2 style="margin:0">Meet Setup</h2>
-          <div class="action-row">
-            <button class="btn2" type="submit" formaction="/portal/meet/${meet.id}/builder/save-meet">Save Meet</button>
-            <button class="btn-orange" type="submit" onclick="return confirmRebuild()">Generate Races ⚠️</button>
-          </div>
+          <button class="btn2" type="submit" formaction="/portal/meet/${meet.id}/builder/save-meet">Save Meet</button>
         </div>
         <div class="form-grid cols-3" style="margin-bottom:14px">
           <div><label>Meet Name</label><input name="meetName" value="${esc(meet.meetName)}" required /></div>
@@ -2004,11 +2001,8 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
       ${groupsHtml}
       <div class="card">
         <div class="row between center">
-          <div class="muted"><strong>Save Meet</strong> — saves settings only. <strong>Rebuild Races</strong> — regenerates races from divisions. <span style="color:var(--red)">⚠️ Clears block assignments.</span></div>
-          <div class="action-row">
-            <button class="btn2" type="submit" formaction="/portal/meet/${meet.id}/builder/save-meet">Save Meet</button>
-            <button class="btn-orange" type="submit" onclick="return confirmRebuild()">Generate Races ⚠️</button>
-          </div>
+          <div class="muted">Save Meet saves all settings without touching races or blocks.</div>
+          <button class="btn2" type="submit" formaction="/portal/meet/${meet.id}/builder/save-meet">Save Meet</button>
         </div>
       </div>
     </form>`}));
@@ -2755,7 +2749,10 @@ app.get('/portal/meet/:meetId/blocks', requireRole('meet_director'), (req, res) 
             <button class="btn2 btn-sm" onclick="addDivider('practice','⛸️ Practice')">⛸️ Practice</button>
           </div>
           <form method="POST" action="/portal/meet/${meet.id}/assign-races" onsubmit="return confirm('Rebuild will re-split heats and reassign lanes.\n\nYour block structure is preserved.\n\nContinue?')"><button class="btn2" type="submit">Rebuild</button></form>
-          <a class="btn-orange" href="/portal/meet/${meet.id}/registered/print-race-list" target="_blank">Print Race List</a>
+          <form method="POST" action="/portal/meet/${meet.id}/blocks/generate" onsubmit="return confirm('⚠️ Generate Blocks will create races from your division settings.\n\nExisting block assignments will be cleared.\n\nContinue?')" style="display:inline">
+              <button class="btn2" type="submit">Generate Blocks ⚠️</button>
+            </form>
+            <a class="btn-orange" href="/portal/meet/${meet.id}/registered/print-race-list" target="_blank">Print Race List</a>
         </div>
       </div>
     </div>
@@ -2881,6 +2878,20 @@ app.post('/api/meet/:meetId/blocks/move-race', requireRole('meet_director'), (re
     block.raceIds.push(raceId);
   }
   ensureCurrentRace(meet); meet.updatedAt=nowIso(); saveDb(req.db); res.json({ok:true});
+});
+
+app.post('/portal/meet/:meetId/blocks/generate', requireRole('meet_director'), (req, res) => {
+  const meet=getMeetOr404(req.db,req.params.meetId);
+  if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
+  generateBaseRacesForMeet(meet);
+  generateOpenRacesForMeet(meet);
+  generateQuadRacesForMeet(meet);
+  rebuildRaceAssignments(meet);
+  ensureAtLeastOneBlock(meet);
+  ensureCurrentRace(meet);
+  meet.updatedAt=nowIso();
+  saveDb(req.db);
+  res.redirect(`/portal/meet/${meet.id}/blocks`);
 });
 
 // ── Race Day ──────────────────────────────────────────────────────────────────
