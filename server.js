@@ -37,6 +37,46 @@ async function sendSms(to, body) {
   } catch(err) { console.error('[SMS exception]', err.message); }
 }
 
+// ── SendGrid ──────────────────────────────────────────────────────────────────
+const SG_KEY       = process.env.SENDGRID_API_KEY;
+const SG_FROM      = process.env.SENDGRID_FROM      || 'noreply@speedskatemeet.com';
+const SG_FROM_NAME = process.env.SENDGRID_FROM_NAME || 'SpeedSkateMeet';
+const SG_READY     = !!SG_KEY;
+
+async function sendEmail(to, subject, htmlBody, textBody) {
+  if(!SG_READY) { console.log('[Email disabled] To:', to, 'Subject:', subject); return; }
+  try {
+    const res = await fetch('https://api.sendgrid.com/v3/mail/send', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer '+SG_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        personalizations: [{ to: [{ email: to }] }],
+        from: { email: SG_FROM, name: SG_FROM_NAME },
+        subject,
+        content: [
+          { type: 'text/plain', value: textBody||subject },
+          { type: 'text/html',  value: htmlBody||'<p>'+subject+'</p>' },
+        ],
+      }),
+    });
+    if(res.status===202) console.log('[Email sent]', to, subject);
+    else { const d=await res.json(); console.error('[Email error]', d); }
+  } catch(err) { console.error('[Email exception]', err.message); }
+}
+
+function emailHtmlWrap(content) {
+  return `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;color:#0F1F3D">
+    <div style="background:#0F1F3D;padding:20px;border-radius:12px;text-align:center;margin-bottom:24px">
+      <img src="https://speedskatemeet.com/public/images/branding/ssm-logo.png" style="height:60px" alt="SpeedSkateMeet" />
+    </div>
+    ${content}
+    <div style="margin-top:32px;padding-top:16px;border-top:1px solid #e2e8f0;font-size:12px;color:#64748b;text-align:center">
+      SpeedSkateMeet.com — The Platform for Inline Speed Skating<br/>
+      <a href="https://speedskatemeet.com" style="color:#F97316">speedskatemeet.com</a>
+    </div>
+  </body></html>`;
+}
+
 function normalizePhone(raw) {
   const digits = String(raw||'').replace(/\D/g,'');
   if(digits.length===10) return '+1'+digits;
@@ -386,7 +426,7 @@ function migrateMeet(meet,fallbackOwnerId) {
     divisionGroupId:String(reg.divisionGroupId||''), divisionGroupLabel:String(reg.divisionGroupLabel||''),
     originalDivisionGroupId:String(reg.originalDivisionGroupId||reg.divisionGroupId||''),
     originalDivisionGroupLabel:String(reg.originalDivisionGroupLabel||reg.divisionGroupLabel||''),
-    meetNumber:Number(reg.meetNumber||idx+1), birthdate:String(reg.birthdate||''),
+    meetNumber:Number(reg.meetNumber||idx+1), birthdate:String(reg.birthdate||''), email:String(reg.email||''),
     helmetNumber:reg.helmetNumber===''||reg.helmetNumber==null?'':Number(reg.helmetNumber),
     paid:!!reg.paid, checkedIn:!!reg.checkedIn, totalCost:Number(reg.totalCost||0),
     options:{challengeUp:!!reg.options?.challengeUp, novice:!!reg.options?.novice,
@@ -1505,15 +1545,99 @@ app.get('/live', (req, res) => {
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
+
+// ── Password Reset ────────────────────────────────────────────────────────────
+app.get('/admin/forgot-password', (req, res) => {
+  const sent=req.query.sent;
+  res.send(pageShell({title:'Forgot Password',user:null, bodyHtml:`
+    <div style="max-width:400px;margin:40px auto">
+      <div class="page-header"><h1>Forgot Password</h1></div>
+      <div class="card">
+        ${sent?`<div class="good" style="margin-bottom:14px">✅ If that email is in our system, a reset link is on its way.</div><a class="btn2" href="/admin/login">Back to Login</a>`:`
+        <form method="POST" action="/admin/forgot-password" class="stack">
+          <div><label>Your Email Address</label><input type="email" name="email" required placeholder="lee@speedskatemeet.com" /></div>
+          <button class="btn" type="submit" style="width:100%">Send Reset Link</button>
+          <a href="/admin/login" style="text-align:center;font-size:13px;color:var(--muted)">Back to login</a>
+        </form>`}
+      </div>
+    </div>`}));
+});
+
+app.post('/admin/forgot-password', (req, res) => {
+  const db=loadDb();
+  const email=String(req.body.email||'').trim().toLowerCase();
+  const user=db.users.find(u=>String(u.email||'').trim().toLowerCase()===email&&u.active!==false);
+  if(user) {
+    const token=crypto.randomBytes(24).toString('hex');
+    const expires=new Date(Date.now()+1000*60*60).toISOString(); // 1 hour
+    if(!db.passwordResets) db.passwordResets=[];
+    db.passwordResets=db.passwordResets.filter(r=>r.userId!==user.id&&new Date(r.expires).getTime()>Date.now());
+    db.passwordResets.push({token,userId:user.id,expires});
+    saveDb(db);
+    const resetUrl=`https://speedskatemeet.com/admin/reset-password?token=${token}`;
+    const html=emailHtmlWrap(`
+      <h2 style="color:#0F1F3D">Password Reset Request</h2>
+      <p>Hi ${esc(user.displayName||user.username)},</p>
+      <p>Click the button below to reset your password. This link expires in 1 hour.</p>
+      <p style="text-align:center;margin:24px 0">
+        <a href="${resetUrl}" style="background:#F97316;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;display:inline-block;font-weight:700">Reset My Password</a>
+      </p>
+      <p style="font-size:12px;color:#64748b">If you didn't request this, ignore this email. Your password won't change.</p>
+    `);
+    sendEmail(email, 'Password Reset — SpeedSkateMeet', html, `Reset your password: ${resetUrl}`);
+  }
+  res.redirect('/admin/forgot-password?sent=1');
+});
+
+app.get('/admin/reset-password', (req, res) => {
+  const token=String(req.query.token||'');
+  const db=loadDb();
+  const reset=(db.passwordResets||[]).find(r=>r.token===token&&new Date(r.expires).getTime()>Date.now());
+  if(!reset) return res.send(pageShell({title:'Reset Password',user:null, bodyHtml:`
+    <div style="max-width:400px;margin:40px auto">
+      <div class="page-header"><h1>Reset Password</h1></div>
+      <div class="card"><div class="danger">This reset link has expired or is invalid. <a href="/admin/forgot-password">Request a new one</a>.</div></div>
+    </div>`}));
+  res.send(pageShell({title:'Reset Password',user:null, bodyHtml:`
+    <div style="max-width:400px;margin:40px auto">
+      <div class="page-header"><h1>Reset Password</h1></div>
+      <div class="card">
+        <form method="POST" action="/admin/reset-password" class="stack">
+          <input type="hidden" name="token" value="${esc(token)}" />
+          <div><label>New Password</label><input type="password" name="password" required minlength="6" /></div>
+          <div><label>Confirm Password</label><input type="password" name="confirm" required minlength="6" /></div>
+          <button class="btn" type="submit" style="width:100%">Set New Password</button>
+        </form>
+      </div>
+    </div>`}));
+});
+
+app.post('/admin/reset-password', (req, res) => {
+  const db=loadDb();
+  const token=String(req.body.token||'');
+  const password=String(req.body.password||'').trim();
+  const confirm=String(req.body.confirm||'').trim();
+  const reset=(db.passwordResets||[]).find(r=>r.token===token&&new Date(r.expires).getTime()>Date.now());
+  if(!reset||password!==confirm||password.length<6) return res.redirect(`/admin/reset-password?token=${token}&err=1`);
+  const user=db.users.find(u=>u.id===reset.userId);
+  if(!user) return res.redirect('/admin/forgot-password');
+  user.password=password;
+  db.passwordResets=(db.passwordResets||[]).filter(r=>r.token!==token);
+  saveDb(db);
+  res.redirect('/admin/login?reset=1');
+});
+
 app.get('/admin/login', (req, res) => {
   res.send(pageShell({title:'Login',user:null, bodyHtml:`
     <div style="max-width:400px;margin:40px auto">
       <div class="page-header"><h1>Login</h1></div>
+      ${req.query.reset?'<div class="card" style="border-left:4px solid var(--green);margin-bottom:12px"><div class="good">✅ Password updated! Sign in with your new password.</div></div>':''}
       <div class="card">
         <form method="POST" action="/admin/login" class="stack">
           <div><label>Username</label><input name="username" autocomplete="username" required /></div>
           <div><label>Password</label><input name="password" type="password" autocomplete="current-password" required /></div>
           <button class="btn" type="submit" style="width:100%">Sign In</button>
+          <a href="/admin/forgot-password" style="text-align:center;font-size:13px;color:var(--muted);display:block;margin-top:8px">Forgot password?</a>
         </form>
       </div>
     </div>`}));
@@ -2357,6 +2481,7 @@ app.get('/meet/:meetId/register', (req, res) => {
               <div class="note">Ages 16+ are Men/Women divisions.</div>
             </div>
             <div><label>Team</label><input name="team" list="teams-reg" value="Midwest Racing" /></div>
+            <div><label>Email (for confirmation)</label><input type="email" name="email" placeholder="parent@email.com" /></div>
             <div><label>Sponsor (optional)</label><input name="sponsor" placeholder="Bones Bearings" /></div>
           </div>
           <datalist id="teams-reg">${TEAM_LIST.map(t=>`<option value="${esc(t)}"></option>`).join('')}</datalist>
@@ -2382,9 +2507,10 @@ app.post('/meet/:meetId/register', (req, res) => {
   const baseGroup=findAgeGroup(meet.groups,compAge,gender);
   const finalGroup=challengeAdjustedGroup(meet,baseGroup,!!req.body.challengeUp);
   const meetNumber=(meet.registrations||[]).reduce((max,r)=>Math.max(max,Number(r.meetNumber)||0),0)+1;
+  const regEmail=String(req.body.email||'').trim();
   meet.registrations.push({
     id:nextId(meet.registrations),createdAt:nowIso(),
-    name:String(req.body.name||'').trim(),birthdate,age:compAge,gender,
+    name:String(req.body.name||'').trim(),birthdate,age:compAge,gender,email:regEmail,
     team:String(req.body.team||'Midwest Racing').trim()||'Midwest Racing',
     sponsor:String(req.body.sponsor||'').trim(),
     divisionGroupId:finalGroup?.id||'',divisionGroupLabel:finalGroup?.label||'Unassigned',
@@ -2394,6 +2520,35 @@ app.post('/meet/:meetId/register', (req, res) => {
     options:{challengeUp:!!req.body.challengeUp,novice:!!req.body.novice,elite:!!req.body.elite,open:!!req.body.open,timeTrials:!!req.body.timeTrials,relays:!!req.body.relays},
   });
   rebuildRaceAssignments(meet); ensureCurrentRace(meet); saveDb(db);
+  // Send confirmation email to registrant
+  if(regEmail) {
+    const rink=db.rinks.find(r=>Number(r.id)===Number(meet.rinkId));
+    const html=emailHtmlWrap(`
+      <h2 style="color:#0F1F3D">Registration Confirmed! 🏁</h2>
+      <p>Hi ${esc(String(req.body.name||'').trim())},</p>
+      <p>You're registered for <strong>${esc(meet.meetName)}</strong>!</p>
+      <table style="width:100%;border-collapse:collapse;margin:16px 0">
+        <tr><td style="padding:8px;border-bottom:1px solid #e2e8f0;color:#64748b">Date</td><td style="padding:8px;border-bottom:1px solid #e2e8f0"><strong>${esc(meet.date||'TBD')}</strong></td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #e2e8f0;color:#64748b">Venue</td><td style="padding:8px;border-bottom:1px solid #e2e8f0"><strong>${rink?esc(rink.name)+', '+esc(rink.city)+' '+esc(rink.state):'TBD'}</strong></td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #e2e8f0;color:#64748b">Division</td><td style="padding:8px;border-bottom:1px solid #e2e8f0"><strong>${esc(finalGroup?.label||'TBD')}</strong></td></tr>
+        ${meet.startTime?'<tr><td style="padding:8px;color:#64748b">Start Time</td><td style="padding:8px"><strong>'+esc(meet.startTime)+'</strong></td></tr>':''}
+      </table>
+      <p>Follow live results on race day at <a href="https://speedskatemeet.com/meet/${meet.id}/live" style="color:#F97316">speedskatemeet.com</a></p>
+      <p>Sign up for text alerts at <a href="https://speedskatemeet.com/meet/${meet.id}/alerts" style="color:#F97316">speedskatemeet.com/meet/${meet.id}/alerts</a></p>
+    `);
+    sendEmail(regEmail, `Registration Confirmed — ${meet.meetName}`, html, `You're registered for ${meet.meetName} on ${meet.date||'TBD'}. Follow live at speedskatemeet.com`);
+  }
+  // Notify meet director
+  const director=db.users.find(u=>Number(u.id)===Number(meet.createdByUserId));
+  if(director&&director.email) {
+    const html=emailHtmlWrap(`
+      <h2 style="color:#0F1F3D">New Registration 🏁</h2>
+      <p><strong>${esc(String(req.body.name||'').trim())}</strong> just registered for <strong>${esc(meet.meetName)}</strong>.</p>
+      <p>Total registrations: <strong>${meet.registrations.length}</strong></p>
+      <p><a href="https://speedskatemeet.com/portal/meet/${meet.id}/registered" style="background:#F97316;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;display:inline-block;margin-top:8px">View Registrations</a></p>
+    `);
+    sendEmail(director.email, `New Registration — ${meet.meetName}`, html, `${String(req.body.name||'').trim()} just registered for ${meet.meetName}. Total: ${meet.registrations.length}`);
+  }
   res.redirect(`/meet/${meet.id}/register?ok=1`);
 });
 
