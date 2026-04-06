@@ -1948,7 +1948,7 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
           <h2 style="margin:0">Meet Setup</h2>
           <div class="action-row">
             <button class="btn2" type="submit" formaction="/portal/meet/${meet.id}/builder/save-meet">Save Meet</button>
-            <button class="btn-orange" type="submit" onclick="return confirmRebuild()">Rebuild Races ⚠️</button>
+            <button class="btn-orange" type="submit" onclick="return confirmRebuild()">Generate Races ⚠️</button>
           </div>
         </div>
         <div class="form-grid cols-3" style="margin-bottom:14px">
@@ -2007,7 +2007,7 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
           <div class="muted"><strong>Save Meet</strong> — saves settings only. <strong>Rebuild Races</strong> — regenerates races from divisions. <span style="color:var(--red)">⚠️ Clears block assignments.</span></div>
           <div class="action-row">
             <button class="btn2" type="submit" formaction="/portal/meet/${meet.id}/builder/save-meet">Save Meet</button>
-            <button class="btn-orange" type="submit" onclick="return confirmRebuild()">Rebuild Races ⚠️</button>
+            <button class="btn-orange" type="submit" onclick="return confirmRebuild()">Generate Races ⚠️</button>
           </div>
         </div>
       </div>
