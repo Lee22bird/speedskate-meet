@@ -2304,6 +2304,7 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
   const openEnabledCount=(meet.openGroups||[]).filter(g=>g.enabled).length;
   const quadEnabledCount=(meet.quadGroups||[]).filter(g=>g.enabled).length;
   const savedFlash=req.query.saved?'<div class="card" style="border-left:4px solid var(--green);margin-bottom:12px"><div class="good">✅ Meet saved successfully.</div></div>':'';
+  const blockSavedFlash=req.query.saved?'<div class="card" style="border-left:4px solid var(--green);margin-bottom:12px"><div class="good">✅ Block Builder saved.</div></div>':'';
 
   function divCardHtml(group, gi, divKey) {
     const div=group.divisions[divKey];
@@ -2514,6 +2515,7 @@ app.get('/portal/meet/:meetId/relay-builder', requireRole('meet_director'), (req
           <div><label>Notes (optional)</label><input name="notes" placeholder="e.g. Mixed relay, 4 skaters" /></div>
           <div><button class="btn-sky" type="submit">+ Add Relay Race</button></div>
         </form>
+        ${req.query.saved?'<div class="good" style="margin-top:8px">✅ Saved.</div>':''}
       </div>
       <div class="card">
         <h2 style="margin-bottom:6px">How it works</h2>
@@ -2579,12 +2581,18 @@ app.get('/portal/meet/:meetId/open-builder', requireRole('meet_director'), (req,
   if(!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
   meet.openGroups=normalizeOpenGroups(meet.openGroups);
   const enabledCount=meet.openGroups.filter(g=>g.enabled).length;
-  const groupCards=meet.openGroups.map((og,i)=>{
+  const savedFlashOpen=req.query.saved?'<div class="card" style="border-left:4px solid var(--green);margin-bottom:12px"><div class="good">✅ Open Builder saved.</div></div>':'';
+  // Pair groups as girls/boys side by side
+  const openGroupPairs=[];
+  for(let i=0;i<meet.openGroups.length;i+=2) openGroupPairs.push([i,i+1].filter(x=>x<meet.openGroups.length));
+  const groupCards=openGroupPairs.map(pair=>{
+    const cards=pair.map(i=>{
+    const og=meet.openGroups[i];
     const def=OPEN_GROUP_DEFAULTS[i];
     const liveRace=(meet.races||[]).find(r=>r.isOpenRace&&r.groupId===og.id&&!r.isTimeTrial);
     const liveTT=(meet.races||[]).find(r=>r.isTimeTrial&&r.groupId===og.id);
     return `
-      <div class="open-group-card">
+      <div class="open-group-card" style="flex:1">
         <div class="row between center" style="margin-bottom:12px">
           <div>
             <div style="font-weight:700;font-size:16px;color:var(--navy)">${esc(og.label)}</div>
@@ -2617,7 +2625,9 @@ app.get('/portal/meet/:meetId/open-builder', requireRole('meet_director'), (req,
           </div>
         </div>
       </div>`;
-  }).join('<div class="spacer-sm"></div>');
+    });
+    return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">${cards.join('')}</div>`;
+  }).join('');
   const openRaces=(meet.races||[]).filter(r=>r.isOpenRace);
   res.send(pageShell({title:'Open Builder',user:req.user,meet,activeTab:'open-builder', bodyHtml:`
     <div class="builder-banner orange">
@@ -2630,6 +2640,7 @@ app.get('/portal/meet/:meetId/open-builder', requireRole('meet_director'), (req,
         <div class="row"><span class="chip chip-orange">Rolling Start</span><span class="chip chip-orange">No Lane Cap</span><span class="chip chip-orange">No Points</span></div>
       </div>
     </div>
+    ${savedFlashOpen}
     <form method="POST" action="/portal/meet/${meet.id}/open-builder/save" class="stack">
       ${groupCards}
       <div class="card">
@@ -2666,7 +2677,7 @@ app.post('/portal/meet/:meetId/open-builder/save', requireRole('meet_director'),
     og.ttDistance=String(req.body[`og_${i}_ttDistance`]||'').trim();
   });
   generateOpenRacesForMeet(meet); ensureAtLeastOneBlock(meet); ensureCurrentRace(meet);
-  saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/open-builder`);
+  saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/open-builder?saved=1`);
 });
 
 // ── Quad Builder ──────────────────────────────────────────────────────────────
@@ -2677,11 +2688,16 @@ app.get('/portal/meet/:meetId/quad-builder', requireRole('meet_director'), (req,
   if(!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
   meet.quadGroups=normalizeQuadGroups(meet.quadGroups);
   const enabledCount=meet.quadGroups.filter(g=>g.enabled).length;
-  const groupCards=meet.quadGroups.map((qg,i)=>{
+  const savedFlashQuad=req.query.saved?'<div class="card" style="border-left:4px solid var(--green);margin-bottom:12px"><div class="good">✅ Quad Builder saved.</div></div>':'';
+  const quadGroupPairs=[];
+  for(let i=0;i<meet.quadGroups.length;i+=2) quadGroupPairs.push([i,i+1].filter(x=>x<meet.quadGroups.length));
+  const groupCards=quadGroupPairs.map(pair=>{
+    const cards=pair.map(i=>{
+    const qg=meet.quadGroups[i];
     const def=QUAD_GROUP_DEFAULTS[i];
     const liveRaces=(meet.races||[]).filter(r=>r.isQuadRace&&r.groupId===qg.id);
     return `
-      <div class="quad-group-card">
+      <div class="quad-group-card" style="flex:1">
         <div class="row between center" style="margin-bottom:12px">
           <div>
             <div style="font-weight:700;font-size:16px;color:var(--navy)">${esc(qg.label)}</div>
@@ -2707,7 +2723,9 @@ app.get('/portal/meet/:meetId/quad-builder', requireRole('meet_director'), (req,
           </div>
         </div>
       </div>`;
-  }).join('<div class="spacer-sm"></div>');
+    });
+    return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">${cards.join('')}</div>`;
+  }).join('');
   const quadRaces=(meet.races||[]).filter(r=>r.isQuadRace);
   res.send(pageShell({title:'Quad Builder',user:req.user,meet,activeTab:'quad-builder', bodyHtml:`
     <div class="builder-banner purple">
@@ -2720,6 +2738,7 @@ app.get('/portal/meet/:meetId/quad-builder', requireRole('meet_director'), (req,
         <div class="row"><span class="chip chip-purple">30/20/10/5 Pts</span><span class="chip chip-purple">Standing Start</span><span class="chip chip-purple">Heat Splitting</span></div>
       </div>
     </div>
+    ${savedFlashQuad}
     <form method="POST" action="/portal/meet/${meet.id}/quad-builder/save" class="stack">
       ${groupCards}
       <div class="card">
@@ -2755,7 +2774,7 @@ app.post('/portal/meet/:meetId/quad-builder/save', requireRole('meet_director'),
     qg.cost=Number(String(req.body[`qg_${i}_cost`]||'0').trim()||0);
   });
   generateQuadRacesForMeet(meet); ensureAtLeastOneBlock(meet); ensureCurrentRace(meet);
-  saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/quad-builder`);
+  saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/quad-builder?saved=1`);
 });
 // ── Public Registration ───────────────────────────────────────────────────────
 
