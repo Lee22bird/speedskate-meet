@@ -15,6 +15,7 @@ const DATA_DIR = fs.existsSync('/data') ? '/data' : __dirname;
 const DATA_FILE = process.env.SSM_DATA_FILE || path.join(DATA_DIR, 'ssm_db.json');
 
 const SESSION_COOKIE = 'ssm_sess';
+const ADMIN_PHONE = '+13166516013';
 
 // ── Twilio ────────────────────────────────────────────────────────────────────
 const TWILIO_SID    = process.env.TWILIO_ACCOUNT_SID;
@@ -1482,6 +1483,158 @@ app.get('/', (req, res) => {
       </a>
     </div>` }));
 });
+
+// ── Submit a Meet (public) ────────────────────────────────────────────────────
+app.get('/submit-meet', (req, res) => {
+  const data=getSessionUser(req);
+  const ok=req.query.ok;
+  res.send(pageShell({title:'Submit Your Meet',user:data?.user||null, bodyHtml:`
+    <div class="page-header"><h1>Submit Your Meet</h1><div class="sub">List your inline speed skating meet on SpeedSkateMeet.com — free, no account required.</div></div>
+    ${ok?`<div class="card" style="border-left:4px solid var(--green);margin-bottom:16px"><div class="good">✅ Your meet has been submitted! Lee will review it and reach out to you shortly.</div></div>`:`
+    <div class="card">
+      <form method="POST" action="/submit-meet" class="stack">
+        <div class="form-grid cols-2">
+          <div><label>Meet Name *</label><input name="meetName" required placeholder="Wichita Spring Classic" /></div>
+          <div><label>Date *</label><input type="date" name="date" required /></div>
+          <div><label>City *</label><input name="city" required placeholder="Wichita" /></div>
+          <div><label>State *</label><input name="state" required placeholder="KS" maxlength="2" /></div>
+          <div><label>Your Name *</label><input name="contactName" required placeholder="Bob Jones" /></div>
+          <div><label>Your Email *</label><input type="email" name="contactEmail" required placeholder="bob@team.com" /></div>
+          <div><label>Your Phone</label><input type="tel" name="contactPhone" placeholder="(316) 555-1234" /></div>
+          <div><label>External Registration URL</label><input name="registrationUrl" placeholder="https://forms.google.com/..." /></div>
+        </div>
+        <div><label>Description</label><textarea name="description" placeholder="Tell skaters about your meet — venue, format, divisions, etc." rows="4"></textarea></div>
+        <div><button class="btn-orange" type="submit">Submit My Meet →</button></div>
+      </form>
+    </div>`}`}));
+});
+
+app.post('/submit-meet', (req, res) => {
+  const db=loadDb();
+  const pending={
+    id:'pm'+crypto.randomBytes(6).toString('hex'),
+    meetName:String(req.body.meetName||'').trim(),
+    date:String(req.body.date||'').trim(),
+    city:String(req.body.city||'').trim(),
+    state:String(req.body.state||'').trim(),
+    contactName:String(req.body.contactName||'').trim(),
+    contactEmail:String(req.body.contactEmail||'').trim(),
+    contactPhone:String(req.body.contactPhone||'').trim(),
+    registrationUrl:String(req.body.registrationUrl||'').trim(),
+    description:String(req.body.description||'').trim(),
+    submittedAt:nowIso(), status:'pending',
+  };
+  if(!pending.meetName||!pending.date||!pending.city||!pending.contactName||!pending.contactEmail)
+    return res.redirect('/submit-meet');
+  if(!Array.isArray(db.pendingMeets)) db.pendingMeets=[];
+  db.pendingMeets.push(pending);
+  saveDb(db);
+  // Text Lee
+  sendSms(ADMIN_PHONE, `🏁 New meet submission!\n${pending.meetName}\n${pending.city}, ${pending.state} • ${pending.date}\n${pending.contactName} • ${pending.contactEmail}\nReview: speedskatemeet.com/portal/pending-meets`);
+  res.redirect('/submit-meet?ok=1');
+});
+
+// ── Pending Meets (super admin only) ──────────────────────────────────────────
+app.get('/portal/pending-meets', requireRole('super_admin'), (req, res) => {
+  const pending=(req.db.pendingMeets||[]).filter(p=>p.status==='pending');
+  const approved=(req.db.pendingMeets||[]).filter(p=>p.status==='approved').slice(-10);
+  const rejected=(req.db.pendingMeets||[]).filter(p=>p.status==='rejected').slice(-10);
+
+  const pendingRows=pending.map(p=>`
+    <div class="card" style="margin-bottom:14px;border-left:4px solid var(--orange)">
+      <div class="row between" style="margin-bottom:8px">
+        <div>
+          <h2 style="margin:0">${esc(p.meetName)}</h2>
+          <div class="note">${esc(p.city)}, ${esc(p.state)} • ${esc(p.date)}</div>
+        </div>
+        <span class="chip chip-orange">Pending Review</span>
+      </div>
+      <div class="grid-2" style="margin-bottom:12px">
+        <div><div class="note"><strong>Contact:</strong> ${esc(p.contactName)}</div>
+          <div class="note">${esc(p.contactEmail)}${p.contactPhone?' • '+esc(p.contactPhone):''}</div></div>
+        <div>${p.registrationUrl?`<div class="note"><strong>Reg URL:</strong> <a href="${esc(p.registrationUrl)}" target="_blank" style="color:var(--orange)">View →</a></div>`:''}</div>
+      </div>
+      ${p.description?`<div class="note" style="margin-bottom:12px">${esc(p.description)}</div>`:''}
+      <div class="action-row">
+        <form method="POST" action="/portal/pending-meets/approve" style="display:inline">
+          <input type="hidden" name="id" value="${esc(p.id)}" />
+          <button class="btn-orange" type="submit">✅ Approve</button>
+        </form>
+        <form method="POST" action="/portal/pending-meets/reject" style="display:inline">
+          <input type="hidden" name="id" value="${esc(p.id)}" />
+          <input name="reason" placeholder="Reason (optional, emailed to submitter)" style="width:260px" />
+          <button class="btn-danger" type="submit">❌ Reject</button>
+        </form>
+      </div>
+    </div>`).join('');
+
+  res.send(pageShell({title:'Pending Meets',user:req.user, bodyHtml:`
+    <div class="page-header"><h1>Pending Meets</h1><div class="sub">Review and approve meet submissions.</div></div>
+    <div class="action-row" style="margin-bottom:20px">
+      <a class="btn2" href="/portal">← Portal</a>
+    </div>
+    ${pending.length?`<h2 style="margin-bottom:12px">⏳ Awaiting Review (${pending.length})</h2>${pendingRows}`:`<div class="card"><div class="muted">No pending submissions. 🎉</div></div>`}
+    ${approved.length?`<div class="spacer"></div><h2 style="margin-bottom:12px;color:var(--green)">✅ Recently Approved</h2>
+      ${approved.map(p=>`<div class="card" style="margin-bottom:8px;opacity:.7"><div class="row between"><div><strong>${esc(p.meetName)}</strong> — ${esc(p.city)}, ${esc(p.state)} • ${esc(p.date)}</div><span class="chip chip-green">Approved</span></div></div>`).join('')}`:''}
+    ${rejected.length?`<div class="spacer"></div><h2 style="margin-bottom:12px;color:var(--muted)">❌ Recently Rejected</h2>
+      ${rejected.map(p=>`<div class="card" style="margin-bottom:8px;opacity:.7"><div class="row between"><div><strong>${esc(p.meetName)}</strong> — ${esc(p.city)}, ${esc(p.state)} • ${esc(p.date)}</div><span class="chip">Rejected</span></div></div>`).join('')}`:''}
+  `}));
+});
+
+app.post('/portal/pending-meets/approve', requireRole('super_admin'), (req, res) => {
+  const db=req.db;
+  const p=(db.pendingMeets||[]).find(x=>x.id===String(req.body.id||''));
+  if(!p) return res.redirect('/portal/pending-meets');
+  p.status='approved'; p.approvedAt=nowIso();
+  // Create a lite meet in the meets array
+  const rink=db.rinks.find(r=>String(r.city||'').toLowerCase()===p.city.toLowerCase())||db.rinks[0];
+  const liteMeet={
+    id:nextId(db.meets), meetName:p.meetName, date:p.date, isPublic:true,
+    status:'published', isLiteMeet:true,
+    city:p.city, state:p.state,
+    rinkId:rink?rink.id:1,
+    registrationUrl:p.registrationUrl||'',
+    description:p.description||'',
+    contactName:p.contactName, contactEmail:p.contactEmail,
+    createdByUserId:1, createdAt:nowIso(), updatedAt:nowIso(),
+    races:[], blocks:[], registrations:[], groups:[], textAlerts:[],
+  };
+  db.meets.push(liteMeet);
+  saveDb(db);
+  // Email submitter
+  if(p.contactEmail) {
+    const html=emailHtmlWrap(`
+      <h2 style="color:#0F1F3D">Your Meet is Live! 🏁</h2>
+      <p>Hi ${esc(p.contactName)},</p>
+      <p>Your meet <strong>${esc(p.meetName)}</strong> has been approved and is now listed on SpeedSkateMeet.com!</p>
+      <p><a href="https://speedskatemeet.com/meets" style="background:#F97316;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;display:inline-block;margin-top:8px">View on SpeedSkateMeet →</a></p>
+      <p style="margin-top:16px">Interested in full race management — heat assignments, live scoring, text alerts, TV display? Reply to this email and we'll get you set up.</p>
+    `);
+    sendEmail(p.contactEmail, `Your Meet is Live — ${p.meetName}`, html, `Your meet ${p.meetName} is now live on SpeedSkateMeet.com!`);
+  }
+  res.redirect('/portal/pending-meets');
+});
+
+app.post('/portal/pending-meets/reject', requireRole('super_admin'), (req, res) => {
+  const db=req.db;
+  const p=(db.pendingMeets||[]).find(x=>x.id===String(req.body.id||''));
+  if(!p) return res.redirect('/portal/pending-meets');
+  p.status='rejected'; p.rejectedAt=nowIso(); p.rejectReason=String(req.body.reason||'').trim();
+  saveDb(db);
+  if(p.contactEmail) {
+    const reason=p.rejectReason||'It did not meet our listing requirements at this time.';
+    const html=emailHtmlWrap(`
+      <h2 style="color:#0F1F3D">Meet Submission Update</h2>
+      <p>Hi ${esc(p.contactName)},</p>
+      <p>Thank you for submitting <strong>${esc(p.meetName)}</strong> to SpeedSkateMeet.com.</p>
+      <p>Unfortunately we were unable to approve this listing at this time: <em>${esc(reason)}</em></p>
+      <p>If you have questions, reply to this email.</p>
+    `);
+    sendEmail(p.contactEmail, `Meet Submission Update — ${p.meetName}`, html, `Update regarding your meet submission ${p.meetName}.`);
+  }
+  res.redirect('/portal/pending-meets');
+});
+
 app.get('/meets', (req, res) => {
   const db=loadDb(); const data=getSessionUser(req);
   const cards=(db.meets||[]).filter(m=>m.isPublic).map(m=>{
@@ -1509,6 +1662,7 @@ app.get('/meets', (req, res) => {
   }).join('');
   res.send(pageShell({title:'Find a Meet',user:data?.user||null, bodyHtml:`
     <div class="page-header"><h1>Find a Meet</h1><div class="sub">Upcoming inline speed skating meets open for registration.</div></div>
+    <div style="margin-bottom:16px"><a class="btn2" href="/submit-meet">+ Submit Your Meet</a></div>
     ${cards||`<div class="card"><div class="muted">No public meets yet.</div></div>`}`}));
 });
 
@@ -1758,7 +1912,9 @@ app.get('/portal', requireRole('meet_director','judge','coach'), (req, res) => {
         <form method="POST" action="/portal/create-meet"><button class="btn-orange" type="submit">+ New Meet</button></form>
         <a class="btn2" href="/portal/rinks">Manage Rinks</a>`:''}
       ${hasRole(req.user,'coach')||hasRole(req.user,'super_admin')||hasRole(req.user,'meet_director')?`<a class="btn2" href="/portal/coach">Coach Portal</a>`:''}
-      ${hasRole(req.user,'super_admin')?`<a class="btn2" href="/portal/users">Users</a>`:''}
+      ${hasRole(req.user,'super_admin')?`<a class="btn2" href="/portal/users">Users</a>
+        <a class="btn2" href="/portal/pending-meets" style="position:relative">Pending Meets${req.db.pendingMeets?.length?`<span style="position:absolute;top:-6px;right:-6px;background:var(--red);color:#fff;border-radius:50%;width:18px;height:18px;font-size:11px;display:flex;align-items:center;justify-content:center;font-weight:700">${req.db.pendingMeets.length}</span>`:''}
+        </a>`:''}
     </div>
     ${cards||`<div class="card"><div class="muted">No meets yet. Click "New Meet" to get started.</div></div>`}`}));
 });
