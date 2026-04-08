@@ -302,7 +302,7 @@ function defaultMeet(ownerUserId) {
     meetName:'New Meet', date:'', startTime:'', registrationCloseAt:'',
     rinkId:1, trackLength:100, lanes:4,
     timeTrialsEnabled:false, relayEnabled:false, judgesPanelRequired:true,
-    notes:'', relayNotes:'', isPublic:false, status:'draft', tiebreaker:'d2',
+    notes:'', relayNotes:'', isPublic:false, status:'draft', tiebreaker:'d2', baseEntryFee:0,
     groups:baseGroups(), openGroups:makeOpenGroupsTemplate(), quadGroups:makeQuadGroupsTemplate(),
     races:[], blocks:[], registrations:[],
     currentRaceId:'', currentRaceIndex:-1, raceDayPaused:false,
@@ -401,6 +401,7 @@ function migrateMeet(meet,fallbackOwnerId) {
   if(typeof meet.currentRaceId!=='string') meet.currentRaceId='';
   if(typeof meet.currentRaceIndex!=='number') meet.currentRaceIndex=-1;
   if(typeof meet.raceDayPaused!=='boolean') meet.raceDayPaused=false;
+  if(!Number.isFinite(Number(meet.baseEntryFee))) meet.baseEntryFee=0;
   if(!Array.isArray(meet.textAlerts)) meet.textAlerts=[];
   meet.races=meet.races.map((r,idx)=>({
     id:r.id||('r'+crypto.randomBytes(6).toString('hex')), orderHint:Number(r.orderHint||idx+1),
@@ -910,6 +911,50 @@ function rebuildRaceAssignments(meet) {
     } return {...block,raceIds:nextRaceIds};
   });
   meet.races=newRaces; meet.blocks=mappedBlocks; meet.updatedAt=nowIso(); ensureCurrentRace(meet);
+}
+
+function buildCostWidget(base,novC,eliC,opnC,qdC) {
+  const html=[
+    '<div class="card" style="background:#f8fafc;margin-top:8px">',
+    '<div style="display:flex;justify-content:space-between;align-items:center">',
+    '<div style="font-weight:700">Estimated Total</div>',
+    '<div style="font-size:28px;font-weight:900;color:#F97316" id="ssm-cost">$'+base+'</div>',
+    '</div>',
+    '<div style="font-size:12px;color:#64748b;margin-top:4px" id="ssm-breakdown">Select events above</div>',
+    '</div>',
+    '<script>(function(){',
+    'var B='+base+',C={novice:'+novC+',elite:'+eliC+',open:'+opnC+',quad:'+qdC+',timeTrials:0,relays:0,challengeUp:0};',
+    'function upd(){var sel=[];',
+    '["novice","elite","open","quad","timeTrials","relays","challengeUp"].forEach(function(k){',
+    'var el=document.querySelector("[name="+k+"]");if(el&&el.value==="on")sel.push({name:k,cost:C[k]||0});',
+    '});',
+    'var t=document.getElementById("ssm-cost"),b=document.getElementById("ssm-breakdown");',
+    'if(!sel.length){t.textContent="$"+B;b.textContent="Base entry fee";return;}',
+    'sel.sort(function(a,b){return b.cost-a.cost;});',
+    'var total=B,lines=["1st event (base): $"+B];',
+    'for(var i=1;i<sel.length;i++){total+=sel[i].cost;lines.push("+ "+sel[i].name+": $"+sel[i].cost);}',
+    't.textContent="$"+total;b.textContent=lines.join(" | ");',
+    '}document.addEventListener("change",upd);setTimeout(upd,300);',
+    '})();</script>'
+  ];
+  return html.join("");
+}
+
+function calcRegistrationCost(meet, options) {
+  const base=Number(meet.baseEntryFee||0);
+  const events=[];
+  if(options.novice){const cost=(meet.groups||[]).reduce((c,g)=>g.divisions&&g.divisions.novice&&g.divisions.novice.enabled?Number(g.divisions.novice.cost||0):c,0);events.push({name:'Novice',cost});}
+  if(options.elite){const cost=(meet.groups||[]).reduce((c,g)=>g.divisions&&g.divisions.elite&&g.divisions.elite.enabled?Number(g.divisions.elite.cost||0):c,0);events.push({name:'Elite',cost});}
+  if(options.open){const cost=(meet.openGroups||[]).reduce((c,g)=>g.enabled?Number(g.cost||0):c,0);events.push({name:'Open',cost});}
+  if(options.quad){const cost=(meet.quadGroups||[]).reduce((c,g)=>g.enabled?Number(g.cost||0):c,0);events.push({name:'Quad',cost});}
+  if(options.timeTrials) events.push({name:'Time Trials',cost:0});
+  if(options.relays) events.push({name:'Relays',cost:0});
+  if(!events.length) return base;
+  if(base===0) return events.reduce((t,e)=>t+e.cost,0);
+  events.sort((a,b)=>b.cost-a.cost);
+  let total=base;
+  for(let i=1;i<events.length;i++) total+=events[i].cost;
+  return total;
 }
 
 function racingSoonLabel(delta) {
@@ -2831,6 +2876,7 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
           <div><label>Rink</label><select name="rinkId">${rinkOptions}</select></div>
           <div><label>Track Length (m)</label><input name="trackLength" value="${esc(meet.trackLength)}" /></div>
           <div><label>Lanes</label><input name="lanes" value="${esc(meet.lanes)}" /></div>
+          <div><label>Base Entry Fee ($)</label><input type="number" name="baseEntryFee" value="${esc(String(meet.baseEntryFee||0))}" min="0" /><div class="note">Min charge per skater. First event = base fee, each additional adds its own cost.</div></div>
           <div><label>Status</label>
             <select name="status">
               <option value="draft"     ${meet.status==='draft'    ?'selected':''}>Draft</option>
@@ -2898,6 +2944,7 @@ function saveMeetFields(meet, body) {
   meet.notes=String(body.notes||'');
   meet.relayNotes=String(body.relayNotes||'');
   meet.tiebreaker=String(body.tiebreaker||'d2')==='sr832'?'sr832':'d2';
+  meet.baseEntryFee=Number(String(body.baseEntryFee||'0').trim()||0);
   meet.groups.forEach((group,gi)=>{
     for(const divKey of ['novice','elite']) {
       group.divisions[divKey]={
@@ -3232,6 +3279,12 @@ app.get('/meet/:meetId/register', (req, res) => {
   const db=loadDb(); const meet=getMeetOr404(db,req.params.meetId); const data=getSessionUser(req);
   if(!meet||!meet.isPublic) return res.redirect('/meets');
   const closed=isRegistrationClosed(meet);
+  const base=Number(meet.baseEntryFee||0);
+  const novC=(meet.groups||[]).reduce((c,g)=>g.divisions&&g.divisions.novice&&g.divisions.novice.enabled?Number(g.divisions.novice.cost||0):c,0);
+  const eliC=(meet.groups||[]).reduce((c,g)=>g.divisions&&g.divisions.elite&&g.divisions.elite.enabled?Number(g.divisions.elite.cost||0):c,0);
+  const opnC=(meet.openGroups||[]).reduce((c,g)=>g.enabled?Number(g.cost||0):c,0);
+  const qdC=(meet.quadGroups||[]).reduce((c,g)=>g.enabled?Number(g.cost||0):c,0);
+  const costWidget=base>0 ? buildCostWidget(base,novC,eliC,opnC,qdC) : '';
   res.send(pageShell({title:'Register',user:data?.user||null, bodyHtml:`
     <div class="page-header"><h1>Register</h1><div class="sub">${esc(meet.meetName)}${meet.date?` • ${esc(meet.date)}`:''}</div></div>
     <div class="card">
@@ -3262,6 +3315,7 @@ app.get('/meet/:meetId/register', (req, res) => {
             ${meet.timeTrialsEnabled?`<div class="toggle-row"><div><div class="toggle-row-label">Time Trials</div></div>${toggleSwitch('timeTrials',false)}</div>`:''}
             ${meet.relayEnabled?`<div class="toggle-row"><div><div class="toggle-row-label">Relays</div></div>${toggleSwitch('relays',false)}</div>`:''}
           </div>
+          ${costWidget}
           <div><button class="btn-orange" type="submit">Register Skater</button></div>
         </form>`}
     </div>`}));
@@ -3277,6 +3331,8 @@ app.post('/meet/:meetId/register', (req, res) => {
   const finalGroup=challengeAdjustedGroup(meet,baseGroup,!!req.body.challengeUp);
   const meetNumber=(meet.registrations||[]).reduce((max,r)=>Math.max(max,Number(r.meetNumber)||0),0)+1;
   const regEmail=String(req.body.email||'').trim();
+  const regOpts={challengeUp:!!req.body.challengeUp,novice:!!req.body.novice,elite:!!req.body.elite,open:!!req.body.open,quad:!!req.body.quad,timeTrials:!!req.body.timeTrials,relays:!!req.body.relays};
+  const totalCost=calcRegistrationCost(meet,regOpts);
   meet.registrations.push({
     id:nextId(meet.registrations),createdAt:nowIso(),
     name:String(req.body.name||'').trim(),birthdate,age:compAge,gender,email:regEmail,
@@ -3285,8 +3341,8 @@ app.post('/meet/:meetId/register', (req, res) => {
     divisionGroupId:finalGroup?.id||'',divisionGroupLabel:finalGroup?.label||'Unassigned',
     originalDivisionGroupId:baseGroup?.id||'',originalDivisionGroupLabel:baseGroup?.label||'',
     meetNumber,helmetNumber:nextHelmetNumber(meet),
-    paid:false,checkedIn:false,totalCost:0,
-    options:{challengeUp:!!req.body.challengeUp,novice:!!req.body.novice,elite:!!req.body.elite,open:!!req.body.open,quad:!!req.body.quad,timeTrials:!!req.body.timeTrials,relays:!!req.body.relays},
+    paid:false,checkedIn:false,totalCost,
+    options:regOpts,
   });
   rebuildRaceAssignments(meet); ensureCurrentRace(meet); saveDb(db);
   // Send confirmation email to registrant
