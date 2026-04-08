@@ -995,6 +995,8 @@ function navHtml(user) {
           <a class="nav-link" href="/meets">Find a Meet</a>
         <a class="nav-link" href="/about">About</a>
         <a class="nav-link" href="/help">Help</a>
+        <a class="nav-link" href="/submit-meet">Submit a Meet</a>
+        <a class="nav-link" href="/submit-rink">Submit a Rink</a>
           <a class="nav-link" href="/rinks">Rinks</a>
           <a class="nav-link" href="/live">Live</a>
           ${user
@@ -1020,13 +1022,19 @@ function meetTabs(meet, active) {
   ];
   return `<div class="meet-tabs">${tabs.map(([key,label,href])=>`<a class="meet-tab${active===key?' active':''}" href="${href}">${label}</a>`).join('')}</div>`;
 }
-function pageShell({ title, bodyHtml, user, meet, activeTab }) {
+function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
   return `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${esc(title)} — SpeedSkateMeet</title>
+  <meta name="description" content="${esc(description||'SpeedSkateMeet — The all-in-one platform for inline speed skating meets. Registration, heat assignments, live scoring, text alerts, and results.')}" />
+  <meta name="keywords" content="inline speed skating, speed skating meet, inline skating competition, race management, heat assignments, skating results" />
+  <meta property="og:title" content="${esc(title)} — SpeedSkateMeet" />
+  <meta property="og:description" content="${esc(description||'SpeedSkateMeet — The all-in-one platform for inline speed skating meets.')}" />
+  <meta property="og:url" content="https://speedskatemeet.com" />
+  <meta property="og:type" content="website" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;900&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -1439,7 +1447,7 @@ function resultsSectionHtml(section) {
 app.get('/', (req, res) => {
   const data = getSessionUser(req);
   const portalLink = data ? '/portal' : '/admin/login';
-  res.send(pageShell({ title:'Home', user:data?.user||null, bodyHtml:`
+  res.send(pageShell({ title:'Home', description:'SpeedSkateMeet is the all-in-one platform for inline speed skating meets. Registration, heat assignments, live scoring, TV display, and text alerts for parents.', user:data?.user||null, bodyHtml:`
     <div class="hero hero-centered">
       <img class="hero-img" src="/public/images/home/hero-banner.jpg" alt="" />
       <div class="hero-gradient"></div>
@@ -1490,7 +1498,7 @@ app.get('/', (req, res) => {
 app.get('/submit-meet', (req, res) => {
   const data=getSessionUser(req);
   const ok=req.query.ok;
-  res.send(pageShell({title:'Submit Your Meet',user:data?.user||null, bodyHtml:`
+  res.send(pageShell({title:'Submit Your Meet', description:'List your inline speed skating meet on SpeedSkateMeet.com for free. No account required. Reach skaters and families across the country.', user:data?.user||null, bodyHtml:`
     <div class="page-header"><h1>Submit Your Meet</h1><div class="sub">List your inline speed skating meet on SpeedSkateMeet.com — free, no account required.</div></div>
     ${ok?`<div class="card" style="border-left:4px solid var(--green);margin-bottom:16px"><div class="good">✅ Your meet has been submitted! Lee will review it and reach out to you shortly.</div></div>`:`
     <div class="card">
@@ -1529,6 +1537,7 @@ app.post('/submit-meet', (req, res) => {
   if(!pending.meetName||!pending.date||!pending.city||!pending.contactName||!pending.contactEmail)
     return res.redirect('/submit-meet');
   if(!Array.isArray(db.pendingMeets)) db.pendingMeets=[];
+  if(!Array.isArray(db.pendingRinks)) db.pendingRinks=[];
   db.pendingMeets.push(pending);
   saveDb(db);
   // Text Lee
@@ -1641,7 +1650,7 @@ app.post('/portal/pending-meets/reject', requireRole('super_admin'), (req, res) 
 // ── About Page ────────────────────────────────────────────────────────────────
 app.get('/about', (req, res) => {
   const data=getSessionUser(req);
-  res.send(pageShell({title:'About',user:data?.user||null, bodyHtml:`
+  res.send(pageShell({title:'About', description:'SpeedSkateMeet was built by a skater for the skating community. Learn about our platform for inline speed skating meet management, live scoring, and race day tools.', user:data?.user||null, bodyHtml:`
     <div class="page-header">
       <h1>About SpeedSkateMeet</h1>
       <div class="sub">Built by a skater, for the skating community.</div>
@@ -1687,7 +1696,7 @@ app.get('/about', (req, res) => {
         </div>
         <div class="hr"></div>
         <p style="line-height:1.7;color:var(--text);margin-bottom:8px">Questions? Feedback? Want to get your club set up with full race management?</p>
-        <a href="mailto:lee@speedskatemeet.com" style="color:var(--orange);font-weight:700">lee@speedskatemeet.com</a>
+        <a href="mailto:LBird@speedskatemeet.com" style="color:var(--orange);font-weight:700">LBird@speedskatemeet.com</a>
       </div>
     </div>
   `}));
@@ -1697,7 +1706,7 @@ app.get('/about', (req, res) => {
 app.get('/help', (req, res) => {
   const data=getSessionUser(req);
   const isPortal=data?.user&&(hasRole(data.user,'meet_director')||hasRole(data.user,'super_admin'));
-  res.send(pageShell({title:'Help & FAQ',user:data?.user||null, bodyHtml:`
+  res.send(pageShell({title:'Help & FAQ', description:'Complete guide to running an inline speed skating meet on SpeedSkateMeet. Learn about meet builder, block builder, race day, text alerts, scoring, and more.', user:data?.user||null, bodyHtml:`
     <div class="page-header">
       <h1>Help & FAQ</h1>
       <div class="sub">Everything you need to know about running a meet on SpeedSkateMeet.</div>
@@ -1723,7 +1732,7 @@ app.get('/help', (req, res) => {
       <div class="stack">
         <div><h3>What is SpeedSkateMeet?</h3><p style="line-height:1.7;color:var(--text)">SpeedSkateMeet is an all-in-one platform for running inline speed skating meets. It handles registration, heat assignments, race day management, live scoring, text alerts, and results — all from your browser.</p></div>
         <div class="hr"></div>
-        <div><h3>How do I get a meet director account?</h3><p style="line-height:1.7;color:var(--text)">Contact Lee at <a href="mailto:lee@speedskatemeet.com" style="color:var(--orange)">lee@speedskatemeet.com</a> or submit your meet at <a href="/submit-meet" style="color:var(--orange)">/submit-meet</a>. Once your listing is approved we'll reach out to get you fully set up.</p></div>
+        <div><h3>How do I get a meet director account?</h3><p style="line-height:1.7;color:var(--text)">Contact Lee at <a href="mailto:LBird@speedskatemeet.com" style="color:var(--orange)">LBird@speedskatemeet.com</a> or submit your meet at <a href="/submit-meet" style="color:var(--orange)">/submit-meet</a>. Once your listing is approved we'll reach out to get you fully set up.</p></div>
         <div class="hr"></div>
         <div><h3>What's the recommended workflow for a new meet?</h3>
           <ol style="line-height:2;color:var(--text);padding-left:20px">
@@ -1795,6 +1804,8 @@ app.get('/help', (req, res) => {
         <div><h3>How do skaters register?</h3><p style="line-height:1.7;color:var(--text)">Once you publish your meet, a public registration page is available at speedskatemeet.com/meet/[id]/register. Share that link with your skaters. Directors can also register skaters manually from the Registered tab in the portal.</p></div>
         <div class="hr"></div>
         <div><h3>How does USARS age work?</h3><p style="line-height:1.7;color:var(--text)">The system uses the USARS SR150.1 rule — a skater's competitive age is calculated as the meet year minus their birth year (January 1 cutoff). So a skater born in 2015 competing in a 2026 meet is age 11, regardless of whether they've had their birthday yet.</p></div>
+        <div class="hr"></div>
+        <div><h3>Do I have to use Check-In?</h3><p style="line-height:1.7;color:var(--text)">No — Check-In is completely optional. You can go straight from Block Builder to Race Day and everything works fine. All registered skaters appear in the judges panel regardless. Check-In is only useful if you want to Rebuild heats after no-shows — it lets the system rebalance with only skaters who actually showed up. If you skip it, empty lanes just get skipped by the judge on race day.</p></div>
         <div class="hr"></div>
         <div><h3>How do I check in skaters on race day?</h3><p style="line-height:1.7;color:var(--text)">Go to the Check-In tab. Find each skater as they arrive and toggle them as checked in. After check-in closes, go to Block Builder and hit Rebuild to rebalance heats with actual attendees.</p></div>
         <div class="hr"></div>
@@ -1886,7 +1897,7 @@ app.get('/help', (req, res) => {
     <div class="card" style="text-align:center">
       <h2 style="margin-bottom:8px">Still have questions?</h2>
       <p style="color:var(--muted);margin-bottom:16px">Reach out directly — happy to help.</p>
-      <a href="mailto:lee@speedskatemeet.com" class="btn-orange">Email Lee →</a>
+      <a href="mailto:LBird@speedskatemeet.com" class="btn-orange">Email Lee →</a>
     </div>
   `}));
 });
@@ -1916,27 +1927,208 @@ app.get('/meets', (req, res) => {
         </div>
       </div>`;
   }).join('');
-  res.send(pageShell({title:'Find a Meet',user:data?.user||null, bodyHtml:`
+  res.send(pageShell({title:'Find a Meet', description:'Find upcoming inline speed skating meets near you. View schedules, register online, and follow live results on race day.', user:data?.user||null, bodyHtml:`
     <div class="page-header"><h1>Find a Meet</h1><div class="sub">Upcoming inline speed skating meets open for registration.</div></div>
     <div style="margin-bottom:16px"><a class="btn2" href="/submit-meet">+ Submit Your Meet</a></div>
     ${cards||`<div class="card"><div class="muted">No public meets yet.</div></div>`}`}));
 });
 
-app.get('/rinks', (req, res) => {
-  const db=loadDb(); const data=getSessionUser(req);
-  const cards=db.rinks.map(r=>`
-    <div class="card" style="margin-bottom:14px">
-      <div class="row between">
-        <div>
-          <h2 style="margin:0">📍 ${esc(r.name)}</h2>
-          <div class="muted">${esc(r.address||'')} • ${esc(r.city||'')}, ${esc(r.state||'')}</div>
-          <div class="note">${r.phone?esc(r.phone):''}${r.website?` • <a href="https://${esc(r.website)}" target="_blank" rel="noreferrer">${esc(r.website)}</a>`:''}</div>
+
+// ── Submit a Rink (public) ────────────────────────────────────────────────────
+app.get('/submit-rink', (req, res) => {
+  const data=getSessionUser(req);
+  const ok=req.query.ok;
+  res.send(pageShell({title:'Submit a Rink', description:'Add your inline speed skating rink or venue to the SpeedSkateMeet directory. Free listing, no account required.', user:data?.user||null, bodyHtml:`
+    <div class="page-header"><h1>Submit a Rink</h1><div class="sub">Add your inline speed skating venue to SpeedSkateMeet.com — free, no account required.</div></div>
+    ${ok?`<div class="card" style="border-left:4px solid var(--green);margin-bottom:16px"><div class="good">✅ Your rink has been submitted! Lee will review it and add it to the directory shortly.</div></div>`:`
+    <div class="card">
+      <form method="POST" action="/submit-rink" class="stack">
+        <div class="form-grid cols-2">
+          <div><label>Rink Name *</label><input name="name" required placeholder="Roller King Skating Center" /></div>
+          <div><label>Track Length</label><input name="trackLength" placeholder="e.g. 100m" /></div>
+          <div><label>Address *</label><input name="address" required placeholder="123 Main St" /></div>
+          <div><label>City *</label><input name="city" required placeholder="Wichita" /></div>
+          <div><label>State *</label><input name="state" required placeholder="KS" maxlength="2" /></div>
+          <div><label>Zip</label><input name="zip" placeholder="67201" /></div>
+          <div><label>Phone</label><input type="tel" name="phone" placeholder="(316) 555-1234" /></div>
+          <div><label>Website</label><input name="website" placeholder="rollerking.com" /></div>
+          <div><label>Your Name *</label><input name="contactName" required placeholder="Bob Jones" /></div>
+          <div><label>Your Email *</label><input type="email" name="contactEmail" required placeholder="bob@rink.com" /></div>
         </div>
-        ${data?.user&&(hasRole(data.user,'super_admin')||hasRole(data.user,'meet_director'))?`<a class="btn2 btn-sm" href="/portal/rinks">Edit</a>`:''}
+        <div><label>Notes (surface type, parking, directions, etc.)</label><textarea name="notes" rows="3" placeholder="Smooth concrete floor, 200 car parking lot, exit 42 off I-35..."></textarea></div>
+        <div><button class="btn-orange" type="submit">Submit Rink →</button></div>
+      </form>
+    </div>`}`}));
+});
+
+app.post('/submit-rink', (req, res) => {
+  const db=loadDb();
+  const pending={
+    id:'pr'+crypto.randomBytes(6).toString('hex'),
+    name:String(req.body.name||'').trim(),
+    address:String(req.body.address||'').trim(),
+    city:String(req.body.city||'').trim(),
+    state:String(req.body.state||'').trim(),
+    zip:String(req.body.zip||'').trim(),
+    phone:String(req.body.phone||'').trim(),
+    website:String(req.body.website||'').trim(),
+    trackLength:String(req.body.trackLength||'').trim(),
+    notes:String(req.body.notes||'').trim(),
+    contactName:String(req.body.contactName||'').trim(),
+    contactEmail:String(req.body.contactEmail||'').trim(),
+    submittedAt:nowIso(), status:'pending',
+  };
+  if(!pending.name||!pending.address||!pending.city||!pending.contactName||!pending.contactEmail)
+    return res.redirect('/submit-rink');
+  if(!Array.isArray(db.pendingRinks)) db.pendingRinks=[];
+  db.pendingRinks.push(pending);
+  saveDb(db);
+  sendSms(ADMIN_PHONE, `🏟️ New rink submission!\n${pending.name}\n${pending.city}, ${pending.state}\n${pending.contactName} • ${pending.contactEmail}\nReview: speedskatemeet.com/portal/pending-rinks`);
+  res.redirect('/submit-rink?ok=1');
+});
+
+// ── Pending Rinks (super admin only) ─────────────────────────────────────────
+app.get('/portal/pending-rinks', requireRole('super_admin'), (req, res) => {
+  const pending=(req.db.pendingRinks||[]).filter(p=>p.status==='pending');
+  const approved=(req.db.pendingRinks||[]).filter(p=>p.status==='approved').slice(-10);
+  const rejected=(req.db.pendingRinks||[]).filter(p=>p.status==='rejected').slice(-10);
+
+  const pendingRows=pending.map(p=>`
+    <div class="card" style="margin-bottom:14px;border-left:4px solid var(--orange)">
+      <div class="row between" style="margin-bottom:8px">
+        <div>
+          <h2 style="margin:0">${esc(p.name)}</h2>
+          <div class="note">${esc(p.address)} • ${esc(p.city)}, ${esc(p.state)} ${esc(p.zip||'')}</div>
+        </div>
+        <span class="chip chip-orange">Pending Review</span>
+      </div>
+      <div class="grid-2" style="margin-bottom:12px">
+        <div>
+          ${p.phone?`<div class="note"><strong>Phone:</strong> ${esc(p.phone)}</div>`:''}
+          ${p.website?`<div class="note"><strong>Website:</strong> ${esc(p.website)}</div>`:''}
+          ${p.trackLength?`<div class="note"><strong>Track:</strong> ${esc(p.trackLength)}</div>`:''}
+        </div>
+        <div>
+          <div class="note"><strong>Contact:</strong> ${esc(p.contactName)}</div>
+          <div class="note">${esc(p.contactEmail)}</div>
+        </div>
+      </div>
+      ${p.notes?`<div class="note" style="margin-bottom:12px">${esc(p.notes)}</div>`:''}
+      <div class="action-row">
+        <form method="POST" action="/portal/pending-rinks/approve" style="display:inline">
+          <input type="hidden" name="id" value="${esc(p.id)}" />
+          <button class="btn-orange" type="submit">✅ Approve & Add</button>
+        </form>
+        <form method="POST" action="/portal/pending-rinks/reject" style="display:inline">
+          <input type="hidden" name="id" value="${esc(p.id)}" />
+          <input name="reason" placeholder="Reason (optional)" style="width:220px" />
+          <button class="btn-danger" type="submit">❌ Reject</button>
+        </form>
       </div>
     </div>`).join('');
-  res.send(pageShell({title:'Rinks',user:data?.user||null, bodyHtml:`
-    <div class="page-header"><h1>Rinks</h1></div>${cards}`}));
+
+  res.send(pageShell({title:'Pending Rinks',user:req.user, bodyHtml:`
+    <div class="page-header"><h1>Pending Rinks</h1><div class="sub">Review and approve rink submissions.</div></div>
+    <div class="action-row" style="margin-bottom:20px"><a class="btn2" href="/portal">← Portal</a></div>
+    ${pending.length?`<h2 style="margin-bottom:12px">⏳ Awaiting Review (${pending.length})</h2>${pendingRows}`:`<div class="card"><div class="muted">No pending rink submissions. 🎉</div></div>`}
+    ${approved.length?`<div class="spacer"></div><h2 style="margin-bottom:12px;color:var(--green)">✅ Recently Approved</h2>
+      ${approved.map(p=>`<div class="card" style="margin-bottom:8px;opacity:.7"><div class="row between"><div><strong>${esc(p.name)}</strong> — ${esc(p.city)}, ${esc(p.state)}</div><span class="chip chip-green">Approved</span></div></div>`).join('')}`:''}
+    ${rejected.length?`<div class="spacer"></div><h2 style="margin-bottom:12px;color:var(--muted)">❌ Recently Rejected</h2>
+      ${rejected.map(p=>`<div class="card" style="margin-bottom:8px;opacity:.7"><div class="row between"><div><strong>${esc(p.name)}</strong> — ${esc(p.city)}, ${esc(p.state)}</div><span class="chip">Rejected</span></div></div>`).join('')}`:''}
+  `}));
+});
+
+app.post('/portal/pending-rinks/approve', requireRole('super_admin'), (req, res) => {
+  const db=req.db;
+  const p=(db.pendingRinks||[]).find(x=>x.id===String(req.body.id||''));
+  if(!p) return res.redirect('/portal/pending-rinks');
+  p.status='approved'; p.approvedAt=nowIso();
+  if(!Array.isArray(db.rinks)) db.rinks=[];
+  db.rinks.push({
+    id:nextId(db.rinks), name:p.name, address:p.address,
+    city:p.city, state:p.state, zip:p.zip||'',
+    phone:p.phone||'', website:p.website||'',
+    trackLength:p.trackLength||'', notes:p.notes||'',
+  });
+  sanitizeRinks(db);
+  saveDb(db);
+  if(p.contactEmail) {
+    const html=emailHtmlWrap(`
+      <h2 style="color:#0F1F3D">Your Rink is Listed! 🏟️</h2>
+      <p>Hi ${esc(p.contactName)},</p>
+      <p><strong>${esc(p.name)}</strong> has been approved and is now listed in the SpeedSkateMeet rink directory!</p>
+      <p><a href="https://speedskatemeet.com/rinks" style="background:#F97316;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;display:inline-block;margin-top:8px">View on SpeedSkateMeet →</a></p>
+    `);
+    sendEmail(p.contactEmail, `Your Rink is Listed — ${p.name}`, html, `${p.name} is now listed on SpeedSkateMeet.com!`);
+  }
+  res.redirect('/portal/pending-rinks');
+});
+
+app.post('/portal/pending-rinks/reject', requireRole('super_admin'), (req, res) => {
+  const db=req.db;
+  const p=(db.pendingRinks||[]).find(x=>x.id===String(req.body.id||''));
+  if(!p) return res.redirect('/portal/pending-rinks');
+  p.status='rejected'; p.rejectedAt=nowIso(); p.rejectReason=String(req.body.reason||'').trim();
+  saveDb(db);
+  if(p.contactEmail) {
+    const reason=p.rejectReason||'It did not meet our listing requirements at this time.';
+    const html=emailHtmlWrap(`
+      <h2 style="color:#0F1F3D">Rink Submission Update</h2>
+      <p>Hi ${esc(p.contactName)},</p>
+      <p>Thank you for submitting <strong>${esc(p.name)}</strong> to SpeedSkateMeet.com.</p>
+      <p>Unfortunately we were unable to approve this listing: <em>${esc(reason)}</em></p>
+      <p>If you have questions, reply to this email.</p>
+    `);
+    sendEmail(p.contactEmail, `Rink Submission Update — ${p.name}`, html, `Update regarding your rink submission ${p.name}.`);
+  }
+  res.redirect('/portal/pending-rinks');
+});
+
+app.get('/rinks', (req, res) => {
+  const db=loadDb(); const data=getSessionUser(req);
+  // Group rinks by state
+  const sorted=[...db.rinks].sort((a,b)=>{
+    const sc=String(a.state||'').localeCompare(String(b.state||''));
+    if(sc!==0) return sc;
+    return String(a.name||'').localeCompare(String(b.name||''));
+  });
+  const byState={};
+  for(const r of sorted) {
+    const s=String(r.state||'Other').toUpperCase();
+    if(!byState[s]) byState[s]=[];
+    byState[s].push(r);
+  }
+  const stateNames={AL:'Alabama',AK:'Alaska',AZ:'Arizona',AR:'Arkansas',CA:'California',CO:'Colorado',CT:'Connecticut',DE:'Delaware',FL:'Florida',GA:'Georgia',HI:'Hawaii',ID:'Idaho',IL:'Illinois',IN:'Indiana',IA:'Iowa',KS:'Kansas',KY:'Kentucky',LA:'Louisiana',ME:'Maine',MD:'Maryland',MA:'Massachusetts',MI:'Michigan',MN:'Minnesota',MS:'Mississippi',MO:'Missouri',MT:'Montana',NE:'Nebraska',NV:'Nevada',NH:'New Hampshire',NJ:'New Jersey',NM:'New Mexico',NY:'New York',NC:'North Carolina',ND:'North Dakota',OH:'Ohio',OK:'Oklahoma',OR:'Oregon',PA:'Pennsylvania',RI:'Rhode Island',SC:'South Carolina',SD:'South Dakota',TN:'Tennessee',TX:'Texas',UT:'Utah',VT:'Vermont',VA:'Virginia',WA:'Washington',WV:'West Virginia',WI:'Wisconsin',WY:'Wyoming'};
+  const stateLinks=Object.keys(byState).map(s=>`<a href="#state-${s}" style="text-decoration:none"><span class="chip" style="cursor:pointer">${s}</span></a>`).join('');
+  const sections=Object.entries(byState).map(([state,rinks])=>`
+    <div id="state-${state}" style="margin-bottom:28px">
+      <h2 style="margin-bottom:12px;color:var(--navy);border-bottom:2px solid var(--border);padding-bottom:8px">
+        ${esc(stateNames[state]||state)} <span style="font-size:16px;color:var(--muted);font-weight:400">(${rinks.length} rink${rinks.length!==1?'s':''})</span>
+      </h2>
+      ${rinks.map(r=>`
+        <div class="card" style="margin-bottom:10px">
+          <div class="row between">
+            <div>
+              <div style="font-weight:700;font-size:16px">📍 ${esc(r.name)}</div>
+              <div class="muted" style="font-size:13px">${esc(r.address||'')} • ${esc(r.city||'')}, ${esc(r.state||'')}${r.zip?' '+esc(r.zip):''}</div>
+              <div class="note">
+                ${r.phone?esc(r.phone):''}
+                ${r.phone&&r.website?' • ':''}
+                ${r.website?`<a href="https://${esc(r.website)}" target="_blank" rel="noreferrer" style="color:var(--orange)">${esc(r.website)}</a>`:''}
+                ${r.trackLength?`<span style="margin-left:8px" class="chip">${esc(r.trackLength)}</span>`:''}
+              </div>
+            </div>
+            ${data?.user&&(hasRole(data.user,'super_admin')||hasRole(data.user,'meet_director'))?`<a class="btn2 btn-sm" href="/portal/rinks">Edit</a>`:''}
+          </div>
+        </div>`).join('')}
+    </div>`).join('');
+  res.send(pageShell({title:'Rinks', description:'Inline speed skating venues and rinks across the United States. Find a rink near you or submit your venue to the SpeedSkateMeet directory.', user:data?.user||null, bodyHtml:`
+    <div class="page-header"><h1>Rinks</h1><div class="sub">Inline speed skating venues across the country.</div></div>
+    <div class="row between" style="margin-bottom:16px">
+      <div class="row" style="flex-wrap:wrap;gap:6px">${stateLinks}</div>
+      <a class="btn2" href="/submit-rink">+ Submit a Rink</a>
+    </div>
+    ${sections||'<div class="card"><div class="muted">No rinks listed yet. Be the first to submit one!</div></div>'}`}));
 });
 
 app.get('/live', (req, res) => {
@@ -1971,7 +2163,7 @@ app.get('/admin/forgot-password', (req, res) => {
       <div class="card">
         ${sent?`<div class="good" style="margin-bottom:14px">✅ If that email is in our system, a reset link is on its way.</div><a class="btn2" href="/admin/login">Back to Login</a>`:`
         <form method="POST" action="/admin/forgot-password" class="stack">
-          <div><label>Your Email Address</label><input type="email" name="email" required placeholder="lee@speedskatemeet.com" /></div>
+          <div><label>Your Email Address</label><input type="email" name="email" required placeholder="LBird@speedskatemeet.com" /></div>
           <button class="btn" type="submit" style="width:100%">Send Reset Link</button>
           <a href="/admin/login" style="text-align:center;font-size:13px;color:var(--muted)">Back to login</a>
         </form>`}
@@ -2169,6 +2361,8 @@ app.get('/portal', requireRole('meet_director','judge','coach'), (req, res) => {
         <a class="btn2" href="/portal/rinks">Manage Rinks</a>`:''}
       ${hasRole(req.user,'coach')||hasRole(req.user,'super_admin')||hasRole(req.user,'meet_director')?`<a class="btn2" href="/portal/coach">Coach Portal</a>`:''}
       ${hasRole(req.user,'super_admin')?`<a class="btn2" href="/portal/users">Users</a>
+        <a class="btn2" href="/portal/pending-rinks" style="position:relative">Pending Rinks${req.db.pendingRinks?.filter(p=>p.status==='pending').length?`<span style="position:absolute;top:-6px;right:-6px;background:var(--red);color:#fff;border-radius:50%;width:18px;height:18px;font-size:11px;display:flex;align-items:center;justify-content:center;font-weight:700">${req.db.pendingRinks.filter(p=>p.status==='pending').length}</span>`:''}
+        </a>
         <a class="btn2" href="/portal/pending-meets" style="position:relative">Pending Meets${req.db.pendingMeets?.length?`<span style="position:absolute;top:-6px;right:-6px;background:var(--red);color:#fff;border-radius:50%;width:18px;height:18px;font-size:11px;display:flex;align-items:center;justify-content:center;font-weight:700">${req.db.pendingMeets.length}</span>`:''}
         </a>`:''}
     </div>
