@@ -2097,8 +2097,8 @@ app.get('/meet/:meetId/schedule', (req, res) => {
           <div>
             ${meet.description?'<div class="note" style="margin-bottom:8px">'+esc(meet.description)+'</div>':''}
             <div class="row">
-              ${meet.contactName?'<span class="chip">📋 '+esc(meet.contactName)+'</span>':''}
-              ${meet.contactEmail?'<a href="mailto:'+esc(meet.contactEmail)+'" class="chip">✉️ '+esc(meet.contactEmail)+'</a>':''}
+              ${meet.contactName?'<span class="chip" style="font-size:14px;padding:6px 14px">📋 '+esc(meet.contactName)+'</span>':''}
+              ${meet.contactEmail?'<a href="mailto:'+esc(meet.contactEmail)+'" class="chip" style="font-size:14px;padding:6px 14px">✉️ '+esc(meet.contactEmail)+'</a>':''}
             </div>
           </div>
           <button onclick="window.print()" class="btn2">🖨️ Print</button>
