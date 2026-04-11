@@ -390,14 +390,6 @@ function seedCCCCMeet(db) {
     {label:'Elite Junior (16 & 17) Ladies',distance:'1000m'},{label:'Elite Junior (16 & 17) Men',distance:'1000m'},
     {label:'Elite Classic (25-34) Ladies',distance:'1000m'},{label:'Elite Classic (25-34) Men',distance:'1000m'},
     {label:'Elite Veteran (45-54) Ladies',distance:'700m'},{label:'Elite Veteran (45-54) Men',distance:'700m'},
-    {type:'subheader',label:'Novice Middle Distant Races'},
-    {label:'Novice Juvenile (9 & under) Girls',distance:'300m'},{label:'Novice Juvenile (9 & under) Boys',distance:'300m'},
-    {label:'Novice Elementary (10-11) Girls',distance:'500m'},{label:'Novice Elementary (10-11) Boys',distance:'500m'},
-    {label:'Novice Freshman (12-13) Girls',distance:'500m'},{label:'Novice Freshman (12-13) Boys',distance:'500m'},
-    {label:'Novice Sophomore (14-15) Ladies',distance:'1000m'},{label:'Novice Sophomore (14-15) Men',distance:'1000m'},
-    {label:'Novice Junior (16-17) Ladies',distance:'1000m'},{label:'Novice Junior (16-17) Men',distance:'1000m'},
-    {label:'Novice Senior (18-34) Ladies',distance:'1000m'},{label:'Novice Senior (18-34) Men',distance:'1000m'},
-    {label:'Novice Master Ladies (35 and up)',distance:'700m'},{label:'Novice Master Men (35 and up)',distance:'1000m'},
   ];
   const meet = {
     id:nextId(db.meets),
