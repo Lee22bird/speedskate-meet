@@ -344,17 +344,20 @@ function seedCCCCMeet(db) {
     {label:'Elite Classic (25-34) Ladies',distance:'1500m'},{label:'Elite Classic (25-34) Men',distance:'2000m'},
     {label:'Elite Veteran (45-54) Ladies',distance:'1000m'},{label:'Elite Veteran (45-54) Men',distance:'1000m'},
     {type:'subheader',label:'Elite Short Races'},
-    {label:'Skatability Short Distance',distance:'300m'},
-    {label:'Elite Tiny Tot (5 & Under) Girls',distance:'100m'},{label:'Elite Tiny Tot (5 & Under) Boys',distance:'100m'},
-    {label:'Elite Juvenile (8&9) Girls',distance:'200m'},{label:'Elite Juvenile (8&9) Boys',distance:'200m'},
     {label:'Elite Primary (6-7) Girls',distance:'200m'},{label:'Elite Primary (6-7) Boys',distance:'200m'},
     {label:'Elite Elementary (10-11) Girls',distance:'300m'},{label:'Elite Elementary (10-11) Boys',distance:'300m'},
-    {label:'Elite Freshman (12&13) Girls',distance:'300m'},{label:'Elite Freshman (12&13) Boys',distance:'300m'},
     {label:'Elite Sophomore (14-15) Ladies',distance:'500m'},{label:'Elite Sophomore (14-15) Men',distance:'500m'},
-    {label:'Elite Junior (16&17) Ladies',distance:'500m'},{label:'Elite Junior (16&17) Men',distance:'500m'},
     {label:'Elite Senior Ladies (18-24)',distance:'500m'},{label:'Elite Senior Men (18-24)',distance:'500m'},
     {label:'Elite Master Women (35-44)',distance:'500m'},{label:'Elite Master Men (35-44)',distance:'500m'},
     {label:'Elite Esquire Ladies (55+)',distance:'500m'},{label:'Elite Esquire Men (55+)',distance:'500m'},
+    {type:'subheader',label:'Elite Short Races Continued'},
+    {label:'Skatability Short Distance',distance:'100m'},
+    {label:'Elite Tiny Tot (5 & Under) Girls',distance:'100m'},{label:'Elite Tiny Tot (5 & Under) Boys',distance:'100m'},
+    {label:'Elite Juvenile (8&9) Girls',distance:'200m'},{label:'Elite Juvenile (8&9) Boys',distance:'200m'},
+    {label:'Elite Freshman (12&13) Girls',distance:'300m'},{label:'Elite Freshman (12&13) Boys',distance:'300m'},
+    {label:'Elite Junior (16 & 17) Ladies',distance:'500m'},{label:'Elite Junior (16 & 17) Men',distance:'500m'},
+    {label:'Elite Classic (25-34) Ladies',distance:'500m'},{label:'Elite Classic (25-34) Men',distance:'500m'},
+    {label:'Elite Veteran (45-54) Ladies',distance:'500m'},{label:'Elite Veteran (45-54) Men',distance:'500m'},
     {type:'subheader',label:'Elite Middle Races'},
     {label:'Skatability Short Distance',distance:'200m'},
     {label:'Elite Tiny Tot (5 & Under) Girls',distance:'200m'},{label:'Elite Tiny Tot (5 & Under) Boys',distance:'200m'},
@@ -2899,7 +2902,7 @@ app.post('/portal/create-meet', requireRole('meet_director'), (req, res) => {
 
 app.get('/portal/meet/:meetId/delete-confirm', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
-  if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
+  if(!meet||(!(canEditMeet(req.user,meet))&&!hasRole(req.user,'super_admin'))) return res.redirect('/portal');
   res.send(pageShell({title:'Delete Meet',user:req.user, bodyHtml:`
     <div style="max-width:500px;margin:40px auto">
       <div class="page-header"><h1>Delete Meet</h1></div>
@@ -2917,7 +2920,7 @@ app.get('/portal/meet/:meetId/delete-confirm', requireRole('meet_director'), (re
 
 app.post('/portal/meet/:meetId/delete', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
-  if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
+  if(!meet||(!(canEditMeet(req.user,meet))&&!hasRole(req.user,'super_admin'))) return res.redirect('/portal');
   req.db.meets=req.db.meets.filter(m=>Number(m.id)!==Number(req.params.meetId));
   saveDb(req.db); res.redirect('/portal');
 });
