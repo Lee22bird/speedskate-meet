@@ -2148,22 +2148,48 @@ app.get('/meets', (req, res) => {
   const db=loadDb(); const data=getSessionUser(req);
   const cards=(db.meets||[]).filter(m=>m.isPublic).map(m=>{
     const rink=db.rinks.find(r=>Number(r.id)===Number(m.rinkId));
+
+    // Lite meet card
+    if(m.isLiteMeet) {
+      const hasSchedule=!!(m.staticSchedule&&m.staticSchedule.length);
+      return `
+        <div class="card" style="margin-bottom:14px;border-left:4px solid var(--orange)">
+          <div class="row between" style="margin-bottom:6px">
+            <div>
+              <div class="row" style="gap:6px;margin-bottom:4px">
+                <h2 style="margin:0">${esc(m.meetName)}</h2>
+                <span class="chip" style="font-size:11px">📋 Basic Listing</span>
+              </div>
+              <div class="muted">${esc(m.city||'')}${m.state?', '+esc(m.state):''} • ${esc(m.date||'Date TBD')}${m.startTime?' • '+esc(m.startTime):''}</div>
+              ${m.description?`<div class="note" style="margin-top:4px">${esc(m.description)}</div>`:''}
+            </div>
+          </div>
+          <div class="hr"></div>
+          <div class="action-row">
+            ${hasSchedule?`<a class="btn-orange" href="/meet/${m.id}/schedule">📋 View Schedule</a>`:''}
+            ${m.registrationUrl?`<a class="btn2" href="${esc(m.registrationUrl)}" target="_blank">Register →</a>`:''}
+            ${m.contactEmail?`<a class="btn2" href="mailto:${esc(m.contactEmail)}">Contact</a>`:''}
+          </div>
+        </div>`;
+    }
+
+    // Full SSM meet card
     return `
       <div class="card" style="margin-bottom:14px">
-        <div class="row between">
+        <div class="row between" style="margin-bottom:6px">
           <div>
             <h2 style="margin:0">${esc(m.meetName)}</h2>
             <div class="muted">${esc(m.date||'Date TBD')}${m.startTime?` • ${esc(m.startTime)}`:''}</div>
             ${rink?`<div class="note">${esc(rink.name)} • ${esc(rink.city)}, ${esc(rink.state)}</div>`:''}
           </div>
           <div class="row">
-            <span class="chip">${(m.races||[]).length} Races</span>
             <span class="chip chip-green">${esc(m.status||'draft')}</span>
           </div>
         </div>
         <div class="hr"></div>
         <div class="action-row">
           <a class="btn-orange" href="/meet/${m.id}/register">Register</a>
+          <a class="btn2" href="/meet/${m.id}/schedule">📋 Schedule</a>
           <a class="btn2" href="/meet/${m.id}/live">Live</a>
           <a class="btn2" href="/meet/${m.id}/results">Results</a>
         </div>
