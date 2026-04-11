@@ -296,6 +296,107 @@ function baseGroups() {
   ].map(g=>({...g,divisions:makeDivisionsTemplate()}));
 }
 
+
+// ── Seed CCCC Demo Meet ───────────────────────────────────────────────────────
+function seedCCCCMeet(db) {
+  if((db.meets||[]).find(m=>m.meetName==='Capital City Classic Challenge')) return;
+  const schedule = [
+    {type:'divider',label:'SATURDAY APRIL 11 — Relays & Opens 4:30-6:30pm'},
+    {type:'subheader',label:'Opens'},
+    {label:'Juvenile (9 & under) Girls',distance:'1500m'},{label:'Juvenile (9 & under) Boys',distance:'1500m'},
+    {label:'Freshmen (10-13) Girls',distance:'2000m'},{label:'Freshmen (10-13) Boys',distance:'2000m'},
+    {label:'Senior Ladies (18-34)',distance:'3000m'},{label:'Master Ladies (35 & Up)',distance:'1500m'},
+    {label:'Master Men (35 & Up)',distance:'2000m'},{label:'Senior Men (18-34)',distance:'5000m'},
+    {type:'subheader',label:'Relays — 3 Person'},
+    {label:'Juvenile (9 & Under)',distance:'900m - 1 Lap 3 Times each'},{label:'Freshmen (10-13)',distance:'900m - 1 Lap 3 Times each'},
+    {label:'Senior (14-34)',distance:'900m - 1 Lap 3 Times each'},{label:'Master (35 and up)',distance:'900m - 1 Lap 3 Times each'},
+    {type:'subheader',label:'Relays — 2 Person'},
+    {label:'Juvenile (9 & Under)',distance:'1200m - 2 Laps 3 Times each'},{label:'Freshmen (10-13)',distance:'1200m - 2 Laps 3 Times each'},
+    {label:'Senior (14-34)',distance:'1200m - 2 Laps 3 Times each'},{label:'Master (35 and up)',distance:'1200m - 2 Laps 3 Times each'},
+    {type:'subheader',label:'Relays — 4 Person'},
+    {label:'Juvenile (9 & Under)',distance:'1200m - 3 Laps 1 Time each'},{label:'Freshmen (10-13)',distance:'2000m - 5 Laps 1 Time each'},
+    {label:'Senior (14-34)',distance:'2000m - 5 Laps 1 Time each'},{label:'Master (35 and up)',distance:'2000m - 5 Laps 1 Time each'},
+    {type:'divider',label:'SUNDAY APRIL 12 — Doors 5am • Warmups 5:30am • Quads 6am'},
+    {type:'subheader',label:'Quad Short Races'},
+    {label:'Juvenile 9 & Under Girls',distance:'200m'},{label:'Juvenile 9 & Under Boys',distance:'200m'},
+    {label:'Freshmen 10-13 Girls',distance:'300m'},{label:'Freshmen 10-13 Boys',distance:'300m'},
+    {label:'Senior 14-34 Ladies',distance:'500m'},{label:'Senior 14-34 Men',distance:'500m'},
+    {label:'Master 34 & Up Ladies',distance:'500m'},{label:'Master 34 & Up Men',distance:'500m'},
+    {type:'subheader',label:'Quad Middle Races'},
+    {label:'Juvenile 9 & Under Girls',distance:'500m'},{label:'Juvenile 9 & Under Boys',distance:'500m'},
+    {label:'Freshmen 10-13 Girls',distance:'500m'},{label:'Freshmen 10-13 Boys',distance:'500m'},
+    {label:'Senior 14-34 Ladies',distance:'1000m'},{label:'Senior 14-34 Men',distance:'1000m'},
+    {label:'Master 34 & Up Ladies',distance:'700m'},{label:'Master 34 & Up Men',distance:'700m'},
+    {type:'subheader',label:'Elite Long Races (Warm Up)'},
+    {label:'Elite Primary (6-7) Girls',distance:'400m'},{label:'Elite Primary (6-7) Boys',distance:'400m'},
+    {label:'Elite Elementary (10-11) Girls',distance:'700m'},{label:'Elite Elementary (10-11) Boys',distance:'700m'},
+    {label:'Elite Sophomore (14-15) Ladies',distance:'1500m'},{label:'Elite Sophomore (14-15) Men',distance:'1500m'},
+    {label:'Elite Senior Ladies (18-24)',distance:'2000m'},{label:'Elite Senior Men (18-24)',distance:'3000m'},
+    {label:'Elite Master Women (35-44)',distance:'1000m'},{label:'Elite Master Men (35-44)',distance:'1500m'},
+    {label:'Elite Esquire Ladies',distance:'1000m'},{label:'Elite Esquire Men',distance:'1000m'},
+    {type:'subheader',label:'Elite Short Races'},
+    {label:'Skatability Short Distance',distance:'300m'},
+    {label:'Elite Tiny Tot (5 & Under) Girls',distance:'100m'},{label:'Elite Tiny Tot (5 & Under) Boys',distance:'100m'},
+    {label:'Elite Juvenile (8&9) Girls',distance:'200m'},{label:'Elite Juvenile (8&9) Boys',distance:'200m'},
+    {label:'Elite Primary (6-7) Girls',distance:'200m'},{label:'Elite Primary (6-7) Boys',distance:'200m'},
+    {label:'Elite Elementary (10-11) Girls',distance:'300m'},{label:'Elite Elementary (10-11) Boys',distance:'300m'},
+    {label:'Elite Freshman (12&13) Girls',distance:'300m'},{label:'Elite Freshman (12&13) Boys',distance:'300m'},
+    {label:'Elite Sophomore (14-15) Ladies',distance:'500m'},{label:'Elite Sophomore (14-15) Men',distance:'500m'},
+    {label:'Elite Junior (16&17) Ladies',distance:'500m'},{label:'Elite Junior (16&17) Men',distance:'500m'},
+    {label:'Elite Senior Ladies (18-24)',distance:'500m'},{label:'Elite Senior Men (18-24)',distance:'500m'},
+    {label:'Elite Master Women (35-44)',distance:'500m'},{label:'Elite Master Men (35-44)',distance:'500m'},
+    {label:'Elite Esquire Ladies (55+)',distance:'500m'},{label:'Elite Esquire Men (55+)',distance:'500m'},
+    {type:'subheader',label:'Elite Middle Races'},
+    {label:'Skatability Short Distance',distance:'200m'},
+    {label:'Elite Tiny Tot (5 & Under) Girls',distance:'200m'},{label:'Elite Tiny Tot (5 & Under) Boys',distance:'200m'},
+    {label:'Elite Juvenile (8&9) Girls',distance:'300m'},{label:'Elite Juvenile (8&9) Boys',distance:'300m'},
+    {label:'Elite Primary (6-7) Girls',distance:'300m'},{label:'Elite Primary (6-7) Boys',distance:'300m'},
+    {label:'Elite Elementary (10-11) Girls',distance:'500m'},{label:'Elite Elementary (10-11) Boys',distance:'500m'},
+    {label:'Elite Freshman (12&13) Girls',distance:'500m'},{label:'Elite Freshman (12&13) Boys',distance:'500m'},
+    {label:'Elite Sophomore (14-15) Ladies',distance:'1000m'},{label:'Elite Sophomore (14-15) Men',distance:'1000m'},
+    {label:'Elite Senior Ladies (18-24)',distance:'1000m'},{label:'Elite Senior Men (18-24)',distance:'1500m'},
+    {label:'Elite Master Women (35-44)',distance:'700m'},{label:'Elite Master Men (35-44)',distance:'1000m'},
+    {label:'Elite Classic (25-34) Ladies',distance:'1000m'},{label:'Elite Classic (25-34) Men',distance:'1000m'},
+    {label:'Elite Veteran (45-54) Ladies',distance:'700m'},{label:'Elite Veteran (45-54) Men',distance:'700m'},
+    {label:'Elite Esquire Ladies (55+)',distance:'700m'},{label:'Elite Esquire Men (55+)',distance:'700m'},
+    {type:'subheader',label:'Novice Short Races'},
+    {label:'Novice Juvenile (9 & under) Girls',distance:'200m'},{label:'Novice Juvenile (9 & under) Boys',distance:'200m'},
+    {label:'Novice Elementary (10-11) Girls',distance:'300m'},{label:'Novice Elementary (10-11) Boys',distance:'300m'},
+    {label:'Novice Freshman (12-13) Girls',distance:'300m'},{label:'Novice Freshman (12-13) Boys',distance:'300m'},
+    {label:'Novice Sophomore (14-15) Ladies',distance:'500m'},{label:'Novice Sophomore (14-15) Men',distance:'500m'},
+    {label:'Novice Junior (16-17) Ladies',distance:'500m'},{label:'Novice Junior (16-17) Men',distance:'500m'},
+    {label:'Novice Senior (18-34) Ladies',distance:'500m'},{label:'Novice Senior (18-34) Men',distance:'500m'},
+    {label:'Novice Master Ladies (35 and up)',distance:'500m'},{label:'Novice Master Men (35 and up)',distance:'500m'},
+    {type:'subheader',label:'Novice Middle Races'},
+    {label:'Novice Juvenile (9 & under) Girls',distance:'300m'},{label:'Novice Juvenile (9 & under) Boys',distance:'300m'},
+    {label:'Novice Elementary (10-11) Girls',distance:'500m'},{label:'Novice Elementary (10-11) Boys',distance:'500m'},
+    {label:'Novice Freshman (12-13) Girls',distance:'500m'},{label:'Novice Freshman (12-13) Boys',distance:'500m'},
+    {label:'Novice Sophomore (14-15) Ladies',distance:'1000m'},{label:'Novice Sophomore (14-15) Men',distance:'1000m'},
+    {label:'Novice Junior (16-17) Ladies',distance:'1000m'},{label:'Novice Junior (16-17) Men',distance:'1000m'},
+    {label:'Novice Senior (18-34) Ladies',distance:'1000m'},{label:'Novice Senior (18-34) Men',distance:'1000m'},
+    {label:'Novice Master Ladies (35 and up)',distance:'700m'},{label:'Novice Master Men (35 and up)',distance:'1000m'},
+  ];
+  const meet = {
+    id:nextId(db.meets),
+    meetName:'Capital City Classic Challenge',
+    date:'2026-04-12',
+    startTime:'5:00 AM',
+    city:'Jefferson City', state:'MO',
+    rinkId:1,
+    description:'Hosted by Team Velocity at Sk8 Zone. Saturday April 11: Relays & Opens 4:30-6:30pm (free skate after!). Sunday April 12: Doors 5am, Warmups 5:30am, Quads 6am. Ross Creveling announcing. MSSL meet — next season schedule decided here!',
+    registrationUrl:'',
+    contactName:'Team Velocity',
+    contactEmail:'',
+    isPublic:true, status:'published', isLiteMeet:true, isDemoMeet:true,
+    staticSchedule:schedule,
+    createdByUserId:1, createdAt:new Date().toISOString(), updatedAt:new Date().toISOString(),
+    races:[], blocks:[], registrations:[], groups:[], textAlerts:[],
+  };
+  db.meets.push(meet);
+  console.log('[SSM] CCCC demo meet seeded, id:', meet.id);
+}
+
+
 function defaultMeet(ownerUserId) {
   return {
     id:null, createdByUserId:ownerUserId, createdAt:nowIso(), updatedAt:nowIso(),
@@ -1946,6 +2047,101 @@ app.get('/help', (req, res) => {
     </div>
   `}));
 });
+
+
+// ── Public Meet Schedule Page ─────────────────────────────────────────────────
+app.get('/meet/:meetId/schedule', (req, res) => {
+  const db=loadDb(); const meet=getMeetOr404(db,req.params.meetId); const data=getSessionUser(req);
+  if(!meet||!meet.isPublic) return res.redirect('/meets');
+  
+  // For lite meets with a static schedule
+  if(meet.isLiteMeet && meet.staticSchedule) {
+    const sections=meet.staticSchedule;
+    const printedAt=new Date().toLocaleDateString('en-US',{month:'numeric',day:'numeric',year:'numeric'});
+    let raceNo=1;
+    const rows=sections.map(section=>{
+      if(section.type==='divider') return '<tr><td colspan="3" style="background:#0F1F3D;color:#fff;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.08em;padding:8px 12px;border:none;">'+esc(section.label)+'</td></tr>';
+      if(section.type==='subheader') return '<tr><td colspan="3" style="background:#f1f5f9;color:#475569;font-weight:700;font-size:11px;padding:6px 12px;border:none;">'+esc(section.label)+'</td></tr>';
+      const num = raceNo++;
+      return '<tr><td style="width:40px;font-weight:700;color:#F97316;font-size:14px;padding:6px 10px;">'+num+'</td><td style="padding:6px 10px;font-weight:600;">'+esc(section.label)+'</td><td style="padding:6px 10px;color:#64748b;">'+esc(section.distance||'')+'</td></tr>';
+    }).join('');
+
+    return res.send(pageShell({title:meet.meetName+' — Schedule', description:'Full race schedule for '+meet.meetName, user:data?.user||null, bodyHtml:`
+      <div class="page-header">
+        <h1>${esc(meet.meetName)}</h1>
+        <div class="sub">${esc(meet.city||'')}, ${esc(meet.state||'')} • ${esc(meet.date||'')}${meet.startTime?' • '+esc(meet.startTime):''}</div>
+      </div>
+      <div class="live-tabs">
+        <a class="live-tab" href="/meets">← Find a Meet</a>
+        <a class="live-tab active" href="/meet/${meet.id}/schedule">Race Schedule</a>
+        ${meet.registrationUrl?'<a class="live-tab" href="'+esc(meet.registrationUrl)+'" target="_blank">Register →</a>':''}
+      </div>
+      <div class="card" style="margin-bottom:16px">
+        <div class="row between center">
+          <div>
+            ${meet.description?'<div class="note" style="margin-bottom:8px">'+esc(meet.description)+'</div>':''}
+            <div class="row">
+              ${meet.contactName?'<span class="chip">📋 '+esc(meet.contactName)+'</span>':''}
+              ${meet.contactEmail?'<a href="mailto:'+esc(meet.contactEmail)+'" class="chip">✉️ '+esc(meet.contactEmail)+'</a>':''}
+            </div>
+          </div>
+          <button onclick="window.print()" class="btn2">🖨️ Print</button>
+        </div>
+      </div>
+      <div class="card">
+        <table style="width:100%;border-collapse:collapse;">
+          ${rows}
+        </table>
+      </div>
+      <div class="note" style="margin-top:12px;text-align:center">Printed ${printedAt} • speedskatemeet.com</div>
+      <style>
+        @media print {
+          .nav-bar,.live-tabs,.btn2,.page-header .sub { display:none!important; }
+          .card { box-shadow:none!important; border:none!important; }
+          body { padding:0!important; }
+        }
+      </style>
+    `}));
+  }
+
+  // For full SSM meets — generate from blocks
+  const breakTypes=['break','lunch','awards','practice'];
+  const breakIcons={break:'☕ BREAK',lunch:'🍽️ LUNCH',awards:'🏆 AWARDS',practice:'⛸️ PRACTICE'};
+  let raceNo=1;
+  const rows=(meet.blocks||[]).map(block=>{
+    const isBreak=breakTypes.includes(block.type||'');
+    if(isBreak) return '<tr><td colspan="3" style="background:#f1f5f9;color:#475569;font-weight:700;font-size:12px;padding:8px;border:none;text-align:center;">'+( breakIcons[block.type]||esc(block.name))+'</td></tr>';
+    const blockHeader='<tr><td colspan="3" style="background:#0F1F3D;color:#fff;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.08em;padding:8px 12px;border:none;">'+esc(block.name)+(block.day?' • '+esc(block.day):'')+'</td></tr>';
+    const raceRows=(block.raceIds||[]).map(rid=>{
+      const race=(meet.races||[]).find(r=>r.id===rid); if(!race) return '';
+      const tag=race.isRelayRace?'🔄 ':race.isOpenRace?'🏁 ':race.isQuadRace?'🛼 ':race.isTimeTrial?'⏱ ':'';
+      return '<tr><td style="width:40px;font-weight:700;color:#F97316;font-size:14px;padding:6px 10px;">'+raceNo+++'</td><td style="padding:6px 10px;font-weight:600;">'+tag+esc(race.groupLabel)+'</td><td style="padding:6px 10px;color:#64748b;">'+esc(race.distanceLabel)+' • '+esc(cap(race.division))+'</td></tr>';
+    }).join('');
+    return blockHeader+raceRows;
+  }).join('');
+
+  res.send(pageShell({title:meet.meetName+' — Schedule', description:'Full race schedule for '+meet.meetName, user:data?.user||null, bodyHtml:`
+    <div class="page-header">
+      <h1>${esc(meet.meetName)}</h1>
+      <div class="sub">${esc(meet.date||'')}${meet.startTime?' • '+esc(meet.startTime):''}</div>
+    </div>
+    <div class="live-tabs">
+      <a class="live-tab" href="/meet/${meet.id}/live">Live Board</a>
+      <a class="live-tab active" href="/meet/${meet.id}/schedule">Schedule</a>
+      <a class="live-tab" href="/meet/${meet.id}/results">Results</a>
+      <a class="live-tab" href="/meet/${meet.id}/alerts">📲 Alerts</a>
+    </div>
+    <div class="card">
+      <div class="row between" style="margin-bottom:12px">
+        <div style="font-weight:700">${(meet.blocks||[]).filter(b=>!['break','lunch','awards','practice'].includes(b.type||'')).length} Blocks • ${(meet.races||[]).length} Races</div>
+        <button onclick="window.print()" class="btn2">🖨️ Print</button>
+      </div>
+      <table style="width:100%;border-collapse:collapse;">${rows||'<tr><td class="muted">Schedule not yet posted.</td></tr>'}</table>
+    </div>
+    <style>@media print{.nav-bar,.live-tabs,.btn2{display:none!important;}.card{box-shadow:none!important;}}</style>
+  `}));
+});
+
 
 app.get('/meets', (req, res) => {
   const db=loadDb(); const data=getSessionUser(req);
