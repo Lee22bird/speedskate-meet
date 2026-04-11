@@ -299,9 +299,8 @@ function baseGroups() {
 
 // ── Seed CCCC Demo Meet ───────────────────────────────────────────────────────
 function seedCCCCMeet(db) {
-  const existing=(db.meets||[]).find(m=>m.meetName==='Capital City Classic Challenge');
-  if(existing&&(existing.staticSchedule||[]).length>100) return;
-  if(existing) db.meets=db.meets.filter(m=>m.meetName!=='Capital City Classic Challenge');
+  // Always rebuild CCCC to pick up schedule changes
+  db.meets=db.meets.filter(m=>m.meetName!=='Capital City Classic Challenge');
   const schedule = [
     {type:'divider',label:'SATURDAY APRIL 11 — Relays & Opens 4:30-6:30pm'},
     {type:'subheader',label:'Opens'},
