@@ -551,6 +551,7 @@ function loadDb() {
   const fallbackOwnerId=(db.users[0]&&db.users[0].id)||1;
   db.meets.forEach(m=>migrateMeet(m,fallbackOwnerId));
   db.sessions=db.sessions.filter(s=>s.expiresAt&&new Date(s.expiresAt).getTime()>Date.now());
+  seedCCCCMeet(db);
   db.version=19; db.updatedAt=nowIso(); return db;
 }
 
