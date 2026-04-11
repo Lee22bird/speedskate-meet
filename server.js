@@ -2095,7 +2095,7 @@ app.get('/meet/:meetId/schedule', (req, res) => {
       <div class="card" style="margin-bottom:16px">
         <div class="row between center">
           <div>
-            ${meet.description?'<div class="note" style="margin-bottom:8px">'+esc(meet.description)+'</div>':''}
+            ${meet.description?'<div style="font-size:15px;line-height:1.7;color:var(--text);margin-bottom:14px">'+esc(meet.description)+'</div>':''}
             <div class="row">
               ${meet.contactName?'<span class="chip" style="font-size:14px;padding:6px 14px">📋 '+esc(meet.contactName)+'</span>':''}
               ${meet.contactEmail?'<a href="mailto:'+esc(meet.contactEmail)+'" class="chip" style="font-size:14px;padding:6px 14px">✉️ '+esc(meet.contactEmail)+'</a>':''}
