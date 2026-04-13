@@ -2903,9 +2903,9 @@ app.post('/portal/create-meet', requireRole('meet_director'), (req, res) => {
   req.db.meets.push(meet); saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/builder`);
 });
 
-app.get('/portal/meet/:meetId/delete-confirm', requireRole('meet_director'), (req, res) => {
+app.get('/portal/meet/:meetId/delete-confirm', requireRole('meet_director','super_admin'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
-  if(!meet||(!(canEditMeet(req.user,meet))&&!hasRole(req.user,'super_admin'))) return res.redirect('/portal');
+  if(!meet) return res.redirect('/portal');
   res.send(pageShell({title:'Delete Meet',user:req.user, bodyHtml:`
     <div style="max-width:500px;margin:40px auto">
       <div class="page-header"><h1>Delete Meet</h1></div>
@@ -2921,9 +2921,9 @@ app.get('/portal/meet/:meetId/delete-confirm', requireRole('meet_director'), (re
     </div>`}));
 });
 
-app.post('/portal/meet/:meetId/delete', requireRole('meet_director'), (req, res) => {
+app.post('/portal/meet/:meetId/delete', requireRole('meet_director','super_admin'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
-  if(!meet||(!(canEditMeet(req.user,meet))&&!hasRole(req.user,'super_admin'))) return res.redirect('/portal');
+  if(!meet) return res.redirect('/portal');
   req.db.meets=req.db.meets.filter(m=>Number(m.id)!==Number(req.params.meetId));
   saveDb(req.db); res.redirect('/portal');
 });
