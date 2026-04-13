@@ -638,14 +638,65 @@ function findAgeGroup(groups,age,genderGuess) {
   return candidates.find(g=>g.gender===normalizedGender)||candidates[0];
 }
 
-function findChallengeUpGroup(groups,currentGroupId) {
-  const idx=groups.findIndex(g=>String(g.id)===String(currentGroupId));
-  if(idx<0) return null; return groups[idx+1]||null;
+// USARS Challenge Up ladder — maps group ID to the next group up
+// Senior is the ceiling — no challenge up from senior
+// Adult 25+ can challenge DOWN to senior (handled separately)
+const CHALLENGE_UP_LADDER = {
+  'tiny_tot_girls':  'primary_girls',
+  'tiny_tot_boys':   'primary_boys',
+  'primary_girls':   'juvenile_girls',
+  'primary_boys':    'juvenile_boys',
+  'juvenile_girls':  'elementary_girls',
+  'juvenile_boys':   'elementary_boys',
+  'elementary_girls':'freshman_girls',
+  'elementary_boys': 'freshman_boys',
+  'freshman_girls':  'sophomore_girls',
+  'freshman_boys':   'sophomore_boys',
+  'sophomore_girls': 'junior_women',
+  'sophomore_boys':  'junior_men',
+  'junior_women':    'senior_women',
+  'junior_men':      'senior_men',
+  // Senior = ceiling, no challenge up
+  // Adult 25+ can challenge DOWN to senior
+};
+
+const CHALLENGE_DOWN_TO_SENIOR = {
+  'classic_women':'senior_women','classic_men':'senior_men',
+  'grand_classic_women':'senior_women','grand_classic_men':'senior_men',
+  'masters_women':'senior_women','masters_men':'senior_men',
+  'grand_masters_women':'senior_women','grand_masters_men':'senior_men',
+  'veteran_women':'senior_women','veteran_men':'senior_men',
+  'grand_veteran_women':'senior_women','grand_veteran_men':'senior_men',
+  'esquire_women':'senior_women','esquire_men':'senior_men',
+  'grand_esquire_women':'senior_women','grand_esquire_men':'senior_men',
+  'premier_women':'senior_women','premier_men':'senior_men',
+};
+
+function canChallengeUp(groupId) {
+  return !!CHALLENGE_UP_LADDER[String(groupId||'')];
 }
 
-function challengeAdjustedGroup(meet,baseGroup,challengeUp) {
-  if(!baseGroup) return null; if(!challengeUp) return baseGroup;
-  return findChallengeUpGroup(meet.groups||[],baseGroup.id)||baseGroup;
+function canChallengeDown(groupId) {
+  return !!CHALLENGE_DOWN_TO_SENIOR[String(groupId||'')];
+}
+
+function findChallengeUpGroup(groups,currentGroupId) {
+  const targetId = CHALLENGE_UP_LADDER[String(currentGroupId||'')];
+  if(!targetId) return null;
+  return groups.find(g=>String(g.id)===targetId)||null;
+}
+
+function findChallengeDownGroup(groups,currentGroupId) {
+  const targetId = CHALLENGE_DOWN_TO_SENIOR[String(currentGroupId||'')];
+  if(!targetId) return null;
+  return groups.find(g=>String(g.id)===targetId)||null;
+}
+
+function challengeAdjustedGroup(meet,baseGroup,challengeUp,challengeDown) {
+  if(!baseGroup) return null;
+  if(challengeDown) return findChallengeDownGroup(meet.groups||[],baseGroup.id)||baseGroup;
+  if(challengeUp) return findChallengeUpGroup(meet.groups||[],baseGroup.id)||baseGroup;
+  return baseGroup;
 }
 
 function divisionEnabledForRegistration(reg,division) { return !!reg.options?.[division]; }
@@ -3544,15 +3595,40 @@ app.get('/meet/:meetId/register', (req, res) => {
             <div><label>Sponsor (optional)</label><input name="sponsor" placeholder="Bones Bearings" /></div>
           </div>
           <datalist id="teams-reg">${TEAM_LIST.map(t=>`<option value="${esc(t)}"></option>`).join('')}</datalist>
-          <div class="toggle-group">
-            <div class="toggle-row"><div><div class="toggle-row-label">Challenge Up</div></div>${toggleSwitch('challengeUp',false)}</div>
-            <div class="toggle-row"><div><div class="toggle-row-label">Novice</div></div>${toggleSwitch('novice',false)}</div>
+          <div class="toggle-group" id="regToggles">
+            ${canChallengeUp(baseGroup?.id)?`
+            <div class="toggle-row"><div><div class="toggle-row-label">Challenge Up <span class="note" style="font-size:11px">(races in ${findChallengeUpGroup(meet.groups,baseGroup?.id)?.label||'next division'} Elite)</span></div><div class="toggle-row-desc">Add-on: races their own Elite + next age group Elite. Novice not allowed.</div></div>${toggleSwitch('challengeUp',false)}</div>`:''}
+            ${canChallengeDown(baseGroup?.id)?`
+            <div class="toggle-row"><div><div class="toggle-row-label">Challenge Down to Senior <span class="note" style="font-size:11px">(Senior Elite)</span></div><div class="toggle-row-desc">Add-on: races their own class + Senior Elite.</div></div>${toggleSwitch('challengeDown',false)}</div>`:''}
+            <div class="toggle-row" id="noviceRow"><div><div class="toggle-row-label">Novice</div></div>${toggleSwitch('novice',false)}</div>
             <div class="toggle-row"><div><div class="toggle-row-label">Elite</div></div>${toggleSwitch('elite',false)}</div>
             <div class="toggle-row"><div><div class="toggle-row-label">Open</div></div>${toggleSwitch('open',false)}</div>
             ${(meet.quadGroups||[]).some(g=>g.enabled)?`<div class="toggle-row"><div><div class="toggle-row-label">Quad</div></div>${toggleSwitch('quad',false)}</div>`:''}
             ${meet.timeTrialsEnabled?`<div class="toggle-row"><div><div class="toggle-row-label">Time Trials</div></div>${toggleSwitch('timeTrials',false)}</div>`:''}
             ${meet.relayEnabled?`<div class="toggle-row"><div><div class="toggle-row-label">Relays</div></div>${toggleSwitch('relays',false)}</div>`:''}
           </div>
+          <script>
+            // Challenge Up — auto-deselect Novice, force Elite on
+            var cuToggle = document.querySelector('input[name="challengeUp"]');
+            var cdToggle = document.querySelector('input[name="challengeDown"]');
+            var noviceToggle = document.querySelector('input[name="novice"]');
+            var eliteToggle = document.querySelector('input[name="elite"]');
+            var noviceRow = document.getElementById('noviceRow');
+            function onChallengeChange() {
+              var cu = cuToggle && cuToggle.checked;
+              var cd = cdToggle && cdToggle.checked;
+              if(cu || cd) {
+                // Force Elite on, Novice off and hide it
+                if(noviceToggle) { noviceToggle.checked=false; if(noviceToggle.nextElementSibling) noviceToggle.nextElementSibling.classList.remove('on'); }
+                if(eliteToggle) { eliteToggle.checked=true; if(eliteToggle.nextElementSibling) eliteToggle.nextElementSibling.classList.add('on'); }
+                if(noviceRow) noviceRow.style.display='none';
+              } else {
+                if(noviceRow) noviceRow.style.display='';
+              }
+            }
+            if(cuToggle) cuToggle.addEventListener('change', onChallengeChange);
+            if(cdToggle) cdToggle.addEventListener('change', onChallengeChange);
+          </script>
           ${costWidget}
           <div><button class="btn-orange" type="submit">Register Skater</button></div>
         </form>`}
@@ -3566,10 +3642,14 @@ app.post('/meet/:meetId/register', (req, res) => {
   const birthdate=String(req.body.birthdate||'').trim();
   const compAge=usarsAge(birthdate,meet.date)||Number(req.body.age||0);
   const baseGroup=findAgeGroup(meet.groups,compAge,gender);
-  const finalGroup=challengeAdjustedGroup(meet,baseGroup,!!req.body.challengeUp);
+  const isChallengeUp=!!req.body.challengeUp;
+  const isChallengeDown=!!req.body.challengeDown;
+  const finalGroup=challengeAdjustedGroup(meet,baseGroup,isChallengeUp,isChallengeDown);
   const meetNumber=(meet.registrations||[]).reduce((max,r)=>Math.max(max,Number(r.meetNumber)||0),0)+1;
   const regEmail=String(req.body.email||'').trim();
-  const regOpts={challengeUp:!!req.body.challengeUp,novice:!!req.body.novice,elite:!!req.body.elite,open:!!req.body.open,quad:!!req.body.quad,timeTrials:!!req.body.timeTrials,relays:!!req.body.relays};
+  // Challenge Up/Down forces Elite, strips Novice
+  const forcedElite = isChallengeUp||isChallengeDown;
+  const regOpts={challengeUp:isChallengeUp,challengeDown:isChallengeDown,novice:forcedElite?false:!!req.body.novice,elite:forcedElite?true:!!req.body.elite,open:!!req.body.open,quad:!!req.body.quad,timeTrials:!!req.body.timeTrials,relays:!!req.body.relays};
   const totalCost=calcRegistrationCost(meet,regOpts);
   meet.registrations.push({
     id:nextId(meet.registrations),createdAt:nowIso(),
@@ -3582,6 +3662,22 @@ app.post('/meet/:meetId/register', (req, res) => {
     paid:false,checkedIn:false,totalCost,
     options:regOpts,
   });
+  // If challenging up or down, ALSO register them in their base group Elite
+  if((isChallengeUp||isChallengeDown) && baseGroup && finalGroup && baseGroup.id !== finalGroup.id) {
+    const baseOpts={...regOpts,challengeUp:false,challengeDown:false};
+    meet.registrations.push({
+      id:nextId(meet.registrations),createdAt:nowIso(),
+      name:String(req.body.name||'').trim(),birthdate,age:compAge,gender,email:regEmail,
+      team:String(req.body.team||'Midwest Racing').trim()||'Midwest Racing',
+      sponsor:String(req.body.sponsor||'').trim(),
+      divisionGroupId:baseGroup.id,divisionGroupLabel:baseGroup.label,
+      originalDivisionGroupId:baseGroup.id,originalDivisionGroupLabel:baseGroup.label,
+      meetNumber,helmetNumber:nextHelmetNumber(meet),
+      paid:false,checkedIn:false,totalCost:0,
+      isChallengeSecondary:true,
+      options:baseOpts,
+    });
+  }
   rebuildRaceAssignments(meet); ensureCurrentRace(meet); saveDb(db);
   // Send confirmation email to registrant
   if(regEmail) {
@@ -3666,7 +3762,7 @@ app.get('/portal/meet/:meetId/registered', requireRole('meet_director'), (req, r
       <td>${esc(r.meetNumber)}</td><td>${esc(r.helmetNumber)}</td>
       <td><strong>${esc(r.name)}</strong>${sponsorLineHtml(r.sponsor||'')}</td>
       <td>${esc(r.age)}</td><td>${esc(r.team)}</td>
-      <td>${esc(r.divisionGroupLabel||'')}${r.options?.challengeUp?`<div class="note">↑ from ${esc(r.originalDivisionGroupLabel||'')}</div>`:''}</td>
+      <td>${esc(r.divisionGroupLabel||'')}${r.options?.challengeUp?`<div class="note" style="color:var(--orange)">↑ CU from ${esc(r.originalDivisionGroupLabel||'')}</div>`:''}${r.options?.challengeDown?`<div class="note" style="color:var(--sky2)">↓ CD to Senior</div>`:''}${r.isChallengeSecondary?`<div class="note" style="color:var(--muted)">Base group entry</div>`:''}</td>
       <td>${['challengeUp','novice','elite','open','quad','timeTrials','relays'].filter(k=>r.options?.[k]).map(k=>k==='challengeUp'?'CU':cap(k)).join(', ')||'—'}</td>
       <td>$${esc(r.totalCost)}</td>
       <td>${r.paid?`<span class="good">✔</span>`:'—'}</td>
