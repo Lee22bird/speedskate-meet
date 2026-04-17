@@ -178,7 +178,9 @@ function usarsAge(birthdate, meetDate) {
   if (!birthdate) return null;
   const bd = new Date(birthdate);
   if (isNaN(bd.getTime())) return null;
-  return refYear - bd.getFullYear();
+  let age = refYear - bd.getFullYear();
+  if (new Date(refYear, bd.getMonth(), bd.getDate()) > new Date(refYear, 0, 1)) age -= 1;
+  return age;
 }
 
 function ageForReg(reg, meet) {
@@ -304,7 +306,7 @@ function defaultMeet(ownerUserId) {
     timeTrialsEnabled:false, relayEnabled:false, judgesPanelRequired:true,
     notes:'', relayNotes:'', isPublic:false, status:'draft', tiebreaker:'d2', baseEntryFee:0,
     groups:baseGroups(), openGroups:makeOpenGroupsTemplate(), quadGroups:makeQuadGroupsTemplate(),
-    races:[], blocks:[], registrations:[], skateabilityGroups:[],
+    races:[], blocks:[], registrations:[],
     currentRaceId:'', currentRaceIndex:-1, raceDayPaused:false,
   };
 }
@@ -403,7 +405,6 @@ function migrateMeet(meet,fallbackOwnerId) {
   if(typeof meet.raceDayPaused!=='boolean') meet.raceDayPaused=false;
   if(!Number.isFinite(Number(meet.baseEntryFee))) meet.baseEntryFee=0;
   if(!Array.isArray(meet.textAlerts)) meet.textAlerts=[];
-  if(!Array.isArray(meet.skateabilityGroups)) meet.skateabilityGroups=[];
   meet.races=meet.races.map((r,idx)=>({
     id:r.id||('r'+crypto.randomBytes(6).toString('hex')), orderHint:Number(r.orderHint||idx+1),
     groupId:String(r.groupId||''), groupLabel:String(r.groupLabel||''), ages:String(r.ages||''),
@@ -1118,8 +1119,8 @@ function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
     html { scroll-behavior: smooth; }
     body {
       font-family: 'Barlow', ui-sans-serif, system-ui, sans-serif;
-      font-size: 15px; line-height: 1.7; color: var(--text);
-      background: #f1f5f9;
+      font-size: 15px; line-height: 1.6; color: var(--text);
+      background: var(--off);
       min-height: 100vh;
     }
     a { color: var(--sky2); text-decoration: none; }
@@ -1127,12 +1128,10 @@ function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
 
     /* ── Nav ──────────────────────────────────────────────────────── */
     .topnav {
-      background: rgba(15,31,61,.92);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border-bottom: 1px solid rgba(249,115,22,.35);
+      background: var(--navy);
+      border-bottom: 2px solid var(--orange);
       position: sticky; top: 0; z-index: 100;
-      box-shadow: 0 2px 20px rgba(15,31,61,.30);
+      box-shadow: 0 2px 20px rgba(15,31,61,.40);
     }
     .nav-inner {
       max-width: 1340px; margin: 0 auto; padding: 0 20px;
@@ -1143,9 +1142,8 @@ function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
     .nav-logo { height: 44px; width: auto; display: block; }
     .nav-links { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
     .nav-link {
-      padding: 8px 16px; border-radius: 999px; font-weight: 600; font-size: 14px;
+      padding: 8px 14px; border-radius: var(--radius-sm); font-weight: 600; font-size: 14px;
       color: rgba(255,255,255,.80); transition: color .15s, background .15s;
-      letter-spacing: .01em;
     }
     .nav-link:hover { color: #fff; background: rgba(255,255,255,.10); }
     .nav-cta {
@@ -1153,12 +1151,12 @@ function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
       box-shadow: 0 2px 8px rgba(249,115,22,.40);
     }
     .nav-cta:hover { background: var(--orange2); color: #fff; }
-    .nav-ghost { border: 1px solid rgba(255,255,255,.25); color: rgba(255,255,255,.70); border-radius: 999px; }
-    .nav-ghost:hover { border-color: rgba(255,255,255,.50); color: #fff; background: rgba(255,255,255,.06); }
+    .nav-ghost { border: 1px solid rgba(255,255,255,.25); color: rgba(255,255,255,.70); }
+    .nav-ghost:hover { border-color: rgba(255,255,255,.50); color: #fff; background: transparent; }
 
     /* ── Layout ───────────────────────────────────────────────────── */
-    .wrap { max-width: 1340px; margin: 0 auto; padding: 36px 20px 80px; }
-    .page-header { margin-bottom: 28px; }
+    .wrap { max-width: 1340px; margin: 0 auto; padding: 28px 20px 80px; }
+    .page-header { margin-bottom: 22px; }
     .page-header h1 { font-family: 'Barlow Condensed', sans-serif; font-size: 48px; font-weight: 900; letter-spacing: -1px; line-height: 1; color: var(--navy); }
     .page-header .sub { font-size: 16px; color: var(--muted); margin-top: 4px; }
     h1 { font-family: 'Barlow Condensed', sans-serif; font-size: 40px; font-weight: 900; letter-spacing: -.5px; color: var(--navy); margin-bottom: 14px; }
@@ -1168,8 +1166,8 @@ function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
 
     /* ── Cards ────────────────────────────────────────────────────── */
     .card {
-      background: var(--card); border: 1px solid rgba(15,31,61,.07);
-      border-radius: var(--radius-lg); box-shadow: 0 2px 12px rgba(15,31,61,.06), 0 1px 3px rgba(15,31,61,.04); padding: 28px;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); box-shadow: var(--shadow); padding: 22px;
     }
     .card-sm { padding: 14px; border-radius: var(--radius); }
     .card-accent { border-left: 4px solid var(--orange); }
@@ -1283,13 +1281,13 @@ function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
 
     /* ── Table ────────────────────────────────────────────────────── */
     .table { width: 100%; border-collapse: collapse; font-size: 14px; }
-    .table th { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 700; padding: 12px 14px; border-bottom: 1px solid rgba(15,31,61,.08); text-align: left; }
-    .table td { padding: 13px 14px; border-bottom: 1px solid rgba(15,31,61,.05); vertical-align: top; }
+    .table th { font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); font-weight: 700; padding: 10px 12px; border-bottom: 2px solid var(--border); text-align: left; }
+    .table td { padding: 11px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
     .table tr:last-child td { border-bottom: 0; }
-    .table tr:hover td { background: rgba(15,31,61,.02); }
+    .table tr:hover td { background: #f8fafc; }
 
     /* ── Chips / Badges ───────────────────────────────────────────── */
-    .chip { display: inline-flex; align-items: center; gap: 5px; padding: 5px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; border: 1px solid rgba(15,31,61,.12); background: #fff; color: var(--navy); white-space: nowrap; box-shadow: 0 1px 2px rgba(15,31,61,.05); letter-spacing:.01em; }
+    .chip { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; border: 1px solid var(--border2); background: #fff; color: var(--navy); white-space: nowrap; }
     .chip-orange { background: #fff7ed; border-color: #fed7aa; color: var(--orange2); }
     .chip-purple { background: #faf5ff; border-color: #d8b4fe; color: var(--purple); }
     .chip-sky    { background: #f0f9ff; border-color: #bae6fd; color: var(--sky2); }
@@ -1365,7 +1363,7 @@ function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
     .announcer-empty { font-size: 15px; opacity: .6; padding-top: 10px; }
 
     /* ── Live board ───────────────────────────────────────────────── */
-    .live-hero { background: linear-gradient(135deg, var(--navy) 0%, var(--navy2) 100%); border-radius: var(--radius-lg); padding: 36px; margin-bottom: 24px; color: #fff; box-shadow: 0 4px 20px rgba(15,31,61,.25); }
+    .live-hero { background: var(--navy); border-radius: var(--radius-lg); padding: 28px; margin-bottom: 18px; color: #fff; }
     .live-meet-name { font-family: 'Barlow Condensed',sans-serif; font-size: 36px; font-weight: 900; }
     .live-race-label{ font-size: 13px; opacity: .7; text-transform: uppercase; letter-spacing: .1em; margin-bottom: 4px; }
     .live-race-name { font-family: 'Barlow Condensed',sans-serif; font-size: 28px; font-weight: 700; }
@@ -1429,11 +1427,11 @@ function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
     .checkin-row {}
     .filters-row { display: grid; grid-template-columns: 1.2fr .8fr .8fr; gap: 10px; }
     @media(max-width:700px){.filters-row{grid-template-columns:1fr;}}
-    .footer-note { font-size: 11px; color: var(--muted); margin-top: 60px; padding-top: 20px; border-top: 1px solid rgba(15,31,61,.08); text-align:center; letter-spacing:.03em; }
-    .live-tabs { display:flex; gap:8px; margin-bottom:24px; flex-wrap:wrap; }
-    .live-tab { padding:10px 22px; border-radius:999px; font-weight:700; font-size:14px; border:1.5px solid rgba(15,31,61,.15); color:var(--navy); background:#fff; text-decoration:none; letter-spacing:.01em; transition:all .15s; box-shadow:0 1px 3px rgba(15,31,61,.06); }
-    .live-tab:hover { background:var(--off); color:var(--navy); transform:translateY(-1px); box-shadow:0 3px 8px rgba(15,31,61,.10); }
-    .live-tab.active { background:var(--navy); color:#fff; border-color:var(--navy); box-shadow:0 2px 10px rgba(15,31,61,.25); }
+    .footer-note { font-size: 11px; color: var(--muted); margin-top: 40px; padding-top: 14px; border-top: 1px solid var(--border); }
+    .live-tabs { display:flex; gap:8px; margin-bottom:18px; flex-wrap:wrap; }
+    .live-tab { padding:10px 18px; border-radius:var(--radius-sm); font-weight:700; font-size:14px; border:1.5px solid var(--border2); color:var(--navy); background:#fff; text-decoration:none; }
+    .live-tab:hover { background:var(--off); color:var(--navy); }
+    .live-tab.active { background:var(--navy); color:#fff; border-color:var(--navy); }
   </style>
 </head>
 <body>
@@ -2923,73 +2921,6 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
       </div>
       <div class="page-header"><h2>Division Groups</h2><div class="sub">Enable classes and set distances for each age group.</div></div>
       ${groupsHtml}
-
-      <div class="card" style="margin-top:8px">
-        <div class="row between center" style="margin-bottom:14px">
-          <div>
-            <h2 style="margin:0">🦋 Skateability</h2>
-            <div class="note">Add Skateability divisions for specific age groups — director sets distances manually.</div>
-          </div>
-          <button type="button" class="btn2 btn-sm" onclick="addSkateability()">+ Add Skateability</button>
-        </div>
-        <div id="skateability-list">
-          ${(meet.skateabilityGroups||[]).map((sg,si)=>`
-            <div class="group-pair-col" style="margin-bottom:12px" id="sk-${si}">
-              <div class="group-pair-header">
-                <span class="group-pair-name">Skateability — ${esc(sg.ageGroupLabel||'')}</span>
-                <button type="button" class="btn-danger btn-sm" onclick="removeSkateability(${si})">Remove</button>
-              </div>
-              <input type="hidden" name="sk_${si}_ageGroupId" value="${esc(sg.ageGroupId||'')}" />
-              <input type="hidden" name="sk_${si}_ageGroupLabel" value="${esc(sg.ageGroupLabel||'')}" />
-              <div style="display:flex;gap:8px;align-items:flex-end;margin-top:10px">
-                <div style="width:80px;flex-shrink:0"><label>Cost $</label><input name="sk_${si}_cost" value="${esc(sg.cost||'0')}" placeholder="0" /></div>
-                <div style="flex:1"><label>D1</label><input name="sk_${si}_d1" value="${esc(sg.distances?.[0]||'')}" placeholder="100m" /></div>
-                <div style="flex:1"><label>D2</label><input name="sk_${si}_d2" value="${esc(sg.distances?.[1]||'')}" placeholder="200m" /></div>
-                <div style="flex:1"><label>D3</label><input name="sk_${si}_d3" value="${esc(sg.distances?.[2]||'')}" placeholder="300m" /></div>
-              </div>
-            </div>`).join('')}
-        </div>
-        <input type="hidden" name="skateability_count" id="skateability_count" value="${(meet.skateabilityGroups||[]).length}" />
-      </div>
-
-      <script>
-        const AGE_GROUPS = ${JSON.stringify(meet.groups.map(g=>({id:g.id,label:g.label,ages:g.ages})))};
-        let skCount = ${(meet.skateabilityGroups||[]).length};
-
-        function addSkateability() {
-          const sel = prompt('Select age group for Skateability:\n' + AGE_GROUPS.map((g,i)=>(i+1)+'. '+g.label+' ('+g.ages+')').join('\n') + '\n\nEnter number:');
-          if(!sel) return;
-          const idx = parseInt(sel)-1;
-          const g = AGE_GROUPS[idx];
-          if(!g) return alert('Invalid selection');
-          const si = skCount++;
-          document.getElementById('skateability_count').value = skCount;
-          const div = document.createElement('div');
-          div.className = 'group-pair-col';
-          div.style.marginBottom = '12px';
-          div.id = 'sk-'+si;
-          div.innerHTML =
-            '<div class="group-pair-header">' +
-              '<span class="group-pair-name">Skateability \u2014 '+g.label+'</span>' +
-              '<button type="button" class="btn-danger btn-sm" onclick="this.closest(\'.group-pair-col\').remove()">Remove</button>' +
-            '</div>' +
-            '<input type="hidden" name="sk_'+si+'_ageGroupId" value="'+g.id+'" />' +
-            '<input type="hidden" name="sk_'+si+'_ageGroupLabel" value="'+g.label+'" />' +
-            '<div style="display:flex;gap:8px;align-items:flex-end;margin-top:10px">' +
-              '<div style="width:80px;flex-shrink:0"><label>Cost $</label><input name="sk_'+si+'_cost" value="0" placeholder="0" /></div>' +
-              '<div style="flex:1"><label>D1</label><input name="sk_'+si+'_d1" value="" placeholder="100m" /></div>' +
-              '<div style="flex:1"><label>D2</label><input name="sk_'+si+'_d2" value="" placeholder="200m" /></div>' +
-              '<div style="flex:1"><label>D3</label><input name="sk_'+si+'_d3" value="" placeholder="300m" /></div>' +
-            '</div>';
-          document.getElementById('skateability-list').appendChild(div);
-        }
-
-        function removeSkateability(si) {
-          const el = document.getElementById('sk-'+si);
-          if(el) el.remove();
-        }
-      </script>
-
       <div class="card">
         <div class="row between center">
           <div class="muted">Save Meet saves all settings without touching races or blocks.</div>
@@ -3025,24 +2956,6 @@ function saveMeetFields(meet, body) {
       };
     }
   });
-  // Save skateability groups
-  const skCount = Number(body.skateability_count||0);
-  meet.skateabilityGroups = [];
-  for(let si=0; si<skCount; si++) {
-    const ageGroupId = String(body[`sk_${si}_ageGroupId`]||'').trim();
-    const ageGroupLabel = String(body[`sk_${si}_ageGroupLabel`]||'').trim();
-    if(!ageGroupId) continue;
-    meet.skateabilityGroups.push({
-      id: 'sk_'+si+'_'+ageGroupId,
-      ageGroupId, ageGroupLabel,
-      cost: Number(String(body[`sk_${si}_cost`]||'0').trim()||0),
-      distances: [
-        String(body[`sk_${si}_d1`]||'').trim(),
-        String(body[`sk_${si}_d2`]||'').trim(),
-        String(body[`sk_${si}_d3`]||'').trim(),
-      ],
-    });
-  }
   meet.updatedAt=nowIso();
 }
 
@@ -3403,23 +3316,6 @@ app.get('/meet/:meetId/register', (req, res) => {
             ${(meet.quadGroups||[]).some(g=>g.enabled)?`<div class="toggle-row"><div><div class="toggle-row-label">Quad</div></div>${toggleSwitch('quad',false)}</div>`:''}
             ${meet.timeTrialsEnabled?`<div class="toggle-row"><div><div class="toggle-row-label">Time Trials</div></div>${toggleSwitch('timeTrials',false)}</div>`:''}
             ${meet.relayEnabled?`<div class="toggle-row"><div><div class="toggle-row-label">Relays</div></div>${toggleSwitch('relays',false)}</div>`:''}
-            ${(meet.skateabilityGroups||[]).length?`
-              <div class="toggle-row"><div><div class="toggle-row-label">Skateability</div><div class="toggle-row-desc">Special division — select your group below if enabled</div></div>${toggleSwitch('skateability',false)}</div>
-              <div id="skateability-group-row" style="display:none">
-                <div class="toggle-row" style="flex-direction:column;align-items:flex-start;gap:8px">
-                  <div class="toggle-row-label">Skateability Age Group</div>
-                  <select name="skateabilityGroupId" style="width:100%">
-                    <option value="">— Select group —</option>
-                    ${(meet.skateabilityGroups||[]).map(sg=>`<option value="${esc(sg.id)}">${esc(sg.ageGroupLabel)}</option>`).join('')}
-                  </select>
-                </div>
-              </div>
-              <script>
-                var skToggle = document.querySelector('input[name="skateability"]');
-                if(skToggle) skToggle.addEventListener('change', function() {
-                  document.getElementById('skateability-group-row').style.display = this.checked ? '' : 'none';
-                });
-              </script>`:''}
           </div>
           ${costWidget}
           <div><button class="btn-orange" type="submit">Register Skater</button></div>
@@ -3627,30 +3523,33 @@ app.get('/portal/meet/:meetId/checkin', requireRole('meet_director'), (req, res)
   ensureRegistrationTotalsAndNumbers(meet); saveDb(req.db);
   const totalOwed=(meet.registrations||[]).reduce((s,r)=>s+Number(r.totalCost||0),0);
   const totalPaid=(meet.registrations||[]).filter(r=>r.paid).reduce((s,r)=>s+Number(r.totalCost||0),0);
-  const rows=(meet.registrations||[]).map(r=>`
-    <tr class="checkin-row" data-name="${esc(String(r.name||'').toLowerCase())}" data-team="${esc(String(r.team||'').toLowerCase())}">
-      <td>${esc(r.meetNumber)}</td>
-      <td><strong>${esc(r.name)}</strong>${sponsorLineHtml(r.sponsor||'')}</td>
-      <td>${esc(r.team)}</td>
-      <td>${esc(r.divisionGroupLabel)}</td>
-      <td>
-        <form method="POST" action="/portal/meet/${meet.id}/checkin/helmet/${r.id}" class="checkin-form row center" style="gap:6px">
-          <input style="max-width:80px" name="helmetNumber" value="${esc(r.helmetNumber)}" />
-          <button class="btn2 btn-sm" type="submit">✓</button>
-        </form>
-      </td>
-      <td><strong>$${esc(r.totalCost)}</strong></td>
-      <td>
-        <form method="POST" action="/portal/meet/${meet.id}/checkin/toggle-paid/${r.id}" class="checkin-form">
-          <button class="${r.paid?'btn-good':'btn2'} btn-sm" type="submit">${r.paid?'✔ Paid':'Mark Paid'}</button>
-        </form>
-      </td>
-      <td>
-        <form method="POST" action="/portal/meet/${meet.id}/checkin/toggle-checkin/${r.id}" class="checkin-form">
-          <button class="${r.checkedIn?'btn-good':'btn2'} btn-sm" type="submit">${r.checkedIn?'✔ In':'Check In'}</button>
-        </form>
-      </td>
-    </tr>`).join('');
+  const ENTRY_KEYS=['elite','novice','open','quad','timeTrials','relays','challengeUp','challengeDown','skateability'];
+  const ENTRY_LABELS={elite:'Elite',novice:'Novice',open:'Open',quad:'Quads',timeTrials:'TT',relays:'Relay',challengeUp:'CU',challengeDown:'CD',skateability:'Skate'};
+  const rows=(meet.registrations||[]).map(r=>{
+    const opts=r.options||{};
+    const active=ENTRY_KEYS.filter(k=>opts[k]);
+    const chips=active.map(k=>'<span class="chip chip-sky" style="font-size:11px;padding:3px 8px">'+ENTRY_LABELS[k]+'</span>').join(' ');
+    const md=JSON.stringify({
+      name:r.name,team:r.team||'',division:r.divisionGroupLabel||'',
+      helmet:String(r.helmetNumber||''),age:String(r.age||''),sponsor:r.sponsor||'',
+      totalCost:String(r.totalCost||0),paid:!!r.paid,checkedIn:!!r.checkedIn,
+      entries:active.map(k=>ENTRY_LABELS[k]),
+      paidUrl:'/portal/meet/'+meet.id+'/checkin/toggle-paid/'+r.id,
+      checkinUrl:'/portal/meet/'+meet.id+'/checkin/toggle-checkin/'+r.id,
+      editUrl:'/portal/meet/'+meet.id+'/registered/'+r.id+'/edit',
+    });
+    return '<tr class="checkin-row" data-name="'+esc(String(r.name||'').toLowerCase())+'" data-team="'+esc(String(r.team||'').toLowerCase())+'" data-md="'+esc(md)+'" onclick="openCiModal(this)" style="cursor:pointer">'+
+      '<td>'+esc(r.meetNumber)+'</td>'+
+      '<td><strong>'+esc(r.name)+'</strong>'+sponsorLineHtml(r.sponsor||'')+'</td>'+
+      '<td>'+esc(r.team)+'</td>'+
+      '<td>'+esc(r.divisionGroupLabel)+'</td>'+
+      '<td><strong>#'+esc(r.helmetNumber||'?')+'</strong></td>'+
+      '<td>$'+esc(r.totalCost)+'</td>'+
+      '<td>'+(r.paid?'<span class="good">✔</span>':'<span class="muted">—</span>')+'</td>'+
+      '<td>'+(r.checkedIn?'<span class="good">✔</span>':'<span class="muted">—</span>')+'</td>'+
+      '<td>'+(chips||'<span class="muted note">—</span>')+'</td>'+
+      '</tr>';
+  }).join('');
   res.send(pageShell({title:'Check-In',user:req.user,meet,activeTab:'checkin', bodyHtml:`
     <div class="page-header"><h1>Check-In</h1><div class="sub">${esc(meet.meetName)}</div></div>
     <div class="stat-grid" style="margin-bottom:16px">
@@ -3678,15 +3577,55 @@ app.get('/portal/meet/:meetId/checkin', requireRole('meet_director'), (req, res)
       </div>
       <div style="overflow-x:auto">
         <table class="table">
-          <thead><tr><th>#</th><th>Name</th><th>Team</th><th>Division</th><th>Helmet</th><th>Total</th><th>Paid</th><th>Check In</th></tr></thead>
-          <tbody id="ciBody">${rows||`<tr><td colspan="8" class="muted">No registrations yet.</td></tr>`}</tbody>
+          <thead><tr><th>#</th><th>Name</th><th>Team</th><th>Division</th><th>Helmet</th><th>Total</th><th>Paid</th><th>In</th><th>Entries — click row for details</th></tr></thead>
+          <tbody id="ciBody">${rows||`<tr><td colspan="9" class="muted">No registrations yet.</td></tr>`}</tbody>
         </table>
+      </div>
+    </div>
+    <div id="ci-modal" style="display:none;position:fixed;inset:0;z-index:999;background:rgba(15,31,61,.65);backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:20px" onclick="if(event.target===this)closeCiModal()">
+      <div style="background:#fff;border-radius:20px;padding:28px;max-width:460px;width:100%;box-shadow:0 20px 60px rgba(15,31,61,.3);position:relative;max-height:90vh;overflow-y:auto">
+        <button onclick="closeCiModal()" style="position:absolute;top:14px;right:16px;background:none;border:none;font-size:22px;cursor:pointer;color:#94a3b8;line-height:1">&#x2715;</button>
+        <div id="ci-modal-body"></div>
       </div>
     </div>
     <script>
       const savedY=sessionStorage.getItem('ciY');
       if(savedY) { window.scrollTo(0,parseInt(savedY,10)); sessionStorage.removeItem('ciY'); }
-      document.querySelectorAll('.checkin-form').forEach(f=>f.addEventListener('submit',()=>sessionStorage.setItem('ciY',String(window.scrollY))));
+      function openCiModal(row) {
+        var d = JSON.parse(row.getAttribute('data-md'));
+        var chips = d.entries.length ? d.entries.map(function(e){
+          return '<span style="display:inline-block;padding:5px 12px;border-radius:999px;font-size:13px;font-weight:700;background:#f0f9ff;border:1px solid #bae6fd;color:#0ea5e9;margin:3px 3px 3px 0">'+e+'</span>';
+        }).join('') : '<span style="color:#94a3b8;font-size:14px">No events selected</span>';
+        var paidSt = d.paid ? 'border:1.5px solid #6ee7b7;background:#ecfdf5;color:#059669' : 'border:1.5px solid #cbd5e1;background:#fff;color:#64748b';
+        var ciSt = d.checkedIn ? 'border:1.5px solid #6ee7b7;background:#ecfdf5;color:#059669' : 'border:1.5px solid #F97316;background:#F97316;color:#fff';
+        document.getElementById('ci-modal-body').innerHTML =
+          '<div style="margin-bottom:18px">'+
+            '<div style="font-size:24px;font-weight:900;color:#0F1F3D;margin-bottom:3px">'+d.name+'</div>'+
+            '<div style="font-size:14px;color:#64748b">'+d.team+' &middot; '+d.division+'</div>'+
+            (d.sponsor?'<div style="font-size:12px;color:#0ea5e9;margin-top:2px">Sponsored by '+d.sponsor+'</div>':'')+
+          '</div>'+
+          '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:18px">'+
+            '<div style="background:#f8fafc;border-radius:10px;padding:12px;text-align:center"><div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#64748b;margin-bottom:4px">Helmet</div><div style="font-size:22px;font-weight:900;color:#0F1F3D">#'+(d.helmet||'?')+'</div></div>'+
+            '<div style="background:#f8fafc;border-radius:10px;padding:12px;text-align:center"><div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#64748b;margin-bottom:4px">Total</div><div style="font-size:22px;font-weight:900;color:#0F1F3D">$'+d.totalCost+'</div></div>'+
+            '<div style="background:#f8fafc;border-radius:10px;padding:12px;text-align:center"><div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#64748b;margin-bottom:4px">Age</div><div style="font-size:22px;font-weight:900;color:#0F1F3D">'+d.age+'</div></div>'+
+          '</div>'+
+          '<div style="margin-bottom:18px">'+
+            '<div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#64748b;margin-bottom:8px;font-weight:700">Entered In</div>'+
+            chips+
+          '</div>'+
+          '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
+            '<form method="POST" action="'+d.paidUrl+'" style="flex:1" onsubmit="sessionStorage.setItem(\'ciY\',String(window.scrollY))">'+
+              '<button type="submit" style="width:100%;padding:11px;border-radius:10px;font-weight:700;font-size:13px;cursor:pointer;'+paidSt+'">'+(d.paid?'&#x2714; Paid':'Mark Paid')+'</button>'+
+            '</form>'+
+            '<form method="POST" action="'+d.checkinUrl+'" style="flex:1" onsubmit="sessionStorage.setItem(\'ciY\',String(window.scrollY))">'+
+              '<button type="submit" style="width:100%;padding:11px;border-radius:10px;font-weight:700;font-size:13px;cursor:pointer;'+ciSt+'">'+(d.checkedIn?'&#x2714; Checked In':'Check In')+'</button>'+
+            '</form>'+
+            '<a href="'+d.editUrl+'" style="flex:1;display:block;padding:11px;border-radius:10px;font-weight:700;font-size:13px;text-align:center;border:1.5px solid #cbd5e1;background:#fff;color:#0F1F3D;text-decoration:none">Edit</a>'+
+          '</div>';
+        document.getElementById('ci-modal').style.display='flex';
+      }
+      function closeCiModal(){ document.getElementById('ci-modal').style.display='none'; }
+      document.addEventListener('keydown',function(e){if(e.key==='Escape')closeCiModal();});
       function applyCI() {
         const q=(document.getElementById('ciSearch').value||'').toLowerCase().trim();
         const t=(document.getElementById('ciTeam').value||'').toLowerCase().trim();
