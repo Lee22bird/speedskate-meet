@@ -174,13 +174,13 @@ const STANDARD_POINTS = { 1: 30, 2: 20, 3: 10, 4: 5 };
 
 // USARS SR150.1: age is birth year subtracted from Jan 1 of competition year
 function usarsAge(birthdate, meetDate) {
-  // USARS SR150.1: age is what the skater is ON January 1 of the meet year
+  // USARS SR150.1: age is what the skater IS on January 1 of the meet year
   const refYear = meetDate ? new Date(meetDate).getFullYear() : new Date().getFullYear();
   if (!birthdate) return null;
   const bd = new Date(birthdate);
   if (isNaN(bd.getTime())) return null;
   let age = refYear - bd.getFullYear();
-  // If their birthday falls after Jan 1, they haven't turned that age yet on Jan 1
+  // If birthday falls after Jan 1, they haven't yet reached that age on Jan 1
   if (new Date(refYear, bd.getMonth(), bd.getDate()) > new Date(refYear, 0, 1)) age -= 1;
   return age;
 }
@@ -295,9 +295,11 @@ function baseGroups() {
     {id:'master_men',      label:'Master Men',       ages:'35-44',    gender:'men'},
     {id:'veteran_women',   label:'Veteran Women',    ages:'45-54',    gender:'women'},
     {id:'veteran_men',     label:'Veteran Men',      ages:'45-54',    gender:'men'},
-    {id:'esquire_women',   label:'Esquire Women',    ages:'55+',      gender:'women'},
-    {id:'esquire_men',     label:'Esquire Men',      ages:'55+',      gender:'men'},
-  ].map(g=>({...g,divisions:makeDivisionsTemplate()}));
+    {id:'esquire_women',   label:'Esquire Women',    ages:'55-64',    gender:'women'},
+    {id:'esquire_men',     label:'Esquire Men',      ages:'55-64',    gender:'men'},
+    {id:'premier_women',   label:'Premier Women',    ages:'65+',      gender:'women'},
+    {id:'premier_men',     label:'Premier Men',      ages:'65+',      gender:'men'},
+  ].map(g=>({...g,divisions:makeDefaultDivisions(g.id)}));
 }
 
 function defaultMeet(ownerUserId) {
@@ -2949,9 +2951,9 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
             '<input type="hidden" name="sk_'+si+'_ageGroupLabel" value="'+esc(sg.ageGroupLabel||'')+'" />'+
             '<div style="display:flex;gap:8px;align-items:flex-end;margin-top:10px">'+
               '<div style="width:80px;flex-shrink:0"><label>Cost $</label><input name="sk_'+si+'_cost" value="'+esc(String(sg.cost||'0'))+'" placeholder="0" /></div>'+
-              '<div style="flex:1"><label>D1</label><input name="sk_'+si+'_d1" value="'+esc(sg.distances&&sg.distances[0]||'')+'" placeholder="100m" /></div>'+
-              '<div style="flex:1"><label>D2</label><input name="sk_'+si+'_d2" value="'+esc(sg.distances&&sg.distances[1]||'')+'" placeholder="200m" /></div>'+
-              '<div style="flex:1"><label>D3</label><input name="sk_'+si+'_d3" value="'+esc(sg.distances&&sg.distances[2]||'')+'" placeholder="300m" /></div>'+
+              '<div style="flex:1"><label>D1</label><input name="sk_'+si+'_d1" value="'+esc((sg.distances&&sg.distances[0])||'')+'" placeholder="100m" /></div>'+
+              '<div style="flex:1"><label>D2</label><input name="sk_'+si+'_d2" value="'+esc((sg.distances&&sg.distances[1])||'')+'" placeholder="200m" /></div>'+
+              '<div style="flex:1"><label>D3</label><input name="sk_'+si+'_d3" value="'+esc((sg.distances&&sg.distances[2])||'')+'" placeholder="300m" /></div>'+
             '</div>'+
             '</div>'
           ).join('')}
@@ -2959,21 +2961,16 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
         <input type="hidden" name="sk_count" id="sk_count" value="${(meet.skateabilityGroups||[]).length}" />
       </div>
       <script>
-        var SK_GROUPS = ${JSON.stringify(meet.groups.map(g=>({id:g.id,label:g.label,ages:g.ages})))};
-        var skCount = ${(meet.skateabilityGroups||[]).length};
-        function addSkateability() {
-          var picker = document.getElementById('sk-age-picker');
-          var val = picker.value;
-          if(!val) return alert('Please pick an age group first.');
-          var parts = val.split('|');
-          var gid = parts[0], glabel = parts[1];
-          var si = skCount++;
-          document.getElementById('sk_count').value = skCount;
-          var div = document.createElement('div');
-          div.className = 'group-pair-col';
-          div.style.marginBottom = '12px';
-          div.id = 'sk-'+si;
-          div.innerHTML =
+        var SK_GROUPS=${JSON.stringify(meet.groups.map(g=>({id:g.id,label:g.label,ages:g.ages})))};
+        var skCount=${(meet.skateabilityGroups||[]).length};
+        function addSkateability(){
+          var picker=document.getElementById('sk-age-picker');
+          var val=picker.value; if(!val) return alert('Please pick an age group first.');
+          var parts=val.split('|'); var gid=parts[0],glabel=parts[1];
+          var si=skCount++; document.getElementById('sk_count').value=skCount;
+          var div=document.createElement('div');
+          div.className='group-pair-col'; div.style.marginBottom='12px'; div.id='sk-'+si;
+          div.innerHTML=
             '<div class="group-pair-header">'+
               '<span class="group-pair-name">Skateability — '+glabel+'</span>'+
               '<button type="button" class="btn-danger btn-sm" onclick="this.closest('.group-pair-col').remove()">Remove</button>'+
@@ -2987,10 +2984,9 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
               '<div style="flex:1"><label>D3</label><input name="sk_'+si+'_d3" value="" placeholder="300m" /></div>'+
             '</div>';
           document.getElementById('sk-list').appendChild(div);
-          picker.value = '';
+          picker.value='';
         }
       </script>
-
       <div class="card">
         <div class="row between center">
           <div class="muted">Save Meet saves all settings without touching races or blocks.</div>
@@ -3026,22 +3022,15 @@ function saveMeetFields(meet, body) {
       };
     }
   });
-  // Save skateability groups
-  const skCount = Number(body.sk_count||0);
-  meet.skateabilityGroups = [];
-  for(let si=0; si<skCount; si++) {
-    const ageGroupId = String(body['sk_'+si+'_ageGroupId']||'').trim();
-    const ageGroupLabel = String(body['sk_'+si+'_ageGroupLabel']||'').trim();
+  const skCount=Number(body.sk_count||0);
+  meet.skateabilityGroups=[];
+  for(let si=0;si<skCount;si++){
+    const ageGroupId=String(body['sk_'+si+'_ageGroupId']||'').trim();
+    const ageGroupLabel=String(body['sk_'+si+'_ageGroupLabel']||'').trim();
     if(!ageGroupId) continue;
-    meet.skateabilityGroups.push({
-      id:'sk_'+ageGroupId,
-      ageGroupId, ageGroupLabel,
-      cost: Number(String(body['sk_'+si+'_cost']||'0').trim()||0),
-      distances: [
-        String(body['sk_'+si+'_d1']||'').trim(),
-        String(body['sk_'+si+'_d2']||'').trim(),
-        String(body['sk_'+si+'_d3']||'').trim(),
-      ],
+    meet.skateabilityGroups.push({id:'sk_'+ageGroupId,ageGroupId,ageGroupLabel,
+      cost:Number(String(body['sk_'+si+'_cost']||'0').trim()||0),
+      distances:[String(body['sk_'+si+'_d1']||'').trim(),String(body['sk_'+si+'_d2']||'').trim(),String(body['sk_'+si+'_d3']||'').trim()],
     });
   }
   meet.updatedAt=nowIso();
@@ -3417,7 +3406,17 @@ app.post('/meet/:meetId/register', (req, res) => {
   const gender=String(req.body.gender||'').trim()||'boys';
   const birthdate=String(req.body.birthdate||'').trim();
   const compAge=usarsAge(birthdate,meet.date)||Number(req.body.age||0);
-  const baseGroup=findAgeGroup(meet.groups,compAge,gender);
+  let baseGroup=findAgeGroup(meet.groups,compAge,gender);
+  // If novice selected but age group has novice disabled, bump up to next group with novice enabled
+  if(!!req.body.novice && baseGroup) {
+    const hasNovice = baseGroup.divisions && baseGroup.divisions.novice && baseGroup.divisions.novice.enabled;
+    if(!hasNovice) {
+      const idx = meet.groups.findIndex(g=>g.id===baseGroup.id);
+      // Find next group of same gender that has novice enabled
+      const bump = meet.groups.slice(idx+1).find(g=>g.gender===gender&&g.divisions&&g.divisions.novice&&g.divisions.novice.enabled);
+      if(bump) baseGroup = bump;
+    }
+  }
   const finalGroup=challengeAdjustedGroup(meet,baseGroup,!!req.body.challengeUp);
   const meetNumber=(meet.registrations||[]).reduce((max,r)=>Math.max(max,Number(r.meetNumber)||0),0)+1;
   const regEmail=String(req.body.email||'').trim();
@@ -3667,10 +3666,48 @@ app.get('/portal/meet/:meetId/checkin', requireRole('meet_director'), (req, res)
         </table>
       </div>
     </div>
+    <div id="ci-modal" style="display:none;position:fixed;inset:0;z-index:999;background:rgba(15,31,61,.65);backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:20px" onclick="if(event.target===this)closeCiModal()">
+      <div style="background:#fff;border-radius:20px;padding:28px;max-width:460px;width:100%;box-shadow:0 20px 60px rgba(15,31,61,.3);position:relative;max-height:90vh;overflow-y:auto">
+        <button onclick="closeCiModal()" style="position:absolute;top:14px;right:16px;background:none;border:none;font-size:22px;cursor:pointer;color:#94a3b8;line-height:1">&#x2715;</button>
+        <div id="ci-modal-body"></div>
+      </div>
+    </div>
     <script>
       const savedY=sessionStorage.getItem('ciY');
       if(savedY) { window.scrollTo(0,parseInt(savedY,10)); sessionStorage.removeItem('ciY'); }
-      document.querySelectorAll('.checkin-form').forEach(f=>f.addEventListener('submit',()=>sessionStorage.setItem('ciY',String(window.scrollY))));
+      function openCiModal(row) {
+        var d=JSON.parse(row.getAttribute('data-md'));
+        var chips=d.entries.length ? d.entries.map(function(e){return '<span style="display:inline-block;padding:5px 12px;border-radius:999px;font-size:13px;font-weight:700;background:#f0f9ff;border:1px solid #bae6fd;color:#0ea5e9;margin:3px 3px 3px 0">'+e+'</span>';}).join('') : '<span style="color:#94a3b8;font-size:14px">No events selected</span>';
+        var paidSt=d.paid?'border:1.5px solid #6ee7b7;background:#ecfdf5;color:#059669':'border:1.5px solid #cbd5e1;background:#fff;color:#64748b';
+        var ciSt=d.checkedIn?'border:1.5px solid #6ee7b7;background:#ecfdf5;color:#059669':'border:1.5px solid #F97316;background:#F97316;color:#fff';
+        document.getElementById('ci-modal-body').innerHTML=
+          '<div style="margin-bottom:18px">'+
+            '<div style="font-size:24px;font-weight:900;color:#0F1F3D;margin-bottom:3px">'+d.name+'</div>'+
+            '<div style="font-size:14px;color:#64748b">'+d.team+' &middot; '+d.division+'</div>'+
+            (d.sponsor?'<div style="font-size:12px;color:#0ea5e9;margin-top:2px">Sponsored by '+d.sponsor+'</div>':'')+
+          '</div>'+
+          '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:18px">'+
+            '<div style="background:#f8fafc;border-radius:10px;padding:12px;text-align:center"><div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#64748b;margin-bottom:4px">Helmet</div><div style="font-size:22px;font-weight:900;color:#0F1F3D">#'+(d.helmet||'?')+'</div></div>'+
+            '<div style="background:#f8fafc;border-radius:10px;padding:12px;text-align:center"><div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#64748b;margin-bottom:4px">Total</div><div style="font-size:22px;font-weight:900;color:#0F1F3D">$'+d.totalCost+'</div></div>'+
+            '<div style="background:#f8fafc;border-radius:10px;padding:12px;text-align:center"><div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#64748b;margin-bottom:4px">Age</div><div style="font-size:22px;font-weight:900;color:#0F1F3D">'+d.age+'</div></div>'+
+          '</div>'+
+          '<div style="margin-bottom:18px">'+
+            '<div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#64748b;margin-bottom:8px;font-weight:700">Entered In</div>'+
+            chips+
+          '</div>'+
+          '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
+            '<form method="POST" action="'+d.paidUrl+'" style="flex:1" onsubmit="sessionStorage.setItem(\'ciY\',String(window.scrollY))">'+
+              '<button type="submit" style="width:100%;padding:11px;border-radius:10px;font-weight:700;font-size:13px;cursor:pointer;'+paidSt+'">'+(d.paid?'&#x2714; Paid':'Mark Paid')+'</button>'+
+            '</form>'+
+            '<form method="POST" action="'+d.checkinUrl+'" style="flex:1" onsubmit="sessionStorage.setItem(\'ciY\',String(window.scrollY))">'+
+              '<button type="submit" style="width:100%;padding:11px;border-radius:10px;font-weight:700;font-size:13px;cursor:pointer;'+ciSt+'">'+(d.checkedIn?'&#x2714; Checked In':'Check In')+'</button>'+
+            '</form>'+
+            '<a href="'+d.editUrl+'" style="flex:1;display:block;padding:11px;border-radius:10px;font-weight:700;font-size:13px;text-align:center;border:1.5px solid #cbd5e1;background:#fff;color:#0F1F3D;text-decoration:none">Edit</a>'+
+          '</div>';
+        document.getElementById('ci-modal').style.display='flex';
+      }
+      function closeCiModal(){document.getElementById('ci-modal').style.display='none';}
+      document.addEventListener('keydown',function(e){if(e.key==='Escape')closeCiModal();});
       function applyCI() {
         const q=(document.getElementById('ciSearch').value||'').toLowerCase().trim();
         const t=(document.getElementById('ciTeam').value||'').toLowerCase().trim();
