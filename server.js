@@ -178,9 +178,7 @@ function usarsAge(birthdate, meetDate) {
   if (!birthdate) return null;
   const bd = new Date(birthdate);
   if (isNaN(bd.getTime())) return null;
-  let age = refYear - bd.getFullYear();
-  if (new Date(refYear, bd.getMonth(), bd.getDate()) > new Date(refYear, 0, 1)) age -= 1;
-  return age;
+  return refYear - bd.getFullYear();
 }
 
 function ageForReg(reg, meet) {
@@ -3523,33 +3521,30 @@ app.get('/portal/meet/:meetId/checkin', requireRole('meet_director'), (req, res)
   ensureRegistrationTotalsAndNumbers(meet); saveDb(req.db);
   const totalOwed=(meet.registrations||[]).reduce((s,r)=>s+Number(r.totalCost||0),0);
   const totalPaid=(meet.registrations||[]).filter(r=>r.paid).reduce((s,r)=>s+Number(r.totalCost||0),0);
-  const ENTRY_KEYS=['elite','novice','open','quad','timeTrials','relays','challengeUp','challengeDown','skateability'];
-  const ENTRY_LABELS={elite:'Elite',novice:'Novice',open:'Open',quad:'Quads',timeTrials:'TT',relays:'Relay',challengeUp:'CU',challengeDown:'CD',skateability:'Skate'};
-  const rows=(meet.registrations||[]).map(r=>{
-    const opts=r.options||{};
-    const active=ENTRY_KEYS.filter(k=>opts[k]);
-    const chips=active.map(k=>'<span class="chip chip-sky" style="font-size:11px;padding:3px 8px">'+ENTRY_LABELS[k]+'</span>').join(' ');
-    const md=JSON.stringify({
-      name:r.name,team:r.team||'',division:r.divisionGroupLabel||'',
-      helmet:String(r.helmetNumber||''),age:String(r.age||''),sponsor:r.sponsor||'',
-      totalCost:String(r.totalCost||0),paid:!!r.paid,checkedIn:!!r.checkedIn,
-      entries:active.map(k=>ENTRY_LABELS[k]),
-      paidUrl:'/portal/meet/'+meet.id+'/checkin/toggle-paid/'+r.id,
-      checkinUrl:'/portal/meet/'+meet.id+'/checkin/toggle-checkin/'+r.id,
-      editUrl:'/portal/meet/'+meet.id+'/registered/'+r.id+'/edit',
-    });
-    return '<tr class="checkin-row" data-name="'+esc(String(r.name||'').toLowerCase())+'" data-team="'+esc(String(r.team||'').toLowerCase())+'" data-md="'+esc(md)+'" onclick="openCiModal(this)" style="cursor:pointer">'+
-      '<td>'+esc(r.meetNumber)+'</td>'+
-      '<td><strong>'+esc(r.name)+'</strong>'+sponsorLineHtml(r.sponsor||'')+'</td>'+
-      '<td>'+esc(r.team)+'</td>'+
-      '<td>'+esc(r.divisionGroupLabel)+'</td>'+
-      '<td><strong>#'+esc(r.helmetNumber||'?')+'</strong></td>'+
-      '<td>$'+esc(r.totalCost)+'</td>'+
-      '<td>'+(r.paid?'<span class="good">✔</span>':'<span class="muted">—</span>')+'</td>'+
-      '<td>'+(r.checkedIn?'<span class="good">✔</span>':'<span class="muted">—</span>')+'</td>'+
-      '<td>'+(chips||'<span class="muted note">—</span>')+'</td>'+
-      '</tr>';
-  }).join('');
+  const rows=(meet.registrations||[]).map(r=>`
+    <tr class="checkin-row" data-name="${esc(String(r.name||'').toLowerCase())}" data-team="${esc(String(r.team||'').toLowerCase())}">
+      <td>${esc(r.meetNumber)}</td>
+      <td><strong>${esc(r.name)}</strong>${sponsorLineHtml(r.sponsor||'')}</td>
+      <td>${esc(r.team)}</td>
+      <td>${esc(r.divisionGroupLabel)}</td>
+      <td>
+        <form method="POST" action="/portal/meet/${meet.id}/checkin/helmet/${r.id}" class="checkin-form row center" style="gap:6px">
+          <input style="max-width:80px" name="helmetNumber" value="${esc(r.helmetNumber)}" />
+          <button class="btn2 btn-sm" type="submit">✓</button>
+        </form>
+      </td>
+      <td><strong>$${esc(r.totalCost)}</strong></td>
+      <td>
+        <form method="POST" action="/portal/meet/${meet.id}/checkin/toggle-paid/${r.id}" class="checkin-form">
+          <button class="${r.paid?'btn-good':'btn2'} btn-sm" type="submit">${r.paid?'✔ Paid':'Mark Paid'}</button>
+        </form>
+      </td>
+      <td>
+        <form method="POST" action="/portal/meet/${meet.id}/checkin/toggle-checkin/${r.id}" class="checkin-form">
+          <button class="${r.checkedIn?'btn-good':'btn2'} btn-sm" type="submit">${r.checkedIn?'✔ In':'Check In'}</button>
+        </form>
+      </td>
+    </tr>`).join('');
   res.send(pageShell({title:'Check-In',user:req.user,meet,activeTab:'checkin', bodyHtml:`
     <div class="page-header"><h1>Check-In</h1><div class="sub">${esc(meet.meetName)}</div></div>
     <div class="stat-grid" style="margin-bottom:16px">
@@ -3577,55 +3572,15 @@ app.get('/portal/meet/:meetId/checkin', requireRole('meet_director'), (req, res)
       </div>
       <div style="overflow-x:auto">
         <table class="table">
-          <thead><tr><th>#</th><th>Name</th><th>Team</th><th>Division</th><th>Helmet</th><th>Total</th><th>Paid</th><th>In</th><th>Entries — click row for details</th></tr></thead>
-          <tbody id="ciBody">${rows||`<tr><td colspan="9" class="muted">No registrations yet.</td></tr>`}</tbody>
+          <thead><tr><th>#</th><th>Name</th><th>Team</th><th>Division</th><th>Helmet</th><th>Total</th><th>Paid</th><th>Check In</th></tr></thead>
+          <tbody id="ciBody">${rows||`<tr><td colspan="8" class="muted">No registrations yet.</td></tr>`}</tbody>
         </table>
-      </div>
-    </div>
-    <div id="ci-modal" style="display:none;position:fixed;inset:0;z-index:999;background:rgba(15,31,61,.65);backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:20px" onclick="if(event.target===this)closeCiModal()">
-      <div style="background:#fff;border-radius:20px;padding:28px;max-width:460px;width:100%;box-shadow:0 20px 60px rgba(15,31,61,.3);position:relative;max-height:90vh;overflow-y:auto">
-        <button onclick="closeCiModal()" style="position:absolute;top:14px;right:16px;background:none;border:none;font-size:22px;cursor:pointer;color:#94a3b8;line-height:1">&#x2715;</button>
-        <div id="ci-modal-body"></div>
       </div>
     </div>
     <script>
       const savedY=sessionStorage.getItem('ciY');
       if(savedY) { window.scrollTo(0,parseInt(savedY,10)); sessionStorage.removeItem('ciY'); }
-      function openCiModal(row) {
-        var d = JSON.parse(row.getAttribute('data-md'));
-        var chips = d.entries.length ? d.entries.map(function(e){
-          return '<span style="display:inline-block;padding:5px 12px;border-radius:999px;font-size:13px;font-weight:700;background:#f0f9ff;border:1px solid #bae6fd;color:#0ea5e9;margin:3px 3px 3px 0">'+e+'</span>';
-        }).join('') : '<span style="color:#94a3b8;font-size:14px">No events selected</span>';
-        var paidSt = d.paid ? 'border:1.5px solid #6ee7b7;background:#ecfdf5;color:#059669' : 'border:1.5px solid #cbd5e1;background:#fff;color:#64748b';
-        var ciSt = d.checkedIn ? 'border:1.5px solid #6ee7b7;background:#ecfdf5;color:#059669' : 'border:1.5px solid #F97316;background:#F97316;color:#fff';
-        document.getElementById('ci-modal-body').innerHTML =
-          '<div style="margin-bottom:18px">'+
-            '<div style="font-size:24px;font-weight:900;color:#0F1F3D;margin-bottom:3px">'+d.name+'</div>'+
-            '<div style="font-size:14px;color:#64748b">'+d.team+' &middot; '+d.division+'</div>'+
-            (d.sponsor?'<div style="font-size:12px;color:#0ea5e9;margin-top:2px">Sponsored by '+d.sponsor+'</div>':'')+
-          '</div>'+
-          '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:18px">'+
-            '<div style="background:#f8fafc;border-radius:10px;padding:12px;text-align:center"><div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#64748b;margin-bottom:4px">Helmet</div><div style="font-size:22px;font-weight:900;color:#0F1F3D">#'+(d.helmet||'?')+'</div></div>'+
-            '<div style="background:#f8fafc;border-radius:10px;padding:12px;text-align:center"><div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#64748b;margin-bottom:4px">Total</div><div style="font-size:22px;font-weight:900;color:#0F1F3D">$'+d.totalCost+'</div></div>'+
-            '<div style="background:#f8fafc;border-radius:10px;padding:12px;text-align:center"><div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#64748b;margin-bottom:4px">Age</div><div style="font-size:22px;font-weight:900;color:#0F1F3D">'+d.age+'</div></div>'+
-          '</div>'+
-          '<div style="margin-bottom:18px">'+
-            '<div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#64748b;margin-bottom:8px;font-weight:700">Entered In</div>'+
-            chips+
-          '</div>'+
-          '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
-            '<form method="POST" action="'+d.paidUrl+'" style="flex:1" onsubmit="sessionStorage.setItem(\'ciY\',String(window.scrollY))">'+
-              '<button type="submit" style="width:100%;padding:11px;border-radius:10px;font-weight:700;font-size:13px;cursor:pointer;'+paidSt+'">'+(d.paid?'&#x2714; Paid':'Mark Paid')+'</button>'+
-            '</form>'+
-            '<form method="POST" action="'+d.checkinUrl+'" style="flex:1" onsubmit="sessionStorage.setItem(\'ciY\',String(window.scrollY))">'+
-              '<button type="submit" style="width:100%;padding:11px;border-radius:10px;font-weight:700;font-size:13px;cursor:pointer;'+ciSt+'">'+(d.checkedIn?'&#x2714; Checked In':'Check In')+'</button>'+
-            '</form>'+
-            '<a href="'+d.editUrl+'" style="flex:1;display:block;padding:11px;border-radius:10px;font-weight:700;font-size:13px;text-align:center;border:1.5px solid #cbd5e1;background:#fff;color:#0F1F3D;text-decoration:none">Edit</a>'+
-          '</div>';
-        document.getElementById('ci-modal').style.display='flex';
-      }
-      function closeCiModal(){ document.getElementById('ci-modal').style.display='none'; }
-      document.addEventListener('keydown',function(e){if(e.key==='Escape')closeCiModal();});
+      document.querySelectorAll('.checkin-form').forEach(f=>f.addEventListener('submit',()=>sessionStorage.setItem('ciY',String(window.scrollY))));
       function applyCI() {
         const q=(document.getElementById('ciSearch').value||'').toLowerCase().trim();
         const t=(document.getElementById('ciTeam').value||'').toLowerCase().trim();
@@ -4002,11 +3957,35 @@ app.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','judg
 
   } else if(mode==='judges') {
     body+=`
-      <div class="card" style="margin-bottom:14px">
-        <h2 style="margin:0">${current?`Race ${Math.max(info.idx+1,1)} — ${esc(current.groupLabel)} — ${esc(cap(current.division))} — ${esc(current.distanceLabel)}`:'No race selected'}</h2>
-        <div class="note">Judges always land on the current race. Save, then close race when done.</div>
+      <div class="card" style="margin-bottom:14px;border-left:4px solid ${current?.isRelayRace?'#3b82f6':'var(--orange)'}">
+        <h2 style="margin:0">${current?`${current.isRelayRace?'🔄 ':''}${esc(current.groupLabel)} — ${esc(current.distanceLabel)}`:'No race selected'}</h2>
+        <div class="note">${current?.isRelayRace?'Relay race — fill in team names, skaters, and places below.':'Judges always land on the current race. Save, then close race when done.'}</div>
       </div>
-      ${current?`
+      ${current?.isRelayRace?`
+        <div class="card">
+          <form method="POST" action="/portal/meet/${meet.id}/race-day/judges/relay-save">
+            <input type="hidden" name="raceId" value="${esc(current.id)}" />
+            <div class="stack">
+              ${[1,2,3,4].map(i=>{
+                const existing=(current.laneEntries||[]).find(x=>Number(x.lane)===i)||{};
+                return `<div style="background:var(--off);border-radius:var(--radius);padding:14px;border:1.5px solid var(--border)">
+                  <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:10px">Team ${i}</div>
+                  <div class="form-grid cols-3">
+                    <div><label>Team Name / Color</label><input name="team_${i}" value="${esc(existing.team||existing.skaterName||'')}" placeholder="e.g. Blue, White..." /></div>
+                    <div style="grid-column:span 1"><label>Skaters (names)</label><input name="skaters_${i}" value="${esc(existing.skaterNames||'')}" placeholder="e.g. Jane S., Tyler B., Nash B." /></div>
+                    <div><label>Place</label><input name="place_${i}" value="${esc(existing.place||'')}" placeholder="1" style="max-width:80px" /></div>
+                  </div>
+                </div>`;
+              }).join('')}
+            </div>
+            <div style="margin-top:14px"><label>Notes</label><textarea name="notes">${esc(current.notes||'')}</textarea></div>
+            <div class="action-row" style="margin-top:14px">
+              <button class="btn2" type="submit" name="action" value="save">Save</button>
+              <button class="btn-orange" type="submit" name="action" value="close">Close Relay</button>
+            </div>
+          </form>
+        </div>
+      `:current?`
         <div class="card">
           <form method="POST" action="/portal/meet/${meet.id}/race-day/judges/save">
             <input type="hidden" name="raceId" value="${esc(current.id)}" />
@@ -4081,6 +4060,31 @@ app.post('/portal/meet/:meetId/race-day/judges/save', requireRole('judge','meet_
   saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/race-day/judges`);
 });
 
+
+app.post('/portal/meet/:meetId/race-day/judges/relay-save', requireRole('judge','meet_director'), (req, res) => {
+  const meet=getMeetOr404(req.db,req.params.meetId);
+  if(!meet) return res.redirect('/portal');
+  const race=(meet.races||[]).find(r=>r.id===String(req.body.raceId||'')&&r.isRelayRace);
+  if(!race) return res.redirect(`/portal/meet/${req.params.meetId}/race-day/judges`);
+  race.laneEntries=[];
+  for(let i=1;i<=4;i++) {
+    const team=String(req.body[`team_${i}`]||'').trim();
+    const skaterNames=String(req.body[`skaters_${i}`]||'').trim();
+    const place=String(req.body[`place_${i}`]||'').trim();
+    if(!team&&!skaterNames&&!place) continue;
+    race.laneEntries.push({lane:i,skaterName:team,skaterNames,team,place,time:'',status:'',registrationId:''});
+  }
+  race.notes=String(req.body.notes||'');
+  race.status=req.body.action==='close'?'closed':'open';
+  race.closedAt=req.body.action==='close'?nowIso():race.closedAt;
+  race.isFinal=req.body.action==='close';
+  meet.updatedAt=nowIso();
+  if(req.body.action==='close') {
+    const info=currentRaceInfo(meet);
+    if(info.current&&info.current.id===race.id){const next=info.ordered[info.idx+1];if(next){meet.currentRaceId=next.id;meet.currentRaceIndex=info.idx+1;}}
+  }
+  saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/race-day/judges`);
+});
 app.post('/portal/meet/:meetId/race-day/judges/tt-post', requireRole('judge','meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet) return res.redirect('/portal');
