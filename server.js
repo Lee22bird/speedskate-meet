@@ -271,6 +271,45 @@ function makeDivisionsTemplate() {
   };
 }
 
+const GROUP_DEFAULTS = {
+  tiny_tot_girls:   {e:['100m','200m','300m',''], n:['','','','']},
+  tiny_tot_boys:    {e:['100m','200m','300m',''], n:['','','','']},
+  primary_girls:    {e:['200m','300m','400m',''], n:['100m','300m','','']},
+  primary_boys:     {e:['200m','300m','400m',''], n:['100m','300m','','']},
+  juvenile_girls:   {e:['200m','300m','500m',''], n:['200m','500m','','']},
+  juvenile_boys:    {e:['200m','300m','500m',''], n:['200m','500m','','']},
+  elementary_girls: {e:['300m','500m','700m',''], n:['300m','700m','','']},
+  elementary_boys:  {e:['300m','500m','700m',''], n:['300m','700m','','']},
+  freshman_girls:   {e:['300m','500m','1000m',''],n:['300m','1000m','','']},
+  freshman_boys:    {e:['300m','500m','1000m',''],n:['300m','1000m','','']},
+  sophomore_girls:  {e:['500m','1000m','1500m',''],n:['500m','1000m','','']},
+  sophomore_boys:   {e:['500m','1000m','1500m',''],n:['500m','1000m','','']},
+  junior_women:     {e:['500m','1000m','1500m',''],n:['500m','1000m','','']},
+  junior_men:       {e:['500m','1000m','1500m',''],n:['500m','1000m','','']},
+  senior_women:     {e:['500m','1000m','1500m',''],n:['500m','1000m','','']},
+  senior_men:       {e:['500m','1000m','1500m',''],n:['500m','1000m','','']},
+  classic_women:    {e:['500m','1000m','1500m',''],n:['500m','1000m','','']},
+  classic_men:      {e:['500m','1000m','1500m',''],n:['500m','1000m','','']},
+  master_women:     {e:['500m','700m','1000m',''], n:['500m','1000m','','']},
+  master_men:       {e:['500m','700m','1000m',''], n:['500m','1000m','','']},
+  veteran_women:    {e:['500m','700m','1000m',''], n:['500m','1000m','','']},
+  veteran_men:      {e:['500m','700m','1000m',''], n:['500m','1000m','','']},
+  esquire_women:    {e:['500m','700m','1000m',''], n:['500m','1000m','','']},
+  esquire_men:      {e:['500m','700m','1000m',''], n:['500m','1000m','','']},
+  premier_women:    {e:['500m','700m','1000m',''], n:['500m','1000m','','']},
+  premier_men:      {e:['500m','700m','1000m',''], n:['500m','1000m','','']},
+};
+
+function makeDefaultDivisions(groupId) {
+  const def = GROUP_DEFAULTS[groupId];
+  if(!def) return makeDivisionsTemplate();
+  return {
+    novice:{enabled:false,cost:0,distances:[...def.n]},
+    elite: {enabled:false,cost:0,distances:[...def.e]},
+    open:  {enabled:false,cost:0,distances:['','','','']},
+  };
+}
+
 function baseGroups() {
   return [
     {id:'tiny_tot_girls',  label:'Tiny Tot Girls',   ages:'5 & under',gender:'girls'},
