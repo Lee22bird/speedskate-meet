@@ -174,11 +174,15 @@ const STANDARD_POINTS = { 1: 30, 2: 20, 3: 10, 4: 5 };
 
 // USARS SR150.1: age is birth year subtracted from Jan 1 of competition year
 function usarsAge(birthdate, meetDate) {
+  // USARS SR150.1: age is what the skater is ON January 1 of the meet year
   const refYear = meetDate ? new Date(meetDate).getFullYear() : new Date().getFullYear();
   if (!birthdate) return null;
   const bd = new Date(birthdate);
   if (isNaN(bd.getTime())) return null;
-  return refYear - bd.getFullYear();
+  let age = refYear - bd.getFullYear();
+  // If their birthday falls after Jan 1, they haven't turned that age yet on Jan 1
+  if (new Date(refYear, bd.getMonth(), bd.getDate()) > new Date(refYear, 0, 1)) age -= 1;
+  return age;
 }
 
 function ageForReg(reg, meet) {
@@ -304,7 +308,7 @@ function defaultMeet(ownerUserId) {
     timeTrialsEnabled:false, relayEnabled:false, judgesPanelRequired:true,
     notes:'', relayNotes:'', isPublic:false, status:'draft', tiebreaker:'d2', baseEntryFee:0,
     groups:baseGroups(), openGroups:makeOpenGroupsTemplate(), quadGroups:makeQuadGroupsTemplate(),
-    races:[], blocks:[], registrations:[],
+    races:[], blocks:[], registrations:[], skateabilityGroups:[],
     currentRaceId:'', currentRaceIndex:-1, raceDayPaused:false,
   };
 }
@@ -403,6 +407,7 @@ function migrateMeet(meet,fallbackOwnerId) {
   if(typeof meet.raceDayPaused!=='boolean') meet.raceDayPaused=false;
   if(!Number.isFinite(Number(meet.baseEntryFee))) meet.baseEntryFee=0;
   if(!Array.isArray(meet.textAlerts)) meet.textAlerts=[];
+  if(!Array.isArray(meet.skateabilityGroups)) meet.skateabilityGroups=[];
   meet.races=meet.races.map((r,idx)=>({
     id:r.id||('r'+crypto.randomBytes(6).toString('hex')), orderHint:Number(r.orderHint||idx+1),
     groupId:String(r.groupId||''), groupLabel:String(r.groupLabel||''), ages:String(r.ages||''),
@@ -926,7 +931,7 @@ function buildCostWidget(base,novC,eliC,opnC,qdC) {
     'var B='+base+',C={novice:'+novC+',elite:'+eliC+',open:'+opnC+',quad:'+qdC+',timeTrials:0,relays:0,challengeUp:0};',
     'function upd(){var sel=[];',
     '["novice","elite","open","quad","timeTrials","relays","challengeUp"].forEach(function(k){',
-    'var el=document.querySelector("[name="+k+"]");if(el&&el.value==="on")sel.push({name:k,cost:C[k]||0});',
+    'var el=document.querySelector("[name="+k+"]");if(el&&el.checked)sel.push({name:k,cost:C[k]||0});',
     '});',
     'var t=document.getElementById("ssm-cost"),b=document.getElementById("ssm-breakdown");',
     'if(!sel.length){t.textContent="$"+B;b.textContent="Base entry fee";return;}',
@@ -2919,6 +2924,73 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
       </div>
       <div class="page-header"><h2>Division Groups</h2><div class="sub">Enable classes and set distances for each age group.</div></div>
       ${groupsHtml}
+      <div class="card" style="margin-top:8px">
+        <div class="row between center" style="margin-bottom:14px">
+          <div>
+            <h2 style="margin:0">Skateability</h2>
+            <div class="note">Add Skateability divisions for specific age groups — director enters distances manually.</div>
+          </div>
+          <div class="action-row">
+            <select id="sk-age-picker" style="width:220px">
+              <option value="">— Pick age group —</option>
+              ${meet.groups.map(g=>`<option value="${esc(g.id)}|${esc(g.label)}">${esc(g.label)} (${esc(g.ages)})</option>`).join('')}
+            </select>
+            <button type="button" class="btn2 btn-sm" onclick="addSkateability()">+ Add</button>
+          </div>
+        </div>
+        <div id="sk-list" class="stack">
+          ${(meet.skateabilityGroups||[]).map((sg,si)=>
+            '<div class="group-pair-col" style="margin-bottom:12px" id="sk-'+si+'">'+
+            '<div class="group-pair-header">'+
+              '<span class="group-pair-name">Skateability — '+esc(sg.ageGroupLabel||'')+'</span>'+
+              '<button type="button" class="btn-danger btn-sm" onclick="this.closest(\'.group-pair-col\').remove()">Remove</button>'+
+            '</div>'+
+            '<input type="hidden" name="sk_'+si+'_ageGroupId" value="'+esc(sg.ageGroupId||'')+'" />'+
+            '<input type="hidden" name="sk_'+si+'_ageGroupLabel" value="'+esc(sg.ageGroupLabel||'')+'" />'+
+            '<div style="display:flex;gap:8px;align-items:flex-end;margin-top:10px">'+
+              '<div style="width:80px;flex-shrink:0"><label>Cost $</label><input name="sk_'+si+'_cost" value="'+esc(String(sg.cost||'0'))+'" placeholder="0" /></div>'+
+              '<div style="flex:1"><label>D1</label><input name="sk_'+si+'_d1" value="'+esc(sg.distances&&sg.distances[0]||'')+'" placeholder="100m" /></div>'+
+              '<div style="flex:1"><label>D2</label><input name="sk_'+si+'_d2" value="'+esc(sg.distances&&sg.distances[1]||'')+'" placeholder="200m" /></div>'+
+              '<div style="flex:1"><label>D3</label><input name="sk_'+si+'_d3" value="'+esc(sg.distances&&sg.distances[2]||'')+'" placeholder="300m" /></div>'+
+            '</div>'+
+            '</div>'
+          ).join('')}
+        </div>
+        <input type="hidden" name="sk_count" id="sk_count" value="${(meet.skateabilityGroups||[]).length}" />
+      </div>
+      <script>
+        var SK_GROUPS = ${JSON.stringify(meet.groups.map(g=>({id:g.id,label:g.label,ages:g.ages})))};
+        var skCount = ${(meet.skateabilityGroups||[]).length};
+        function addSkateability() {
+          var picker = document.getElementById('sk-age-picker');
+          var val = picker.value;
+          if(!val) return alert('Please pick an age group first.');
+          var parts = val.split('|');
+          var gid = parts[0], glabel = parts[1];
+          var si = skCount++;
+          document.getElementById('sk_count').value = skCount;
+          var div = document.createElement('div');
+          div.className = 'group-pair-col';
+          div.style.marginBottom = '12px';
+          div.id = 'sk-'+si;
+          div.innerHTML =
+            '<div class="group-pair-header">'+
+              '<span class="group-pair-name">Skateability — '+glabel+'</span>'+
+              '<button type="button" class="btn-danger btn-sm" onclick="this.closest('.group-pair-col').remove()">Remove</button>'+
+            '</div>'+
+            '<input type="hidden" name="sk_'+si+'_ageGroupId" value="'+gid+'" />'+
+            '<input type="hidden" name="sk_'+si+'_ageGroupLabel" value="'+glabel+'" />'+
+            '<div style="display:flex;gap:8px;align-items:flex-end;margin-top:10px">'+
+              '<div style="width:80px;flex-shrink:0"><label>Cost $</label><input name="sk_'+si+'_cost" value="0" placeholder="0" /></div>'+
+              '<div style="flex:1"><label>D1</label><input name="sk_'+si+'_d1" value="" placeholder="100m" /></div>'+
+              '<div style="flex:1"><label>D2</label><input name="sk_'+si+'_d2" value="" placeholder="200m" /></div>'+
+              '<div style="flex:1"><label>D3</label><input name="sk_'+si+'_d3" value="" placeholder="300m" /></div>'+
+            '</div>';
+          document.getElementById('sk-list').appendChild(div);
+          picker.value = '';
+        }
+      </script>
+
       <div class="card">
         <div class="row between center">
           <div class="muted">Save Meet saves all settings without touching races or blocks.</div>
@@ -2954,6 +3026,24 @@ function saveMeetFields(meet, body) {
       };
     }
   });
+  // Save skateability groups
+  const skCount = Number(body.sk_count||0);
+  meet.skateabilityGroups = [];
+  for(let si=0; si<skCount; si++) {
+    const ageGroupId = String(body['sk_'+si+'_ageGroupId']||'').trim();
+    const ageGroupLabel = String(body['sk_'+si+'_ageGroupLabel']||'').trim();
+    if(!ageGroupId) continue;
+    meet.skateabilityGroups.push({
+      id:'sk_'+ageGroupId,
+      ageGroupId, ageGroupLabel,
+      cost: Number(String(body['sk_'+si+'_cost']||'0').trim()||0),
+      distances: [
+        String(body['sk_'+si+'_d1']||'').trim(),
+        String(body['sk_'+si+'_d2']||'').trim(),
+        String(body['sk_'+si+'_d3']||'').trim(),
+      ],
+    });
+  }
   meet.updatedAt=nowIso();
 }
 
@@ -3957,35 +4047,11 @@ app.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','judg
 
   } else if(mode==='judges') {
     body+=`
-      <div class="card" style="margin-bottom:14px;border-left:4px solid ${current?.isRelayRace?'#3b82f6':'var(--orange)'}">
-        <h2 style="margin:0">${current?`${current.isRelayRace?'🔄 ':''}${esc(current.groupLabel)} — ${esc(current.distanceLabel)}`:'No race selected'}</h2>
-        <div class="note">${current?.isRelayRace?'Relay race — fill in team names, skaters, and places below.':'Judges always land on the current race. Save, then close race when done.'}</div>
+      <div class="card" style="margin-bottom:14px">
+        <h2 style="margin:0">${current?`Race ${Math.max(info.idx+1,1)} — ${esc(current.groupLabel)} — ${esc(cap(current.division))} — ${esc(current.distanceLabel)}`:'No race selected'}</h2>
+        <div class="note">Judges always land on the current race. Save, then close race when done.</div>
       </div>
-      ${current?.isRelayRace?`
-        <div class="card">
-          <form method="POST" action="/portal/meet/${meet.id}/race-day/judges/relay-save">
-            <input type="hidden" name="raceId" value="${esc(current.id)}" />
-            <div class="stack">
-              ${[1,2,3,4].map(i=>{
-                const existing=(current.laneEntries||[]).find(x=>Number(x.lane)===i)||{};
-                return `<div style="background:var(--off);border-radius:var(--radius);padding:14px;border:1.5px solid var(--border)">
-                  <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:10px">Team ${i}</div>
-                  <div class="form-grid cols-3">
-                    <div><label>Team Name / Color</label><input name="team_${i}" value="${esc(existing.team||existing.skaterName||'')}" placeholder="e.g. Blue, White..." /></div>
-                    <div style="grid-column:span 1"><label>Skaters (names)</label><input name="skaters_${i}" value="${esc(existing.skaterNames||'')}" placeholder="e.g. Jane S., Tyler B., Nash B." /></div>
-                    <div><label>Place</label><input name="place_${i}" value="${esc(existing.place||'')}" placeholder="1" style="max-width:80px" /></div>
-                  </div>
-                </div>`;
-              }).join('')}
-            </div>
-            <div style="margin-top:14px"><label>Notes</label><textarea name="notes">${esc(current.notes||'')}</textarea></div>
-            <div class="action-row" style="margin-top:14px">
-              <button class="btn2" type="submit" name="action" value="save">Save</button>
-              <button class="btn-orange" type="submit" name="action" value="close">Close Relay</button>
-            </div>
-          </form>
-        </div>
-      `:current?`
+      ${current?`
         <div class="card">
           <form method="POST" action="/portal/meet/${meet.id}/race-day/judges/save">
             <input type="hidden" name="raceId" value="${esc(current.id)}" />
@@ -4060,31 +4126,6 @@ app.post('/portal/meet/:meetId/race-day/judges/save', requireRole('judge','meet_
   saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/race-day/judges`);
 });
 
-
-app.post('/portal/meet/:meetId/race-day/judges/relay-save', requireRole('judge','meet_director'), (req, res) => {
-  const meet=getMeetOr404(req.db,req.params.meetId);
-  if(!meet) return res.redirect('/portal');
-  const race=(meet.races||[]).find(r=>r.id===String(req.body.raceId||'')&&r.isRelayRace);
-  if(!race) return res.redirect(`/portal/meet/${req.params.meetId}/race-day/judges`);
-  race.laneEntries=[];
-  for(let i=1;i<=4;i++) {
-    const team=String(req.body[`team_${i}`]||'').trim();
-    const skaterNames=String(req.body[`skaters_${i}`]||'').trim();
-    const place=String(req.body[`place_${i}`]||'').trim();
-    if(!team&&!skaterNames&&!place) continue;
-    race.laneEntries.push({lane:i,skaterName:team,skaterNames,team,place,time:'',status:'',registrationId:''});
-  }
-  race.notes=String(req.body.notes||'');
-  race.status=req.body.action==='close'?'closed':'open';
-  race.closedAt=req.body.action==='close'?nowIso():race.closedAt;
-  race.isFinal=req.body.action==='close';
-  meet.updatedAt=nowIso();
-  if(req.body.action==='close') {
-    const info=currentRaceInfo(meet);
-    if(info.current&&info.current.id===race.id){const next=info.ordered[info.idx+1];if(next){meet.currentRaceId=next.id;meet.currentRaceIndex=info.idx+1;}}
-  }
-  saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/race-day/judges`);
-});
 app.post('/portal/meet/:meetId/race-day/judges/tt-post', requireRole('judge','meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet) return res.redirect('/portal');
