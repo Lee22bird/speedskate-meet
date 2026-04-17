@@ -296,123 +296,6 @@ function baseGroups() {
   ].map(g=>({...g,divisions:makeDivisionsTemplate()}));
 }
 
-
-// ── Seed CCCC Demo Meet (disabled) ───────────────────────────────────────────
-// seedCCCCMeet function removed — meet can be deleted normally now
-function seedCCCCMeet_DISABLED(db) {
-  // Always rebuild CCCC to pick up schedule changes
-  db.meets=db.meets.filter(m=>m.meetName!=='Capital City Classic Challenge');
-  const schedule = [
-    {type:'divider',label:'SATURDAY APRIL 11 — Relays & Opens 4:30-6:30pm'},
-    {type:'subheader',label:'Opens'},
-    {label:'Juvenile (9 & under) Girls',distance:'1500m'},{label:'Juvenile (9 & under) Boys',distance:'1500m'},
-    {label:'Freshmen (10-13) Girls',distance:'2000m'},{label:'Freshmen (10-13) Boys',distance:'2000m'},
-    {label:'Senior Ladies (18-34)',distance:'3000m'},{label:'Master Ladies (35 & Up)',distance:'1500m'},
-    {label:'Master Men (35 & Up)',distance:'2000m'},{label:'Senior Men (18-34)',distance:'5000m'},
-    {type:'subheader',label:'Relays — 3 Person'},
-    {label:'Juvenile (9 & Under)',distance:'900m - 1 Lap 3 Times each'},{label:'Freshmen (10-13)',distance:'900m - 1 Lap 3 Times each'},
-    {label:'Senior (14-34)',distance:'900m - 1 Lap 3 Times each'},{label:'Master (35 and up)',distance:'900m - 1 Lap 3 Times each'},
-    {type:'subheader',label:'Relays — 2 Person'},
-    {label:'Juvenile (9 & Under)',distance:'1200m - 2 Laps 3 Times each'},{label:'Freshmen (10-13)',distance:'1200m - 2 Laps 3 Times each'},
-    {label:'Senior (14-34)',distance:'1200m - 2 Laps 3 Times each'},{label:'Master (35 and up)',distance:'1200m - 2 Laps 3 Times each'},
-    {type:'subheader',label:'Relays — 4 Person'},
-    {label:'Juvenile (9 & Under)',distance:'1200m - 3 Laps 1 Time each'},{label:'Freshmen (10-13)',distance:'2000m - 5 Laps 1 Time each'},
-    {label:'Senior (14-34)',distance:'2000m - 5 Laps 1 Time each'},{label:'Master (35 and up)',distance:'2000m - 5 Laps 1 Time each'},
-    {type:'divider',label:'SUNDAY APRIL 12 — Doors 5am • Warmups 5:30am • Quads 6am'},
-    {type:'subheader',label:'Quad Short Races'},
-    {label:'Juvenile 9 & Under Girls',distance:'200m'},{label:'Juvenile 9 & Under Boys',distance:'200m'},
-    {label:'Freshmen 10-13 Girls',distance:'300m'},{label:'Freshmen 10-13 Boys',distance:'300m'},
-    {label:'Senior 14-34 Ladies',distance:'500m'},{label:'Senior 14-34 Men',distance:'500m'},
-    {label:'Master 34 & Up Ladies',distance:'500m'},{label:'Master 34 & Up Men',distance:'500m'},
-    {type:'subheader',label:'Quad Middle Races'},
-    {label:'Juvenile 9 & Under Girls',distance:'500m'},{label:'Juvenile 9 & Under Boys',distance:'500m'},
-    {label:'Freshmen 10-13 Girls',distance:'500m'},{label:'Freshmen 10-13 Boys',distance:'500m'},
-    {label:'Senior 14-34 Ladies',distance:'1000m'},{label:'Senior 14-34 Men',distance:'1000m'},
-    {label:'Master 34 & Up Ladies',distance:'700m'},{label:'Master 34 & Up Men',distance:'700m'},
-    {type:'subheader',label:'Elite Long Races (Warm Up)'},
-    {label:'Elite Primary (6-7) Girls',distance:'400m'},{label:'Elite Primary (6-7) Boys',distance:'400m'},
-    {label:'Elite Elementary (10-11) Girls',distance:'700m'},{label:'Elite Elementary (10-11) Boys',distance:'700m'},
-    {label:'Elite Sophomore (14-15) Ladies',distance:'1500m'},{label:'Elite Sophomore (14-15) Men',distance:'1500m'},
-    {label:'Elite Senior Ladies (18-24)',distance:'2000m'},{label:'Elite Senior Men (18-24)',distance:'3000m'},
-    {label:'Elite Master Women (35-44)',distance:'1000m'},{label:'Elite Master Men (35-44)',distance:'1500m'},
-    {label:'Elite Esquire Ladies',distance:'1000m'},{label:'Elite Esquire Men',distance:'1000m'},
-    {type:'subheader',label:'Elite Long Races (Continued)'},
-    {label:'Skatability Short Distance',distance:'300m'},
-    {label:'Elite Tiny Tot (5 and Under) Girls',distance:'300m'},{label:'Elite Tiny Tot (5 and Under) Boys',distance:'300m'},
-    {label:'Elite Juvenile (8 & 9) Girls',distance:'500m'},{label:'Elite Juvenile (8 & 9) Boys',distance:'500m'},
-    {label:'Elite Freshman (12 & 13) Girls',distance:'1000m'},{label:'Elite Freshman (12 & 13) Boys',distance:'1000m'},
-    {label:'Elite Junior (16 & 17) Ladies',distance:'1500m'},{label:'Elite Junior (16 & 17) Men',distance:'2000m'},
-    {label:'Elite Classic (25-34) Ladies',distance:'1500m'},{label:'Elite Classic (25-34) Men',distance:'2000m'},
-    {label:'Elite Veteran (45-54) Ladies',distance:'1000m'},{label:'Elite Veteran (45-54) Men',distance:'1000m'},
-    {type:'subheader',label:'Novice Short Races'},
-    {label:'Novice Juvenile (9 & under) Girls',distance:'200m'},{label:'Novice Juvenile (9 & under) Boys',distance:'200m'},
-    {label:'Novice Elementary (10-11) Girls',distance:'300m'},{label:'Novice Elementary (10-11) Boys',distance:'300m'},
-    {label:'Novice Freshman (12-13) Girls',distance:'300m'},{label:'Novice Freshman (12-13) Boys',distance:'300m'},
-    {label:'Novice Sophomore (14-15) Ladies',distance:'500m'},{label:'Novice Sophomore (14-15) Men',distance:'500m'},
-    {label:'Novice Junior (16-17) Ladies',distance:'500m'},{label:'Novice Junior (16-17) Men',distance:'500m'},
-    {label:'Novice Senior (18-34) Ladies',distance:'500m'},{label:'Novice Senior (18-34) Men',distance:'500m'},
-    {label:'Novice Master Ladies (35 and up)',distance:'500m'},{label:'Novice Master Men (35 and up)',distance:'500m'},
-    {type:'subheader',label:'Elite Short Races'},
-    {label:'Elite Primary (6-7) Girls',distance:'200m'},{label:'Elite Primary (6-7) Boys',distance:'200m'},
-    {label:'Elite Elementary (10-11) Girls',distance:'300m'},{label:'Elite Elementary (10-11) Boys',distance:'300m'},
-    {label:'Elite Sophomore (14-15) Ladies',distance:'500m'},{label:'Elite Sophomore (14-15) Men',distance:'500m'},
-    {label:'Elite Senior Ladies (18-24)',distance:'500m'},{label:'Elite Senior Men (18-24)',distance:'500m'},
-    {label:'Elite Master Women (35-44)',distance:'500m'},{label:'Elite Master Men (35-44)',distance:'500m'},
-    {label:'Elite Esquire Ladies (55+)',distance:'500m'},{label:'Elite Esquire Men (55+)',distance:'500m'},
-    {type:'subheader',label:'Elite Short Races Continued'},
-    {label:'Skatability Short Distance',distance:'100m'},
-    {label:'Elite Tiny Tot (5 & Under) Girls',distance:'100m'},{label:'Elite Tiny Tot (5 & Under) Boys',distance:'100m'},
-    {label:'Elite Juvenile (8&9) Girls',distance:'200m'},{label:'Elite Juvenile (8&9) Boys',distance:'200m'},
-    {label:'Elite Freshman (12&13) Girls',distance:'300m'},{label:'Elite Freshman (12&13) Boys',distance:'300m'},
-    {label:'Elite Junior (16 & 17) Ladies',distance:'500m'},{label:'Elite Junior (16 & 17) Men',distance:'500m'},
-    {label:'Elite Classic (25-34) Ladies',distance:'500m'},{label:'Elite Classic (25-34) Men',distance:'500m'},
-    {label:'Elite Veteran (45-54) Ladies',distance:'500m'},{label:'Elite Veteran (45-54) Men',distance:'500m'},
-    {type:'subheader',label:'Novice Middle Distant Races'},
-    {label:'Novice Juvenile (9 & under) Girls',distance:'300m'},{label:'Novice Juvenile (9 & under) Boys',distance:'300m'},
-    {label:'Novice Elementary (10-11) Girls',distance:'500m'},{label:'Novice Elementary (10-11) Boys',distance:'500m'},
-    {label:'Novice Freshman (12-13) Girls',distance:'500m'},{label:'Novice Freshman (12-13) Boys',distance:'500m'},
-    {label:'Novice Sophomore (14-15) Ladies',distance:'1000m'},{label:'Novice Sophomore (14-15) Men',distance:'1000m'},
-    {label:'Novice Junior (16-17) Ladies',distance:'1000m'},{label:'Novice Junior (16-17) Men',distance:'1000m'},
-    {label:'Novice Senior (18-34) Ladies',distance:'1000m'},{label:'Novice Senior (18-34) Men',distance:'1500m'},
-    {label:'Novice Master Ladies (35 and up)',distance:'700m'},{label:'Novice Master Men (35 and up)',distance:'1000m'},
-
-    {type:'subheader',label:'Elite Middle Races'},
-    {label:'Elite Primary (6-7) Girls',distance:'300m'},{label:'Elite Primary (6-7) Boys',distance:'300m'},
-    {label:'Elite Elementary (10-11) Girls',distance:'500m'},{label:'Elite Elementary (10-11) Boys',distance:'500m'},
-    {label:'Elite Sophomore (14-15) Ladies',distance:'1000m'},{label:'Elite Sophomore (14-15) Men',distance:'1000m'},
-    {label:'Elite Senior Ladies (18-24)',distance:'1000m'},{label:'Elite Senior Men (18-24)',distance:'1500m'},
-    {label:'Elite Master Women (35-44)',distance:'700m'},{label:'Elite Master Men (35-44)',distance:'1000m'},
-    {label:'Elite Esquire Ladies (55+)',distance:'700m'},{label:'Elite Esquire Men (55+)',distance:'700m'},
-    {type:'subheader',label:'Elite Middle Races Continued'},
-    {label:'Skatability Short Distance',distance:'200m'},
-    {label:'Elite Tiny Tot (5 & Under) Girls',distance:'200m'},{label:'Elite Tiny Tot (5 & Under) Boys',distance:'200m'},
-    {label:'Elite Juvenile (8&9) Girls',distance:'300m'},{label:'Elite Juvenile (8&9) Boys',distance:'300m'},
-    {label:'Elite Freshman (12&13) Girls',distance:'500m'},{label:'Elite Freshman (12&13) Boys',distance:'500m'},
-    {label:'Elite Junior (16 & 17) Ladies',distance:'1000m'},{label:'Elite Junior (16 & 17) Men',distance:'1000m'},
-    {label:'Elite Classic (25-34) Ladies',distance:'1000m'},{label:'Elite Classic (25-34) Men',distance:'1000m'},
-    {label:'Elite Veteran (45-54) Ladies',distance:'700m'},{label:'Elite Veteran (45-54) Men',distance:'700m'},
-  ];
-  const meet = {
-    id:nextId(db.meets),
-    meetName:'Capital City Classic Challenge',
-    date:'2026-04-12',
-    startTime:'5:00 AM',
-    city:'Jefferson City', state:'MO',
-    rinkId:1,
-    description:'Hosted by Team Velocity at Sk8 Zone. Saturday April 11: Relays & Opens 4:30-6:30pm (free skate after!). Sunday April 12: Doors 5am, Warmups 5:30am, Quads 6am. Ross Creveling announcing. MSSL meet — next season schedule decided here!',
-    registrationUrl:'',
-    contactName:'Team Velocity',
-    contactEmail:'',
-    isPublic:true, status:'published', isLiteMeet:true, isDemoMeet:true,
-    staticSchedule:schedule,
-    createdByUserId:1, createdAt:new Date().toISOString(), updatedAt:new Date().toISOString(),
-    races:[], blocks:[], registrations:[], groups:[], textAlerts:[],
-  };
-  db.meets.push(meet);
-  console.log('[SSM] CCCC demo meet seeded, id:', meet.id);
-}
-
-
 function defaultMeet(ownerUserId) {
   return {
     id:null, createdByUserId:ownerUserId, createdAt:nowIso(), updatedAt:nowIso(),
@@ -638,65 +521,14 @@ function findAgeGroup(groups,age,genderGuess) {
   return candidates.find(g=>g.gender===normalizedGender)||candidates[0];
 }
 
-// USARS Challenge Up ladder — maps group ID to the next group up
-// Senior is the ceiling — no challenge up from senior
-// Adult 25+ can challenge DOWN to senior (handled separately)
-const CHALLENGE_UP_LADDER = {
-  'tiny_tot_girls':  'primary_girls',
-  'tiny_tot_boys':   'primary_boys',
-  'primary_girls':   'juvenile_girls',
-  'primary_boys':    'juvenile_boys',
-  'juvenile_girls':  'elementary_girls',
-  'juvenile_boys':   'elementary_boys',
-  'elementary_girls':'freshman_girls',
-  'elementary_boys': 'freshman_boys',
-  'freshman_girls':  'sophomore_girls',
-  'freshman_boys':   'sophomore_boys',
-  'sophomore_girls': 'junior_women',
-  'sophomore_boys':  'junior_men',
-  'junior_women':    'senior_women',
-  'junior_men':      'senior_men',
-  // Senior = ceiling, no challenge up
-  // Adult 25+ can challenge DOWN to senior
-};
-
-const CHALLENGE_DOWN_TO_SENIOR = {
-  'classic_women':'senior_women','classic_men':'senior_men',
-  'grand_classic_women':'senior_women','grand_classic_men':'senior_men',
-  'masters_women':'senior_women','masters_men':'senior_men',
-  'grand_masters_women':'senior_women','grand_masters_men':'senior_men',
-  'veteran_women':'senior_women','veteran_men':'senior_men',
-  'grand_veteran_women':'senior_women','grand_veteran_men':'senior_men',
-  'esquire_women':'senior_women','esquire_men':'senior_men',
-  'grand_esquire_women':'senior_women','grand_esquire_men':'senior_men',
-  'premier_women':'senior_women','premier_men':'senior_men',
-};
-
-function canChallengeUp(groupId) {
-  return !!CHALLENGE_UP_LADDER[String(groupId||'')];
-}
-
-function canChallengeDown(groupId) {
-  return !!CHALLENGE_DOWN_TO_SENIOR[String(groupId||'')];
-}
-
 function findChallengeUpGroup(groups,currentGroupId) {
-  const targetId = CHALLENGE_UP_LADDER[String(currentGroupId||'')];
-  if(!targetId) return null;
-  return groups.find(g=>String(g.id)===targetId)||null;
+  const idx=groups.findIndex(g=>String(g.id)===String(currentGroupId));
+  if(idx<0) return null; return groups[idx+1]||null;
 }
 
-function findChallengeDownGroup(groups,currentGroupId) {
-  const targetId = CHALLENGE_DOWN_TO_SENIOR[String(currentGroupId||'')];
-  if(!targetId) return null;
-  return groups.find(g=>String(g.id)===targetId)||null;
-}
-
-function challengeAdjustedGroup(meet,baseGroup,challengeUp,challengeDown) {
-  if(!baseGroup) return null;
-  if(challengeDown) return findChallengeDownGroup(meet.groups||[],baseGroup.id)||baseGroup;
-  if(challengeUp) return findChallengeUpGroup(meet.groups||[],baseGroup.id)||baseGroup;
-  return baseGroup;
+function challengeAdjustedGroup(meet,baseGroup,challengeUp) {
+  if(!baseGroup) return null; if(!challengeUp) return baseGroup;
+  return findChallengeUpGroup(meet.groups||[],baseGroup.id)||baseGroup;
 }
 
 function divisionEnabledForRegistration(reg,division) { return !!reg.options?.[division]; }
@@ -1285,8 +1117,8 @@ function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
     html { scroll-behavior: smooth; }
     body {
       font-family: 'Barlow', ui-sans-serif, system-ui, sans-serif;
-      font-size: 15px; line-height: 1.6; color: var(--text);
-      background: var(--off);
+      font-size: 15px; line-height: 1.7; color: var(--text);
+      background: #f1f5f9;
       min-height: 100vh;
     }
     a { color: var(--sky2); text-decoration: none; }
@@ -1294,10 +1126,12 @@ function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
 
     /* ── Nav ──────────────────────────────────────────────────────── */
     .topnav {
-      background: var(--navy);
-      border-bottom: 2px solid var(--orange);
+      background: rgba(15,31,61,.92);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(249,115,22,.35);
       position: sticky; top: 0; z-index: 100;
-      box-shadow: 0 2px 20px rgba(15,31,61,.40);
+      box-shadow: 0 2px 20px rgba(15,31,61,.30);
     }
     .nav-inner {
       max-width: 1340px; margin: 0 auto; padding: 0 20px;
@@ -1308,8 +1142,9 @@ function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
     .nav-logo { height: 44px; width: auto; display: block; }
     .nav-links { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
     .nav-link {
-      padding: 8px 14px; border-radius: var(--radius-sm); font-weight: 600; font-size: 14px;
+      padding: 8px 16px; border-radius: 999px; font-weight: 600; font-size: 14px;
       color: rgba(255,255,255,.80); transition: color .15s, background .15s;
+      letter-spacing: .01em;
     }
     .nav-link:hover { color: #fff; background: rgba(255,255,255,.10); }
     .nav-cta {
@@ -1317,12 +1152,12 @@ function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
       box-shadow: 0 2px 8px rgba(249,115,22,.40);
     }
     .nav-cta:hover { background: var(--orange2); color: #fff; }
-    .nav-ghost { border: 1px solid rgba(255,255,255,.25); color: rgba(255,255,255,.70); }
-    .nav-ghost:hover { border-color: rgba(255,255,255,.50); color: #fff; background: transparent; }
+    .nav-ghost { border: 1px solid rgba(255,255,255,.25); color: rgba(255,255,255,.70); border-radius: 999px; }
+    .nav-ghost:hover { border-color: rgba(255,255,255,.50); color: #fff; background: rgba(255,255,255,.06); }
 
     /* ── Layout ───────────────────────────────────────────────────── */
-    .wrap { max-width: 1340px; margin: 0 auto; padding: 28px 20px 80px; }
-    .page-header { margin-bottom: 22px; }
+    .wrap { max-width: 1340px; margin: 0 auto; padding: 36px 20px 80px; }
+    .page-header { margin-bottom: 28px; }
     .page-header h1 { font-family: 'Barlow Condensed', sans-serif; font-size: 48px; font-weight: 900; letter-spacing: -1px; line-height: 1; color: var(--navy); }
     .page-header .sub { font-size: 16px; color: var(--muted); margin-top: 4px; }
     h1 { font-family: 'Barlow Condensed', sans-serif; font-size: 40px; font-weight: 900; letter-spacing: -.5px; color: var(--navy); margin-bottom: 14px; }
@@ -1332,8 +1167,8 @@ function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
 
     /* ── Cards ────────────────────────────────────────────────────── */
     .card {
-      background: var(--card); border: 1px solid var(--border);
-      border-radius: var(--radius-lg); box-shadow: var(--shadow); padding: 22px;
+      background: var(--card); border: 1px solid rgba(15,31,61,.07);
+      border-radius: var(--radius-lg); box-shadow: 0 2px 12px rgba(15,31,61,.06), 0 1px 3px rgba(15,31,61,.04); padding: 28px;
     }
     .card-sm { padding: 14px; border-radius: var(--radius); }
     .card-accent { border-left: 4px solid var(--orange); }
@@ -1447,13 +1282,13 @@ function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
 
     /* ── Table ────────────────────────────────────────────────────── */
     .table { width: 100%; border-collapse: collapse; font-size: 14px; }
-    .table th { font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); font-weight: 700; padding: 10px 12px; border-bottom: 2px solid var(--border); text-align: left; }
-    .table td { padding: 11px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    .table th { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 700; padding: 12px 14px; border-bottom: 1px solid rgba(15,31,61,.08); text-align: left; }
+    .table td { padding: 13px 14px; border-bottom: 1px solid rgba(15,31,61,.05); vertical-align: top; }
     .table tr:last-child td { border-bottom: 0; }
-    .table tr:hover td { background: #f8fafc; }
+    .table tr:hover td { background: rgba(15,31,61,.02); }
 
     /* ── Chips / Badges ───────────────────────────────────────────── */
-    .chip { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; border: 1px solid var(--border2); background: #fff; color: var(--navy); white-space: nowrap; }
+    .chip { display: inline-flex; align-items: center; gap: 5px; padding: 5px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; border: 1px solid rgba(15,31,61,.12); background: #fff; color: var(--navy); white-space: nowrap; box-shadow: 0 1px 2px rgba(15,31,61,.05); letter-spacing:.01em; }
     .chip-orange { background: #fff7ed; border-color: #fed7aa; color: var(--orange2); }
     .chip-purple { background: #faf5ff; border-color: #d8b4fe; color: var(--purple); }
     .chip-sky    { background: #f0f9ff; border-color: #bae6fd; color: var(--sky2); }
@@ -1529,7 +1364,7 @@ function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
     .announcer-empty { font-size: 15px; opacity: .6; padding-top: 10px; }
 
     /* ── Live board ───────────────────────────────────────────────── */
-    .live-hero { background: var(--navy); border-radius: var(--radius-lg); padding: 28px; margin-bottom: 18px; color: #fff; }
+    .live-hero { background: linear-gradient(135deg, var(--navy) 0%, var(--navy2) 100%); border-radius: var(--radius-lg); padding: 36px; margin-bottom: 24px; color: #fff; box-shadow: 0 4px 20px rgba(15,31,61,.25); }
     .live-meet-name { font-family: 'Barlow Condensed',sans-serif; font-size: 36px; font-weight: 900; }
     .live-race-label{ font-size: 13px; opacity: .7; text-transform: uppercase; letter-spacing: .1em; margin-bottom: 4px; }
     .live-race-name { font-family: 'Barlow Condensed',sans-serif; font-size: 28px; font-weight: 700; }
@@ -1593,11 +1428,11 @@ function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
     .checkin-row {}
     .filters-row { display: grid; grid-template-columns: 1.2fr .8fr .8fr; gap: 10px; }
     @media(max-width:700px){.filters-row{grid-template-columns:1fr;}}
-    .footer-note { font-size: 11px; color: var(--muted); margin-top: 40px; padding-top: 14px; border-top: 1px solid var(--border); }
-    .live-tabs { display:flex; gap:8px; margin-bottom:18px; flex-wrap:wrap; }
-    .live-tab { padding:10px 18px; border-radius:var(--radius-sm); font-weight:700; font-size:14px; border:1.5px solid var(--border2); color:var(--navy); background:#fff; text-decoration:none; }
-    .live-tab:hover { background:var(--off); color:var(--navy); }
-    .live-tab.active { background:var(--navy); color:#fff; border-color:var(--navy); }
+    .footer-note { font-size: 11px; color: var(--muted); margin-top: 60px; padding-top: 20px; border-top: 1px solid rgba(15,31,61,.08); text-align:center; letter-spacing:.03em; }
+    .live-tabs { display:flex; gap:8px; margin-bottom:24px; flex-wrap:wrap; }
+    .live-tab { padding:10px 22px; border-radius:999px; font-weight:700; font-size:14px; border:1.5px solid rgba(15,31,61,.15); color:var(--navy); background:#fff; text-decoration:none; letter-spacing:.01em; transition:all .15s; box-shadow:0 1px 3px rgba(15,31,61,.06); }
+    .live-tab:hover { background:var(--off); color:var(--navy); transform:translateY(-1px); box-shadow:0 3px 8px rgba(15,31,61,.10); }
+    .live-tab.active { background:var(--navy); color:#fff; border-color:var(--navy); box-shadow:0 2px 10px rgba(15,31,61,.25); }
   </style>
 </head>
 <body>
@@ -2115,147 +1950,26 @@ app.get('/help', (req, res) => {
   `}));
 });
 
-
-// ── Public Meet Schedule Page ─────────────────────────────────────────────────
-app.get('/meet/:meetId/schedule', (req, res) => {
-  const db=loadDb(); const meet=getMeetOr404(db,req.params.meetId); const data=getSessionUser(req);
-  if(!meet||!meet.isPublic) return res.redirect('/meets');
-  
-  // For lite meets with a static schedule
-  if(meet.isLiteMeet && meet.staticSchedule) {
-    const sections=meet.staticSchedule;
-    const printedAt=new Date().toLocaleDateString('en-US',{month:'numeric',day:'numeric',year:'numeric'});
-    let raceNo=1;
-    const rows=sections.map(section=>{
-      if(section.type==='divider') return '<tr><td colspan="3" style="background:#0F1F3D;color:#fff;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.08em;padding:8px 12px;border:none;">'+esc(section.label)+'</td></tr>';
-      if(section.type==='subheader') return '<tr><td colspan="3" style="background:#f1f5f9;color:#475569;font-weight:700;font-size:11px;padding:6px 12px;border:none;">'+esc(section.label)+'</td></tr>';
-      const num = raceNo++;
-      return '<tr><td style="width:40px;font-weight:700;color:#F97316;font-size:14px;padding:6px 10px;">'+num+'</td><td style="padding:6px 10px;font-weight:600;">'+esc(section.label)+'</td><td style="padding:6px 10px;color:#64748b;">'+esc(section.distance||'')+'</td></tr>';
-    }).join('');
-
-    return res.send(pageShell({title:meet.meetName+' — Schedule', description:'Full race schedule for '+meet.meetName, user:data?.user||null, bodyHtml:`
-      <div class="page-header">
-        <h1>${esc(meet.meetName)}</h1>
-        <div class="sub">${esc(meet.city||'')}, ${esc(meet.state||'')} • ${esc(meet.date||'')}${meet.startTime?' • '+esc(meet.startTime):''}</div>
-      </div>
-      <div class="live-tabs">
-        <a class="live-tab" href="/meets">← Find a Meet</a>
-        <a class="live-tab active" href="/meet/${meet.id}/schedule">Race Schedule</a>
-        ${meet.registrationUrl?'<a class="live-tab" href="'+esc(meet.registrationUrl)+'" target="_blank">Register →</a>':''}
-      </div>
-      <div class="card" style="margin-bottom:16px">
-        <div class="row between center">
-          <div>
-            ${meet.description?'<div style="font-size:15px;line-height:1.7;color:var(--text);margin-bottom:14px">'+esc(meet.description)+'</div>':''}
-            <div class="row">
-              ${meet.contactName?'<span class="chip" style="font-size:14px;padding:6px 14px">📋 '+esc(meet.contactName)+'</span>':''}
-              ${meet.contactEmail?'<a href="mailto:'+esc(meet.contactEmail)+'" class="chip" style="font-size:14px;padding:6px 14px">✉️ '+esc(meet.contactEmail)+'</a>':''}
-            </div>
-          </div>
-          <button onclick="window.print()" class="btn2">🖨️ Print</button>
-        </div>
-      </div>
-      <div class="card">
-        <table style="width:100%;border-collapse:collapse;">
-          ${rows}
-        </table>
-      </div>
-      <div class="note" style="margin-top:12px;text-align:center">Printed ${printedAt} • speedskatemeet.com</div>
-      <style>
-        @media print {
-          .nav-bar,.live-tabs,.btn2,.page-header .sub { display:none!important; }
-          .card { box-shadow:none!important; border:none!important; }
-          body { padding:0!important; }
-        }
-      </style>
-    `}));
-  }
-
-  // For full SSM meets — generate from blocks
-  const breakTypes=['break','lunch','awards','practice'];
-  const breakIcons={break:'☕ BREAK',lunch:'🍽️ LUNCH',awards:'🏆 AWARDS',practice:'⛸️ PRACTICE'};
-  let raceNo=1;
-  const rows=(meet.blocks||[]).map(block=>{
-    const isBreak=breakTypes.includes(block.type||'');
-    if(isBreak) return '<tr><td colspan="3" style="background:#f1f5f9;color:#475569;font-weight:700;font-size:12px;padding:8px;border:none;text-align:center;">'+( breakIcons[block.type]||esc(block.name))+'</td></tr>';
-    const blockHeader='<tr><td colspan="3" style="background:#0F1F3D;color:#fff;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.08em;padding:8px 12px;border:none;">'+esc(block.name)+(block.day?' • '+esc(block.day):'')+'</td></tr>';
-    const raceRows=(block.raceIds||[]).map(rid=>{
-      const race=(meet.races||[]).find(r=>r.id===rid); if(!race) return '';
-      const tag=race.isRelayRace?'🔄 ':race.isOpenRace?'🏁 ':race.isQuadRace?'🛼 ':race.isTimeTrial?'⏱ ':'';
-      return '<tr><td style="width:40px;font-weight:700;color:#F97316;font-size:14px;padding:6px 10px;">'+raceNo+++'</td><td style="padding:6px 10px;font-weight:600;">'+tag+esc(race.groupLabel)+'</td><td style="padding:6px 10px;color:#64748b;">'+esc(race.distanceLabel)+' • '+esc(cap(race.division))+'</td></tr>';
-    }).join('');
-    return blockHeader+raceRows;
-  }).join('');
-
-  res.send(pageShell({title:meet.meetName+' — Schedule', description:'Full race schedule for '+meet.meetName, user:data?.user||null, bodyHtml:`
-    <div class="page-header">
-      <h1>${esc(meet.meetName)}</h1>
-      <div class="sub">${esc(meet.date||'')}${meet.startTime?' • '+esc(meet.startTime):''}</div>
-    </div>
-    <div class="live-tabs">
-      <a class="live-tab" href="/meet/${meet.id}/live">Live Board</a>
-      <a class="live-tab active" href="/meet/${meet.id}/schedule">Schedule</a>
-      <a class="live-tab" href="/meet/${meet.id}/results">Results</a>
-      <a class="live-tab" href="/meet/${meet.id}/alerts">📲 Alerts</a>
-    </div>
-    <div class="card">
-      <div class="row between" style="margin-bottom:12px">
-        <div style="font-weight:700">${(meet.blocks||[]).filter(b=>!['break','lunch','awards','practice'].includes(b.type||'')).length} Blocks • ${(meet.races||[]).length} Races</div>
-        <button onclick="window.print()" class="btn2">🖨️ Print</button>
-      </div>
-      <table style="width:100%;border-collapse:collapse;">${rows||'<tr><td class="muted">Schedule not yet posted.</td></tr>'}</table>
-    </div>
-    <style>@media print{.nav-bar,.live-tabs,.btn2{display:none!important;}.card{box-shadow:none!important;}}</style>
-  `}));
-});
-
-
 app.get('/meets', (req, res) => {
   const db=loadDb(); const data=getSessionUser(req);
   const cards=(db.meets||[]).filter(m=>m.isPublic).map(m=>{
     const rink=db.rinks.find(r=>Number(r.id)===Number(m.rinkId));
-
-    // Lite meet card
-    if(m.isLiteMeet) {
-      const hasSchedule=!!(m.staticSchedule&&m.staticSchedule.length);
-      return `
-        <div class="card" style="margin-bottom:14px;border-left:4px solid var(--orange)">
-          <div class="row between" style="margin-bottom:6px">
-            <div>
-              <div class="row" style="gap:6px;margin-bottom:4px">
-                <h2 style="margin:0">${esc(m.meetName)}</h2>
-                <span class="chip" style="font-size:11px">📋 Basic Listing</span>
-              </div>
-              <div class="muted">${esc(m.city||'')}${m.state?', '+esc(m.state):''} • ${esc(m.date||'Date TBD')}${m.startTime?' • '+esc(m.startTime):''}</div>
-              ${m.description?`<div class="note" style="margin-top:4px">${esc(m.description)}</div>`:''}
-            </div>
-          </div>
-          <div class="hr"></div>
-          <div class="action-row">
-            ${hasSchedule?`<a class="btn-orange" href="/meet/${m.id}/schedule">📋 View Schedule</a>`:''}
-            ${m.registrationUrl?`<a class="btn2" href="${esc(m.registrationUrl)}" target="_blank">Register →</a>`:''}
-            ${m.contactEmail?`<a class="btn2" href="mailto:${esc(m.contactEmail)}">Contact</a>`:''}
-          </div>
-        </div>`;
-    }
-
-    // Full SSM meet card
     return `
       <div class="card" style="margin-bottom:14px">
-        <div class="row between" style="margin-bottom:6px">
+        <div class="row between">
           <div>
             <h2 style="margin:0">${esc(m.meetName)}</h2>
             <div class="muted">${esc(m.date||'Date TBD')}${m.startTime?` • ${esc(m.startTime)}`:''}</div>
             ${rink?`<div class="note">${esc(rink.name)} • ${esc(rink.city)}, ${esc(rink.state)}</div>`:''}
           </div>
           <div class="row">
+            <span class="chip">${(m.races||[]).length} Races</span>
             <span class="chip chip-green">${esc(m.status||'draft')}</span>
           </div>
         </div>
         <div class="hr"></div>
         <div class="action-row">
           <a class="btn-orange" href="/meet/${m.id}/register">Register</a>
-          <a class="btn2" href="/meet/${m.id}/schedule">📋 Schedule</a>
           <a class="btn2" href="/meet/${m.id}/live">Live</a>
           <a class="btn2" href="/meet/${m.id}/results">Results</a>
         </div>
@@ -2954,9 +2668,9 @@ app.post('/portal/create-meet', requireRole('meet_director'), (req, res) => {
   req.db.meets.push(meet); saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/builder`);
 });
 
-app.get('/portal/meet/:meetId/delete-confirm', requireRole('meet_director','super_admin'), (req, res) => {
+app.get('/portal/meet/:meetId/delete-confirm', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
-  if(!meet) return res.redirect('/portal');
+  if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
   res.send(pageShell({title:'Delete Meet',user:req.user, bodyHtml:`
     <div style="max-width:500px;margin:40px auto">
       <div class="page-header"><h1>Delete Meet</h1></div>
@@ -2972,9 +2686,9 @@ app.get('/portal/meet/:meetId/delete-confirm', requireRole('meet_director','supe
     </div>`}));
 });
 
-app.post('/portal/meet/:meetId/delete', requireRole('meet_director','super_admin'), (req, res) => {
+app.post('/portal/meet/:meetId/delete', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
-  if(!meet) return res.redirect('/portal');
+  if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
   req.db.meets=req.db.meets.filter(m=>Number(m.id)!==Number(req.params.meetId));
   saveDb(req.db); res.redirect('/portal');
 });
@@ -3595,40 +3309,15 @@ app.get('/meet/:meetId/register', (req, res) => {
             <div><label>Sponsor (optional)</label><input name="sponsor" placeholder="Bones Bearings" /></div>
           </div>
           <datalist id="teams-reg">${TEAM_LIST.map(t=>`<option value="${esc(t)}"></option>`).join('')}</datalist>
-          <div class="toggle-group" id="regToggles">
-            ${canChallengeUp(baseGroup?.id)?`
-            <div class="toggle-row"><div><div class="toggle-row-label">Challenge Up <span class="note" style="font-size:11px">(races in ${findChallengeUpGroup(meet.groups,baseGroup?.id)?.label||'next division'} Elite)</span></div><div class="toggle-row-desc">Add-on: races their own Elite + next age group Elite. Novice not allowed.</div></div>${toggleSwitch('challengeUp',false)}</div>`:''}
-            ${canChallengeDown(baseGroup?.id)?`
-            <div class="toggle-row"><div><div class="toggle-row-label">Challenge Down to Senior <span class="note" style="font-size:11px">(Senior Elite)</span></div><div class="toggle-row-desc">Add-on: races their own class + Senior Elite.</div></div>${toggleSwitch('challengeDown',false)}</div>`:''}
-            <div class="toggle-row" id="noviceRow"><div><div class="toggle-row-label">Novice</div></div>${toggleSwitch('novice',false)}</div>
+          <div class="toggle-group">
+            <div class="toggle-row"><div><div class="toggle-row-label">Challenge Up</div></div>${toggleSwitch('challengeUp',false)}</div>
+            <div class="toggle-row"><div><div class="toggle-row-label">Novice</div></div>${toggleSwitch('novice',false)}</div>
             <div class="toggle-row"><div><div class="toggle-row-label">Elite</div></div>${toggleSwitch('elite',false)}</div>
             <div class="toggle-row"><div><div class="toggle-row-label">Open</div></div>${toggleSwitch('open',false)}</div>
             ${(meet.quadGroups||[]).some(g=>g.enabled)?`<div class="toggle-row"><div><div class="toggle-row-label">Quad</div></div>${toggleSwitch('quad',false)}</div>`:''}
             ${meet.timeTrialsEnabled?`<div class="toggle-row"><div><div class="toggle-row-label">Time Trials</div></div>${toggleSwitch('timeTrials',false)}</div>`:''}
             ${meet.relayEnabled?`<div class="toggle-row"><div><div class="toggle-row-label">Relays</div></div>${toggleSwitch('relays',false)}</div>`:''}
           </div>
-          <script>
-            // Challenge Up — auto-deselect Novice, force Elite on
-            var cuToggle = document.querySelector('input[name="challengeUp"]');
-            var cdToggle = document.querySelector('input[name="challengeDown"]');
-            var noviceToggle = document.querySelector('input[name="novice"]');
-            var eliteToggle = document.querySelector('input[name="elite"]');
-            var noviceRow = document.getElementById('noviceRow');
-            function onChallengeChange() {
-              var cu = cuToggle && cuToggle.checked;
-              var cd = cdToggle && cdToggle.checked;
-              if(cu || cd) {
-                // Force Elite on, Novice off and hide it
-                if(noviceToggle) { noviceToggle.checked=false; if(noviceToggle.nextElementSibling) noviceToggle.nextElementSibling.classList.remove('on'); }
-                if(eliteToggle) { eliteToggle.checked=true; if(eliteToggle.nextElementSibling) eliteToggle.nextElementSibling.classList.add('on'); }
-                if(noviceRow) noviceRow.style.display='none';
-              } else {
-                if(noviceRow) noviceRow.style.display='';
-              }
-            }
-            if(cuToggle) cuToggle.addEventListener('change', onChallengeChange);
-            if(cdToggle) cdToggle.addEventListener('change', onChallengeChange);
-          </script>
           ${costWidget}
           <div><button class="btn-orange" type="submit">Register Skater</button></div>
         </form>`}
@@ -3642,14 +3331,10 @@ app.post('/meet/:meetId/register', (req, res) => {
   const birthdate=String(req.body.birthdate||'').trim();
   const compAge=usarsAge(birthdate,meet.date)||Number(req.body.age||0);
   const baseGroup=findAgeGroup(meet.groups,compAge,gender);
-  const isChallengeUp=!!req.body.challengeUp;
-  const isChallengeDown=!!req.body.challengeDown;
-  const finalGroup=challengeAdjustedGroup(meet,baseGroup,isChallengeUp,isChallengeDown);
+  const finalGroup=challengeAdjustedGroup(meet,baseGroup,!!req.body.challengeUp);
   const meetNumber=(meet.registrations||[]).reduce((max,r)=>Math.max(max,Number(r.meetNumber)||0),0)+1;
   const regEmail=String(req.body.email||'').trim();
-  // Challenge Up/Down forces Elite, strips Novice
-  const forcedElite = isChallengeUp||isChallengeDown;
-  const regOpts={challengeUp:isChallengeUp,challengeDown:isChallengeDown,novice:forcedElite?false:!!req.body.novice,elite:forcedElite?true:!!req.body.elite,open:!!req.body.open,quad:!!req.body.quad,timeTrials:!!req.body.timeTrials,relays:!!req.body.relays};
+  const regOpts={challengeUp:!!req.body.challengeUp,novice:!!req.body.novice,elite:!!req.body.elite,open:!!req.body.open,quad:!!req.body.quad,timeTrials:!!req.body.timeTrials,relays:!!req.body.relays};
   const totalCost=calcRegistrationCost(meet,regOpts);
   meet.registrations.push({
     id:nextId(meet.registrations),createdAt:nowIso(),
@@ -3662,22 +3347,6 @@ app.post('/meet/:meetId/register', (req, res) => {
     paid:false,checkedIn:false,totalCost,
     options:regOpts,
   });
-  // If challenging up or down, ALSO register them in their base group Elite
-  if((isChallengeUp||isChallengeDown) && baseGroup && finalGroup && baseGroup.id !== finalGroup.id) {
-    const baseOpts={...regOpts,challengeUp:false,challengeDown:false};
-    meet.registrations.push({
-      id:nextId(meet.registrations),createdAt:nowIso(),
-      name:String(req.body.name||'').trim(),birthdate,age:compAge,gender,email:regEmail,
-      team:String(req.body.team||'Midwest Racing').trim()||'Midwest Racing',
-      sponsor:String(req.body.sponsor||'').trim(),
-      divisionGroupId:baseGroup.id,divisionGroupLabel:baseGroup.label,
-      originalDivisionGroupId:baseGroup.id,originalDivisionGroupLabel:baseGroup.label,
-      meetNumber,helmetNumber:nextHelmetNumber(meet),
-      paid:false,checkedIn:false,totalCost:0,
-      isChallengeSecondary:true,
-      options:baseOpts,
-    });
-  }
   rebuildRaceAssignments(meet); ensureCurrentRace(meet); saveDb(db);
   // Send confirmation email to registrant
   if(regEmail) {
@@ -3762,7 +3431,7 @@ app.get('/portal/meet/:meetId/registered', requireRole('meet_director'), (req, r
       <td>${esc(r.meetNumber)}</td><td>${esc(r.helmetNumber)}</td>
       <td><strong>${esc(r.name)}</strong>${sponsorLineHtml(r.sponsor||'')}</td>
       <td>${esc(r.age)}</td><td>${esc(r.team)}</td>
-      <td>${esc(r.divisionGroupLabel||'')}${r.options?.challengeUp?`<div class="note" style="color:var(--orange)">↑ CU from ${esc(r.originalDivisionGroupLabel||'')}</div>`:''}${r.options?.challengeDown?`<div class="note" style="color:var(--sky2)">↓ CD to Senior</div>`:''}${r.isChallengeSecondary?`<div class="note" style="color:var(--muted)">Base group entry</div>`:''}</td>
+      <td>${esc(r.divisionGroupLabel||'')}${r.options?.challengeUp?`<div class="note">↑ from ${esc(r.originalDivisionGroupLabel||'')}</div>`:''}</td>
       <td>${['challengeUp','novice','elite','open','quad','timeTrials','relays'].filter(k=>r.options?.[k]).map(k=>k==='challengeUp'?'CU':cap(k)).join(', ')||'—'}</td>
       <td>$${esc(r.totalCost)}</td>
       <td>${r.paid?`<span class="good">✔</span>`:'—'}</td>
