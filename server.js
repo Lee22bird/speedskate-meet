@@ -3410,11 +3410,12 @@ app.get('/meet/:meetId/register', (req, res) => {
   if(!meet||!meet.isPublic) return res.redirect('/meets');
   const closed=isRegistrationClosed(meet);
   const base=Number(meet.baseEntryFee||0);
-  const novC=(meet.groups||[]).reduce((c,g)=>g.divisions&&g.divisions.novice&&g.divisions.novice.enabled?Number(g.divisions.novice.cost||0):c,0);
-  const eliC=(meet.groups||[]).reduce((c,g)=>g.divisions&&g.divisions.elite&&g.divisions.elite.enabled?Number(g.divisions.elite.cost||0):c,0);
-  const opnC=(meet.openGroups||[]).reduce((c,g)=>g.enabled?Number(g.cost||0):c,0);
-  const qdC=(meet.quadGroups||[]).reduce((c,g)=>g.enabled?Number(g.cost||0):c,0);
-  const costWidget=base>0 ? buildCostWidget(base,novC,eliC,opnC,qdC) : '';
+  const novC=Number((meet.groups||[]).find(g=>g.divisions&&g.divisions.novice&&g.divisions.novice.enabled)?.divisions?.novice?.cost||0);
+  const eliC=Number((meet.groups||[]).find(g=>g.divisions&&g.divisions.elite&&g.divisions.elite.enabled)?.divisions?.elite?.cost||0);
+  const opnC=Number((meet.openGroups||[]).find(g=>g.enabled)?.cost||0);
+  const qdC=Number((meet.quadGroups||[]).find(g=>g.enabled)?.cost||0);
+  const hasAnyCost=base>0||novC>0||eliC>0||opnC>0||qdC>0;
+  const costWidget=hasAnyCost ? buildCostWidget(base,novC,eliC,opnC,qdC) : '';
   res.send(pageShell({title:'Register',user:data?.user||null, bodyHtml:`
     <div class="page-header"><h1>Register</h1><div class="sub">${esc(meet.meetName)}${meet.date?` • ${esc(meet.date)}`:''}</div></div>
     <div class="card">
@@ -3618,7 +3619,9 @@ app.post('/portal/meet/:meetId/registered/:regId/edit', requireRole('meet_direct
   const compAge=usarsAge(birthdate,meet.date)||Number(reg.age||0);
   const baseGroup=findAgeGroup(meet.groups,compAge,gender);
   const finalGroup=challengeAdjustedGroup(meet,baseGroup,!!req.body.challengeUp);
-  Object.assign(reg,{name:String(req.body.name||'').trim(),birthdate,age:compAge,gender,team:String(req.body.team||'Midwest Racing').trim()||'Midwest Racing',sponsor:String(req.body.sponsor||'').trim(),originalDivisionGroupId:baseGroup?.id||'',originalDivisionGroupLabel:baseGroup?.label||'',divisionGroupId:finalGroup?.id||'',divisionGroupLabel:finalGroup?.label||'Unassigned',options:{challengeUp:!!req.body.challengeUp,novice:!!req.body.novice,elite:!!req.body.elite,open:!!req.body.open,quad:!!req.body.quad,timeTrials:!!req.body.timeTrials,relays:!!req.body.relays}});
+  const editOpts={challengeUp:!!req.body.challengeUp,novice:!!req.body.novice,elite:!!req.body.elite,open:!!req.body.open,quad:!!req.body.quad,timeTrials:!!req.body.timeTrials,relays:!!req.body.relays};
+  const editCost=calcRegistrationCost(meet,editOpts,finalGroup?.id);
+  Object.assign(reg,{name:String(req.body.name||'').trim(),birthdate,age:compAge,gender,team:String(req.body.team||'Midwest Racing').trim()||'Midwest Racing',sponsor:String(req.body.sponsor||'').trim(),originalDivisionGroupId:baseGroup?.id||'',originalDivisionGroupLabel:baseGroup?.label||'',divisionGroupId:finalGroup?.id||'',divisionGroupLabel:finalGroup?.label||'Unassigned',totalCost:editCost,options:editOpts});
   rebuildRaceAssignments(meet); saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/registered`);
 });
 
