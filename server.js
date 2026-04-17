@@ -594,7 +594,7 @@ function calculateRegistrationTotal(meet,reg) {
 
 function ensureRegistrationTotalsAndNumbers(meet) {
   for(const reg of meet.registrations||[]) {
-    reg.totalCost=calculateRegistrationTotal(meet,reg);
+    reg.totalCost=calcRegistrationCost(meet,reg.options||{},reg.divisionGroupId);
     if(!Number.isFinite(Number(reg.helmetNumber))||Number(reg.helmetNumber)<=0) reg.helmetNumber=nextHelmetNumber(meet);
   }
 }
