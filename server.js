@@ -304,7 +304,7 @@ function defaultMeet(ownerUserId) {
     timeTrialsEnabled:false, relayEnabled:false, judgesPanelRequired:true,
     notes:'', relayNotes:'', isPublic:false, status:'draft', tiebreaker:'d2', baseEntryFee:0,
     groups:baseGroups(), openGroups:makeOpenGroupsTemplate(), quadGroups:makeQuadGroupsTemplate(),
-    races:[], blocks:[], registrations:[],
+    races:[], blocks:[], registrations:[], skateabilityGroups:[],
     currentRaceId:'', currentRaceIndex:-1, raceDayPaused:false,
   };
 }
@@ -403,6 +403,7 @@ function migrateMeet(meet,fallbackOwnerId) {
   if(typeof meet.raceDayPaused!=='boolean') meet.raceDayPaused=false;
   if(!Number.isFinite(Number(meet.baseEntryFee))) meet.baseEntryFee=0;
   if(!Array.isArray(meet.textAlerts)) meet.textAlerts=[];
+  if(!Array.isArray(meet.skateabilityGroups)) meet.skateabilityGroups=[];
   meet.races=meet.races.map((r,idx)=>({
     id:r.id||('r'+crypto.randomBytes(6).toString('hex')), orderHint:Number(r.orderHint||idx+1),
     groupId:String(r.groupId||''), groupLabel:String(r.groupLabel||''), ages:String(r.ages||''),
@@ -2922,6 +2923,73 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
       </div>
       <div class="page-header"><h2>Division Groups</h2><div class="sub">Enable classes and set distances for each age group.</div></div>
       ${groupsHtml}
+
+      <div class="card" style="margin-top:8px">
+        <div class="row between center" style="margin-bottom:14px">
+          <div>
+            <h2 style="margin:0">🦋 Skateability</h2>
+            <div class="note">Add Skateability divisions for specific age groups — director sets distances manually.</div>
+          </div>
+          <button type="button" class="btn2 btn-sm" onclick="addSkateability()">+ Add Skateability</button>
+        </div>
+        <div id="skateability-list">
+          ${(meet.skateabilityGroups||[]).map((sg,si)=>`
+            <div class="group-pair-col" style="margin-bottom:12px" id="sk-${si}">
+              <div class="group-pair-header">
+                <span class="group-pair-name">Skateability — ${esc(sg.ageGroupLabel||'')}</span>
+                <button type="button" class="btn-danger btn-sm" onclick="removeSkateability(${si})">Remove</button>
+              </div>
+              <input type="hidden" name="sk_${si}_ageGroupId" value="${esc(sg.ageGroupId||'')}" />
+              <input type="hidden" name="sk_${si}_ageGroupLabel" value="${esc(sg.ageGroupLabel||'')}" />
+              <div style="display:flex;gap:8px;align-items:flex-end;margin-top:10px">
+                <div style="width:80px;flex-shrink:0"><label>Cost $</label><input name="sk_${si}_cost" value="${esc(sg.cost||'0')}" placeholder="0" /></div>
+                <div style="flex:1"><label>D1</label><input name="sk_${si}_d1" value="${esc(sg.distances?.[0]||'')}" placeholder="100m" /></div>
+                <div style="flex:1"><label>D2</label><input name="sk_${si}_d2" value="${esc(sg.distances?.[1]||'')}" placeholder="200m" /></div>
+                <div style="flex:1"><label>D3</label><input name="sk_${si}_d3" value="${esc(sg.distances?.[2]||'')}" placeholder="300m" /></div>
+              </div>
+            </div>`).join('')}
+        </div>
+        <input type="hidden" name="skateability_count" id="skateability_count" value="${(meet.skateabilityGroups||[]).length}" />
+      </div>
+
+      <script>
+        const AGE_GROUPS = ${JSON.stringify(meet.groups.map(g=>({id:g.id,label:g.label,ages:g.ages})))};
+        let skCount = ${(meet.skateabilityGroups||[]).length};
+
+        function addSkateability() {
+          const sel = prompt('Select age group for Skateability:\n' + AGE_GROUPS.map((g,i)=>(i+1)+'. '+g.label+' ('+g.ages+')').join('\n') + '\n\nEnter number:');
+          if(!sel) return;
+          const idx = parseInt(sel)-1;
+          const g = AGE_GROUPS[idx];
+          if(!g) return alert('Invalid selection');
+          const si = skCount++;
+          document.getElementById('skateability_count').value = skCount;
+          const div = document.createElement('div');
+          div.className = 'group-pair-col';
+          div.style.marginBottom = '12px';
+          div.id = 'sk-'+si;
+          div.innerHTML =
+            '<div class="group-pair-header">' +
+              '<span class="group-pair-name">Skateability \u2014 '+g.label+'</span>' +
+              '<button type="button" class="btn-danger btn-sm" onclick="this.closest(\'.group-pair-col\').remove()">Remove</button>' +
+            '</div>' +
+            '<input type="hidden" name="sk_'+si+'_ageGroupId" value="'+g.id+'" />' +
+            '<input type="hidden" name="sk_'+si+'_ageGroupLabel" value="'+g.label+'" />' +
+            '<div style="display:flex;gap:8px;align-items:flex-end;margin-top:10px">' +
+              '<div style="width:80px;flex-shrink:0"><label>Cost $</label><input name="sk_'+si+'_cost" value="0" placeholder="0" /></div>' +
+              '<div style="flex:1"><label>D1</label><input name="sk_'+si+'_d1" value="" placeholder="100m" /></div>' +
+              '<div style="flex:1"><label>D2</label><input name="sk_'+si+'_d2" value="" placeholder="200m" /></div>' +
+              '<div style="flex:1"><label>D3</label><input name="sk_'+si+'_d3" value="" placeholder="300m" /></div>' +
+            '</div>';
+          document.getElementById('skateability-list').appendChild(div);
+        }
+
+        function removeSkateability(si) {
+          const el = document.getElementById('sk-'+si);
+          if(el) el.remove();
+        }
+      </script>
+
       <div class="card">
         <div class="row between center">
           <div class="muted">Save Meet saves all settings without touching races or blocks.</div>
@@ -2957,6 +3025,24 @@ function saveMeetFields(meet, body) {
       };
     }
   });
+  // Save skateability groups
+  const skCount = Number(body.skateability_count||0);
+  meet.skateabilityGroups = [];
+  for(let si=0; si<skCount; si++) {
+    const ageGroupId = String(body[`sk_${si}_ageGroupId`]||'').trim();
+    const ageGroupLabel = String(body[`sk_${si}_ageGroupLabel`]||'').trim();
+    if(!ageGroupId) continue;
+    meet.skateabilityGroups.push({
+      id: 'sk_'+si+'_'+ageGroupId,
+      ageGroupId, ageGroupLabel,
+      cost: Number(String(body[`sk_${si}_cost`]||'0').trim()||0),
+      distances: [
+        String(body[`sk_${si}_d1`]||'').trim(),
+        String(body[`sk_${si}_d2`]||'').trim(),
+        String(body[`sk_${si}_d3`]||'').trim(),
+      ],
+    });
+  }
   meet.updatedAt=nowIso();
 }
 
@@ -3317,6 +3403,23 @@ app.get('/meet/:meetId/register', (req, res) => {
             ${(meet.quadGroups||[]).some(g=>g.enabled)?`<div class="toggle-row"><div><div class="toggle-row-label">Quad</div></div>${toggleSwitch('quad',false)}</div>`:''}
             ${meet.timeTrialsEnabled?`<div class="toggle-row"><div><div class="toggle-row-label">Time Trials</div></div>${toggleSwitch('timeTrials',false)}</div>`:''}
             ${meet.relayEnabled?`<div class="toggle-row"><div><div class="toggle-row-label">Relays</div></div>${toggleSwitch('relays',false)}</div>`:''}
+            ${(meet.skateabilityGroups||[]).length?`
+              <div class="toggle-row"><div><div class="toggle-row-label">Skateability</div><div class="toggle-row-desc">Special division — select your group below if enabled</div></div>${toggleSwitch('skateability',false)}</div>
+              <div id="skateability-group-row" style="display:none">
+                <div class="toggle-row" style="flex-direction:column;align-items:flex-start;gap:8px">
+                  <div class="toggle-row-label">Skateability Age Group</div>
+                  <select name="skateabilityGroupId" style="width:100%">
+                    <option value="">— Select group —</option>
+                    ${(meet.skateabilityGroups||[]).map(sg=>`<option value="${esc(sg.id)}">${esc(sg.ageGroupLabel)}</option>`).join('')}
+                  </select>
+                </div>
+              </div>
+              <script>
+                var skToggle = document.querySelector('input[name="skateability"]');
+                if(skToggle) skToggle.addEventListener('change', function() {
+                  document.getElementById('skateability-group-row').style.display = this.checked ? '' : 'none';
+                });
+              </script>`:''}
           </div>
           ${costWidget}
           <div><button class="btn-orange" type="submit">Register Skater</button></div>
