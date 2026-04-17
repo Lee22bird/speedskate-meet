@@ -986,13 +986,25 @@ function buildCostWidget(base,novC,eliC,opnC,qdC) {
   return html.join("");
 }
 
-function calcRegistrationCost(meet, options) {
+function calcRegistrationCost(meet, options, groupId) {
   const base=Number(meet.baseEntryFee||0);
   const events=[];
-  if(options.novice){const cost=(meet.groups||[]).reduce((c,g)=>g.divisions&&g.divisions.novice&&g.divisions.novice.enabled?Number(g.divisions.novice.cost||0):c,0);events.push({name:'Novice',cost});}
-  if(options.elite){const cost=(meet.groups||[]).reduce((c,g)=>g.divisions&&g.divisions.elite&&g.divisions.elite.enabled?Number(g.divisions.elite.cost||0):c,0);events.push({name:'Elite',cost});}
-  if(options.open){const cost=(meet.openGroups||[]).reduce((c,g)=>g.enabled?Number(g.cost||0):c,0);events.push({name:'Open',cost});}
-  if(options.quad){const cost=(meet.quadGroups||[]).reduce((c,g)=>g.enabled?Number(g.cost||0):c,0);events.push({name:'Quad',cost});}
+  // Use the skater's specific group so we get the correct per-group cost
+  const skaterGroup=groupId?(meet.groups||[]).find(g=>g.id===groupId):null;
+  if(options.novice){
+    const cost=skaterGroup&&skaterGroup.divisions&&skaterGroup.divisions.novice&&skaterGroup.divisions.novice.enabled
+      ? Number(skaterGroup.divisions.novice.cost||0)
+      : Number((meet.groups||[]).find(g=>g.divisions&&g.divisions.novice&&g.divisions.novice.enabled)?.divisions?.novice?.cost||0);
+    events.push({name:'Novice',cost});
+  }
+  if(options.elite){
+    const cost=skaterGroup&&skaterGroup.divisions&&skaterGroup.divisions.elite&&skaterGroup.divisions.elite.enabled
+      ? Number(skaterGroup.divisions.elite.cost||0)
+      : Number((meet.groups||[]).find(g=>g.divisions&&g.divisions.elite&&g.divisions.elite.enabled)?.divisions?.elite?.cost||0);
+    events.push({name:'Elite',cost});
+  }
+  if(options.open){const cost=Number((meet.openGroups||[]).find(g=>g.enabled)?.cost||0);events.push({name:'Open',cost});}
+  if(options.quad){const cost=Number((meet.quadGroups||[]).find(g=>g.enabled)?.cost||0);events.push({name:'Quad',cost});}
   if(options.timeTrials) events.push({name:'Time Trials',cost:0});
   if(options.relays) events.push({name:'Relays',cost:0});
   if(!events.length) return base;
@@ -3460,7 +3472,7 @@ app.post('/meet/:meetId/register', (req, res) => {
   const meetNumber=(meet.registrations||[]).reduce((max,r)=>Math.max(max,Number(r.meetNumber)||0),0)+1;
   const regEmail=String(req.body.email||'').trim();
   const regOpts={challengeUp:!!req.body.challengeUp,novice:!!req.body.novice,elite:!!req.body.elite,open:!!req.body.open,quad:!!req.body.quad,timeTrials:!!req.body.timeTrials,relays:!!req.body.relays};
-  const totalCost=calcRegistrationCost(meet,regOpts);
+  const totalCost=calcRegistrationCost(meet,regOpts,finalGroup?.id);
   meet.registrations.push({
     id:nextId(meet.registrations),createdAt:nowIso(),
     name:String(req.body.name||'').trim(),birthdate,age:compAge,gender,email:regEmail,
