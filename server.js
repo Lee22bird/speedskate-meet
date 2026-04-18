@@ -439,6 +439,11 @@ function migrateMeet(meet,fallbackOwnerId) {
         label:base?.label||g.label||'Division Group', ages:base?.ages||g.ages||'', gender:base?.gender||g.gender||'',
         divisions:normalizeDivisionSet(g.divisions)};
     });
+    // Append any base groups missing from this meet (e.g. Premier added after meet was created)
+    const existingIds=new Set(meet.groups.map(g=>g.id));
+    for(const base of baseGroups()) {
+      if(!existingIds.has(base.id)) meet.groups.push({...base,divisions:normalizeDivisionSet({})});
+    }
   }
   if(!Array.isArray(meet.races)) meet.races=[];
   if(!Array.isArray(meet.blocks)) meet.blocks=[];
@@ -570,8 +575,26 @@ function findAgeGroup(groups,age,genderGuess) {
 }
 
 function findChallengeUpGroup(groups,currentGroupId) {
-  const idx=groups.findIndex(g=>String(g.id)===String(currentGroupId));
-  if(idx<0) return null; return groups[idx+1]||null;
+  // Senior is the peak — everyone challenges toward Senior, same gender only.
+  // Younger groups (Junior and below) challenge UP (toward older/Senior).
+  // Older groups (Classic and above) challenge DOWN (toward younger/Senior).
+  // Senior itself cannot challenge — they are the top of the mountain.
+  const SENIOR_IDS = ['senior_men','senior_women'];
+  const current = groups.find(g=>String(g.id)===String(currentGroupId));
+  if(!current) return null;
+  // Senior cannot challenge
+  if(SENIOR_IDS.includes(current.id)) return null;
+  // Get same-gender groups only, sorted by their index in the array
+  const sameGender = groups.filter(g=>g.gender===current.gender);
+  const idx = sameGender.findIndex(g=>String(g.id)===String(currentGroupId));
+  if(idx<0) return null;
+  const seniorIdx = sameGender.findIndex(g=>SENIOR_IDS.includes(g.id));
+  if(seniorIdx<0) return null;
+  // If younger than Senior, challenge up (toward higher index = older = Senior)
+  if(idx < seniorIdx) return sameGender[idx+1]||null;
+  // If older than Senior, challenge down (toward lower index = younger = Senior)
+  if(idx > seniorIdx) return sameGender[idx-1]||null;
+  return null;
 }
 
 function challengeAdjustedGroup(meet,baseGroup,challengeUp) {
@@ -3467,19 +3490,30 @@ app.post('/meet/:meetId/register', (req, res) => {
   const birthdate=String(req.body.birthdate||'').trim();
   const compAge=usarsAge(birthdate,meet.date)||Number(req.body.age||0);
   let baseGroup=findAgeGroup(meet.groups,compAge,gender);
-  // If novice selected but age group has novice disabled, find nearest group with novice enabled
-  // Search upward (older) first, then wrap downward (younger) — mirrors how challenge up works
+  // Novice bump: if age group has no novice, find nearest group with novice enabled toward Senior
   if(!!req.body.novice && baseGroup) {
-    const hasNovice = baseGroup.divisions && baseGroup.divisions.novice && baseGroup.divisions.novice.enabled;
+    const hasNovice = baseGroup.divisions?.novice?.enabled;
     if(!hasNovice) {
-      const idx = meet.groups.findIndex(g=>g.id===baseGroup.id);
-      const sameGender = g => g.gender===gender && g.divisions && g.divisions.novice && g.divisions.novice.enabled;
-      const bump = meet.groups.slice(idx+1).find(sameGender)   // search up (older) first
-                || meet.groups.slice(0,idx).reverse().find(sameGender); // wrap back down (younger)
+      const SENIOR_IDS = ['senior_men','senior_women'];
+      const sameGender = meet.groups.filter(g=>g.gender===gender);
+      const idx = sameGender.findIndex(g=>g.id===baseGroup.id);
+      const seniorIdx = sameGender.findIndex(g=>SENIOR_IDS.includes(g.id));
+      const hasNoviceEnabled = g => g.divisions?.novice?.enabled;
+      let bump = null;
+      if(idx < seniorIdx) {
+        // Younger than Senior — search upward toward Senior, then downward if nothing found
+        bump = sameGender.slice(idx+1, seniorIdx+1).find(hasNoviceEnabled)
+            || sameGender.slice(0, idx).reverse().find(hasNoviceEnabled);
+      } else if(idx > seniorIdx) {
+        // Older than Senior — search downward toward Senior, then upward if nothing found
+        bump = sameGender.slice(seniorIdx, idx).reverse().find(hasNoviceEnabled)
+            || sameGender.slice(idx+1).find(hasNoviceEnabled);
+      }
       if(bump) baseGroup = bump;
     }
   }
-  const finalGroup=challengeAdjustedGroup(meet,baseGroup,!!req.body.challengeUp);
+  // Challenge Up is Elite only — Novice-only skaters cannot challenge up or down
+  const finalGroup=challengeAdjustedGroup(meet,baseGroup,!!req.body.challengeUp && !!req.body.elite);
   const meetNumber=(meet.registrations||[]).reduce((max,r)=>Math.max(max,Number(r.meetNumber)||0),0)+1;
   const regEmail=String(req.body.email||'').trim();
   const skGroups=(meet.skateabilityGroups||[]).map(sg=>sg.ageGroupId).filter(id=>!!req.body['sk_grp_'+id]);
@@ -3638,8 +3672,29 @@ app.post('/portal/meet/:meetId/registered/:regId/edit', requireRole('meet_direct
   const gender=String(req.body.gender||'').trim()||'boys';
   const birthdate=String(req.body.birthdate||'').trim()||reg.birthdate||'';
   const compAge=usarsAge(birthdate,meet.date)||Number(reg.age||0);
-  const baseGroup=findAgeGroup(meet.groups,compAge,gender);
-  const finalGroup=challengeAdjustedGroup(meet,baseGroup,!!req.body.challengeUp);
+  let baseGroup=findAgeGroup(meet.groups,compAge,gender);
+  // Novice bump toward Senior for edit route
+  if(!!req.body.novice && baseGroup) {
+    const hasNovice = baseGroup.divisions?.novice?.enabled;
+    if(!hasNovice) {
+      const SENIOR_IDS = ['senior_men','senior_women'];
+      const sameGender = meet.groups.filter(g=>g.gender===gender);
+      const idx = sameGender.findIndex(g=>g.id===baseGroup.id);
+      const seniorIdx = sameGender.findIndex(g=>SENIOR_IDS.includes(g.id));
+      const hasNoviceEnabled = g => g.divisions?.novice?.enabled;
+      let bump = null;
+      if(idx < seniorIdx) {
+        bump = sameGender.slice(idx+1, seniorIdx+1).find(hasNoviceEnabled)
+            || sameGender.slice(0, idx).reverse().find(hasNoviceEnabled);
+      } else if(idx > seniorIdx) {
+        bump = sameGender.slice(seniorIdx, idx).reverse().find(hasNoviceEnabled)
+            || sameGender.slice(idx+1).find(hasNoviceEnabled);
+      }
+      if(bump) baseGroup = bump;
+    }
+  }
+  // Challenge Up is Elite only
+  const finalGroup=challengeAdjustedGroup(meet,baseGroup,!!req.body.challengeUp && !!req.body.elite);
   const editSkGroups=(meet.skateabilityGroups||[]).map(sg=>sg.ageGroupId).filter(id=>!!req.body['sk_grp_'+id]);
   const editOpts={challengeUp:!!req.body.challengeUp,novice:!!req.body.novice,elite:!!req.body.elite,open:!!req.body.open,quad:!!req.body.quad,timeTrials:!!req.body.timeTrials,relays:!!req.body.relays,skateability:editSkGroups.length>0,skateabilityGroups:editSkGroups};
   const editCost=calcRegistrationCost(meet,editOpts);
