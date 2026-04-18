@@ -3000,23 +3000,48 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
         var skCount=${(meet.skateabilityGroups||[]).length};
         function addSkateability(){
           var si=skCount++; document.getElementById('sk_count').value=skCount;
-          var div=document.createElement('div');
-          div.className='group-pair-col'; div.style.marginBottom='12px'; div.id='sk-'+si;
-          div.innerHTML=
-            '<div class="group-pair-header" style="align-items:center">'+
-              '<div style="display:flex;gap:10px;align-items:center;flex:1">'+
-                '<input name="sk_'+si+'_ageGroupLabel" value="" placeholder="Division name" style="font-family:\'Barlow Condensed\',sans-serif;font-size:20px;font-weight:700;color:var(--navy);border:none;border-bottom:2px solid var(--border2);background:transparent;padding:2px 4px;width:180px" />'+
-                '<input name="sk_'+si+'_ageGroupId" value="" placeholder="Age range (e.g. 8-9)" style="font-size:13px;color:#64748b;border:none;border-bottom:1px solid var(--border2);background:transparent;padding:2px 4px;width:130px" />'+
-              '</div>'+
-              '<button type="button" class="btn-danger btn-sm" onclick="this.closest(\'[id^=sk-]\').remove()">Remove</button>'+
-            '</div>'+
-            '<div style="display:flex;gap:8px;align-items:flex-end;margin-top:10px">'+
-              '<input type="hidden" name="sk_'+si+'_cost" value="0" />'+
-              '<div style="flex:1"><label>D1</label><input name="sk_'+si+'_d1" value="" placeholder="100m" /></div>'+
-              '<div style="flex:1"><label>D2</label><input name="sk_'+si+'_d2" value="" placeholder="200m" /></div>'+
-              '<div style="flex:1"><label>D3</label><input name="sk_'+si+'_d3" value="" placeholder="300m" /></div>'+
-            '</div>';
-          document.getElementById('sk-list').appendChild(div);
+          var wrap=document.createElement('div');
+          wrap.className='group-pair-col'; wrap.style.marginBottom='12px'; wrap.id='sk-'+si;
+
+          var header=document.createElement('div');
+          header.className='group-pair-header'; header.style.alignItems='center';
+
+          var nameWrap=document.createElement('div');
+          nameWrap.style.cssText='display:flex;gap:10px;align-items:center;flex:1';
+
+          var nameInput=document.createElement('input');
+          nameInput.name='sk_'+si+'_ageGroupLabel'; nameInput.placeholder='Division name';
+          nameInput.style.cssText="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:700;color:var(--navy);border:none;border-bottom:2px solid var(--border2);background:transparent;padding:2px 4px;width:180px";
+
+          var ageInput=document.createElement('input');
+          ageInput.name='sk_'+si+'_ageGroupId'; ageInput.placeholder='Age range (e.g. 8-9)';
+          ageInput.style.cssText='font-size:13px;color:#64748b;border:none;border-bottom:1px solid var(--border2);background:transparent;padding:2px 4px;width:130px';
+
+          nameWrap.appendChild(nameInput); nameWrap.appendChild(ageInput);
+
+          var removeBtn=document.createElement('button');
+          removeBtn.type='button'; removeBtn.className='btn-danger btn-sm'; removeBtn.textContent='Remove';
+          removeBtn.onclick=function(){ wrap.remove(); };
+
+          header.appendChild(nameWrap); header.appendChild(removeBtn);
+
+          var distRow=document.createElement('div');
+          distRow.style.cssText='display:flex;gap:8px;align-items:flex-end;margin-top:10px';
+
+          var costHidden=document.createElement('input');
+          costHidden.type='hidden'; costHidden.name='sk_'+si+'_cost'; costHidden.value='0';
+          distRow.appendChild(costHidden);
+
+          [['D1','100m'],['D2','200m'],['D3','300m']].forEach(function(pair,idx){
+            var cell=document.createElement('div'); cell.style.flex='1';
+            var lbl=document.createElement('label'); lbl.textContent=pair[0];
+            var inp=document.createElement('input'); inp.name='sk_'+si+'_d'+(idx+1); inp.placeholder=pair[1];
+            cell.appendChild(lbl); cell.appendChild(inp); distRow.appendChild(cell);
+          });
+
+          wrap.appendChild(header); wrap.appendChild(distRow);
+          document.getElementById('sk-list').appendChild(wrap);
+          nameInput.focus();
         }
       </script>
       <div class="card">
