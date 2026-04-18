@@ -2975,9 +2975,9 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
           </div>
           <button type="button" class="btn2 btn-sm" onclick="addSkateability()">+ Add Division</button>
         </div>
-        <div id="sk-list" class="stack">
+        <div id="sk-list" style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
           ${(meet.skateabilityGroups||[]).map((sg,si)=>
-            '<div class="group-pair-col" style="margin-bottom:12px" id="sk-'+si+'">'+
+            '<div class="card" style="margin:0" id="sk-'+si+'">'+
             '<div class="group-pair-header" style="align-items:center">'+
               '<div style="display:flex;gap:10px;align-items:center;flex:1">'+
                 '<input name="sk_'+si+'_ageGroupLabel" value="'+esc(sg.ageGroupLabel||'')+'" placeholder="Division name" style="font-family:\'Barlow Condensed\',sans-serif;font-size:20px;font-weight:700;color:var(--navy);border:none;border-bottom:2px solid var(--border2);background:transparent;padding:2px 4px;width:180px" />'+
@@ -3001,7 +3001,7 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
         function addSkateability(){
           var si=skCount++; document.getElementById('sk_count').value=skCount;
           var wrap=document.createElement('div');
-          wrap.className='group-pair-col'; wrap.style.marginBottom='12px'; wrap.id='sk-'+si;
+          wrap.className='card'; wrap.style.margin='0'; wrap.id='sk-'+si;
 
           var header=document.createElement('div');
           header.className='group-pair-header'; header.style.alignItems='center';
@@ -3447,7 +3447,7 @@ app.get('/meet/:meetId/register', (req, res) => {
             ${(meet.quadGroups||[]).some(g=>g.enabled)?`<div class="toggle-row"><div><div class="toggle-row-label">Quad</div></div>${toggleSwitch('quad',false)}</div>`:''}
             ${meet.timeTrialsEnabled?`<div class="toggle-row"><div><div class="toggle-row-label">Time Trials</div></div>${toggleSwitch('timeTrials',false)}</div>`:''}
             ${meet.relayEnabled?`<div class="toggle-row"><div><div class="toggle-row-label">Relays</div></div>${toggleSwitch('relays',false)}</div>`:''}
-            ${(meet.skateabilityGroups||[]).length?`<div class="toggle-row"><div><div class="toggle-row-label">Skateability</div><div class="toggle-row-desc">Entry-level program with modified distances</div></div>${toggleSwitch('skateability',false)}</div>`:''}
+            ${(meet.skateabilityGroups||[]).map(sg=>`<div class="toggle-row"><div><div class="toggle-row-label">${esc(sg.ageGroupLabel||'Skateability')}</div><div class="toggle-row-desc">${sg.distances?.filter(Boolean).length?sg.distances.filter(Boolean).join(', '):''}</div></div>${toggleSwitch('sk_grp_'+sg.ageGroupId,false)}</div>`).join('')}
           </div>
           ${costWidget}
           <div><button class="btn-orange" type="submit">Register Skater</button></div>
@@ -3475,7 +3475,8 @@ app.post('/meet/:meetId/register', (req, res) => {
   const finalGroup=challengeAdjustedGroup(meet,baseGroup,!!req.body.challengeUp);
   const meetNumber=(meet.registrations||[]).reduce((max,r)=>Math.max(max,Number(r.meetNumber)||0),0)+1;
   const regEmail=String(req.body.email||'').trim();
-  const regOpts={challengeUp:!!req.body.challengeUp,novice:!!req.body.novice,elite:!!req.body.elite,open:!!req.body.open,quad:!!req.body.quad,timeTrials:!!req.body.timeTrials,relays:!!req.body.relays,skateability:!!req.body.skateability};
+  const skGroups=(meet.skateabilityGroups||[]).map(sg=>sg.ageGroupId).filter(id=>!!req.body['sk_grp_'+id]);
+  const regOpts={challengeUp:!!req.body.challengeUp,novice:!!req.body.novice,elite:!!req.body.elite,open:!!req.body.open,quad:!!req.body.quad,timeTrials:!!req.body.timeTrials,relays:!!req.body.relays,skateability:skGroups.length>0,skateabilityGroups:skGroups};
   const totalCost=calcRegistrationCost(meet,regOpts);
   meet.registrations.push({
     id:nextId(meet.registrations),createdAt:nowIso(),
@@ -3551,7 +3552,7 @@ function registrationForm(meet,reg,action,title) {
             ${(meet.quadGroups||[]).some(g=>g.enabled)?`<div class="toggle-row"><div><div class="toggle-row-label">Quad</div></div>${toggleSwitch('quad',!!reg.options?.quad)}</div>`:''}
             <div class="toggle-row"><div><div class="toggle-row-label">Time Trials</div></div>${toggleSwitch('timeTrials',!!reg.options?.timeTrials)}</div>
             <div class="toggle-row"><div><div class="toggle-row-label">Relays</div></div>${toggleSwitch('relays',!!reg.options?.relays)}</div>
-            ${(meet.skateabilityGroups||[]).length?`<div class="toggle-row"><div><div class="toggle-row-label">Skateability</div><div class="toggle-row-desc">Entry-level program with modified distances</div></div>${toggleSwitch('skateability',!!reg.options?.skateability)}</div>`:''}
+            ${(meet.skateabilityGroups||[]).map(sg=>`<div class="toggle-row"><div><div class="toggle-row-label">${esc(sg.ageGroupLabel||'Skateability')}</div><div class="toggle-row-desc">${sg.distances?.filter(Boolean).length?sg.distances.filter(Boolean).join(', '):''}</div></div>${toggleSwitch('sk_grp_'+sg.ageGroupId,!!(reg.options?.skateabilityGroups||[]).includes(sg.ageGroupId))}</div>`).join('')}
           </div>
           <div class="action-row">
             <button class="btn" type="submit">Save Racer</button>
@@ -3574,7 +3575,16 @@ app.get('/portal/meet/:meetId/registered', requireRole('meet_director'), (req, r
       <td><strong>${esc(r.name)}</strong>${sponsorLineHtml(r.sponsor||'')}</td>
       <td>${esc(r.age)}</td><td>${esc(r.team)}</td>
       <td>${esc(r.divisionGroupLabel||'')}${r.options?.challengeUp?`<div class="note">↑ from ${esc(r.originalDivisionGroupLabel||'')}</div>`:''}</td>
-      <td>${['challengeUp','novice','elite','open','quad','timeTrials','relays','skateability'].filter(k=>r.options?.[k]).map(k=>k==='challengeUp'?'CU':cap(k)).join(', ')||'—'}</td>
+      <td>${[
+        r.options?.challengeUp?'CU':null,
+        r.options?.novice?'Novice':null,
+        r.options?.elite?'Elite':null,
+        r.options?.open?'Open':null,
+        r.options?.quad?'Quad':null,
+        r.options?.timeTrials?'Time Trials':null,
+        r.options?.relays?'Relays':null,
+        ...((r.options?.skateabilityGroups||[]).length?(r.options.skateabilityGroups):r.options?.skateability?['Skateability']:[])
+      ].filter(Boolean).join(', ')||'—'}</td>
       <td>$${esc(r.totalCost)}</td>
       <td>${r.paid?`<span class="good">✔</span>`:'—'}</td>
       <td>${r.checkedIn?`<span class="good">✔</span>`:'—'}</td>
@@ -3623,7 +3633,8 @@ app.post('/portal/meet/:meetId/registered/:regId/edit', requireRole('meet_direct
   const compAge=usarsAge(birthdate,meet.date)||Number(reg.age||0);
   const baseGroup=findAgeGroup(meet.groups,compAge,gender);
   const finalGroup=challengeAdjustedGroup(meet,baseGroup,!!req.body.challengeUp);
-  const editOpts={challengeUp:!!req.body.challengeUp,novice:!!req.body.novice,elite:!!req.body.elite,open:!!req.body.open,quad:!!req.body.quad,timeTrials:!!req.body.timeTrials,relays:!!req.body.relays,skateability:!!req.body.skateability};
+  const editSkGroups=(meet.skateabilityGroups||[]).map(sg=>sg.ageGroupId).filter(id=>!!req.body['sk_grp_'+id]);
+  const editOpts={challengeUp:!!req.body.challengeUp,novice:!!req.body.novice,elite:!!req.body.elite,open:!!req.body.open,quad:!!req.body.quad,timeTrials:!!req.body.timeTrials,relays:!!req.body.relays,skateability:editSkGroups.length>0,skateabilityGroups:editSkGroups};
   const editCost=calcRegistrationCost(meet,editOpts);
   Object.assign(reg,{name:String(req.body.name||'').trim(),birthdate,age:compAge,gender,team:String(req.body.team||'Midwest Racing').trim()||'Midwest Racing',sponsor:String(req.body.sponsor||'').trim(),originalDivisionGroupId:baseGroup?.id||'',originalDivisionGroupLabel:baseGroup?.label||'',divisionGroupId:finalGroup?.id||'',divisionGroupLabel:finalGroup?.label||'Unassigned',totalCost:editCost,options:editOpts});
   rebuildRaceAssignments(meet); saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/registered`);
