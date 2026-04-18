@@ -481,7 +481,7 @@ function migrateMeet(meet,fallbackOwnerId) {
     paid:!!reg.paid, checkedIn:!!reg.checkedIn, totalCost:Number(reg.totalCost||0),
     options:{challengeUp:!!reg.options?.challengeUp, novice:!!reg.options?.novice,
       elite:!!reg.options?.elite, open:!!reg.options?.open, quad:!!reg.options?.quad,
-      timeTrials:!!reg.options?.timeTrials, relays:!!reg.options?.relays},
+      timeTrials:!!reg.options?.timeTrials, relays:!!reg.options?.relays, skateability:!!reg.options?.skateability},
   }));
 }
 
@@ -994,7 +994,7 @@ function calcRegistrationCost(meet, options) {
   const base=Number(meet.baseEntryFee||0);
   const addl=Number(meet.additionalEntryFee||0);
   const cap=Number(meet.entryCap||0);
-  const eventKeys=['novice','elite','open','quad','timeTrials','relays'];
+  const eventKeys=['novice','elite','open','quad','timeTrials','relays','skateability'];
   const count=eventKeys.filter(k=>!!options[k]).length;
   if(count===0) return 0;
   let total=base+(count>1?(count-1)*addl:0);
@@ -3006,14 +3006,14 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
         function addSkateability(){
           var picker=document.getElementById('sk-age-picker');
           var val=picker.value; if(!val) return alert('Please pick an age group first.');
-          var parts=val.split('|'); var gid=parts[0],glabel=parts[1];
+          var parts=val.split('|'); var gid=parts[0],glabel=parts.slice(1).join('|');
           var si=skCount++; document.getElementById('sk_count').value=skCount;
           var div=document.createElement('div');
           div.className='group-pair-col'; div.style.marginBottom='12px'; div.id='sk-'+si;
           div.innerHTML=
             '<div class="group-pair-header">'+
-              '<span class="group-pair-name">Skateability — '+glabel+'</span>'+
-              '<button type="button" class="btn-danger btn-sm" onclick="this.closest('.group-pair-col').remove()">Remove</button>'+
+              '<span class="group-pair-name">Skateability \u2014 '+glabel+'</span>'+
+              '<button type="button" class="btn-danger btn-sm" onclick="this.closest(\'.group-pair-col\').remove()">Remove</button>'+
             '</div>'+
             '<input type="hidden" name="sk_'+si+'_ageGroupId" value="'+gid+'" />'+
             '<input type="hidden" name="sk_'+si+'_ageGroupLabel" value="'+glabel+'" />'+
@@ -3432,6 +3432,7 @@ app.get('/meet/:meetId/register', (req, res) => {
             ${(meet.quadGroups||[]).some(g=>g.enabled)?`<div class="toggle-row"><div><div class="toggle-row-label">Quad</div></div>${toggleSwitch('quad',false)}</div>`:''}
             ${meet.timeTrialsEnabled?`<div class="toggle-row"><div><div class="toggle-row-label">Time Trials</div></div>${toggleSwitch('timeTrials',false)}</div>`:''}
             ${meet.relayEnabled?`<div class="toggle-row"><div><div class="toggle-row-label">Relays</div></div>${toggleSwitch('relays',false)}</div>`:''}
+            ${(meet.skateabilityGroups||[]).length?`<div class="toggle-row"><div><div class="toggle-row-label">Skateability</div><div class="toggle-row-desc">Entry-level program with modified distances</div></div>${toggleSwitch('skateability',false)}</div>`:''}
           </div>
           ${costWidget}
           <div><button class="btn-orange" type="submit">Register Skater</button></div>
@@ -3459,7 +3460,7 @@ app.post('/meet/:meetId/register', (req, res) => {
   const finalGroup=challengeAdjustedGroup(meet,baseGroup,!!req.body.challengeUp);
   const meetNumber=(meet.registrations||[]).reduce((max,r)=>Math.max(max,Number(r.meetNumber)||0),0)+1;
   const regEmail=String(req.body.email||'').trim();
-  const regOpts={challengeUp:!!req.body.challengeUp,novice:!!req.body.novice,elite:!!req.body.elite,open:!!req.body.open,quad:!!req.body.quad,timeTrials:!!req.body.timeTrials,relays:!!req.body.relays};
+  const regOpts={challengeUp:!!req.body.challengeUp,novice:!!req.body.novice,elite:!!req.body.elite,open:!!req.body.open,quad:!!req.body.quad,timeTrials:!!req.body.timeTrials,relays:!!req.body.relays,skateability:!!req.body.skateability};
   const totalCost=calcRegistrationCost(meet,regOpts);
   meet.registrations.push({
     id:nextId(meet.registrations),createdAt:nowIso(),
@@ -3535,6 +3536,7 @@ function registrationForm(meet,reg,action,title) {
             ${(meet.quadGroups||[]).some(g=>g.enabled)?`<div class="toggle-row"><div><div class="toggle-row-label">Quad</div></div>${toggleSwitch('quad',!!reg.options?.quad)}</div>`:''}
             <div class="toggle-row"><div><div class="toggle-row-label">Time Trials</div></div>${toggleSwitch('timeTrials',!!reg.options?.timeTrials)}</div>
             <div class="toggle-row"><div><div class="toggle-row-label">Relays</div></div>${toggleSwitch('relays',!!reg.options?.relays)}</div>
+            ${(meet.skateabilityGroups||[]).length?`<div class="toggle-row"><div><div class="toggle-row-label">Skateability</div><div class="toggle-row-desc">Entry-level program with modified distances</div></div>${toggleSwitch('skateability',!!reg.options?.skateability)}</div>`:''}
           </div>
           <div class="action-row">
             <button class="btn" type="submit">Save Racer</button>
@@ -3557,7 +3559,7 @@ app.get('/portal/meet/:meetId/registered', requireRole('meet_director'), (req, r
       <td><strong>${esc(r.name)}</strong>${sponsorLineHtml(r.sponsor||'')}</td>
       <td>${esc(r.age)}</td><td>${esc(r.team)}</td>
       <td>${esc(r.divisionGroupLabel||'')}${r.options?.challengeUp?`<div class="note">↑ from ${esc(r.originalDivisionGroupLabel||'')}</div>`:''}</td>
-      <td>${['challengeUp','novice','elite','open','quad','timeTrials','relays'].filter(k=>r.options?.[k]).map(k=>k==='challengeUp'?'CU':cap(k)).join(', ')||'—'}</td>
+      <td>${['challengeUp','novice','elite','open','quad','timeTrials','relays','skateability'].filter(k=>r.options?.[k]).map(k=>k==='challengeUp'?'CU':cap(k)).join(', ')||'—'}</td>
       <td>$${esc(r.totalCost)}</td>
       <td>${r.paid?`<span class="good">✔</span>`:'—'}</td>
       <td>${r.checkedIn?`<span class="good">✔</span>`:'—'}</td>
@@ -3606,7 +3608,7 @@ app.post('/portal/meet/:meetId/registered/:regId/edit', requireRole('meet_direct
   const compAge=usarsAge(birthdate,meet.date)||Number(reg.age||0);
   const baseGroup=findAgeGroup(meet.groups,compAge,gender);
   const finalGroup=challengeAdjustedGroup(meet,baseGroup,!!req.body.challengeUp);
-  const editOpts={challengeUp:!!req.body.challengeUp,novice:!!req.body.novice,elite:!!req.body.elite,open:!!req.body.open,quad:!!req.body.quad,timeTrials:!!req.body.timeTrials,relays:!!req.body.relays};
+  const editOpts={challengeUp:!!req.body.challengeUp,novice:!!req.body.novice,elite:!!req.body.elite,open:!!req.body.open,quad:!!req.body.quad,timeTrials:!!req.body.timeTrials,relays:!!req.body.relays,skateability:!!req.body.skateability};
   const editCost=calcRegistrationCost(meet,editOpts);
   Object.assign(reg,{name:String(req.body.name||'').trim(),birthdate,age:compAge,gender,team:String(req.body.team||'Midwest Racing').trim()||'Midwest Racing',sponsor:String(req.body.sponsor||'').trim(),originalDivisionGroupId:baseGroup?.id||'',originalDivisionGroupLabel:baseGroup?.label||'',divisionGroupId:finalGroup?.id||'',divisionGroupLabel:finalGroup?.label||'Unassigned',totalCost:editCost,options:editOpts});
   rebuildRaceAssignments(meet); saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/registered`);
