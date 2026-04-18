@@ -1354,6 +1354,8 @@ function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
     .group-pair-header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 2px solid var(--border); }
     .group-pair-name { font-family: 'Barlow Condensed', sans-serif; font-size: 22px; font-weight: 700; color: var(--navy); }
     .group-pair-age  { font-size: 12px; color: var(--muted); font-weight: 600; }
+    .group-pair-age-input { font-size: 12px; color: #64748b; font-weight: 600; border: none; border-bottom: 1px dashed #cbd5e1; background: transparent; padding: 1px 4px; width: 90px; cursor: text; }
+    .group-pair-age-input:hover, .group-pair-age-input:focus { border-bottom-color: var(--orange); outline: none; color: var(--navy); }
     .group-div-card  { border: 1.5px solid var(--border); border-radius: var(--radius-sm); padding: 12px; margin-bottom: 10px; background: var(--off); }
     .group-div-card:last-child { margin-bottom: 0; }
 
@@ -2872,11 +2874,11 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
     groupsRows.push(
       '<div class="group-pair-row">' +
         '<div class="group-pair-col">' +
-          '<div class="group-pair-header"><span class="group-pair-name">'+esc(L.label)+'</span><span class="group-pair-age">'+esc(L.ages)+'</span></div>' +
+          '<div class="group-pair-header"><span class="group-pair-name">'+esc(L.label)+'</span><input name="g_'+i+'_ages" value="'+esc(L.ages)+'" class="group-pair-age-input" placeholder="e.g. 10-11" title="Edit age range" /></div>' +
           Lcards +
         '</div>' +
         (R?'<div class="group-pair-col">' +
-          '<div class="group-pair-header"><span class="group-pair-name">'+esc(R.label)+'</span><span class="group-pair-age">'+esc(R.ages)+'</span></div>' +
+          '<div class="group-pair-header"><span class="group-pair-name">'+esc(R.label)+'</span><input name="g_'+(i+1)+'_ages" value="'+esc(R.ages)+'" class="group-pair-age-input" placeholder="e.g. 10-11" title="Edit age range" /></div>' +
           Rcards +
         '</div>':'') +
       '</div>'
@@ -2970,8 +2972,8 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
       <div class="card" style="margin-top:8px">
         <div class="row between center" style="margin-bottom:14px">
           <div>
-            <h2 style="margin:0">Skateability</h2>
-            <div class="note">Add custom entry-level divisions — type in any name and age group.</div>
+            <h2 style="margin:0">Additional Divisions</h2>
+            <div class="note">Add any custom division — Diaper Dash, Skateability, etc.</div>
           </div>
           <button type="button" class="btn2 btn-sm" onclick="addSkateability()">+ Add Division</button>
         </div>
@@ -3073,6 +3075,7 @@ function saveMeetFields(meet, body) {
   meet.additionalEntryFee=Number(String(body.additionalEntryFee||'0').trim()||0);
   meet.entryCap=Number(String(body.entryCap||'0').trim()||0);
   meet.groups.forEach((group,gi)=>{
+    if(body[`g_${gi}_ages`]!==undefined) group.ages=String(body[`g_${gi}_ages`]||'').trim();
     for(const divKey of ['novice','elite']) {
       group.divisions[divKey]={
         enabled:!!body[`g_${gi}_${divKey}_enabled`],
@@ -3231,7 +3234,7 @@ app.get('/portal/meet/:meetId/open-builder', requireRole('meet_director'), (req,
         <div class="row between center" style="margin-bottom:12px">
           <div>
             <div style="font-weight:700;font-size:16px;color:var(--navy)">${esc(og.label)}</div>
-            <div class="note">${esc(og.ages)}</div>
+            <input name="og_${i}_ages" value="${esc(og.ages)}" class="group-pair-age-input" placeholder="e.g. 10-13" title="Edit age range" />
           </div>
           ${toggleSwitch(`og_${i}_enabled`, og.enabled, 'Open Race')}
         </div>
@@ -3307,6 +3310,7 @@ app.post('/portal/meet/:meetId/open-builder/save', requireRole('meet_director'),
   meet.openGroups.forEach((og,i)=>{
     og.enabled=!!req.body[`og_${i}_enabled`];
     og.distance=String(req.body[`og_${i}_distance`]||'').trim()||og.distance;
+    if(req.body[`og_${i}_ages`]!==undefined) og.ages=String(req.body[`og_${i}_ages`]||'').trim();
     og.cost=Number(String(req.body[`og_${i}_cost`]||'0').trim()||0);
     og.timeTrial=!!req.body[`og_${i}_timeTrial`];
     og.ttDistance=String(req.body[`og_${i}_ttDistance`]||'').trim();
@@ -3336,7 +3340,7 @@ app.get('/portal/meet/:meetId/quad-builder', requireRole('meet_director'), (req,
         <div class="row between center" style="margin-bottom:12px">
           <div>
             <div style="font-weight:700;font-size:16px;color:var(--navy)">${esc(qg.label)}</div>
-            <div class="note">${esc(qg.ages)}</div>
+            <input name="qg_${i}_ages" value="${esc(qg.ages)}" class="group-pair-age-input" placeholder="e.g. 10-13" title="Edit age range" />
           </div>
           ${toggleSwitch(`qg_${i}_enabled`, qg.enabled, 'Enable')}
         </div>
@@ -3404,6 +3408,7 @@ app.post('/portal/meet/:meetId/quad-builder/save', requireRole('meet_director'),
     qg.enabled=!!req.body[`qg_${i}_enabled`];
     qg.distances[0]=String(req.body[`qg_${i}_d1`]||'').trim()||qg.distances[0];
     qg.distances[1]=String(req.body[`qg_${i}_d2`]||'').trim()||qg.distances[1];
+    if(req.body[`qg_${i}_ages`]!==undefined) qg.ages=String(req.body[`qg_${i}_ages`]||'').trim();
     qg.cost=Number(String(req.body[`qg_${i}_cost`]||'0').trim()||0);
   });
   generateQuadRacesForMeet(meet); ensureAtLeastOneBlock(meet); ensureCurrentRace(meet);
@@ -3462,13 +3467,15 @@ app.post('/meet/:meetId/register', (req, res) => {
   const birthdate=String(req.body.birthdate||'').trim();
   const compAge=usarsAge(birthdate,meet.date)||Number(req.body.age||0);
   let baseGroup=findAgeGroup(meet.groups,compAge,gender);
-  // If novice selected but age group has novice disabled, bump up to next group with novice enabled
+  // If novice selected but age group has novice disabled, find nearest group with novice enabled
+  // Search upward (older) first, then wrap downward (younger) — mirrors how challenge up works
   if(!!req.body.novice && baseGroup) {
     const hasNovice = baseGroup.divisions && baseGroup.divisions.novice && baseGroup.divisions.novice.enabled;
     if(!hasNovice) {
       const idx = meet.groups.findIndex(g=>g.id===baseGroup.id);
-      // Find next group of same gender that has novice enabled
-      const bump = meet.groups.slice(idx+1).find(g=>g.gender===gender&&g.divisions&&g.divisions.novice&&g.divisions.novice.enabled);
+      const sameGender = g => g.gender===gender && g.divisions && g.divisions.novice && g.divisions.novice.enabled;
+      const bump = meet.groups.slice(idx+1).find(sameGender)   // search up (older) first
+                || meet.groups.slice(0,idx).reverse().find(sameGender); // wrap back down (younger)
       if(bump) baseGroup = bump;
     }
   }
