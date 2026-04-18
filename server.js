@@ -972,7 +972,7 @@ function buildCostWidget(base, addl, cap) {
     '</div>',
     '<script>(function(){',
     'var BASE='+base+',ADDL='+addl+',CAP='+cap+';',
-    'var KEYS=["novice","elite","open","quad","timeTrials","relays"];',
+    'var KEYS=["novice","elite","open","quad","timeTrials","relays","skateability"];',
     'function upd(){',
     '  var count=KEYS.filter(function(k){var el=document.querySelector("[name="+k+"]");return el&&el.checked;}).length;',
     '  if(count===0){document.getElementById("ssm-cost").textContent="$"+BASE;document.getElementById("ssm-breakdown").textContent="Base entry fee";return;}',
