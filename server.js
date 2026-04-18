@@ -2856,7 +2856,7 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
         toggleSwitch('g_'+gi+'_'+divKey+'_enabled', div.enabled) +
       '</div>' +
       '<div style="display:flex;gap:8px;align-items:flex-end">' +
-        '<div style="width:80px;flex-shrink:0"><label>Cost $</label><input name="g_'+gi+'_'+divKey+'_cost" value="'+esc(div.cost)+'" placeholder="0" /></div>' +
+        '<input type="hidden" name="g_'+gi+'_'+divKey+'_cost" value="0" />' +
         '<div style="flex:1"><label>D1</label><input name="g_'+gi+'_'+divKey+'_d1" value="'+esc(div.distances[0]||'')+'" placeholder="200m" /></div>' +
         '<div style="flex:1"><label>D2</label><input name="g_'+gi+'_'+divKey+'_d2" value="'+esc(div.distances[1]||'')+'" placeholder="500m" /></div>' +
         '<div style="flex:1"><label>D3</label><input name="g_'+gi+'_'+divKey+'_d3" value="'+esc(div.distances[2]||'')+'" placeholder="1000m" /></div>' +
@@ -2986,7 +2986,7 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
               '<button type="button" class="btn-danger btn-sm" onclick="this.closest(\'.group-pair-col\').remove()">Remove</button>'+
             '</div>'+
             '<div style="display:flex;gap:8px;align-items:flex-end;margin-top:10px">'+
-              '<div style="width:80px;flex-shrink:0"><label>Cost $</label><input name="sk_'+si+'_cost" value="'+esc(String(sg.cost||'0'))+'" placeholder="0" /></div>'+
+              '<input type="hidden" name="sk_'+si+'_cost" value="0" />'+
               '<div style="flex:1"><label>D1</label><input name="sk_'+si+'_d1" value="'+esc((sg.distances&&sg.distances[0])||'')+'" placeholder="100m" /></div>'+
               '<div style="flex:1"><label>D2</label><input name="sk_'+si+'_d2" value="'+esc((sg.distances&&sg.distances[1])||'')+'" placeholder="200m" /></div>'+
               '<div style="flex:1"><label>D3</label><input name="sk_'+si+'_d3" value="'+esc((sg.distances&&sg.distances[2])||'')+'" placeholder="300m" /></div>'+
@@ -3011,7 +3011,7 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
               '<button type="button" class="btn-danger btn-sm" onclick="this.closest(\'[id^=sk-]\').remove()">Remove</button>'+
             '</div>'+
             '<div style="display:flex;gap:8px;align-items:flex-end;margin-top:10px">'+
-              '<div style="width:80px;flex-shrink:0"><label>Cost $</label><input name="sk_'+si+'_cost" value="0" placeholder="0" /></div>'+
+              '<input type="hidden" name="sk_'+si+'_cost" value="0" />'+
               '<div style="flex:1"><label>D1</label><input name="sk_'+si+'_d1" value="" placeholder="100m" /></div>'+
               '<div style="flex:1"><label>D2</label><input name="sk_'+si+'_d2" value="" placeholder="200m" /></div>'+
               '<div style="flex:1"><label>D3</label><input name="sk_'+si+'_d3" value="" placeholder="300m" /></div>'+
@@ -3215,7 +3215,7 @@ app.get('/portal/meet/:meetId/open-builder', requireRole('meet_director'), (req,
             <label>Open Distance</label>
             <input name="og_${i}_distance" value="${esc(og.distance)}" placeholder="${esc(def?.defaultDistance||'')}" />
           </div>
-          <div><label>Cost ($)</label><input name="og_${i}_cost" value="${esc(og.cost)}" placeholder="0" /></div>
+          <input type="hidden" name="og_${i}_cost" value="0" />
           <div style="display:flex;align-items:flex-end">
             ${liveRace?`<div class="chip chip-green">Open Entries: ${(liveRace.laneEntries||[]).length}</div>`:`<div class="note">Open race generated on save.</div>`}
           </div>
@@ -3327,8 +3327,6 @@ app.get('/portal/meet/:meetId/quad-builder', requireRole('meet_director'), (req,
             <div class="note">Default: ${esc(def?.distances[1]||'')}</div>
           </div>
           <div>
-            <label>Cost ($)</label>
-            <input name="qg_${i}_cost" value="${esc(qg.cost)}" placeholder="0" />
             ${liveRaces.length?`<div class="note" style="margin-top:6px">${liveRaces.map(r=>`${esc(r.distanceLabel)}: ${(r.laneEntries||[]).length} entries`).join(' | ')}</div>`:''}
           </div>
         </div>
