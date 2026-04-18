@@ -2970,25 +2970,20 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
         <div class="row between center" style="margin-bottom:14px">
           <div>
             <h2 style="margin:0">Skateability</h2>
-            <div class="note">Add Skateability divisions for specific age groups — director enters distances manually.</div>
+            <div class="note">Add custom entry-level divisions — type in any name and age group.</div>
           </div>
-          <div class="action-row">
-            <select id="sk-age-picker" style="width:220px">
-              <option value="">— Pick age group —</option>
-              ${meet.groups.map(g=>`<option value="${esc(g.id)}|${esc(g.label)}">${esc(g.label)} (${esc(g.ages)})</option>`).join('')}
-            </select>
-            <button type="button" class="btn2 btn-sm" onclick="addSkateability()">+ Add</button>
-          </div>
+          <button type="button" class="btn2 btn-sm" onclick="addSkateability()">+ Add Division</button>
         </div>
         <div id="sk-list" class="stack">
           ${(meet.skateabilityGroups||[]).map((sg,si)=>
             '<div class="group-pair-col" style="margin-bottom:12px" id="sk-'+si+'">'+
-            '<div class="group-pair-header">'+
-              '<span class="group-pair-name">Skateability — '+esc(sg.ageGroupLabel||'')+'</span>'+
+            '<div class="group-pair-header" style="align-items:center">'+
+              '<div style="display:flex;gap:10px;align-items:center;flex:1">'+
+                '<input name="sk_'+si+'_ageGroupLabel" value="'+esc(sg.ageGroupLabel||'')+'" placeholder="Division name" style="font-family:\'Barlow Condensed\',sans-serif;font-size:20px;font-weight:700;color:var(--navy);border:none;border-bottom:2px solid var(--border2);background:transparent;padding:2px 4px;width:180px" />'+
+                '<input name="sk_'+si+'_ageGroupId" value="'+esc(sg.ageGroupId||sg.ageGroupLabel||'')+'" placeholder="Age range (e.g. 8-9)" style="font-size:13px;color:#64748b;border:none;border-bottom:1px solid var(--border2);background:transparent;padding:2px 4px;width:130px" />'+
+              '</div>'+
               '<button type="button" class="btn-danger btn-sm" onclick="this.closest(\'.group-pair-col\').remove()">Remove</button>'+
             '</div>'+
-            '<input type="hidden" name="sk_'+si+'_ageGroupId" value="'+esc(sg.ageGroupId||'')+'" />'+
-            '<input type="hidden" name="sk_'+si+'_ageGroupLabel" value="'+esc(sg.ageGroupLabel||'')+'" />'+
             '<div style="display:flex;gap:8px;align-items:flex-end;margin-top:10px">'+
               '<div style="width:80px;flex-shrink:0"><label>Cost $</label><input name="sk_'+si+'_cost" value="'+esc(String(sg.cost||'0'))+'" placeholder="0" /></div>'+
               '<div style="flex:1"><label>D1</label><input name="sk_'+si+'_d1" value="'+esc((sg.distances&&sg.distances[0])||'')+'" placeholder="100m" /></div>'+
@@ -3001,22 +2996,19 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
         <input type="hidden" name="sk_count" id="sk_count" value="${(meet.skateabilityGroups||[]).length}" />
       </div>
       <script>
-        var SK_GROUPS=${JSON.stringify(meet.groups.map(g=>({id:g.id,label:g.label,ages:g.ages})))};
         var skCount=${(meet.skateabilityGroups||[]).length};
         function addSkateability(){
-          var picker=document.getElementById('sk-age-picker');
-          var val=picker.value; if(!val) return alert('Please pick an age group first.');
-          var parts=val.split('|'); var gid=parts[0],glabel=parts.slice(1).join('|');
           var si=skCount++; document.getElementById('sk_count').value=skCount;
           var div=document.createElement('div');
           div.className='group-pair-col'; div.style.marginBottom='12px'; div.id='sk-'+si;
           div.innerHTML=
-            '<div class="group-pair-header">'+
-              '<span class="group-pair-name">Skateability \u2014 '+glabel+'</span>'+
-              '<button type="button" class="btn-danger btn-sm" onclick="this.closest(\'.group-pair-col\').remove()">Remove</button>'+
+            '<div class="group-pair-header" style="align-items:center">'+
+              '<div style="display:flex;gap:10px;align-items:center;flex:1">'+
+                '<input name="sk_'+si+'_ageGroupLabel" value="" placeholder="Division name" style="font-family:\'Barlow Condensed\',sans-serif;font-size:20px;font-weight:700;color:var(--navy);border:none;border-bottom:2px solid var(--border2);background:transparent;padding:2px 4px;width:180px" />'+
+                '<input name="sk_'+si+'_ageGroupId" value="" placeholder="Age range (e.g. 8-9)" style="font-size:13px;color:#64748b;border:none;border-bottom:1px solid var(--border2);background:transparent;padding:2px 4px;width:130px" />'+
+              '</div>'+
+              '<button type="button" class="btn-danger btn-sm" onclick="this.closest(\'[id^=sk-]\').remove()">Remove</button>'+
             '</div>'+
-            '<input type="hidden" name="sk_'+si+'_ageGroupId" value="'+gid+'" />'+
-            '<input type="hidden" name="sk_'+si+'_ageGroupLabel" value="'+glabel+'" />'+
             '<div style="display:flex;gap:8px;align-items:flex-end;margin-top:10px">'+
               '<div style="width:80px;flex-shrink:0"><label>Cost $</label><input name="sk_'+si+'_cost" value="0" placeholder="0" /></div>'+
               '<div style="flex:1"><label>D1</label><input name="sk_'+si+'_d1" value="" placeholder="100m" /></div>'+
@@ -3024,7 +3016,6 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
               '<div style="flex:1"><label>D3</label><input name="sk_'+si+'_d3" value="" placeholder="300m" /></div>'+
             '</div>';
           document.getElementById('sk-list').appendChild(div);
-          picker.value='';
         }
       </script>
       <div class="card">
@@ -3067,9 +3058,9 @@ function saveMeetFields(meet, body) {
   const skCount=Number(body.sk_count||0);
   meet.skateabilityGroups=[];
   for(let si=0;si<skCount;si++){
-    const ageGroupId=String(body['sk_'+si+'_ageGroupId']||'').trim();
     const ageGroupLabel=String(body['sk_'+si+'_ageGroupLabel']||'').trim();
-    if(!ageGroupId) continue;
+    const ageGroupId=String(body['sk_'+si+'_ageGroupId']||ageGroupLabel).trim()||('sk_'+si);
+    if(!ageGroupLabel) continue;
     meet.skateabilityGroups.push({id:'sk_'+ageGroupId,ageGroupId,ageGroupLabel,
       cost:Number(String(body['sk_'+si+'_cost']||'0').trim()||0),
       distances:[String(body['sk_'+si+'_d1']||'').trim(),String(body['sk_'+si+'_d2']||'').trim(),String(body['sk_'+si+'_d3']||'').trim()],
