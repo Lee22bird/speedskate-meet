@@ -78,6 +78,8 @@ function emailHtmlWrap(content) {
   </body></html>`;
 }
 
+function meetDateRange(meet){const s=meetDateRange(meet);const e=meet.endDate||'';if(!s)return'Date TBD';if(!e||e===s)return s;return s+' – '+e;}
+
 function normalizePhone(raw) {
   const digits = String(raw||'').replace(/\D/g,'');
   if(digits.length===10) return '+1'+digits;
@@ -424,6 +426,7 @@ function migrateMeet(meet,fallbackOwnerId) {
   if(!meet.updatedAt) meet.updatedAt=nowIso();
   if(typeof meet.meetName!=='string') meet.meetName='New Meet';
   if(typeof meet.date!=='string') meet.date='';
+  if(typeof meet.endDate!=='string') meet.endDate='';
   if(typeof meet.startTime!=='string') meet.startTime='';
   if(typeof meet.registrationCloseAt!=='string') meet.registrationCloseAt='';
   if(typeof meet.rinkId!=='number') meet.rinkId=1;
@@ -1160,7 +1163,7 @@ function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
   <meta property="og:type" content="website" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;900&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;900&family=Barlow:wght@400;500;600;700&family=Orbitron:wght@700;900&display=swap" rel="stylesheet" />
   <style>
     /* ── Design Tokens ────────────────────────────────────────────── */
     :root {
@@ -1453,7 +1456,7 @@ function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
       background: linear-gradient(90deg, var(--orange), #fbbf24, var(--orange));
     }
     .live-meet-name {
-      font-family: 'Barlow Condensed',sans-serif; font-size: 22px; font-weight: 700;
+      font-family: 'Orbitron',sans-serif; font-size: 13px; font-weight: 700;
       text-transform: uppercase; letter-spacing: .12em; color: rgba(255,255,255,.6); margin-bottom: 16px;
     }
     .live-status-grid { display: grid; grid-template-columns: 1fr 1px 1fr; gap: 0; }
@@ -1463,8 +1466,8 @@ function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
       color: var(--orange); margin-bottom: 6px;
     }
     .live-race-name {
-      font-family: 'Barlow Condensed',sans-serif; font-size: 42px; font-weight: 900;
-      line-height: 1; color: #fff; margin-bottom: 4px;
+      font-family: 'Orbitron',sans-serif; font-size: 36px; font-weight: 900;
+      line-height: 1.1; color: #fff; margin-bottom: 4px;
     }
     .live-race-sub { font-size: 15px; color: rgba(255,255,255,.55); font-weight: 500; margin-top: 4px; }
     .live-race-counter {
@@ -1483,7 +1486,7 @@ function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
     }
     .live-lane-card.has-place { background: #fff; border-color: var(--orange); }
     .live-lane-num {
-      font-family: 'Barlow Condensed',sans-serif; font-size: 28px; font-weight: 900;
+      font-family: 'Orbitron',sans-serif; font-size: 22px; font-weight: 900;
       color: var(--navy); text-align: center; line-height: 1;
     }
     .live-helmet {
@@ -1497,7 +1500,7 @@ function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
     }
     .live-skater-team { font-size: 12px; color: var(--muted); margin-top: 1px; }
     .live-result {
-      font-family: 'Barlow Condensed',sans-serif; font-size: 26px; font-weight: 900;
+      font-family: 'Orbitron',sans-serif; font-size: 20px; font-weight: 900;
       color: var(--orange); min-width: 48px; text-align: right;
     }
     .live-status-badge {
@@ -2502,7 +2505,7 @@ app.get('/portal/meet-picker', requireRole('judge','announcer','meet_director','
       <div class="row between center">
         <div>
           <h2 style="margin:0">${esc(meet.meetName)}</h2>
-          <div class="muted">${rink?esc(rink.name)+' • '+esc(rink.city)+', '+esc(rink.state):''} • ${esc(meet.date||'')}</div>
+          <div class="muted">${rink?esc(rink.name)+' • '+esc(rink.city)+', '+esc(rink.state):''} • ${esc(meetDateRange(meet))}</div>
           ${isLive?'<span class="chip chip-orange" style="margin-top:6px">🔴 Live Now</span>':''}
         </div>
         <a class="btn-orange" href="/portal/meet/${meet.id}/race-day/${target}">Enter ${isJudge?'Judges Panel':'Announcer View'}</a>
@@ -2532,7 +2535,7 @@ app.get('/portal', requireRole('meet_director','judge','coach'), (req, res) => {
         <div class="row between" style="margin-bottom:12px">
           <div>
             <h2 style="margin:0">${esc(meet.meetName)}</h2>
-            <div class="muted" style="font-size:13px">${rink?`${esc(rink.city)}, ${esc(rink.state)} • `:``}${esc(meet.date||'Date TBD')} • <span class="chip chip-${meet.status==='live'?'green':meet.status==='complete'?'sky':'orange'}" style="font-size:11px">${esc(meet.status||'draft')}</span></div>
+            <div class="muted" style="font-size:13px">${rink?`${esc(rink.city)}, ${esc(rink.state)} • `:``}${esc(meetDateRange(meet))} • <span class="chip chip-${meet.status==='live'?'green':meet.status==='complete'?'sky':'orange'}" style="font-size:11px">${esc(meet.status||'draft')}</span></div>
           </div>
           <div class="row">
             <span class="chip">Inline: ${inlineCount}</span>
@@ -2680,7 +2683,7 @@ app.get('/portal/coach', requireRole('coach','meet_director','super_admin'), (re
         <div class="row between" style="margin-bottom:12px">
           <div>
             <h2 style="margin:0">${esc(meet.meetName)}</h2>
-            <div class="muted">${esc(req.user.team||'')} • ${esc(meet.date||'')}</div>
+            <div class="muted">${esc(req.user.team||'')} • ${esc(meetDateRange(meet))}</div>
           </div>
           <div class="row"><span class="chip">Skaters: ${regs.length}</span><span class="chip chip-orange">Racing Soon: ${upcoming.length}</span></div>
         </div>
@@ -3031,7 +3034,8 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
         </div>
         <div class="form-grid cols-3" style="margin-bottom:14px">
           <div><label>Meet Name</label><input name="meetName" value="${esc(meet.meetName)}" required /></div>
-          <div><label>Date</label><input type="date" name="date" value="${esc(meet.date)}" /></div>
+          <div><label>Start Date</label><input type="date" name="date" value="${esc(meet.date)}" /></div>
+          <div><label>End Date</label><input type="date" name="endDate" value="${esc(meet.endDate||'')}" /></div>
           <div><label>Start Time</label><input type="time" name="startTime" value="${esc(meet.startTime)}" /></div>
           <div><label>Registration Close Date</label><input type="date" name="registrationCloseDate" value="${esc(meet.registrationCloseAt?meet.registrationCloseAt.slice(0,10):'')}" /></div>
           <div><label>Registration Close Time</label><input type="time" name="registrationCloseTime" value="${esc(meet.registrationCloseAt?meet.registrationCloseAt.slice(11,16):'')}" /></div>
@@ -3172,6 +3176,7 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
 function saveMeetFields(meet, body) {
   meet.meetName=String(body.meetName||'New Meet').trim();
   meet.date=String(body.date||'').trim();
+  meet.endDate=String(body.endDate||'').trim();
   meet.startTime=String(body.startTime||'').trim();
   meet.registrationCloseAt=combineDateTime(body.registrationCloseDate,body.registrationCloseTime);
   meet.rinkId=Number(body.rinkId||1);
@@ -3539,7 +3544,7 @@ app.get('/meet/:meetId/register', (req, res) => {
   const hasAnyCost=base>0||Number(meet.additionalEntryFee||0)>0;
   const costWidget=hasAnyCost ? buildCostWidget(base,Number(meet.additionalEntryFee||0),Number(meet.entryCap||0)) : '';
   res.send(pageShell({title:'Register',user:data?.user||null, bodyHtml:`
-    <div class="page-header"><h1>Register</h1><div class="sub">${esc(meet.meetName)}${meet.date?` • ${esc(meet.date)}`:''}</div></div>
+    <div class="page-header"><h1>Register</h1><div class="sub">${esc(meet.meetName)}${meet.date?` • ${esc(meetDateRange(meet))}`:''}</div></div>
     <div class="card">
       ${closed?`<div class="danger" style="font-size:18px">Registration is closed.</div>`:`
         <form method="POST" action="/meet/${meet.id}/register" class="stack">
@@ -3631,7 +3636,7 @@ app.post('/meet/:meetId/register', (req, res) => {
       <p>Hi ${esc(String(req.body.name||'').trim())},</p>
       <p>You're registered for <strong>${esc(meet.meetName)}</strong>!</p>
       <table style="width:100%;border-collapse:collapse;margin:16px 0">
-        <tr><td style="padding:8px;border-bottom:1px solid #e2e8f0;color:#64748b">Date</td><td style="padding:8px;border-bottom:1px solid #e2e8f0"><strong>${esc(meet.date||'TBD')}</strong></td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #e2e8f0;color:#64748b">Date</td><td style="padding:8px;border-bottom:1px solid #e2e8f0"><strong>${esc(meetDateRange(meet))}</strong></td></tr>
         <tr><td style="padding:8px;border-bottom:1px solid #e2e8f0;color:#64748b">Venue</td><td style="padding:8px;border-bottom:1px solid #e2e8f0"><strong>${rink?esc(rink.name)+', '+esc(rink.city)+' '+esc(rink.state):'TBD'}</strong></td></tr>
         <tr><td style="padding:8px;border-bottom:1px solid #e2e8f0;color:#64748b">Division</td><td style="padding:8px;border-bottom:1px solid #e2e8f0"><strong>${esc(finalGroup?.label||'TBD')}</strong></td></tr>
         ${meet.startTime?'<tr><td style="padding:8px;color:#64748b">Start Time</td><td style="padding:8px"><strong>'+esc(meet.startTime)+'</strong></td></tr>':''}
@@ -4642,7 +4647,7 @@ app.get('/meet/:meetId/tv', (req, res) => {
     '<div class="tv-meet-name">'+esc(meet.meetName)+'</div>' +
     '<div class="tv-progress">' +
     (current?'<div class="tv-race-num">RACE '+Math.max(info.idx+1,1)+' OF '+info.ordered.length+'</div>':'') +
-    '<div style="font-size:13px;color:rgba(255,255,255,.4);margin-top:2px">'+(meet.date||'')+'</div>' +
+    '<div style="font-size:13px;color:rgba(255,255,255,.4);margin-top:2px">'+(meetDateRange(meet))+'</div>' +
     '</div></div>' +
     '<div class="tv-main">'+mainHtml+'</div>' +
     '<div class="tv-footer">' +
@@ -4682,7 +4687,7 @@ app.get('/portal/meet/:meetId/results/print', requireRole('meet_director','judge
     .meta{color:#555;margin-bottom:12px}.section{margin-bottom:26px}
     table{width:100%;border-collapse:collapse;margin-top:8px}th,td{padding:6px 8px;border-bottom:1px solid #ddd;text-align:left}
     th{font-size:11px;text-transform:uppercase;color:#666;letter-spacing:.05em}</style></head><body>
-    <h1>${esc(meet.meetName)} — Results</h1><div class="meta">${esc(meet.date||'')}${meet.startTime?` • ${esc(meet.startTime)}`:''}</div>
+    <h1>${esc(meet.meetName)} — Results</h1><div class="meta">${esc(meetDateRange(meet))}${meet.startTime?` • ${esc(meet.startTime)}`:''}</div>
     ${sections.map(s=>`<div class="section"><h2>${esc(s.groupLabel)} — ${esc(cap(s.division))}</h2>
       <table><thead><tr><th>Place</th><th>Skater</th><th>Team</th><th>Points</th></tr></thead><tbody>
       ${s.standings.map(r=>`<tr><td>${r.overallPlace}</td><td>${esc(r.skaterName||'')}${r.sponsor?` (${esc(r.sponsor)})`:''}
@@ -4913,7 +4918,7 @@ app.get('/portal/meet/:meetId/registered/print-race-list', requireRole('meet_dir
     table{width:100%;border-collapse:collapse;margin-top:8px}th,td{padding:6px 8px;border-bottom:1px solid #ddd;text-align:left}
     th{font-size:11px;text-transform:uppercase;color:#666}</style></head><body>
     <h1>${esc(meet.meetName)} — Race List</h1>
-    <div style="color:#555;margin-bottom:12px">${esc(meet.date||'')}${meet.startTime?` • ${esc(meet.startTime)}`:''}</div>
+    <div style="color:#555;margin-bottom:12px">${esc(meetDateRange(meet))}${meet.startTime?` • ${esc(meet.startTime)}`:''}</div>
     ${daySections||'<div>No blocks yet.</div>'}
   </body></html>`);
 });
