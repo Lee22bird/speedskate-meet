@@ -389,10 +389,11 @@ function sanitizeRinks(db) {
 function normalizeDivisionSet(divs) {
   const out=divs||{};
   for(const key of ['novice','elite']) {
-    if(!out[key]) out[key]={enabled:false,cost:0,distances:['','','','']};
+    if(!out[key]) out[key]={enabled:false,cost:0,distances:['','','',''],ages:''};
     out[key].enabled=!!out[key].enabled; out[key].cost=Number(out[key].cost||0);
     if(!Array.isArray(out[key].distances)) out[key].distances=['','','',''];
     out[key].distances=[0,1,2,3].map(i=>String(out[key].distances[i]||'').trim());
+    if(typeof out[key].ages!=='string') out[key].ages='';
   } return out;
 }
 
@@ -2964,7 +2965,10 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
     const colors={novice:'var(--sky2)',elite:'var(--navy)'};
     return '<div class="group-div-card">' +
       '<div class="row between center" style="margin-bottom:10px">' +
-        '<div style="font-weight:700;font-size:14px;color:'+colors[divKey]+'">'+divKey.toUpperCase()+'</div>' +
+        '<div style="display:flex;align-items:center;gap:10px">' +
+          '<div style="font-weight:700;font-size:14px;color:'+colors[divKey]+'">'+divKey.toUpperCase()+'</div>' +
+          '<input name="g_'+gi+'_'+divKey+'_ages" value="'+esc(div.ages||'')+'" placeholder="Ages e.g. 18-29" style="font-size:12px;color:#64748b;border:none;border-bottom:1px solid var(--border2);background:transparent;padding:2px 4px;width:110px" />' +
+        '</div>' +
         toggleSwitch('g_'+gi+'_'+divKey+'_enabled', div.enabled) +
       '</div>' +
       '<div style="display:flex;gap:8px;align-items:flex-end">' +
@@ -2984,11 +2988,11 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
     groupsRows.push(
       '<div class="group-pair-row">' +
         '<div class="group-pair-col">' +
-          '<div class="group-pair-header"><span class="group-pair-name">'+esc(L.label)+'</span><input name="g_'+i+'_ages" value="'+esc(L.ages)+'" class="group-pair-age-input" placeholder="e.g. 10-11" title="Edit age range" /></div>' +
+          '<div class="group-pair-header"><span class="group-pair-name">'+esc(L.label)+'</span></div>' +
           Lcards +
         '</div>' +
         (R?'<div class="group-pair-col">' +
-          '<div class="group-pair-header"><span class="group-pair-name">'+esc(R.label)+'</span><input name="g_'+(i+1)+'_ages" value="'+esc(R.ages)+'" class="group-pair-age-input" placeholder="e.g. 10-11" title="Edit age range" /></div>' +
+          '<div class="group-pair-header"><span class="group-pair-name">'+esc(R.label)+'</span></div>' +
           Rcards +
         '</div>':'') +
       '</div>'
@@ -3191,6 +3195,7 @@ function saveMeetFields(meet, body) {
         enabled:!!body[`g_${gi}_${divKey}_enabled`],
         cost:Number(String(body[`g_${gi}_${divKey}_cost`]||'0').trim()||0),
         distances:[String(body[`g_${gi}_${divKey}_d1`]||'').trim(),String(body[`g_${gi}_${divKey}_d2`]||'').trim(),String(body[`g_${gi}_${divKey}_d3`]||'').trim(),String(body[`g_${gi}_${divKey}_d4`]||'').trim()],
+        ages:String(body[`g_${gi}_${divKey}_ages`]||'').trim(),
       };
     }
   });
