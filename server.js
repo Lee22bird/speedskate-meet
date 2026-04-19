@@ -4639,7 +4639,7 @@ app.get('/meet/:meetId/tv', (req, res) => {
       '<div class="tv-footer-results">'+lastResultHtml+'</div>'
       : '<div style="opacity:.4">No results yet</div>') +
     '</div></div>' +
-    '<script>setTimeout(()=>location.reload(),4000);</script>' +
+    '<script>setTimeout(()=>location.reload(),8000);</script>' +
     '</body></html>';
 
   res.send(html);
@@ -4807,16 +4807,17 @@ app.get('/meet/:meetId/live', (req, res) => {
               const result=current.resultsMode==='times'?l.time:l.place;
               const medal=l.place==='1'?'🥇':l.place==='2'?'🥈':l.place==='3'?'🥉':'';
               const statusClass=l.status&&l.status.toLowerCase().includes('ready')?'ready':l.status&&l.status.toLowerCase().includes('dns')?'dns':'';
-              return `<div class="live-lane-card\${result?' has-place':''}">
-                <div class="live-lane-num">\${esc(String(l.lane||''))}</div>
-                <div class="live-helmet">#\${esc(String(l.helmetNumber||'?'))}</div>
-                <div>
-                  <div class="live-skater-name">\${esc(l.skaterName||'')}</div>
-                  <div class="live-skater-team">\${esc(l.team||'')}\${reg?.sponsor?'<span style="color:var(--orange);margin-left:6px">• '+esc(reg.sponsor)+'</span>':''}</div>
-                </div>
-                <div class="live-result">\${medal||(result?esc(String(result)):'')}</div>
-                <div class="live-status-badge \${statusClass}">\${esc(l.status||'')}</div>
-              </div>`;
+              const sponsorHtml=reg?.sponsor?'<span style="color:var(--orange);margin-left:6px">• '+esc(reg.sponsor)+'</span>':'';
+              return '<div class="live-lane-card'+(result?' has-place':'')+'">'+
+                '<div class="live-lane-num">'+esc(String(l.lane||''))+'</div>'+
+                '<div class="live-helmet">#'+esc(String(l.helmetNumber||'?'))+'</div>'+
+                '<div>'+
+                  '<div class="live-skater-name">'+esc(l.skaterName||'')+'</div>'+
+                  '<div class="live-skater-team">'+esc(l.team||'')+sponsorHtml+'</div>'+
+                '</div>'+
+                '<div class="live-result">'+(medal||(result?esc(String(result)):''))+'</div>'+
+                '<div class="live-status-badge '+statusClass+'">'+esc(l.status||'')+'</div>'+
+              '</div>';
             }).join('')}
           </div>`:
         `<div style="padding:40px;text-align:center;color:var(--muted)">
@@ -4828,21 +4829,20 @@ app.get('/meet/:meetId/live', (req, res) => {
         <div style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:var(--navy);margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid var(--border)">
           Recent Results
         </div>
-        ${recent.map(r=>`
-          <div class="recent-race-block">
-            <div class="recent-race-title">${esc(r.groupLabel)} — ${esc(cap(r.division))} — ${esc(r.distanceLabel)}</div>
-            ${(r.laneEntries||[]).filter(x=>String(x.place||'').trim()).sort((a,b)=>Number(a.place||999)-Number(b.place||999)).slice(0,4).map(x=>{
-              const place=Number(x.place);
-              const medal=place===1?'🥇':place===2?'🥈':place===3?'🥉':null;
-              return `<div class="recent-place-row">
-                \${medal?'<div class="recent-medal">'+medal+'</div>':'<div class="recent-place-num">'+esc(x.place)+'</div>'}
-                <div>
-                  <div class="recent-name">\${esc(x.skaterName||'')}</div>
-                  <div class="recent-team">\${esc(x.team||'')}</div>
-                </div>
-              </div>`;
-            }).join('')||'<div class="muted" style="font-size:13px">No results yet</div>'}
-          </div>`).join('')||`<div style="padding:40px;text-align:center;color:var(--muted)">
+        ${recent.map(r=>{
+          const placeRows=(r.laneEntries||[]).filter(x=>String(x.place||'').trim()).sort((a,b)=>Number(a.place||999)-Number(b.place||999)).slice(0,4).map(x=>{
+            const pl=Number(x.place);
+            const med=pl===1?'🥇':pl===2?'🥈':pl===3?'🥉':null;
+            return '<div class="recent-place-row">'+
+              (med?'<div class="recent-medal">'+med+'</div>':'<div class="recent-place-num">'+esc(x.place)+'</div>')+
+              '<div><div class="recent-name">'+esc(x.skaterName||'')+'</div><div class="recent-team">'+esc(x.team||'')+'</div></div>'+
+            '</div>';
+          }).join('')||'<div class="muted" style="font-size:13px">No results yet</div>';
+          return '<div class="recent-race-block">'+
+            '<div class="recent-race-title">'+esc(r.groupLabel)+' — '+esc(cap(r.division))+' — '+esc(r.distanceLabel)+'</div>'+
+            placeRows+
+          '</div>';
+        }).join('')||`<div style="padding:40px;text-align:center;color:var(--muted)">
             <div style="font-size:36px;margin-bottom:8px">⏳</div>
             <div style="font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:700">Results will appear here</div>
           </div>`}
@@ -4862,7 +4862,7 @@ app.get('/meet/:meetId/live', (req, res) => {
           </div>`).join('')||'<div class="muted">No times posted yet.</div>'}
       </div>
     </div>`):''}
-    <script>setTimeout(()=>location.reload(),4000);</script>`}));
+    <script>setTimeout(()=>location.reload(),8000);</script>`}));
 });
 
 // ── Print Race List ───────────────────────────────────────────────────────────
