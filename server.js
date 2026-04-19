@@ -271,6 +271,14 @@ function makeDivisionsTemplate() {
   };
 }
 
+// Defaults from USARS flyer — e=Elite distances, n=Novice distances (empty = no novice for that group)
+// Novice: Primary(7&under)=100/300, Juvenile(8-9)=200/500, Elementary(10-11)=300/700,
+//         Freshman(12-13)=300/1000, Sophomore(14-15)=500/1000, Junior(16-17)=500/1000,
+//         Senior(18-29)=500/1000, Masters(30+)=500/1000  — stops at Masters, none above
+// Elite:  Tiny Tot=100/200/300, Primary=200/300/400, Juvenile=200/300/500,
+//         Elementary=300/500/700, Freshman=300/500/1000, Sophomore=500/1000/1500,
+//         Junior=500/1000/1500, Senior=500/1000/1500, Classic=500/1000/1500,
+//         Masters=500/700/1000, Veterans=500/700/1000, Esquire=500/700/1000, Premier=500/700/1000
 const GROUP_DEFAULTS = {
   tiny_tot_girls:   {e:['100m','200m','300m',''], n:['','','','']},
   tiny_tot_boys:    {e:['100m','200m','300m',''], n:['','','','']},
@@ -288,16 +296,16 @@ const GROUP_DEFAULTS = {
   junior_men:       {e:['500m','1000m','1500m',''],n:['500m','1000m','','']},
   senior_women:     {e:['500m','1000m','1500m',''],n:['500m','1000m','','']},
   senior_men:       {e:['500m','1000m','1500m',''],n:['500m','1000m','','']},
-  classic_women:    {e:['500m','1000m','1500m',''],n:['500m','1000m','','']},
-  classic_men:      {e:['500m','1000m','1500m',''],n:['500m','1000m','','']},
+  classic_women:    {e:['500m','1000m','1500m',''],n:['','','','']},
+  classic_men:      {e:['500m','1000m','1500m',''],n:['','','','']},
   master_women:     {e:['500m','700m','1000m',''], n:['500m','1000m','','']},
   master_men:       {e:['500m','700m','1000m',''], n:['500m','1000m','','']},
-  veteran_women:    {e:['500m','700m','1000m',''], n:['500m','1000m','','']},
-  veteran_men:      {e:['500m','700m','1000m',''], n:['500m','1000m','','']},
-  esquire_women:    {e:['500m','700m','1000m',''], n:['500m','1000m','','']},
-  esquire_men:      {e:['500m','700m','1000m',''], n:['500m','1000m','','']},
-  premier_women:    {e:['500m','700m','1000m',''], n:['500m','1000m','','']},
-  premier_men:      {e:['500m','700m','1000m',''], n:['500m','1000m','','']},
+  veteran_women:    {e:['500m','700m','1000m',''], n:['','','','']},
+  veteran_men:      {e:['500m','700m','1000m',''], n:['','','','']},
+  esquire_women:    {e:['500m','700m','1000m',''], n:['','','','']},
+  esquire_men:      {e:['500m','700m','1000m',''], n:['','','','']},
+  premier_women:    {e:['500m','700m','1000m',''], n:['','','','']},
+  premier_men:      {e:['500m','700m','1000m',''], n:['','','','']},
 };
 
 function makeDefaultDivisions(groupId) {
@@ -326,8 +334,8 @@ function baseGroups() {
     {id:'sophomore_boys',  label:'Sophomore Boys',   ages:'14-15',    gender:'boys'},
     {id:'junior_women',    label:'Junior Women',     ages:'16-17',    gender:'women'},
     {id:'junior_men',      label:'Junior Men',       ages:'16-17',    gender:'men'},
-    {id:'senior_women',    label:'Senior Women',     ages:'18-24',    gender:'women'},
-    {id:'senior_men',      label:'Senior Men',       ages:'18-24',    gender:'men'},
+    {id:'senior_women',    label:'Senior Women',     ages:'18-29',    gender:'women'},
+    {id:'senior_men',      label:'Senior Men',       ages:'18-29',    gender:'men'},
     {id:'classic_women',   label:'Classic Women',    ages:'25-34',    gender:'women'},
     {id:'classic_men',     label:'Classic Men',      ages:'25-34',    gender:'men'},
     {id:'master_women',    label:'Master Women',     ages:'35-44',    gender:'women'},
