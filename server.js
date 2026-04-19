@@ -78,7 +78,7 @@ function emailHtmlWrap(content) {
   </body></html>`;
 }
 
-function meetDateRange(meet){const s=meetDateRange(meet);const e=meet.endDate||'';if(!s)return'Date TBD';if(!e||e===s)return s;return s+' – '+e;}
+function meetDateRange(meet){const s=meet.date||'';const e=meet.endDate||'';if(!s)return'Date TBD';if(!e||e===s)return s;return s+' – '+e;}
 
 function normalizePhone(raw) {
   const digits = String(raw||'').replace(/\D/g,'');
