@@ -4807,7 +4807,7 @@ app.get('/meet/:meetId/live', (req, res) => {
               const result=current.resultsMode==='times'?l.time:l.place;
               const medal=l.place==='1'?'🥇':l.place==='2'?'🥈':l.place==='3'?'🥉':'';
               const statusClass=l.status&&l.status.toLowerCase().includes('ready')?'ready':l.status&&l.status.toLowerCase().includes('dns')?'dns':'';
-              return \`<div class="live-lane-card\${result?' has-place':''}">
+              return `<div class="live-lane-card\${result?' has-place':''}">
                 <div class="live-lane-num">\${esc(String(l.lane||''))}</div>
                 <div class="live-helmet">#\${esc(String(l.helmetNumber||'?'))}</div>
                 <div>
@@ -4816,7 +4816,7 @@ app.get('/meet/:meetId/live', (req, res) => {
                 </div>
                 <div class="live-result">\${medal||(result?esc(String(result)):'')}</div>
                 <div class="live-status-badge \${statusClass}">\${esc(l.status||'')}</div>
-              </div>\`;
+              </div>`;
             }).join('')}
           </div>`:
         `<div style="padding:40px;text-align:center;color:var(--muted)">
@@ -4834,13 +4834,13 @@ app.get('/meet/:meetId/live', (req, res) => {
             ${(r.laneEntries||[]).filter(x=>String(x.place||'').trim()).sort((a,b)=>Number(a.place||999)-Number(b.place||999)).slice(0,4).map(x=>{
               const place=Number(x.place);
               const medal=place===1?'🥇':place===2?'🥈':place===3?'🥉':null;
-              return \`<div class="recent-place-row">
+              return `<div class="recent-place-row">
                 \${medal?'<div class="recent-medal">'+medal+'</div>':'<div class="recent-place-num">'+esc(x.place)+'</div>'}
                 <div>
                   <div class="recent-name">\${esc(x.skaterName||'')}</div>
                   <div class="recent-team">\${esc(x.team||'')}</div>
                 </div>
-              </div>\`;
+              </div>`;
             }).join('')||'<div class="muted" style="font-size:13px">No results yet</div>'}
           </div>`).join('')||`<div style="padding:40px;text-align:center;color:var(--muted)">
             <div style="font-size:36px;margin-bottom:8px">⏳</div>
