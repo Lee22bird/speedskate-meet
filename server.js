@@ -2860,6 +2860,7 @@ app.get('/portal/users', requireRole('super_admin'), (req, res) => {
       <td>${esc(u.displayName||u.username)}</td><td>${esc(u.username)}</td>
       <td>${esc((u.roles||[]).join(', '))}</td><td>${esc(u.team||'')}</td>
       <td>${u.active===false?'Off':'On'}</td>
+      <td>${Number(u.id)===Number(req.user.id)?'<span class="muted" style="font-size:12px">You</span>':`<a class="btn-danger btn-sm" href="/portal/users/${u.id}/delete" onclick="return confirm('Delete ${esc(u.displayName||u.username)}?')">Delete</a>`}</td>
     </tr>`).join('');
   res.send(pageShell({title:'Users',user:req.user, bodyHtml:`
     <div class="page-header"><h1>Users</h1></div>
@@ -2881,7 +2882,7 @@ app.get('/portal/users', requireRole('super_admin'), (req, res) => {
       </form>
       <div class="hr"></div>
       <table class="table">
-        <thead><tr><th>Name</th><th>Username</th><th>Roles</th><th>Team</th><th>Active</th></tr></thead>
+        <thead><tr><th>Name</th><th>Username</th><th>Roles</th><th>Team</th><th>Active</th><th></th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>`}));
@@ -2890,6 +2891,13 @@ app.get('/portal/users', requireRole('super_admin'), (req, res) => {
 app.post('/portal/users/new', requireRole('super_admin'), (req, res) => {
   const rolesRaw=req.body.roles; const roles=Array.isArray(rolesRaw)?rolesRaw:(rolesRaw?[rolesRaw]:[]);
   req.db.users.push({id:nextId(req.db.users),displayName:String(req.body.displayName||'').trim(),username:String(req.body.username||'').trim(),password:String(req.body.password||'').trim(),team:String(req.body.team||'Midwest Racing').trim(),roles,active:true,createdAt:nowIso()});
+  saveDb(req.db); res.redirect('/portal/users');
+});
+
+app.get('/portal/users/:userId/delete', requireRole('super_admin'), (req, res) => {
+  const uid=Number(req.params.userId);
+  if(uid===Number(req.user.id)) return res.redirect('/portal/users'); // can't delete yourself
+  req.db.users=req.db.users.filter(u=>Number(u.id)!==uid);
   saveDb(req.db); res.redirect('/portal/users');
 });
 
@@ -2992,10 +3000,12 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
       '<div class="group-pair-row">' +
         '<div class="group-pair-col">' +
           '<div class="group-pair-header"><span class="group-pair-name">'+esc(L.label)+'</span></div>' +
+          '<input type="hidden" name="g_'+i+'_id" value="'+esc(L.id)+'" />' +
           Lcards +
         '</div>' +
         (R?'<div class="group-pair-col">' +
           '<div class="group-pair-header"><span class="group-pair-name">'+esc(R.label)+'</span></div>' +
+          '<input type="hidden" name="g_'+(i+1)+'_id" value="'+esc(R.id)+'" />' +
           Rcards +
         '</div>':'') +
       '</div>'
@@ -3193,17 +3203,21 @@ function saveMeetFields(meet, body) {
   meet.baseEntryFee=Number(String(body.baseEntryFee||'0').trim()||0);
   meet.additionalEntryFee=Number(String(body.additionalEntryFee||'0').trim()||0);
   meet.entryCap=Number(String(body.entryCap||'0').trim()||0);
-  meet.groups.forEach((group,gi)=>{
-    if(body[`g_${gi}_ages`]!==undefined) group.ages=String(body[`g_${gi}_ages`]||'').trim();
+  // Build a map of submitted group data by group ID (more reliable than index)
+  const submittedGroupCount=meet.groups.length;
+  for(let gi=0;gi<submittedGroupCount;gi++){
+    const submittedId=String(body[`g_${gi}_id`]||'').trim();
+    const group=submittedId?meet.groups.find(g=>g.id===submittedId):meet.groups[gi];
+    if(!group) continue;
     for(const divKey of ['novice','elite']) {
       group.divisions[divKey]={
         enabled:!!body[`g_${gi}_${divKey}_enabled`],
-        cost:Number(String(body[`g_${gi}_${divKey}_cost`]||'0').trim()||0),
+        cost:0,
         distances:[String(body[`g_${gi}_${divKey}_d1`]||'').trim(),String(body[`g_${gi}_${divKey}_d2`]||'').trim(),String(body[`g_${gi}_${divKey}_d3`]||'').trim(),String(body[`g_${gi}_${divKey}_d4`]||'').trim()],
         ages:String(body[`g_${gi}_${divKey}_ages`]||'').trim(),
       };
     }
-  });
+  }
   const skCount=Number(body.sk_count||0);
   meet.skateabilityGroups=[];
   for(let si=0;si<skCount;si++){
