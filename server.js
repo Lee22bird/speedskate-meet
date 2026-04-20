@@ -3588,7 +3588,7 @@ app.get('/meet/:meetId/register', (req, res) => {
       ${closed?`<div class="danger" style="font-size:18px">Registration is closed.</div>`:`
         <form method="POST" action="/meet/${meet.id}/register" class="stack">
           <div class="form-grid cols-3">
-            <div><label>Skater Name</label><input name="name" required /></div>
+            <div><label>Skater Name <span style="font-weight:400;color:#94a3b8;font-size:12px">(First &amp; Last)</span></label><input name="name" required /></div>
             <div><label>Date of Birth</label><input type="date" name="birthdate" min="1900-01-01" max="2026-04-06" /><div class="note">Used for USARS division placement (age as of Jan 1)</div></div>
             <div><label>Age <span style="font-weight:400;color:#94a3b8">(if no birthdate)</span></label><input type="number" name="manualAge" min="0" max="120" placeholder="e.g. 11" /><div class="note">Only used if birthdate is blank.</div></div>
             <div>
@@ -4012,7 +4012,7 @@ app.get('/portal/meet/:meetId/checkin', requireRole('meet_director'), (req, res)
           if(s==='not_paid') mS=!paid;
           if(s==='not_in')   mS=!checkedIn;
           if(s==='in')       mS=checkedIn;
-          row.classList.toggle('hidden',!(mN&&mT&&mS));
+          row.style.display=(mN&&mT&&mS)?'':'none';
         });
       }
     </script>`}));
