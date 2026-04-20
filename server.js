@@ -3878,7 +3878,19 @@ app.get('/portal/meet/:meetId/checkin', requireRole('meet_director'), (req, res)
   ensureRegistrationTotalsAndNumbers(meet); saveDb(req.db);
   const totalOwed=(meet.registrations||[]).reduce((s,r)=>s+Number(r.totalCost||0),0);
   const totalPaid=(meet.registrations||[]).filter(r=>r.paid).reduce((s,r)=>s+Number(r.totalCost||0),0);
-  const rows=(meet.registrations||[]).map(r=>{
+  // Server-side filtering
+  const qName=(String(req.query.q||'')).toLowerCase().trim();
+  const qTeam=(String(req.query.team||'')).toLowerCase().trim();
+  const qStatus=String(req.query.status||'all');
+  const filtered=(meet.registrations||[]).filter(r=>{
+    if(qName&&!String(r.name||'').toLowerCase().includes(qName)) return false;
+    if(qTeam&&!String(r.team||'').toLowerCase().includes(qTeam)) return false;
+    if(qStatus==='not_paid'&&r.paid) return false;
+    if(qStatus==='not_in'&&r.checkedIn) return false;
+    if(qStatus==='in'&&!r.checkedIn) return false;
+    return true;
+  });
+  const rows=filtered.map(r=>{
     const entries=['challengeUp','novice','elite','open','quad','timeTrials','relays'].filter(k=>r.options?.[k]).map(k=>k==='challengeUp'?'CU':cap(k));
     (r.options?.skateabilityGroups||[]).forEach(g=>entries.push(g));
     if(r.options?.skateability&&!entries.length) entries.push('Skateability');
@@ -3925,18 +3937,24 @@ app.get('/portal/meet/:meetId/checkin', requireRole('meet_director'), (req, res)
           <button class="btn2" type="submit">Reassign Helmet Numbers</button>
         </form>
       </div>
-      <div class="filters-row" style="margin-bottom:14px">
-        <div><label>Search Name</label><input id="ciSearch" placeholder="skater name..." oninput="applyCI()" onkeyup="applyCI()" /></div>
-        <div><label>Team</label><input id="ciTeam" placeholder="team..." oninput="applyCI()" onkeyup="applyCI()" /></div>
-        <div><label>Filter</label>
-          <select id="ciStatus" onchange="applyCI()">
-            <option value="all">All</option>
-            <option value="not_paid">Not Paid</option>
-            <option value="not_in">Not Checked In</option>
-            <option value="in">Checked In</option>
-          </select>
+      <form method="GET" action="/portal/meet/${meet.id}/checkin" style="margin-bottom:14px">
+        <div class="filters-row">
+          <div><label>Search Name</label><input name="q" value="${esc(qName)}" placeholder="skater name..." id="ciSearch" autocomplete="off" /></div>
+          <div><label>Team</label><input name="team" value="${esc(qTeam)}" placeholder="team..." id="ciTeam" autocomplete="off" /></div>
+          <div><label>Filter</label>
+            <select name="status" onchange="this.form.submit()">
+              <option value="all" ${qStatus==='all'?'selected':''}>All</option>
+              <option value="not_paid" ${qStatus==='not_paid'?'selected':''}>Not Paid</option>
+              <option value="not_in" ${qStatus==='not_in'?'selected':''}>Not Checked In</option>
+              <option value="in" ${qStatus==='in'?'selected':''}>Checked In</option>
+            </select>
+          </div>
+          <div style="display:flex;align-items:flex-end;gap:6px">
+            <button class="btn-orange btn-sm" type="submit">Search</button>
+            ${qName||qTeam||qStatus!=='all'?`<a class="btn2 btn-sm" href="/portal/meet/${meet.id}/checkin">Clear</a>`:''}
+          </div>
         </div>
-      </div>
+      </form>
       <div style="overflow-x:auto">
         <table class="table">
           <thead><tr><th>#</th><th>Name</th><th>Team</th><th>Division</th><th>Helmet</th><th>Total</th><th>Paid</th><th>Check In</th></tr></thead>
@@ -3997,24 +4015,7 @@ app.get('/portal/meet/:meetId/checkin', requireRole('meet_director'), (req, res)
       }
       function closeCiModal(){document.getElementById('ci-modal').style.display='none';}
       document.addEventListener('keydown',function(e){if(e.key==='Escape')closeCiModal();});
-      function applyCI() {
-        const q=(document.getElementById('ciSearch').value||'').toLowerCase().trim();
-        const t=(document.getElementById('ciTeam').value||'').toLowerCase().trim();
-        const s=document.getElementById('ciStatus').value;
-        document.querySelectorAll('.checkin-row').forEach(row=>{
-          const nm=row.getAttribute('data-name')||'';
-          const tm=row.getAttribute('data-team')||'';
-          const paid=row.getAttribute('data-paid')==='1';
-          const checkedIn=row.getAttribute('data-in')==='1';
-          const mN=!q||nm.includes(q);
-          const mT=!t||tm.includes(t);
-          let mS=true;
-          if(s==='not_paid') mS=!paid;
-          if(s==='not_in')   mS=!checkedIn;
-          if(s==='in')       mS=checkedIn;
-          row.style.display=(mN&&mT&&mS)?'':'none';
-        });
-      }
+      // filtering handled server-side
     </script>`}));
 });
 
