@@ -3882,18 +3882,10 @@ app.get('/portal/meet/:meetId/checkin', requireRole('meet_director'), (req, res)
     const entries=['challengeUp','novice','elite','open','quad','timeTrials','relays'].filter(k=>r.options?.[k]).map(k=>k==='challengeUp'?'CU':cap(k));
     (r.options?.skateabilityGroups||[]).forEach(g=>entries.push(g));
     if(r.options?.skateability&&!entries.length) entries.push('Skateability');
-    const md=JSON.stringify({
-      name:r.name,team:r.team,division:r.divisionGroupLabel,sponsor:r.sponsor||'',
-      helmet:r.helmetNumber,totalCost:r.totalCost,age:r.age||'?',paid:!!r.paid,checkedIn:!!r.checkedIn,
-      entries,
-      paidUrl:'/portal/meet/'+meet.id+'/checkin/toggle-paid/'+r.id,
-      checkinUrl:'/portal/meet/'+meet.id+'/checkin/toggle-checkin/'+r.id,
-      editUrl:'/portal/meet/'+meet.id+'/registered/'+r.id+'/edit',
-    });
     return `
     <tr class="checkin-row" data-name="${esc(String(r.name||'').toLowerCase())}" data-team="${esc(String(r.team||'').toLowerCase())}"
       data-paid="${r.paid?'1':'0'}" data-in="${r.checkedIn?'1':'0'}"
-      data-md='${md.replace(/'/g,"&#39;")}' onclick="openCiModal(this)" style="cursor:pointer">
+      data-reg-id="${esc(String(r.id))}" onclick="openCiModal(this)" style="cursor:pointer">
       <td>${esc(r.meetNumber)}</td>
       <td><strong>${esc(r.name)}</strong>${sponsorLineHtml(r.sponsor||'')}</td>
       <td>${esc(r.team)}</td>
@@ -3959,10 +3951,21 @@ app.get('/portal/meet/:meetId/checkin', requireRole('meet_director'), (req, res)
       </div>
     </div>
     <script>
+      const CI_DATA=${JSON.stringify(Object.fromEntries((meet.registrations||[]).map(r=>{
+        const entries=['challengeUp','novice','elite','open','quad','timeTrials','relays'].filter(k=>r.options?.[k]).map(k=>k==='challengeUp'?'CU':cap(k));
+        (r.options?.skateabilityGroups||[]).forEach(g=>entries.push(g));
+        if(r.options?.skateability&&!entries.length) entries.push('Skateability');
+        return [String(r.id),{name:r.name,team:r.team,division:r.divisionGroupLabel,sponsor:r.sponsor||'',
+          helmet:r.helmetNumber,totalCost:r.totalCost,age:r.age||'?',paid:!!r.paid,checkedIn:!!r.checkedIn,entries,
+          paidUrl:'/portal/meet/${meet.id}/checkin/toggle-paid/'+r.id,
+          checkinUrl:'/portal/meet/${meet.id}/checkin/toggle-checkin/'+r.id,
+          editUrl:'/portal/meet/${meet.id}/registered/'+r.id+'/edit'}];
+      })))};
       const savedY=sessionStorage.getItem('ciY');
       if(savedY) { window.scrollTo(0,parseInt(savedY,10)); sessionStorage.removeItem('ciY'); }
       function openCiModal(row) {
-        var d=JSON.parse(row.getAttribute('data-md'));
+        var d=CI_DATA[row.getAttribute('data-reg-id')];
+        if(!d) return;
         var chips=d.entries.length ? d.entries.map(function(e){return '<span style="display:inline-block;padding:5px 12px;border-radius:999px;font-size:13px;font-weight:700;background:#f0f9ff;border:1px solid #bae6fd;color:#0ea5e9;margin:3px 3px 3px 0">'+e+'</span>';}).join('') : '<span style="color:#94a3b8;font-size:14px">No events selected</span>';
         var paidSt=d.paid?'border:1.5px solid #6ee7b7;background:#ecfdf5;color:#059669':'border:1.5px solid #cbd5e1;background:#fff;color:#64748b';
         var ciSt=d.checkedIn?'border:1.5px solid #6ee7b7;background:#ecfdf5;color:#059669':'border:1.5px solid #F97316;background:#F97316;color:#fff';
