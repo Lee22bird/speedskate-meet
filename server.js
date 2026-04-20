@@ -404,7 +404,7 @@ function normalizeOpenGroups(raw) {
   if(!Array.isArray(raw)||raw.length===0) return defaults;
   return defaults.map(def=>{
     const saved=raw.find(r=>r.id===def.id); if(!saved) return def;
-    return {id:def.id,label:def.label,ages:def.ages,gender:def.gender,
+    return {id:def.id,label:def.label,ages:String(saved.ages||def.ages||'').trim()||def.ages,gender:def.gender,
       enabled:!!saved.enabled, distance:String(saved.distance||def.defaultDistance||'').trim(), cost:Number(saved.cost||0),
       timeTrial:!!saved.timeTrial, ttDistance:String(saved.ttDistance||'').trim()};
   });
@@ -415,7 +415,7 @@ function normalizeQuadGroups(raw) {
   if(!Array.isArray(raw)||raw.length===0) return defaults;
   return defaults.map(def=>{
     const saved=raw.find(r=>r.id===def.id); if(!saved) return def;
-    return {id:def.id,label:def.label,ages:def.ages,gender:def.gender,
+    return {id:def.id,label:def.label,ages:String(saved.ages||def.ages||"").trim()||def.ages,gender:def.gender,
       enabled:!!saved.enabled, distances:Array.isArray(saved.distances)?saved.distances.map(String):[...def.distances], cost:Number(saved.cost||0)};
   });
 }
