@@ -3589,7 +3589,8 @@ app.get('/meet/:meetId/register', (req, res) => {
         <form method="POST" action="/meet/${meet.id}/register" class="stack">
           <div class="form-grid cols-3">
             <div><label>Skater Name</label><input name="name" required /></div>
-            <div><label>Date of Birth</label><input type="date" name="birthdate" min="1900-01-01" max="2026-04-06" required /><div class="note">Used for USARS division placement (age as of Jan 1)</div></div>
+            <div><label>Date of Birth</label><input type="date" name="birthdate" min="1900-01-01" max="2026-04-06" /><div class="note">Used for USARS division placement (age as of Jan 1)</div></div>
+            <div><label>Age <span style="font-weight:400;color:#94a3b8">(if no birthdate)</span></label><input type="number" name="manualAge" min="0" max="120" placeholder="e.g. 11" /><div class="note">Only used if birthdate is blank.</div></div>
             <div>
               <label>Gender</label>
               <select name="gender">
@@ -3624,7 +3625,7 @@ app.post('/meet/:meetId/register', (req, res) => {
   if(!meet||!meet.isPublic||isRegistrationClosed(meet)) return res.redirect(`/meet/${req.params.meetId}/register`);
   const gender=String(req.body.gender||'').trim()||'boys';
   const birthdate=String(req.body.birthdate||'').trim();
-  const compAge=usarsAge(birthdate,meet.date)||Number(req.body.age||0);
+  const compAge=usarsAge(birthdate,meet.date)||Number(req.body.manualAge||req.body.age||0);
   let baseGroup=findAgeGroup(meet.groups,compAge,gender);
   // Novice bump: if age group has no novice, find nearest group with novice enabled toward Senior
   if(!!req.body.novice && baseGroup) {
@@ -3877,30 +3878,48 @@ app.get('/portal/meet/:meetId/checkin', requireRole('meet_director'), (req, res)
   ensureRegistrationTotalsAndNumbers(meet); saveDb(req.db);
   const totalOwed=(meet.registrations||[]).reduce((s,r)=>s+Number(r.totalCost||0),0);
   const totalPaid=(meet.registrations||[]).filter(r=>r.paid).reduce((s,r)=>s+Number(r.totalCost||0),0);
-  const rows=(meet.registrations||[]).map(r=>`
-    <tr class="checkin-row" data-name="${esc(String(r.name||'').toLowerCase())}" data-team="${esc(String(r.team||'').toLowerCase())}">
+  const rows=(meet.registrations||[]).map(r=>{
+    const entries=['challengeUp','novice','elite','open','quad','timeTrials','relays'].filter(k=>r.options?.[k]).map(k=>k==='challengeUp'?'CU':cap(k));
+    (r.options?.skateabilityGroups||[]).forEach(g=>entries.push(g));
+    if(r.options?.skateability&&!entries.length) entries.push('Skateability');
+    const md=JSON.stringify({
+      name:r.name,team:r.team,division:r.divisionGroupLabel,sponsor:r.sponsor||'',
+      helmet:r.helmetNumber,totalCost:r.totalCost,age:r.age||'?',paid:!!r.paid,checkedIn:!!r.checkedIn,
+      entries,
+      paidUrl:'/portal/meet/'+meet.id+'/checkin/toggle-paid/'+r.id,
+      checkinUrl:'/portal/meet/'+meet.id+'/checkin/toggle-checkin/'+r.id,
+      editUrl:'/portal/meet/'+meet.id+'/registered/'+r.id+'/edit',
+    });
+    return `
+    <tr class="checkin-row" data-name="${esc(String(r.name||'').toLowerCase())}" data-team="${esc(String(r.team||'').toLowerCase())}"
+      data-paid="${r.paid?'1':'0'}" data-in="${r.checkedIn?'1':'0'}"
+      data-md='${md.replace(/'/g,"&#39;")}' onclick="openCiModal(this)" style="cursor:pointer">
       <td>${esc(r.meetNumber)}</td>
       <td><strong>${esc(r.name)}</strong>${sponsorLineHtml(r.sponsor||'')}</td>
       <td>${esc(r.team)}</td>
       <td>${esc(r.divisionGroupLabel)}</td>
-      <td>
-        <form method="POST" action="/portal/meet/${meet.id}/checkin/helmet/${r.id}" class="checkin-form row center" style="gap:6px">
+      <td onclick="event.stopPropagation()">
+        <form method="POST" action="/portal/meet/${meet.id}/checkin/helmet/${r.id}" class="checkin-form row center" style="gap:6px"
+          onsubmit="sessionStorage.setItem('ciY',String(window.scrollY))">
           <input style="max-width:80px" name="helmetNumber" value="${esc(r.helmetNumber)}" />
           <button class="btn2 btn-sm" type="submit">✓</button>
         </form>
       </td>
       <td><strong>$${esc(r.totalCost)}</strong></td>
-      <td>
-        <form method="POST" action="/portal/meet/${meet.id}/checkin/toggle-paid/${r.id}" class="checkin-form">
+      <td onclick="event.stopPropagation()">
+        <form method="POST" action="/portal/meet/${meet.id}/checkin/toggle-paid/${r.id}" class="checkin-form"
+          onsubmit="sessionStorage.setItem('ciY',String(window.scrollY))">
           <button class="${r.paid?'btn-good':'btn2'} btn-sm" type="submit">${r.paid?'✔ Paid':'Mark Paid'}</button>
         </form>
       </td>
-      <td>
-        <form method="POST" action="/portal/meet/${meet.id}/checkin/toggle-checkin/${r.id}" class="checkin-form">
+      <td onclick="event.stopPropagation()">
+        <form method="POST" action="/portal/meet/${meet.id}/checkin/toggle-checkin/${r.id}" class="checkin-form"
+          onsubmit="sessionStorage.setItem('ciY',String(window.scrollY))">
           <button class="${r.checkedIn?'btn-good':'btn2'} btn-sm" type="submit">${r.checkedIn?'✔ In':'Check In'}</button>
         </form>
       </td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
   res.send(pageShell({title:'Check-In',user:req.user,meet,activeTab:'checkin', bodyHtml:`
     <div class="page-header"><h1>Check-In</h1><div class="sub">${esc(meet.meetName)}</div></div>
     <div class="stat-grid" style="margin-bottom:16px">
@@ -3982,13 +4001,14 @@ app.get('/portal/meet/:meetId/checkin', requireRole('meet_director'), (req, res)
         document.querySelectorAll('.checkin-row').forEach(row=>{
           const nm=row.getAttribute('data-name')||'';
           const tm=row.getAttribute('data-team')||'';
-          const paidText=row.children[6]?.innerText||'';
-          const inText=row.children[7]?.innerText||'';
-          const mN=!q||nm.includes(q), mT=!t||tm.includes(t);
+          const paid=row.getAttribute('data-paid')==='1';
+          const checkedIn=row.getAttribute('data-in')==='1';
+          const mN=!q||nm.includes(q);
+          const mT=!t||tm.includes(t);
           let mS=true;
-          if(s==='not_paid') mS=!/paid/i.test(paidText);
-          if(s==='not_in')   mS=!/✔ in/i.test(inText);
-          if(s==='in')       mS=/✔ in/i.test(inText);
+          if(s==='not_paid') mS=!paid;
+          if(s==='not_in')   mS=!checkedIn;
+          if(s==='in')       mS=checkedIn;
           row.classList.toggle('hidden',!(mN&&mT&&mS));
         });
       }
