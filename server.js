@@ -902,6 +902,31 @@ function generateBaseRacesForMeet(meet) {
       }
     }
   }
+  // Generate races for Additional Divisions (skateability groups — Diaper Dash, etc.)
+  const existingSkRaces=(meet.races||[]).filter(r=>r.isSkateabilityRace);
+  const skRaceMap=new Map(existingSkRaces.map(r=>[r.groupId+'|'+r.distanceLabel,r]));
+  let skOrderHint=8500;
+  for(const sg of meet.skateabilityGroups||[]) {
+    if(!sg.ageGroupLabel) continue;
+    const distances=(sg.distances||[]).filter(Boolean);
+    for(const dist of distances) {
+      const mapKey=sg.id+'|'+dist;
+      const old=skRaceMap.get(mapKey);
+      races.push({
+        id:old?.id||('r'+crypto.randomBytes(6).toString('hex')),
+        orderHint:skOrderHint++,
+        groupId:sg.id, groupLabel:sg.ageGroupLabel, ages:sg.ageGroupId||'',
+        division:'skateability', distanceLabel:dist, dayIndex:1, cost:0,
+        stage:'final', heatNumber:0, parentRaceKey:'sk|'+sg.id+'|'+dist,
+        startType:'standing', countsForOverall:false,
+        laneEntries:Array.isArray(old?.laneEntries)?old.laneEntries:[],
+        resultsMode:'places', status:old?.status||'open',
+        notes:String(old?.notes||''), isFinal:true, closedAt:old?.closedAt||'',
+        isOpenRace:false, isQuadRace:false, isTimeTrial:false, isSkateabilityRace:true
+      });
+    }
+  }
+
   const existingSpecial=(meet.races||[]).filter(r=>r.isOpenRace||r.isQuadRace);
   for(const r of existingSpecial) races.push(r);
   const validIds=new Set(races.map(r=>r.id));
@@ -4013,8 +4038,8 @@ app.get('/portal/meet/:meetId/blocks', requireRole('meet_director'), (req, res) 
   const breakIcons={break:'☕',lunch:'🍽️',awards:'🏆',practice:'⛸️'};
 
   function raceItemHtml(race,isCurrent,draggable=true) {
-    const tag=race.isTimeTrial?'⏱ ':race.isRelayRace?'🔄 ':race.isOpenRace?'🏁 ':race.isQuadRace?'🛼 ':'';
-    const cls=race.isTimeTrial?'tt-item':race.isRelayRace?'relay-item':race.isOpenRace?'open-item':race.isQuadRace?'quad-item':'';
+    const tag=race.isTimeTrial?'⏱ ':race.isRelayRace?'🔄 ':race.isOpenRace?'🏁 ':race.isQuadRace?'🛼 ':race.isSkateabilityRace?'⛸️ ':'';
+    const cls=race.isTimeTrial?'tt-item':race.isRelayRace?'relay-item':race.isOpenRace?'open-item':race.isQuadRace?'quad-item':race.isSkateabilityRace?'open-item':'';
     return `
       <div class="race-item ${isCurrent?'active-now':''} ${cls}" draggable="${draggable}"
         data-race-id="${esc(race.id)}"
