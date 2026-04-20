@@ -3957,9 +3957,9 @@ app.get('/portal/meet/:meetId/checkin', requireRole('meet_director'), (req, res)
         if(r.options?.skateability&&!entries.length) entries.push('Skateability');
         return [String(r.id),{name:r.name,team:r.team,division:r.divisionGroupLabel,sponsor:r.sponsor||'',
           helmet:r.helmetNumber,totalCost:r.totalCost,age:r.age||'?',paid:!!r.paid,checkedIn:!!r.checkedIn,entries,
-          paidUrl:'/portal/meet/${meet.id}/checkin/toggle-paid/'+r.id,
-          checkinUrl:'/portal/meet/${meet.id}/checkin/toggle-checkin/'+r.id,
-          editUrl:'/portal/meet/${meet.id}/registered/'+r.id+'/edit'}];
+          paidUrl:'/portal/meet/'+meet.id+'/checkin/toggle-paid/'+r.id,
+          checkinUrl:'/portal/meet/'+meet.id+'/checkin/toggle-checkin/'+r.id,
+          editUrl:'/portal/meet/'+meet.id+'/registered/'+r.id+'/edit'}];
       })))};
       const savedY=sessionStorage.getItem('ciY');
       if(savedY) { window.scrollTo(0,parseInt(savedY,10)); sessionStorage.removeItem('ciY'); }
