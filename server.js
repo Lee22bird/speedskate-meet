@@ -3604,7 +3604,7 @@ app.get('/meet/:meetId/register', (req, res) => {
             <div><label>Sponsor (optional)</label><input name="sponsor" placeholder="Bones Bearings" /></div>
           </div>
           <datalist id="teams-reg">${TEAM_LIST.map(t=>`<option value="${esc(t)}"></option>`).join('')}</datalist>
-          <div class="toggle-group">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px">
             <div class="toggle-row"><div><div class="toggle-row-label">Challenge Up</div></div>${toggleSwitch('challengeUp',false)}</div>
             <div class="toggle-row"><div><div class="toggle-row-label">Novice</div></div>${toggleSwitch('novice',false)}</div>
             <div class="toggle-row"><div><div class="toggle-row-label">Elite</div></div>${toggleSwitch('elite',false)}</div>
@@ -3926,8 +3926,8 @@ app.get('/portal/meet/:meetId/checkin', requireRole('meet_director'), (req, res)
         </form>
       </div>
       <div class="filters-row" style="margin-bottom:14px">
-        <div><label>Search Name</label><input id="ciSearch" placeholder="skater name..." oninput="applyCI()" /></div>
-        <div><label>Team</label><input id="ciTeam" placeholder="team..." oninput="applyCI()" /></div>
+        <div><label>Search Name</label><input id="ciSearch" placeholder="skater name..." oninput="applyCI()" onkeyup="applyCI()" /></div>
+        <div><label>Team</label><input id="ciTeam" placeholder="team..." oninput="applyCI()" onkeyup="applyCI()" /></div>
         <div><label>Filter</label>
           <select id="ciStatus" onchange="applyCI()">
             <option value="all">All</option>
