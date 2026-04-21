@@ -78,6 +78,15 @@ function emailHtmlWrap(content) {
   </body></html>`;
 }
 
+function formatTime(t){
+  if(!t) return '';
+  const [h,m]=t.split(':');
+  const hr=Number(h); const min=m||'00';
+  const ampm=hr>=12?'PM':'AM';
+  const h12=hr%12||12;
+  return h12+':'+min+' '+ampm;
+}
+
 function meetDateRange(meet){const s=meet.date||'';const e=meet.endDate||'';if(!s)return'Date TBD';if(!e||e===s)return s;return s+' – '+e;}
 
 function normalizePhone(raw) {
@@ -2159,7 +2168,7 @@ app.get('/meets', (req, res) => {
               <div style="font-family:'Orbitron',sans-serif;font-size:18px;font-weight:900;color:#fff;line-height:1.2;margin-bottom:10px">${esc(m.meetName)}</div>
               <div style="display:flex;flex-wrap:wrap;gap:12px;font-size:13px;color:rgba(255,255,255,.7)">
                 <span>📅 ${esc(dateStr)}</span>
-                ${m.startTime?`<span>🕓 ${esc(m.startTime)}</span>`:''}
+                ${m.startTime?`<span>🕓 ${esc(formatTime(m.startTime))}</span>`:''}
                 ${rink?`<span>📍 ${esc(rink.name)} • ${esc(rink.city)}, ${esc(rink.state)}</span>`:''}
               </div>
             </div>
@@ -2177,13 +2186,14 @@ app.get('/meets', (req, res) => {
       </div>`;
   }).join('');
   res.send(pageShell({title:'Find a Meet', description:'Find upcoming inline speed skating meets near you. View schedules, register online, and follow live results on race day.', user:data?.user||null, bodyHtml:`
-    <div style="max-width:680px;margin:0 auto 28px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+    <div style="max-width:680px;margin:0 auto 24px;background:linear-gradient(135deg,#0F1F3D 0%,#0d2a4a 100%);border-radius:16px;padding:28px 32px;position:relative;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.15)">
+      <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--orange),#fbbf24,var(--orange))"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:16px">
         <div>
-          <h1 style="margin:0;font-family:'Barlow Condensed',sans-serif;font-size:42px;font-weight:900;color:var(--navy)">Find a Meet</h1>
-          <div style="color:var(--muted);font-size:14px;margin-top:2px">Upcoming inline speed skating meets open for registration</div>
+          <div style="font-family:'Orbitron',sans-serif;font-size:22px;font-weight:900;color:#fff;margin-bottom:4px">Find a Meet</div>
+          <div style="color:rgba(255,255,255,.55);font-size:13px">Upcoming inline speed skating meets open for registration</div>
         </div>
-        <a class="btn2" href="/submit-meet" style="white-space:nowrap;flex-shrink:0">+ Submit Your Meet</a>
+        <a class="btn-orange" href="/submit-meet" style="white-space:nowrap;flex-shrink:0;font-size:13px">+ Submit Your Meet</a>
       </div>
     </div>
     ${cards||`<div style="max-width:680px;margin:0 auto"><div class="card"><div class="muted">No public meets yet.</div></div></div>`}`}));
