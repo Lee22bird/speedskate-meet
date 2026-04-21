@@ -4882,101 +4882,104 @@ app.get('/meet/:meetId/live', (req, res) => {
   const lanes=current?laneRowsForRace(current,meet):[];
   const recent=recentClosedRaces(meet,5);
   const regMap=new Map((meet.registrations||[]).map(r=>[Number(r.id),r]));
-  res.send(pageShell({title:'Live',user:data?.user||null, bodyHtml:`
-    <div class="live-tabs">
+
+  const laneCardsHtml=lanes.map(l=>{
+    const reg=regMap.get(Number(l.registrationId));
+    const result=current?.resultsMode==='times'?l.time:l.place;
+    const medal=result==='1'?'🥇':result==='2'?'🥈':result==='3'?'🥉':'';
+    const sponsorHtml=reg?.sponsor?'<div class="tv-team" style="color:#38BDF8;font-size:13px">'+esc(reg.sponsor)+'</div>':'';
+    return '<div class="tv-lane">'+
+      '<div class="tv-lane-num">'+esc(String(l.lane||''))+'</div>'+
+      '<div class="tv-helmet">'+(l.helmetNumber?'#'+esc(String(l.helmetNumber)):'')+'</div>'+
+      '<div style="flex:1"><div class="tv-skater-name">'+esc(l.skaterName||'')+'</div>'+
+      '<div class="tv-team">'+esc(l.team||'')+'</div>'+sponsorHtml+'</div>'+
+      (result?'<div style="font-family:Orbitron,sans-serif;font-size:22px;font-weight:700;color:#F97316;margin-left:12px">'+(medal||esc(String(result)))+'</div>':'')+
+    '</div>';
+  }).join('');
+
+  const recentHtml=recent.map(r=>{
+    const places=(r.laneEntries||[]).filter(x=>String(x.place||'').trim())
+      .sort((a,b)=>Number(a.place||999)-Number(b.place||999)).slice(0,4)
+      .map(x=>{
+        const p=Number(x.place);
+        const med=p===1?'🥇':p===2?'🥈':p===3?'🥉':null;
+        return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.06)">'+
+          '<span style="font-size:18px;width:24px">'+(med||('<span style="font-family:Orbitron,sans-serif;font-size:13px;color:rgba(255,255,255,.5)">'+x.place+'</span>'))+'</span>'+
+          '<div><div style="font-family:Orbitron,sans-serif;font-size:15px;font-weight:700;color:#fff">'+esc(x.skaterName||'')+'</div>'+
+          '<div style="font-size:12px;color:rgba(255,255,255,.5)">'+esc(x.team||'')+'</div></div>'+
+        '</div>';
+      }).join('')||'<div style="color:rgba(255,255,255,.4);font-size:13px;padding:6px 0">No results yet</div>';
+    return '<div style="background:rgba(255,255,255,.05);border-radius:10px;padding:14px;margin-bottom:10px">'+
+      '<div style="font-family:Orbitron,sans-serif;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.15em;color:#F97316;margin-bottom:8px">'+
+        esc(r.groupLabel)+' • '+esc(cap(r.division))+' • '+esc(r.distanceLabel)+'</div>'+
+      places+'</div>';
+  }).join('')||'<div style="color:rgba(255,255,255,.4);text-align:center;padding:40px 0"><div style="font-size:32px;margin-bottom:8px">⏳</div><div style="font-family:Orbitron,sans-serif;font-size:13px;font-weight:700">Results will appear here</div></div>';
+
+  const comingHtml=info.coming.slice(0,5).map(r=>
+    '<div style="font-size:14px;color:rgba(255,255,255,.7);padding:5px 0;border-bottom:1px solid rgba(255,255,255,.06)">'+
+    esc(r.groupLabel)+' — '+esc(cap(r.division))+' • '+esc(r.distanceLabel)+'</div>'
+  ).join('');
+
+  res.send(pageShell({title:'Live — '+esc(meet.meetName), user:data?.user||null, bodyHtml:`
+    <div class="live-tabs" style="margin-bottom:0">
       <a class="live-tab active" href="/meet/${meet.id}/live">Live Board</a>
       <a class="live-tab" href="/meet/${meet.id}/results">Results</a>
       <a class="live-tab" href="/meet/${meet.id}/alerts">📲 Text Alerts</a>
     </div>
-    <div class="live-hero">
-      <div class="live-meet-name">🏁 ${esc(meet.meetName)}</div>
-      <div class="live-status-grid">
-        <div>
-          <div class="live-race-label">⚡ On Track Now</div>
-          <div class="live-race-name">${current?esc(current.groupLabel):'Standby'}</div>
-          ${current?`<div class="live-race-sub">${esc(cap(current.division))} &nbsp;•&nbsp; ${esc(current.distanceLabel)}</div>
-          <div class="live-race-counter">Race ${Math.max(info.idx+1,1)} of ${info.ordered.length}</div>`:''}
-        </div>
-        <div class="live-status-divider"></div>
-        <div>
-          <div class="live-race-label">🛤 In Staging</div>
-          <div class="live-race-name">${info.next?esc(info.next.groupLabel):'—'}</div>
-          ${info.next?`<div class="live-race-sub">${esc(cap(info.next.division))} &nbsp;•&nbsp; ${esc(info.next.distanceLabel)}</div>`:''}
-        </div>
-      </div>
-    </div>
-    <div class="grid-2">
-      <div class="card">
+    <style>
+      .live-wrap{display:grid;grid-template-columns:1fr 340px;grid-template-rows:auto 1fr;min-height:calc(100vh - 130px);background:#0a1628;border-radius:0 0 16px 16px;overflow:hidden}
+      .live-main{background:#0d1f3c;padding:32px;display:flex;flex-direction:column;gap:16px}
+      .live-sidebar-panel{background:#0a1628;padding:24px;display:flex;flex-direction:column;gap:14px;overflow-y:auto;border-left:1px solid rgba(255,255,255,.08)}
+      @media(max-width:768px){
+        .live-wrap{grid-template-columns:1fr;grid-template-rows:auto auto}
+        .live-sidebar-panel{border-left:none;border-top:1px solid rgba(255,255,255,.08)}
+        .live-pub-title{font-size:26px}
+        .live-main{padding:20px}
+      }
+      .live-pub-label{font-family:Orbitron,sans-serif;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.2em;color:#F97316}
+      .live-pub-title{font-family:Orbitron,sans-serif;font-size:38px;font-weight:700;color:#fff;line-height:1.15;margin-top:8px}
+      .live-pub-meta{font-size:17px;color:rgba(255,255,255,.6);margin-top:6px}
+      .live-sidebar-head{font-family:Orbitron,sans-serif;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.2em;color:#38BDF8;margin-bottom:8px}
+      .live-sidebar-box{background:rgba(255,255,255,.05);border-radius:10px;padding:14px}
+      .live-staging-name{font-family:Orbitron,sans-serif;font-size:20px;font-weight:700;color:#fff;line-height:1.2}
+      .live-staging-meta{font-size:13px;color:rgba(255,255,255,.5);margin-top:4px}
+    </style>
+    <div class="live-wrap">
+      <div class="live-main">
         ${current?`
-          <div style="margin-bottom:16px;padding-bottom:14px;border-bottom:2px solid var(--orange)">
-            <div style="font-family:'Barlow Condensed',sans-serif;font-size:28px;font-weight:900;color:var(--navy);line-height:1">
-              ${esc(current.groupLabel)}
-            </div>
-            <div style="font-size:14px;color:var(--muted);margin-top:3px;font-weight:600;text-transform:uppercase;letter-spacing:.06em">
-              ${esc(cap(current.division))} &nbsp;•&nbsp; ${esc(current.distanceLabel)}
-            </div>
+          <div>
+            <div class="live-pub-label">▶ Now Racing</div>
+            <div class="live-pub-title">${esc(current.groupLabel)}</div>
+            <div class="live-pub-meta">${esc(cap(current.division))} • ${esc(current.distanceLabel)} • <span style="color:rgba(255,255,255,.4)">Race ${Math.max(info.idx+1,1)} of ${info.ordered.length}</span></div>
           </div>
-          <div class="live-lane-grid">
-            ${lanes.map(l=>{
-              const reg=regMap.get(Number(l.registrationId));
-              const result=current.resultsMode==='times'?l.time:l.place;
-              const medal=l.place==='1'?'🥇':l.place==='2'?'🥈':l.place==='3'?'🥉':'';
-              const statusClass=l.status&&l.status.toLowerCase().includes('ready')?'ready':l.status&&l.status.toLowerCase().includes('dns')?'dns':'';
-              const sponsorHtml=reg?.sponsor?'<span style="color:var(--orange);margin-left:6px">• '+esc(reg.sponsor)+'</span>':'';
-              return '<div class="live-lane-card'+(result?' has-place':'')+'">'+
-                '<div class="live-lane-num">'+esc(String(l.lane||''))+'</div>'+
-                '<div class="live-helmet">#'+esc(String(l.helmetNumber||'?'))+'</div>'+
-                '<div>'+
-                  '<div class="live-skater-name">'+esc(l.skaterName||'')+'</div>'+
-                  '<div class="live-skater-team">'+esc(l.team||'')+sponsorHtml+'</div>'+
-                '</div>'+
-                '<div class="live-result">'+(medal||(result?esc(String(result)):''))+'</div>'+
-                '<div class="live-status-badge '+statusClass+'">'+esc(l.status||'')+'</div>'+
-              '</div>';
-            }).join('')}
-          </div>`:
-        `<div style="padding:40px;text-align:center;color:var(--muted)">
-          <div style="font-size:48px;margin-bottom:12px">🏁</div>
-          <div style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:700">Waiting for Race Day</div>
-        </div>`}
+          <div style="display:flex;flex-direction:column;gap:10px">${laneCardsHtml}</div>
+        `:`
+          <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;opacity:.4;gap:16px">
+            <img src="/public/images/branding/ssm-logo.png" style="height:100px"/>
+            <div style="font-family:Orbitron,sans-serif;font-size:28px;font-weight:700;color:#fff;letter-spacing:4px">STAND BY</div>
+          </div>
+        `}
       </div>
-      <div class="card">
-        <div style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:var(--navy);margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid var(--border)">
-          Recent Results
+      <div class="live-sidebar-panel">
+        ${info.next?`
+          <div class="live-sidebar-box">
+            <div class="live-sidebar-head">In Staging</div>
+            <div class="live-staging-name">${esc(info.next.groupLabel)}</div>
+            <div class="live-staging-meta">${esc(cap(info.next.division))} • ${esc(info.next.distanceLabel)}</div>
+          </div>`:''
+        }
+        <div class="live-sidebar-box" style="flex:1">
+          <div class="live-sidebar-head">Recent Results</div>
+          ${recentHtml}
         </div>
-        ${recent.map(r=>{
-          const placeRows=(r.laneEntries||[]).filter(x=>String(x.place||'').trim()).sort((a,b)=>Number(a.place||999)-Number(b.place||999)).slice(0,4).map(x=>{
-            const pl=Number(x.place);
-            const med=pl===1?'🥇':pl===2?'🥈':pl===3?'🥉':null;
-            return '<div class="recent-place-row">'+
-              (med?'<div class="recent-medal">'+med+'</div>':'<div class="recent-place-num">'+esc(x.place)+'</div>')+
-              '<div><div class="recent-name">'+esc(x.skaterName||'')+'</div><div class="recent-team">'+esc(x.team||'')+'</div></div>'+
-            '</div>';
-          }).join('')||'<div class="muted" style="font-size:13px">No results yet</div>';
-          return '<div class="recent-race-block">'+
-            '<div class="recent-race-title">'+esc(r.groupLabel)+' — '+esc(cap(r.division))+' — '+esc(r.distanceLabel)+'</div>'+
-            placeRows+
-          '</div>';
-        }).join('')||`<div style="padding:40px;text-align:center;color:var(--muted)">
-            <div style="font-size:36px;margin-bottom:8px">⏳</div>
-            <div style="font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:700">Results will appear here</div>
-          </div>`}
+        ${comingHtml?`
+          <div class="live-sidebar-box">
+            <div class="live-sidebar-head">Coming Up</div>
+            ${comingHtml}
+          </div>`:''
+        }
       </div>
     </div>
-    ${current&&current.isTimeTrial?(`
-    <div class="card" style="margin-top:16px;background:var(--navy);color:#fff;border:none">
-      <div style="font-family:'Barlow Condensed',sans-serif;font-size:26px;font-weight:900;margin-bottom:4px">⏱ ${esc(current.groupLabel)} — Live Top 3</div>
-      <div style="font-size:13px;opacity:.6;margin-bottom:18px">${esc(current.distanceLabel)}</div>
-      <div class="podium-grid">
-        ${[...((current.laneEntries||[]).slice().sort((a,b)=>parseFloat(a.time||'999')-parseFloat(b.time||'999')))].slice(0,3).map((e,i)=>`
-          <div style="background:rgba(255,255,255,.07);border-radius:12px;padding:20px;text-align:center">
-            <div style="font-size:40px;margin-bottom:8px">${['🥇','🥈','🥉'][i]}</div>
-            <div style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;color:#fff">${esc(e.skaterName||'')}</div>
-            <div style="font-size:12px;color:rgba(255,255,255,.5);margin-bottom:10px">${esc(e.team||'')}</div>
-            <div style="font-family:'Barlow Condensed',sans-serif;font-size:38px;font-weight:900;color:var(--orange)">${esc(e.time)}</div>
-          </div>`).join('')||'<div class="muted">No times posted yet.</div>'}
-      </div>
-    </div>`):''}
     <script>setTimeout(()=>location.reload(),8000);</script>`}));
 });
 
