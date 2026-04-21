@@ -2138,31 +2138,46 @@ app.get('/meets', (req, res) => {
   const db=loadDb(); const data=getSessionUser(req);
   const cards=(db.meets||[]).filter(m=>m.isPublic).map(m=>{
     const rink=db.rinks.find(r=>Number(r.id)===Number(m.rinkId));
+    const dateStr=meetDateRange(m);
+    const raceCount=(m.races||[]).length;
+    const regCount=(m.registrations||[]).length;
     return `
-      <div class="card" style="margin-bottom:14px">
-        <div class="row between">
-          <div>
-            <h2 style="margin:0">${esc(m.meetName)}</h2>
-            <div class="muted">${esc(m.date||'Date TBD')}${m.startTime?` • ${esc(m.startTime)}`:''}</div>
-            ${rink?`<div class="note">${esc(rink.name)} • ${esc(rink.city)}, ${esc(rink.state)}</div>`:''}
-          </div>
-          <div class="row">
-            <span class="chip">${(m.races||[]).length} Races</span>
-            <span class="chip chip-green">${esc(m.status||'draft')}</span>
+      <div style="max-width:680px;margin:0 auto 20px;background:#fff;border-radius:16px;box-shadow:0 2px 16px rgba(0,0,0,.08);border:1px solid var(--border);overflow:hidden">
+        <div style="background:linear-gradient(135deg,#0F1F3D 0%,#0d2a4a 100%);padding:24px 28px;position:relative">
+          <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--orange),#fbbf24,var(--orange))"></div>
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+            <div>
+              <div style="font-family:'Barlow Condensed',sans-serif;font-size:26px;font-weight:900;color:#fff;line-height:1.1;margin-bottom:8px">${esc(m.meetName)}</div>
+              <div style="display:flex;flex-wrap:wrap;gap:12px;font-size:13px;color:rgba(255,255,255,.7)">
+                <span>📅 ${esc(dateStr)}</span>
+                ${m.startTime?`<span>🕓 ${esc(m.startTime)}</span>`:''}
+                ${rink?`<span>📍 ${esc(rink.name)} • ${esc(rink.city)}, ${esc(rink.state)}</span>`:''}
+              </div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;flex-shrink:0">
+              ${raceCount?`<span style="background:rgba(249,115,22,.2);border:1px solid rgba(249,115,22,.4);color:var(--orange);font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;white-space:nowrap">${raceCount} Races</span>`:''}
+              ${regCount?`<span style="background:rgba(255,255,255,.1);color:rgba(255,255,255,.7);font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;white-space:nowrap">${regCount} Registered</span>`:''}
+            </div>
           </div>
         </div>
-        <div class="hr"></div>
-        <div class="action-row">
-          <a class="btn-orange" href="/meet/${m.id}/register">Register</a>
-          <a class="btn2" href="/meet/${m.id}/live">Live</a>
-          <a class="btn2" href="/meet/${m.id}/results">Results</a>
+        <div style="padding:18px 28px;display:flex;gap:10px;align-items:center;border-top:1px solid var(--border)">
+          <a class="btn-orange" href="/meet/${m.id}/register" style="font-size:14px;padding:8px 20px">🏁 Register Now</a>
+          <a class="btn2" href="/meet/${m.id}/live" style="font-size:14px;padding:8px 16px">📡 Live</a>
+          <a class="btn2" href="/meet/${m.id}/results" style="font-size:14px;padding:8px 16px">🏆 Results</a>
         </div>
       </div>`;
   }).join('');
   res.send(pageShell({title:'Find a Meet', description:'Find upcoming inline speed skating meets near you. View schedules, register online, and follow live results on race day.', user:data?.user||null, bodyHtml:`
-    <div class="page-header"><h1>Find a Meet</h1><div class="sub">Upcoming inline speed skating meets open for registration.</div></div>
-    <div style="margin-bottom:16px"><a class="btn2" href="/submit-meet">+ Submit Your Meet</a></div>
-    ${cards||`<div class="card"><div class="muted">No public meets yet.</div></div>`}`}));
+    <div style="max-width:680px;margin:0 auto 28px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div>
+          <h1 style="margin:0;font-family:'Barlow Condensed',sans-serif;font-size:42px;font-weight:900;color:var(--navy)">Find a Meet</h1>
+          <div style="color:var(--muted);font-size:14px;margin-top:2px">Upcoming inline speed skating meets open for registration</div>
+        </div>
+        <a class="btn2" href="/submit-meet" style="white-space:nowrap;flex-shrink:0">+ Submit Your Meet</a>
+      </div>
+    </div>
+    ${cards||`<div style="max-width:680px;margin:0 auto"><div class="card"><div class="muted">No public meets yet.</div></div></div>`}`}));
 });
 
 
