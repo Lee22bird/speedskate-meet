@@ -1224,7 +1224,8 @@ function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
     body {
       font-family: 'Barlow', ui-sans-serif, system-ui, sans-serif;
       font-size: 15px; line-height: 1.6; color: var(--text);
-      background: var(--off);
+      background: linear-gradient(160deg, #eef2f7 0%, #e4eaf3 50%, #eef2f7 100%);
+      background-attachment: fixed;
       min-height: 100vh;
     }
     a { color: var(--sky2); text-decoration: none; }
@@ -2138,7 +2139,15 @@ app.get('/meets', (req, res) => {
   const db=loadDb(); const data=getSessionUser(req);
   const cards=(db.meets||[]).filter(m=>m.isPublic).map(m=>{
     const rink=db.rinks.find(r=>Number(r.id)===Number(m.rinkId));
-    const dateStr=meetDateRange(m);
+    const dateStr=(()=>{
+      const fmt=d=>{if(!d)return'';const [y,mo,dy]=d.split('-');const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return months[Number(mo)-1]+' '+Number(dy)+', '+y;};
+      const s=m.date||''; const e=m.endDate||'';
+      if(!s) return 'Date TBD';
+      if(!e||e===s) return fmt(s);
+      const [sy,sm]=s.split('-'); const [ey,em,ed]=e.split('-');
+      if(sy===ey&&sm===em) return fmt(s).replace(/, \d{4}$/,'')+'-'+Number(ed)+', '+sy;
+      return fmt(s)+' – '+fmt(e);
+    })();
     const raceCount=(m.races||[]).length;
     const regCount=(m.registrations||[]).length;
     return `
@@ -2147,7 +2156,7 @@ app.get('/meets', (req, res) => {
           <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--orange),#fbbf24,var(--orange))"></div>
           <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
             <div>
-              <div style="font-family:'Barlow Condensed',sans-serif;font-size:26px;font-weight:900;color:#fff;line-height:1.1;margin-bottom:8px">${esc(m.meetName)}</div>
+              <div style="font-family:'Orbitron',sans-serif;font-size:18px;font-weight:900;color:#fff;line-height:1.2;margin-bottom:10px">${esc(m.meetName)}</div>
               <div style="display:flex;flex-wrap:wrap;gap:12px;font-size:13px;color:rgba(255,255,255,.7)">
                 <span>📅 ${esc(dateStr)}</span>
                 ${m.startTime?`<span>🕓 ${esc(m.startTime)}</span>`:''}
