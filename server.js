@@ -1465,18 +1465,18 @@ function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
     .podium-pts   { font-family: 'Barlow Condensed',sans-serif; font-size: 22px; font-weight: 700; color: var(--green); margin-top: 6px; }
 
     /* ── Announcer ────────────────────────────────────────────────── */
-    .announcer-box { background: var(--navy); color: #fff; border-radius: var(--radius-lg); padding: 24px; }
-    .announcer-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; color: var(--orange); }
-    .announcer-group { font-family: 'Barlow Condensed',sans-serif; font-size: 40px; font-weight: 900; line-height: 1.05; margin-top: 6px; }
-    .announcer-meta  { font-size: 20px; opacity: .9; margin-top: 6px; }
-    .announcer-start { font-size: 14px; opacity: .70; margin-top: 4px; }
-    .announcer-divider { height: 1px; background: rgba(255,255,255,.15); margin: 16px 0; }
-    .announcer-lanes-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--sky); margin-bottom: 8px; }
-    .announcer-lane { padding: 10px 0; border-top: 1px solid rgba(255,255,255,.10); }
-    .announcer-lane-name   { font-size: 20px; font-weight: 900; font-family: 'Barlow Condensed',sans-serif; }
-    .announcer-lane-team   { font-size: 14px; opacity: .85; }
-    .announcer-lane-sponsor{ font-size: 13px; color: var(--sky); }
-    .announcer-empty { font-size: 15px; opacity: .6; padding-top: 10px; }
+    .announcer-box { background: var(--navy); color: #fff; border-radius: var(--radius-lg); padding: 32px; }
+    .announcer-label { font-family:'Orbitron',sans-serif; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .18em; color: var(--orange); }
+    .announcer-group { font-family: 'Orbitron',sans-serif; font-size: 38px; font-weight: 700; line-height: 1.15; margin-top: 10px; letter-spacing: -.5px; }
+    .announcer-meta  { font-family: 'Barlow',sans-serif; font-size: 18px; font-weight: 500; opacity: .75; margin-top: 8px; letter-spacing: .02em; }
+    .announcer-start { font-family: 'Barlow',sans-serif; font-size: 14px; opacity: .50; margin-top: 4px; }
+    .announcer-divider { height: 1px; background: rgba(255,255,255,.12); margin: 20px 0; }
+    .announcer-lanes-label { font-family:'Orbitron',sans-serif; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .18em; color: var(--sky); margin-bottom: 12px; }
+    .announcer-lane { padding: 12px 0; border-top: 1px solid rgba(255,255,255,.08); }
+    .announcer-lane-name   { font-family: 'Orbitron',sans-serif; font-size: 17px; font-weight: 700; letter-spacing: .01em; line-height: 1.3; }
+    .announcer-lane-team   { font-family: 'Barlow',sans-serif; font-size: 14px; opacity: .65; margin-top: 2px; }
+    .announcer-lane-sponsor{ font-family: 'Barlow',sans-serif; font-size: 13px; color: var(--sky); margin-top: 1px; }
+    .announcer-empty { font-size: 15px; opacity: .5; padding-top: 10px; }
 
     /* ── Live board ───────────────────────────────────────────────── */
     /* ── Live Board ─────────────────────────────────────────────────── */
