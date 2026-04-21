@@ -4684,7 +4684,7 @@ app.get('/meet/:meetId/tv', (req, res) => {
   const currentMeta = esc(cap(current&&current.division||''))+' • '+esc(current&&current.distanceLabel||'')+(isTT?' • Individual':' • '+(current?esc(cap(current.startType)):'')+ ' Start');
 
   const mainHtml = !current ?
-    '<div class="tv-current" style="grid-column:1/-1;align-items:center;justify-content:center;display:flex;flex-direction:column;gap:16px;opacity:.4"><img src="/public/images/branding/ssm-logo.png" style="height:120px"/><div style="font-family:Barlow Condensed,sans-serif;font-size:48px;font-weight:900;letter-spacing:2px">STAND BY</div></div>'
+    '<div class="tv-current" style="grid-column:1/-1;align-items:center;justify-content:center;display:flex;flex-direction:column;gap:16px;opacity:.4"><img src="/public/images/branding/ssm-logo.png" style="height:120px"/><div style="font-family:Orbitron,sans-serif;font-size:36px;font-weight:700;letter-spacing:4px;color:#fff">STAND BY</div></div>'
     :
     '<div class="tv-current">' +
       '<div><div class="tv-now-label">'+currentLabel+'</div>' +
@@ -4707,24 +4707,24 @@ app.get('/meet/:meetId/tv', (req, res) => {
     '.tv-wrap{display:grid;grid-template-rows:auto 1fr auto;height:100vh;}' +
     '.tv-header{background:#0a1628;border-bottom:3px solid #F97316;padding:12px 32px;display:flex;align-items:center;justify-content:space-between;}' +
     '.tv-logo{height:48px;width:auto;}' +
-    '.tv-meet-name{font-family:Barlow Condensed,sans-serif;font-size:28px;font-weight:700;color:#fff;}' +
+    '.tv-meet-name{font-family:Orbitron,sans-serif;font-size:16px;font-weight:700;color:#fff;letter-spacing:.05em;}' +
     '.tv-progress{font-size:16px;color:rgba(255,255,255,.6);text-align:right;}' +
-    '.tv-race-num{font-family:Barlow Condensed,sans-serif;font-size:22px;font-weight:700;color:#F97316;}' +
+    '.tv-race-num{font-family:Orbitron,sans-serif;font-size:16px;font-weight:700;color:#F97316;letter-spacing:.05em;}' +
     '.tv-main{display:grid;grid-template-columns:1.4fr .6fr;overflow:hidden;}' +
     '.tv-current{background:#162847;padding:32px 40px;display:flex;flex-direction:column;gap:16px;}' +
-    '.tv-now-label{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.15em;color:#F97316;}' +
-    '.tv-race-title{font-family:Barlow Condensed,sans-serif;font-size:52px;font-weight:900;line-height:1;color:#fff;}' +
+    '.tv-now-label{font-family:Orbitron,sans-serif;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.2em;color:#F97316;}' +
+    '.tv-race-title{font-family:Orbitron,sans-serif;font-size:44px;font-weight:700;line-height:1.1;color:#fff;letter-spacing:-.5px;}' +
     '.tv-race-meta{font-size:22px;color:rgba(255,255,255,.75);font-weight:600;}' +
     '.tv-lanes{display:flex;flex-direction:column;gap:8px;margin-top:8px;flex:1;}' +
     '.tv-lane{display:flex;align-items:center;gap:16px;background:rgba(255,255,255,.07);border-radius:10px;padding:14px 20px;}' +
-    '.tv-lane-num{font-family:Barlow Condensed,sans-serif;font-size:28px;font-weight:900;color:#38BDF8;width:36px;text-align:center;flex-shrink:0;}' +
-    '.tv-helmet{font-family:Barlow Condensed,sans-serif;font-size:24px;font-weight:700;color:#F97316;width:64px;flex-shrink:0;}' +
-    '.tv-skater-name{font-family:Barlow Condensed,sans-serif;font-size:36px;font-weight:900;}' +
+    '.tv-lane-num{font-family:Orbitron,sans-serif;font-size:22px;font-weight:700;color:#38BDF8;width:36px;text-align:center;flex-shrink:0;}' +
+    '.tv-helmet{font-family:Orbitron,sans-serif;font-size:18px;font-weight:700;color:#F97316;width:64px;flex-shrink:0;}' +
+    '.tv-skater-name{font-family:Orbitron,sans-serif;font-size:28px;font-weight:700;line-height:1.2;}' +
     '.tv-team{font-size:16px;color:rgba(255,255,255,.6);}' +
     '.tv-sidebar{background:#0a1628;padding:24px;display:flex;flex-direction:column;gap:16px;overflow:hidden;}' +
     '.tv-sidebar-section{background:rgba(255,255,255,.05);border-radius:12px;padding:16px;}' +
-    '.tv-sidebar-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#38BDF8;margin-bottom:8px;}' +
-    '.tv-next-name{font-family:Barlow Condensed,sans-serif;font-size:28px;font-weight:900;line-height:1.1;}' +
+    '.tv-sidebar-label{font-family:Orbitron,sans-serif;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.2em;color:#38BDF8;margin-bottom:8px;}' +
+    '.tv-next-name{font-family:Orbitron,sans-serif;font-size:22px;font-weight:700;line-height:1.2;}' +
     '.tv-next-meta{font-size:14px;color:rgba(255,255,255,.65);margin-top:4px;}' +
     '.tv-coming-item{font-size:15px;color:rgba(255,255,255,.75);padding:4px 0;border-bottom:1px solid rgba(255,255,255,.08);}' +
     '.tv-coming-item:last-child{border:none;}' +
