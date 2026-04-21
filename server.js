@@ -4943,6 +4943,11 @@ app.get('/meet/:meetId/live', (req, res) => {
       .live-sidebar-box{background:rgba(255,255,255,.05);border-radius:10px;padding:14px}
       .live-staging-name{font-family:Orbitron,sans-serif;font-size:20px;font-weight:700;color:#fff;line-height:1.2}
       .live-staging-meta{font-size:13px;color:rgba(255,255,255,.5);margin-top:4px}
+      .tv-lane{display:flex;align-items:center;gap:14px;background:rgba(255,255,255,.06);border-radius:12px;padding:14px 18px;border:1px solid rgba(255,255,255,.08)}
+      .tv-lane-num{font-family:Orbitron,sans-serif;font-size:22px;font-weight:700;color:#38BDF8;width:36px;text-align:center;flex-shrink:0}
+      .tv-helmet{font-family:Orbitron,sans-serif;font-size:18px;font-weight:700;color:#F97316;width:64px;flex-shrink:0}
+      .tv-skater-name{font-family:Orbitron,sans-serif;font-size:26px;font-weight:700;color:#fff;line-height:1.2}
+      .tv-team{font-size:13px;color:rgba(255,255,255,.5);margin-top:2px}
     </style>
     <div class="live-wrap">
       <div class="live-main">
