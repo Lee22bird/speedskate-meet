@@ -869,11 +869,16 @@ function shouldSplitIntoHeats(baseRace,entryCount,laneCount) {
 
 function buildRaceSetForEntries(baseRace,regs,laneCount) {
   const sorted=[...regs].sort((a,b)=>registrationSortKey(a).localeCompare(registrationSortKey(b)));
+  // If a race already has scored results or is closed, preserve its laneEntries entirely
+  const hasResults = (baseRace.laneEntries||[]).some(e=>e.place||e.time);
+  const isClosed = baseRace.status==='closed';
   if(isOpenDivision(baseRace.division)||baseRace.isOpenRace) {
+    if(hasResults||isClosed) return [{...baseRace}]; // preserve scored race
     return [{...baseRace,stage:'final',heatNumber:0,isFinal:true,startType:'rolling',countsForOverall:false,
       laneEntries:sorted.map((reg,idx)=>({lane:idx+1,registrationId:reg.id,helmetNumber:reg.helmetNumber,skaterName:reg.name,team:reg.team,place:'',time:'',status:''}))}];
   }
   if(!shouldSplitIntoHeats(baseRace,sorted.length,laneCount)) {
+    if(hasResults||isClosed) return [{...baseRace}]; // preserve scored race
     return [{...baseRace,stage:'final',heatNumber:0,isFinal:true,startType:'standing',countsForOverall:true,
       laneEntries:sorted.slice(0,laneCount).map((reg,idx)=>({lane:idx+1,registrationId:reg.id,helmetNumber:reg.helmetNumber,skaterName:reg.name,team:reg.team,place:'',time:'',status:''}))}];
   }
@@ -4472,9 +4477,10 @@ app.post('/portal/meet/:meetId/race-day/judges/save', requireRole('judge','meet_
   const race=(meet.races||[]).find(r=>r.id===String(req.body.raceId||''));
   if(!race) return res.redirect(`/portal/meet/${meet.id}/race-day/judges`);
   const laneCount=(race.isOpenRace||isOpenDivision(race.division))?Math.max((race.laneEntries||[]).length,1):Math.max(1,Number(meet.lanes)||4);
+  const prevEntries=[...(race.laneEntries||[])];
   race.laneEntries=[];
   for(let i=1;i<=laneCount;i++) {
-    const existing=(race.laneEntries||[]).find(x=>Number(x.lane)===i)||{};
+    const existing=prevEntries.find(x=>Number(x.lane)===i)||{};
     race.laneEntries.push({lane:i,registrationId:existing.registrationId||'',helmetNumber:existing.helmetNumber||'',skaterName:String(req.body[`skaterName_${i}`]||'').trim(),team:String(req.body[`team_${i}`]||'').trim(),place:String(req.body[`place_${i}`]||'').trim(),time:String(req.body[`time_${i}`]||'').trim(),status:String(req.body[`status_${i}`]||'').trim()});
   }
   race.resultsMode=String(req.body.resultsMode||'places')==='times'?'times':'places';
