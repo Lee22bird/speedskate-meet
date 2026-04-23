@@ -950,18 +950,36 @@ function generateBaseRacesForMeet(meet) {
   meet.updatedAt=nowIso();
 }
 
+function getOpenGroupIdForReg(reg) {
+  const g=reg.gender||'boys'; const age=Number(reg.age||0);
+  if(g==='girls'||g==='boys') {
+    if(age<=9)  return g==='girls'?'open_juv_girls':'open_juv_boys';
+    if(age<=13) return g==='girls'?'open_fresh_girls':'open_fresh_boys';
+    return g==='girls'?'open_sr_ladies':'open_sr_men';
+  } else {
+    if(age>=35) return g==='women'?'open_mast_ladies':'open_mast_men';
+    return g==='women'?'open_sr_ladies':'open_sr_men';
+  }
+}
+
 function generateOpenRacesForMeet(meet) {
   const nonOpenRaces=(meet.races||[]).filter(r=>!r.isOpenRace&&!r.isTimeTrial);
   const openRaces=[]; let orderHint=9000;
-  // Open group order: youngest→oldest for TT ordering
   const TT_ORDER=['open_juv_girls','open_juv_boys','open_fresh_girls','open_fresh_boys','open_sr_ladies','open_sr_men','open_mast_ladies','open_mast_men'];
   for(const og of meet.openGroups||[]) {
     if(!og.enabled||!og.distance) continue;
     const existingRace=(meet.races||[]).find(r=>r.isOpenRace&&r.groupId===og.id&&!r.isTimeTrial);
+    // Auto-populate from registrations who selected Open and match this age/gender group
+    // Only auto-populate if race has no existing entries (preserve manual entries)
+    let laneEntries=Array.isArray(existingRace?.laneEntries)?existingRace.laneEntries:[];
+    if(!laneEntries.length) {
+      const matchingRegs=(meet.registrations||[]).filter(r=>!!r.options?.open&&getOpenGroupIdForReg(r)===og.id);
+      laneEntries=matchingRegs.map((reg,idx)=>({lane:idx+1,registrationId:reg.id,helmetNumber:reg.helmetNumber,skaterName:reg.name,team:reg.team,place:'',time:'',status:''}));
+    }
     openRaces.push({id:existingRace?.id||('r'+crypto.randomBytes(6).toString('hex')),orderHint:orderHint++,
       groupId:og.id,groupLabel:og.label,ages:og.ages,division:'open',distanceLabel:og.distance,dayIndex:1,cost:Number(og.cost||0),
       stage:'final',heatNumber:0,parentRaceKey:`open|${og.id}`,startType:'rolling',countsForOverall:false,
-      laneEntries:Array.isArray(existingRace?.laneEntries)?existingRace.laneEntries:[],
+      laneEntries,
       resultsMode:existingRace?.resultsMode||'places',status:existingRace?.status||'open',
       notes:String(existingRace?.notes||''),isFinal:true,closedAt:existingRace?.closedAt||'',
       isOpenRace:true,isQuadRace:false,isTimeTrial:false});
@@ -1012,11 +1030,39 @@ function rebuildRaceAssignments(meet) {
   const baseRaces=(meet.races||[]).filter(r=>!r.isOpenRace&&!r.isQuadRace&&!r.isTimeTrial&&!r.isRelayRace&&!['heat','semi'].includes(String(r.stage||'')));
   const newRaces=[];
   for(const baseRace of baseRaces) {
+    // Regular registrations for this group
     const matchingRegs=(meet.registrations||[]).filter(reg=>String(reg.divisionGroupId||'')===String(baseRace.groupId||'')&&divisionEnabledForRegistration(reg,baseRace.division));
-    newRaces.push(...buildRaceSetForEntries(baseRace,matchingRegs,laneCount));
+    // Challenge-up skaters from lower groups racing in this group's elite races
+    const challengeUpRegs=baseRace.division==='elite'?(meet.registrations||[]).filter(reg=>
+      String(reg.challengeUpGroupId||'')===String(baseRace.groupId||'')&&
+      !!reg.options?.challengeUp && !!reg.options?.elite &&
+      !matchingRegs.find(r=>r.id===reg.id) // don't double-add
+    ):[];
+    newRaces.push(...buildRaceSetForEntries(baseRace,[...matchingRegs,...challengeUpRegs],laneCount));
+  }
+  // Map inline group gender to quad group gender equivalent
+  const QUAD_GENDER_MAP={'girls':'girls','boys':'boys','women':'women','men':'men'};
+  // Map inline divisionGroupId to quad groupId based on age/gender
+  function getQuadGroupIdForReg(reg) {
+    const g=reg.gender||'boys';
+    const age=Number(reg.age||0);
+    if(g==='girls'||g==='boys') {
+      if(age<=9)  return g==='girls'?'quad_juv_girls':'quad_juv_boys';
+      if(age<=13) return g==='girls'?'quad_fresh_girls':'quad_fresh_boys';
+      return g==='girls'?'quad_sr_ladies':'quad_sr_men'; // 14+
+    } else { // men/women
+      if(age>=35) return g==='women'?'quad_mast_ladies':'quad_mast_men';
+      return g==='women'?'quad_sr_ladies':'quad_sr_men';
+    }
   }
   const quadBaseRaces=(meet.races||[]).filter(r=>r.isQuadRace&&!['heat','semi'].includes(String(r.stage||'')));
-  for(const baseRace of quadBaseRaces) { const raceSet=buildRaceSetForEntries(baseRace,[],laneCount); newRaces.push(...raceSet); }
+  for(const baseRace of quadBaseRaces) {
+    const matchingQuadRegs=(meet.registrations||[]).filter(reg=>
+      !!reg.options?.quad && getQuadGroupIdForReg(reg)===baseRace.groupId
+    );
+    const raceSet=buildRaceSetForEntries(baseRace,matchingQuadRegs,laneCount);
+    newRaces.push(...raceSet);
+  }
   const openRaces=(meet.races||[]).filter(r=>r.isOpenRace||r.isTimeTrial||r.isRelayRace);
   newRaces.push(...openRaces);
   const mappedBlocks=originalBlocks.map(block=>{
@@ -3688,8 +3734,8 @@ app.post('/meet/:meetId/register', (req, res) => {
       if(bump) baseGroup = bump;
     }
   }
-  // Challenge Up is Elite only — Novice-only skaters cannot challenge up or down
-  const finalGroup=challengeAdjustedGroup(meet,baseGroup,!!req.body.challengeUp && !!req.body.elite);
+  // Challenge Up: skater stays in their own age group AND races elite in the next group toward Senior
+  const challengeUpGroup=(!!req.body.challengeUp && !!req.body.elite)?findChallengeUpGroup(meet.groups||[],baseGroup?.id||''):null;
   const meetNumber=(meet.registrations||[]).reduce((max,r)=>Math.max(max,Number(r.meetNumber)||0),0)+1;
   const regEmail=String(req.body.email||'').trim();
   const skGroups=(meet.skateabilityGroups||[]).map(sg=>sg.ageGroupId).filter(id=>!!req.body['sk_grp_'+id]);
@@ -3700,7 +3746,8 @@ app.post('/meet/:meetId/register', (req, res) => {
     name:String(req.body.name||'').trim(),birthdate,age:compAge,gender,email:regEmail,
     team:String(req.body.team||'Midwest Racing').trim()||'Midwest Racing',
     sponsor:String(req.body.sponsor||'').trim(),
-    divisionGroupId:finalGroup?.id||'',divisionGroupLabel:finalGroup?.label||'Unassigned',
+    divisionGroupId:baseGroup?.id||'',divisionGroupLabel:baseGroup?.label||'Unassigned',
+    challengeUpGroupId:challengeUpGroup?.id||'',challengeUpGroupLabel:challengeUpGroup?.label||'',
     originalDivisionGroupId:baseGroup?.id||'',originalDivisionGroupLabel:baseGroup?.label||'',
     meetNumber,helmetNumber:nextHelmetNumber(meet),
     paid:false,checkedIn:false,totalCost,
@@ -3870,11 +3917,11 @@ app.post('/portal/meet/:meetId/registered/:regId/edit', requireRole('meet_direct
     }
   }
   // Challenge Up is Elite only
-  const finalGroup=challengeAdjustedGroup(meet,baseGroup,!!req.body.challengeUp && !!req.body.elite);
+  const editChallengeUpGroup=(!!req.body.challengeUp && !!req.body.elite)?findChallengeUpGroup(meet.groups||[],baseGroup?.id||''):null;
   const editSkGroups=(meet.skateabilityGroups||[]).map(sg=>sg.ageGroupId).filter(id=>!!req.body['sk_grp_'+id]);
   const editOpts={challengeUp:!!req.body.challengeUp,novice:!!req.body.novice,elite:!!req.body.elite,open:!!req.body.open,quad:!!req.body.quad,timeTrials:!!req.body.timeTrials,relays:!!req.body.relays,skateability:editSkGroups.length>0,skateabilityGroups:editSkGroups};
   const editCost=calcRegistrationCost(meet,editOpts);
-  Object.assign(reg,{name:String(req.body.name||'').trim(),birthdate,age:compAge,gender,team:String(req.body.team||'Midwest Racing').trim()||'Midwest Racing',sponsor:String(req.body.sponsor||'').trim(),originalDivisionGroupId:baseGroup?.id||'',originalDivisionGroupLabel:baseGroup?.label||'',divisionGroupId:finalGroup?.id||'',divisionGroupLabel:finalGroup?.label||'Unassigned',totalCost:editCost,options:editOpts});
+  Object.assign(reg,{name:String(req.body.name||'').trim(),birthdate,age:compAge,gender,team:String(req.body.team||'Midwest Racing').trim()||'Midwest Racing',sponsor:String(req.body.sponsor||'').trim(),originalDivisionGroupId:baseGroup?.id||'',originalDivisionGroupLabel:baseGroup?.label||'',divisionGroupId:baseGroup?.id||'',divisionGroupLabel:baseGroup?.label||'Unassigned',challengeUpGroupId:editChallengeUpGroup?.id||'',challengeUpGroupLabel:editChallengeUpGroup?.label||'',totalCost:editCost,options:editOpts});
   rebuildRaceAssignments(meet); saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/registered`);
 });
 
