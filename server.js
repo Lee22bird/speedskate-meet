@@ -505,9 +505,12 @@ function migrateMeet(meet,fallbackOwnerId) {
     meetNumber:Number(reg.meetNumber||idx+1), birthdate:String(reg.birthdate||''), email:String(reg.email||''),
     helmetNumber:reg.helmetNumber===''||reg.helmetNumber==null?'':Number(reg.helmetNumber),
     paid:!!reg.paid, checkedIn:!!reg.checkedIn, totalCost:Number(reg.totalCost||0),
+    challengeUpGroupId:String(reg.challengeUpGroupId||''),
+    challengeUpGroupLabel:String(reg.challengeUpGroupLabel||''),
     options:{challengeUp:!!reg.options?.challengeUp, novice:!!reg.options?.novice,
       elite:!!reg.options?.elite, open:!!reg.options?.open, quad:!!reg.options?.quad,
-      timeTrials:!!reg.options?.timeTrials, relays:!!reg.options?.relays, skateability:!!reg.options?.skateability},
+      timeTrials:!!reg.options?.timeTrials, relays:!!reg.options?.relays, skateability:!!reg.options?.skateability,
+      skateabilityGroups:Array.isArray(reg.options?.skateabilityGroups)?reg.options.skateabilityGroups:[]},
   }));
 }
 
@@ -1036,23 +1039,30 @@ function rebuildRaceAssignments(meet) {
   const baseRaces=(meet.races||[]).filter(r=>!r.isOpenRace&&!r.isQuadRace&&!r.isTimeTrial&&!r.isRelayRace&&!['heat','semi'].includes(String(r.stage||'')));
   const newRaces=[];
   for(const baseRace of baseRaces) {
-    // Regular registrations for this group
-    // Use originalDivisionGroupId if available (skater's true age group), otherwise divisionGroupId
+    // Regular registrations for this group — find their TRUE age group
     const matchingRegs=(meet.registrations||[]).filter(reg=>{
-      const ageGroupId=reg.originalDivisionGroupId&&reg.options?.challengeUp?reg.originalDivisionGroupId:reg.divisionGroupId;
-      return String(ageGroupId||'')===String(baseRace.groupId||'')&&divisionEnabledForRegistration(reg,baseRace.division);
+      if(!divisionEnabledForRegistration(reg,baseRace.division)) return false;
+      if(reg.options?.challengeUp && reg.options?.elite) {
+        // For CU skaters: their true age group is computed from birthdate/age, not stored divisionGroupId
+        // which may have been set to the CU group under the old system
+        const trueGroup=findAgeGroup(meet.groups,Number(reg.age||0),reg.gender||'boys');
+        return trueGroup&&String(trueGroup.id)===String(baseRace.groupId||'');
+      }
+      return String(reg.divisionGroupId||'')===String(baseRace.groupId||'');
     });
-    // Challenge-up skaters from lower groups racing in this group's elite races
-    // Handles both new registrations (challengeUpGroupId) and old ones (divisionGroupId = CU group, originalDivisionGroupId = real group)
+    // Challenge-up skaters — compute their CU group on the fly from their actual age group
     const challengeUpRegs=baseRace.division==='elite'?(meet.registrations||[]).filter(reg=>{
-      if(matchingRegs.find(r=>r.id===reg.id)) return false; // don't double-add
+      if(matchingRegs.find(r=>r.id===reg.id)) return false;
       if(!reg.options?.challengeUp || !reg.options?.elite) return false;
-      // New style: challengeUpGroupId stored separately
+      // Get the skater's true age group ID
+      const trueGroupId=reg.challengeUpGroupId
+        ? null // already have explicit CU group, use it below
+        : (reg.originalDivisionGroupId||reg.divisionGroupId||'');
+      // If we have an explicit challengeUpGroupId, use it
       if(reg.challengeUpGroupId) return String(reg.challengeUpGroupId)===String(baseRace.groupId||'');
-      // Old style: divisionGroupId was set to the CU group, originalDivisionGroupId is real group
-      if(reg.originalDivisionGroupId && reg.originalDivisionGroupId!==reg.divisionGroupId)
-        return String(reg.divisionGroupId||'')===String(baseRace.groupId||'');
-      return false;
+      // Otherwise compute it from their true age group
+      const computedCUGroup=findChallengeUpGroup(meet.groups||[],trueGroupId);
+      return computedCUGroup && String(computedCUGroup.id)===String(baseRace.groupId||'');
     }):[];
     newRaces.push(...buildRaceSetForEntries(baseRace,[...matchingRegs,...challengeUpRegs],laneCount));
   }
