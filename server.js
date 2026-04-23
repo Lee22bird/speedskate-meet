@@ -991,10 +991,16 @@ function generateOpenRacesForMeet(meet) {
     if(!og.timeTrial) continue;
     const dist=og.ttDistance||og.distance||'';
     const existingTT=(meet.races||[]).find(r=>r.isTimeTrial&&r.groupId===og.id);
+    // Auto-populate TT from registrations who selected Time Trials and match this group
+    let ttEntries=Array.isArray(existingTT?.laneEntries)?existingTT.laneEntries:[];
+    if(!ttEntries.length) {
+      const matchingRegs=(meet.registrations||[]).filter(r=>!!r.options?.timeTrials&&getOpenGroupIdForReg(r)===og.id);
+      ttEntries=matchingRegs.map((reg,idx)=>({lane:idx+1,registrationId:reg.id,helmetNumber:reg.helmetNumber,skaterName:reg.name,team:reg.team,place:'',time:'',status:''}));
+    }
     openRaces.push({id:existingTT?.id||('r'+crypto.randomBytes(6).toString('hex')),orderHint:ttOrderHint++,
       groupId:og.id,groupLabel:og.label+' — Time Trial',ages:og.ages,division:'open',distanceLabel:dist,dayIndex:1,cost:0,
       stage:'final',heatNumber:0,parentRaceKey:`tt|${og.id}`,startType:'individual',countsForOverall:false,
-      laneEntries:Array.isArray(existingTT?.laneEntries)?existingTT.laneEntries:[],
+      laneEntries:ttEntries,
       resultsMode:'times',status:existingTT?.status||'open',
       notes:String(existingTT?.notes||''),isFinal:true,closedAt:existingTT?.closedAt||'',
       isOpenRace:false,isQuadRace:false,isTimeTrial:true});
@@ -1031,13 +1037,23 @@ function rebuildRaceAssignments(meet) {
   const newRaces=[];
   for(const baseRace of baseRaces) {
     // Regular registrations for this group
-    const matchingRegs=(meet.registrations||[]).filter(reg=>String(reg.divisionGroupId||'')===String(baseRace.groupId||'')&&divisionEnabledForRegistration(reg,baseRace.division));
+    // Use originalDivisionGroupId if available (skater's true age group), otherwise divisionGroupId
+    const matchingRegs=(meet.registrations||[]).filter(reg=>{
+      const ageGroupId=reg.originalDivisionGroupId&&reg.options?.challengeUp?reg.originalDivisionGroupId:reg.divisionGroupId;
+      return String(ageGroupId||'')===String(baseRace.groupId||'')&&divisionEnabledForRegistration(reg,baseRace.division);
+    });
     // Challenge-up skaters from lower groups racing in this group's elite races
-    const challengeUpRegs=baseRace.division==='elite'?(meet.registrations||[]).filter(reg=>
-      String(reg.challengeUpGroupId||'')===String(baseRace.groupId||'')&&
-      !!reg.options?.challengeUp && !!reg.options?.elite &&
-      !matchingRegs.find(r=>r.id===reg.id) // don't double-add
-    ):[];
+    // Handles both new registrations (challengeUpGroupId) and old ones (divisionGroupId = CU group, originalDivisionGroupId = real group)
+    const challengeUpRegs=baseRace.division==='elite'?(meet.registrations||[]).filter(reg=>{
+      if(matchingRegs.find(r=>r.id===reg.id)) return false; // don't double-add
+      if(!reg.options?.challengeUp || !reg.options?.elite) return false;
+      // New style: challengeUpGroupId stored separately
+      if(reg.challengeUpGroupId) return String(reg.challengeUpGroupId)===String(baseRace.groupId||'');
+      // Old style: divisionGroupId was set to the CU group, originalDivisionGroupId is real group
+      if(reg.originalDivisionGroupId && reg.originalDivisionGroupId!==reg.divisionGroupId)
+        return String(reg.divisionGroupId||'')===String(baseRace.groupId||'');
+      return false;
+    }):[];
     newRaces.push(...buildRaceSetForEntries(baseRace,[...matchingRegs,...challengeUpRegs],laneCount));
   }
   // Map inline group gender to quad group gender equivalent
