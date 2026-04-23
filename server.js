@@ -591,33 +591,40 @@ function groupAgeMatch(group,age) {
   const nums=ages.match(/\d+/g)||[]; if(nums.length>=2) return n>=Number(nums[0])&&n<=Number(nums[1]); return false;
 }
 
+function normalizeGender(raw,age) {
+  const g=String(raw||'').toLowerCase();
+  const isFem=g==='female'||g==='girls'||g==='women'||g==='f';
+  const n=Number(age)||0;
+  // Under 16: boys/girls; 16+: men/women
+  if(isFem) return n>=16?'women':'girls';
+  return n>=16?'men':'boys';
+}
+
 function findAgeGroup(groups,age,genderGuess) {
   const n=Number(age); if(!Number.isFinite(n)) return null;
-  const normalizedGender=String(genderGuess||'').toLowerCase();
+  const normalizedGender=normalizeGender(genderGuess,age);
   const candidates=groups.filter(g=>groupAgeMatch(g,n)); if(!candidates.length) return null;
   return candidates.find(g=>g.gender===normalizedGender)||candidates[0];
 }
 
 function findChallengeUpGroup(groups,currentGroupId) {
-  // Senior is the peak — everyone challenges toward Senior, same gender only.
-  // Younger groups (Junior and below) challenge UP (toward older/Senior).
-  // Older groups (Classic and above) challenge DOWN (toward younger/Senior).
-  // Senior itself cannot challenge — they are the top of the mountain.
+  // Senior is the peak — everyone challenges toward Senior, same gender side only.
+  // girls/women are the same side, boys/men are the same side.
   const SENIOR_IDS = ['senior_men','senior_women'];
+  const isFemale = g => g.gender==='girls'||g.gender==='women';
+  const isMale   = g => g.gender==='boys'||g.gender==='men';
   const current = groups.find(g=>String(g.id)===String(currentGroupId));
   if(!current) return null;
-  // Senior cannot challenge
-  if(SENIOR_IDS.includes(current.id)) return null;
-  // Get same-gender groups only, sorted by their index in the array
-  const sameGender = groups.filter(g=>g.gender===current.gender);
+  if(SENIOR_IDS.includes(current.id)) return null; // Senior cannot challenge
+  const female = isFemale(current);
+  // Same gender side: girls+women together, boys+men together
+  const sameGender = groups.filter(g=>female?isFemale(g):isMale(g));
   const idx = sameGender.findIndex(g=>String(g.id)===String(currentGroupId));
   if(idx<0) return null;
   const seniorIdx = sameGender.findIndex(g=>SENIOR_IDS.includes(g.id));
   if(seniorIdx<0) return null;
-  // If younger than Senior, challenge up (toward higher index = older = Senior)
-  if(idx < seniorIdx) return sameGender[idx+1]||null;
-  // If older than Senior, challenge down (toward lower index = younger = Senior)
-  if(idx > seniorIdx) return sameGender[idx-1]||null;
+  if(idx < seniorIdx) return sameGender[idx+1]||null; // younger → challenge up
+  if(idx > seniorIdx) return sameGender[idx-1]||null; // older → challenge down
   return null;
 }
 
@@ -954,14 +961,12 @@ function generateBaseRacesForMeet(meet) {
 }
 
 function getOpenGroupIdForReg(reg) {
-  // Infer gender from divisionGroupId if gender field is unreliable
-  const storedGender=String(reg.gender||'boys').toLowerCase();
   const groupId=String(reg.divisionGroupId||reg.originalDivisionGroupId||'');
   const groupIsFemale=groupId.includes('girls')||groupId.includes('women')||groupId.includes('ladies');
   const groupIsMale=groupId.includes('boys')||groupId.includes('men');
-  const genderFromGender=(storedGender==='girls'||storedGender==='women'||storedGender==='female');
-  // Use group-based gender inference if stored gender contradicts group
-  const isFemale=groupIsFemale?true:groupIsMale?false:genderFromGender;
+  const storedGender=String(reg.gender||'').toLowerCase();
+  const genderFemale=storedGender==='female'||storedGender==='girls'||storedGender==='women';
+  const isFemale=groupIsFemale?true:groupIsMale?false:genderFemale;
   const age=Number(reg.age||0);
   if(age<=9)  return isFemale?'open_juv_girls':'open_juv_boys';
   if(age<=13) return isFemale?'open_fresh_girls':'open_fresh_boys';
@@ -2753,10 +2758,8 @@ app.get('/portal/coach/roster', requireRole('coach','meet_director','super_admin
             <div><label>Date of Birth</label><input type="date" name="birthdate" min="1900-01-01" max="${new Date().toISOString().split('T')[0]}" required /></div>
             <div><label>Gender</label>
               <select name="gender">
-                <option value="girls">Girl</option>
-                <option value="boys">Boy</option>
-                <option value="women">Women</option>
-                <option value="men">Men</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
               </select>
             </div>
           </div>
@@ -3709,10 +3712,10 @@ app.get('/meet/:meetId/register', (req, res) => {
             <div>
               <label>Gender</label>
               <select name="gender">
-                <option value="boys">Boy</option><option value="girls">Girl</option>
-                <option value="men">Men</option><option value="women">Women</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
               </select>
-              <div class="note">Ages 16+ are Men/Women divisions.</div>
+              <div class="note">Boys/Men and Girls/Women assigned automatically by age.</div>
             </div>
             <div><label>Team</label><input name="team" list="teams-reg" value="Midwest Racing" /></div>
             <div><label>Email (for confirmation)</label><input type="email" name="email" placeholder="parent@email.com" /></div>
@@ -3738,7 +3741,9 @@ app.get('/meet/:meetId/register', (req, res) => {
 app.post('/meet/:meetId/register', (req, res) => {
   const db=loadDb(); const meet=getMeetOr404(db,req.params.meetId);
   if(!meet||!meet.isPublic||isRegistrationClosed(meet)) return res.redirect(`/meet/${req.params.meetId}/register`);
-  const gender=String(req.body.gender||'').trim()||'boys';
+  const rawGender=String(req.body.gender||'').trim().toLowerCase();
+  const gender=rawGender==='female'||rawGender==='girls'||rawGender==='women'?'female':
+               rawGender==='male'||rawGender==='boys'||rawGender==='men'?'male':'male';
   const birthdate=String(req.body.birthdate||'').trim();
   const compAge=usarsAge(birthdate,meet.date)||Number(req.body.manualAge||req.body.age||0);
   let baseGroup=findAgeGroup(meet.groups,compAge,gender);
@@ -3828,10 +3833,8 @@ function registrationForm(meet,reg,action,title) {
             <div><label>Date of Birth</label><input type="date" name="birthdate" value="${esc(reg.birthdate||'')}" min="1900-01-01" max="2026-04-06" /><div class="note">USARS age as of Jan 1 — ${reg.birthdate?'Age '+ageForReg(reg,meet):'no birthdate yet'}</div></div>
             <div><label>Gender</label>
               <select name="gender">
-                <option value="boys"  ${gender==='boys' ?'selected':''}>Boy</option>
-                <option value="girls" ${gender==='girls'?'selected':''}>Girl</option>
-                <option value="men"   ${gender==='men'  ?'selected':''}>Men</option>
-                <option value="women" ${gender==='women'?'selected':''}>Women</option>
+                <option value="male"   ${gender==='male'||gender==='boys'||gender==='men'  ?'selected':''}>Male</option>
+                <option value="female" ${gender==='female'||gender==='girls'||gender==='women'?'selected':''}>Female</option>
               </select>
             </div>
             <div><label>Team</label><input name="team" list="teams-edit" value="${esc(reg.team||'Midwest Racing')}" /></div>
@@ -3922,7 +3925,9 @@ app.post('/portal/meet/:meetId/registered/:regId/edit', requireRole('meet_direct
   if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
   const reg=(meet.registrations||[]).find(r=>Number(r.id)===Number(req.params.regId));
   if(!reg) return res.redirect(`/portal/meet/${meet.id}/registered`);
-  const gender=String(req.body.gender||'').trim()||'boys';
+  const rawGender=String(req.body.gender||'').trim().toLowerCase();
+  const gender=rawGender==='female'||rawGender==='girls'||rawGender==='women'?'female':
+               rawGender==='male'||rawGender==='boys'||rawGender==='men'?'male':'male';
   const birthdate=String(req.body.birthdate||'').trim()||reg.birthdate||'';
   const compAge=usarsAge(birthdate,meet.date)||Number(reg.age||0);
   let baseGroup=findAgeGroup(meet.groups,compAge,gender);
