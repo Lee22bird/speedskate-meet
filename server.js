@@ -1057,12 +1057,14 @@ function rebuildRaceAssignments(meet) {
       const trueGroup=findAgeGroup(meet.groups,Number(reg.age||0),reg.gender||'boys');
       return trueGroup&&String(trueGroup.id)===String(baseRace.groupId||'');
     });
-    // Challenge-up skaters — always compute from age/gender (most reliable, works for all old/new registrations)
+    // Challenge-up skaters — always compute from age/gender
+    const SENIOR_IDS=['senior_men','senior_women'];
     const challengeUpRegs=baseRace.division==='elite'?(meet.registrations||[]).filter(reg=>{
       if(matchingRegs.find(r=>r.id===reg.id)) return false;
       if(!reg.options?.challengeUp || !reg.options?.elite) return false;
       const trueGroup=findAgeGroup(meet.groups,Number(reg.age||0),reg.gender||'boys');
       if(!trueGroup) return false;
+      if(SENIOR_IDS.includes(trueGroup.id)) return false; // Seniors cannot challenge up
       const cuGroup=findChallengeUpGroup(meet.groups||[],trueGroup.id);
       return cuGroup && String(cuGroup.id)===String(baseRace.groupId||'');
     }):[];
@@ -4662,7 +4664,13 @@ app.get('/portal/meet/:meetId/debug-regs', requireRole('meet_director'), (req, r
     challengeUp:r.options?.challengeUp, elite:r.options?.elite,
     computedOpenGroup:getOpenGroupIdForReg(r),
     computedTrueGroup:findAgeGroup(meet.groups,Number(r.age||0),r.gender||'boys')?.id,
-    computedCUGroup:r.options?.challengeUp?findChallengeUpGroup(meet.groups||[],findAgeGroup(meet.groups,Number(r.age||0),r.gender||'boys')?.id||'')?.id:null,
+    computedCUGroup:(()=>{
+      if(!r.options?.challengeUp) return null;
+      const tg=findAgeGroup(meet.groups,Number(r.age||0),r.gender||'boys');
+      if(!tg) return null;
+      if(['senior_men','senior_women'].includes(tg.id)) return 'SENIOR-CANNOT-CU';
+      return findChallengeUpGroup(meet.groups||[],tg.id)?.id||null;
+    })(),
   }));
   res.json(out);
 });
