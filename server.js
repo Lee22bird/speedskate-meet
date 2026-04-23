@@ -954,15 +954,14 @@ function generateBaseRacesForMeet(meet) {
 }
 
 function getOpenGroupIdForReg(reg) {
-  const g=reg.gender||'boys'; const age=Number(reg.age||0);
-  if(g==='girls'||g==='boys') {
-    if(age<=9)  return g==='girls'?'open_juv_girls':'open_juv_boys';
-    if(age<=13) return g==='girls'?'open_fresh_girls':'open_fresh_boys';
-    return g==='girls'?'open_sr_ladies':'open_sr_men';
-  } else {
-    if(age>=35) return g==='women'?'open_mast_ladies':'open_mast_men';
-    return g==='women'?'open_sr_ladies':'open_sr_men';
-  }
+  const g=String(reg.gender||'boys').toLowerCase();
+  const age=Number(reg.age||0);
+  const isFemale=(g==='girls'||g==='women'||g==='female'||g==='f');
+  const isMale=(g==='boys'||g==='men'||g==='male'||g==='m');
+  if(age<=9)  return isFemale?'open_juv_girls':'open_juv_boys';
+  if(age<=13) return isFemale?'open_fresh_girls':'open_fresh_boys';
+  if(age>=35) return isFemale?'open_mast_ladies':'open_mast_men';
+  return isFemale?'open_sr_ladies':'open_sr_men';
 }
 
 function generateOpenRacesForMeet(meet) {
@@ -972,10 +971,15 @@ function generateOpenRacesForMeet(meet) {
   for(const og of meet.openGroups||[]) {
     if(!og.enabled||!og.distance) continue;
     const existingRace=(meet.races||[]).find(r=>r.isOpenRace&&r.groupId===og.id&&!r.isTimeTrial);
-    // Auto-populate from registrations who selected Open and match this age/gender group
-    // Only auto-populate if race has no existing entries (preserve manual entries)
-    let laneEntries=Array.isArray(existingRace?.laneEntries)?existingRace.laneEntries:[];
-    if(!laneEntries.length) {
+    // Always recompute open race entries from registrations
+    // Preserve scored/closed entries, but rebuild unscored entries from current registrations
+    const existingScored=(existingRace?.laneEntries||[]).filter(e=>e.place||e.time);
+    let laneEntries;
+    if(existingScored.length||existingRace?.status==='closed') {
+      // Race has scores — preserve as-is
+      laneEntries=Array.isArray(existingRace?.laneEntries)?existingRace.laneEntries:[];
+    } else {
+      // Rebuild from registrations
       const matchingRegs=(meet.registrations||[]).filter(r=>!!r.options?.open&&getOpenGroupIdForReg(r)===og.id);
       laneEntries=matchingRegs.map((reg,idx)=>({lane:idx+1,registrationId:reg.id,helmetNumber:reg.helmetNumber,skaterName:reg.name,team:reg.team,place:'',time:'',status:''}));
     }
@@ -994,9 +998,12 @@ function generateOpenRacesForMeet(meet) {
     if(!og.timeTrial) continue;
     const dist=og.ttDistance||og.distance||'';
     const existingTT=(meet.races||[]).find(r=>r.isTimeTrial&&r.groupId===og.id);
-    // Auto-populate TT from registrations who selected Time Trials and match this group
-    let ttEntries=Array.isArray(existingTT?.laneEntries)?existingTT.laneEntries:[];
-    if(!ttEntries.length) {
+    // Rebuild TT entries from registrations unless already scored
+    const ttScored=(existingTT?.laneEntries||[]).filter(e=>e.time);
+    let ttEntries;
+    if(ttScored.length||existingTT?.status==='closed') {
+      ttEntries=Array.isArray(existingTT?.laneEntries)?existingTT.laneEntries:[];
+    } else {
       const matchingRegs=(meet.registrations||[]).filter(r=>!!r.options?.timeTrials&&getOpenGroupIdForReg(r)===og.id);
       ttEntries=matchingRegs.map((reg,idx)=>({lane:idx+1,registrationId:reg.id,helmetNumber:reg.helmetNumber,skaterName:reg.name,team:reg.team,place:'',time:'',status:''}));
     }
@@ -4649,6 +4656,21 @@ app.post('/api/meet/:meetId/race-day/unlock-race', requireRole('meet_director'),
 });
 
 // ── Results ───────────────────────────────────────────────────────────────────
+
+app.get('/portal/meet/:meetId/debug-regs', requireRole('meet_director'), (req, res) => {
+  const meet=getMeetOr404(req.db,req.params.meetId);
+  if(!meet) return res.status(404).send('not found');
+  const out=(meet.registrations||[]).map(r=>({
+    id:r.id, name:r.name, age:r.age, gender:r.gender,
+    divisionGroupId:r.divisionGroupId, originalDivisionGroupId:r.originalDivisionGroupId,
+    challengeUpGroupId:r.challengeUpGroupId,
+    challengeUp:r.options?.challengeUp, elite:r.options?.elite,
+    computedOpenGroup:getOpenGroupIdForReg(r),
+    computedTrueGroup:findAgeGroup(meet.groups,Number(r.age||0),r.gender||'boys')?.id,
+    computedCUGroup:r.options?.challengeUp?findChallengeUpGroup(meet.groups||[],findAgeGroup(meet.groups,Number(r.age||0),r.gender||'boys')?.id||'')?.id:null,
+  }));
+  res.json(out);
+});
 
 app.get('/portal/meet/:meetId/results', requireRole('meet_director','judge','coach'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
