@@ -954,10 +954,15 @@ function generateBaseRacesForMeet(meet) {
 }
 
 function getOpenGroupIdForReg(reg) {
-  const g=String(reg.gender||'boys').toLowerCase();
+  // Infer gender from divisionGroupId if gender field is unreliable
+  const storedGender=String(reg.gender||'boys').toLowerCase();
+  const groupId=String(reg.divisionGroupId||reg.originalDivisionGroupId||'');
+  const groupIsFemale=groupId.includes('girls')||groupId.includes('women')||groupId.includes('ladies');
+  const groupIsMale=groupId.includes('boys')||groupId.includes('men');
+  const genderFromGender=(storedGender==='girls'||storedGender==='women'||storedGender==='female');
+  // Use group-based gender inference if stored gender contradicts group
+  const isFemale=groupIsFemale?true:groupIsMale?false:genderFromGender;
   const age=Number(reg.age||0);
-  const isFemale=(g==='girls'||g==='women'||g==='female'||g==='f');
-  const isMale=(g==='boys'||g==='men'||g==='male'||g==='m');
   if(age<=9)  return isFemale?'open_juv_girls':'open_juv_boys';
   if(age<=13) return isFemale?'open_fresh_girls':'open_fresh_boys';
   if(age>=35) return isFemale?'open_mast_ladies':'open_mast_men';
@@ -1046,30 +1051,20 @@ function rebuildRaceAssignments(meet) {
   const baseRaces=(meet.races||[]).filter(r=>!r.isOpenRace&&!r.isQuadRace&&!r.isTimeTrial&&!r.isRelayRace&&!['heat','semi'].includes(String(r.stage||'')));
   const newRaces=[];
   for(const baseRace of baseRaces) {
-    // Regular registrations for this group — find their TRUE age group
+    // Regular registrations for this group — always compute true age group from age/gender
     const matchingRegs=(meet.registrations||[]).filter(reg=>{
       if(!divisionEnabledForRegistration(reg,baseRace.division)) return false;
-      if(reg.options?.challengeUp && reg.options?.elite) {
-        // For CU skaters: their true age group is computed from birthdate/age, not stored divisionGroupId
-        // which may have been set to the CU group under the old system
-        const trueGroup=findAgeGroup(meet.groups,Number(reg.age||0),reg.gender||'boys');
-        return trueGroup&&String(trueGroup.id)===String(baseRace.groupId||'');
-      }
-      return String(reg.divisionGroupId||'')===String(baseRace.groupId||'');
+      const trueGroup=findAgeGroup(meet.groups,Number(reg.age||0),reg.gender||'boys');
+      return trueGroup&&String(trueGroup.id)===String(baseRace.groupId||'');
     });
-    // Challenge-up skaters — compute their CU group on the fly from their actual age group
+    // Challenge-up skaters — always compute from age/gender (most reliable, works for all old/new registrations)
     const challengeUpRegs=baseRace.division==='elite'?(meet.registrations||[]).filter(reg=>{
       if(matchingRegs.find(r=>r.id===reg.id)) return false;
       if(!reg.options?.challengeUp || !reg.options?.elite) return false;
-      // Get the skater's true age group ID
-      const trueGroupId=reg.challengeUpGroupId
-        ? null // already have explicit CU group, use it below
-        : (reg.originalDivisionGroupId||reg.divisionGroupId||'');
-      // If we have an explicit challengeUpGroupId, use it
-      if(reg.challengeUpGroupId) return String(reg.challengeUpGroupId)===String(baseRace.groupId||'');
-      // Otherwise compute it from their true age group
-      const computedCUGroup=findChallengeUpGroup(meet.groups||[],trueGroupId);
-      return computedCUGroup && String(computedCUGroup.id)===String(baseRace.groupId||'');
+      const trueGroup=findAgeGroup(meet.groups,Number(reg.age||0),reg.gender||'boys');
+      if(!trueGroup) return false;
+      const cuGroup=findChallengeUpGroup(meet.groups||[],trueGroup.id);
+      return cuGroup && String(cuGroup.id)===String(baseRace.groupId||'');
     }):[];
     newRaces.push(...buildRaceSetForEntries(baseRace,[...matchingRegs,...challengeUpRegs],laneCount));
   }
