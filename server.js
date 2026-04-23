@@ -1079,16 +1079,17 @@ function rebuildRaceAssignments(meet) {
   const QUAD_GENDER_MAP={'girls':'girls','boys':'boys','women':'women','men':'men'};
   // Map inline divisionGroupId to quad groupId based on age/gender
   function getQuadGroupIdForReg(reg) {
-    const g=reg.gender||'boys';
+    const groupId=String(reg.divisionGroupId||reg.originalDivisionGroupId||'');
+    const groupIsFemale=groupId.includes('girls')||groupId.includes('women')||groupId.includes('ladies');
+    const groupIsMale=groupId.includes('boys')||groupId.includes('men');
+    const storedGender=String(reg.gender||'').toLowerCase();
+    const genderFemale=storedGender==='female'||storedGender==='girls'||storedGender==='women';
+    const isFemale=groupIsFemale?true:groupIsMale?false:genderFemale;
     const age=Number(reg.age||0);
-    if(g==='girls'||g==='boys') {
-      if(age<=9)  return g==='girls'?'quad_juv_girls':'quad_juv_boys';
-      if(age<=13) return g==='girls'?'quad_fresh_girls':'quad_fresh_boys';
-      return g==='girls'?'quad_sr_ladies':'quad_sr_men'; // 14+
-    } else { // men/women
-      if(age>=35) return g==='women'?'quad_mast_ladies':'quad_mast_men';
-      return g==='women'?'quad_sr_ladies':'quad_sr_men';
-    }
+    if(age<=9)  return isFemale?'quad_juv_girls':'quad_juv_boys';
+    if(age<=13) return isFemale?'quad_fresh_girls':'quad_fresh_boys';
+    if(age>=35) return isFemale?'quad_mast_ladies':'quad_mast_men';
+    return isFemale?'quad_sr_ladies':'quad_sr_men';
   }
   const quadBaseRaces=(meet.races||[]).filter(r=>r.isQuadRace&&!['heat','semi'].includes(String(r.stage||'')));
   for(const baseRace of quadBaseRaces) {
@@ -5034,6 +5035,7 @@ app.get('/meet/:meetId/live', (req, res) => {
       <a class="live-tab active" href="/meet/${meet.id}/live">Live Board</a>
       <a class="live-tab" href="/meet/${meet.id}/results">Results</a>
       <a class="live-tab" href="/meet/${meet.id}/alerts">📲 Text Alerts</a>
+      <a class="live-tab" href="/meet/${meet.id}/print-schedule" target="_blank">🖨️ Print Schedule</a>
     </div>
     <style>
       .live-wrap{display:grid;grid-template-columns:1fr 340px;grid-template-rows:auto 1fr;min-height:calc(100vh - 130px);background:#0a1628;border-radius:0 0 16px 16px;overflow:hidden}
@@ -5134,6 +5136,84 @@ app.get('/portal/meet/:meetId/registered/print-race-list', requireRole('meet_dir
     <h1>${esc(meet.meetName)} — Race List</h1>
     <div style="color:#555;margin-bottom:12px">${esc(meetDateRange(meet))}${meet.startTime?` • ${esc(meet.startTime)}`:''}</div>
     ${daySections||'<div>No blocks yet.</div>'}
+  </body></html>`);
+});
+
+// ── Public Print Schedule ────────────────────────────────────────────────────
+
+app.get('/meet/:meetId/print-schedule', (req, res) => {
+  const db=loadDb(); const meet=getMeetOr404(db,req.params.meetId);
+  if(!meet||!meet.isPublic) return res.redirect('/meets');
+  const blocksByDay={};
+  for(const block of meet.blocks||[]) { const day=block.day||'Day 1'; if(!blocksByDay[day]) blocksByDay[day]=[]; blocksByDay[day].push(block); }
+  const breakTypes=['break','lunch','awards','practice'];
+  const breakIcons={break:'☕',lunch:'🍽️',awards:'🏆',practice:'⛸️'};
+  let raceNo=1;
+  const daySections=Object.keys(blocksByDay).sort().map(day=>{
+    const blockSections=blocksByDay[day].map(block=>{
+      const isBreak=breakTypes.includes(block.type||'');
+      if(isBreak) {
+        const icon=breakIcons[block.type]||'📌';
+        return `<div class="break-row">${icon} ${esc(block.name)}${block.notes?' — '+esc(block.notes):''}</div>`;
+      }
+      const raceRows=(block.raceIds||[]).map(rid=>{
+        const race=(meet.races||[]).find(r=>r.id===rid); if(!race) return '';
+        const skaters=(race.laneEntries||[]).filter(l=>l.skaterName).map(l=>
+          `<span class="skater">${l.lane?l.lane+'.':''} ${esc(l.skaterName)}${l.helmetNumber?' #'+esc(l.helmetNumber):''}</span>`
+        ).join(' &nbsp;|&nbsp; ');
+        const tag=race.isOpenRace?'🏁 ':race.isQuadRace?'🛼 ':race.isTimeTrial?'⏱ ':race.isRelayRace?'🔄 ':'';
+        return `<tr>
+          <td class="race-num">${raceNo++}</td>
+          <td class="race-div">${tag}${esc(race.groupLabel)}</td>
+          <td class="race-class">${esc(cap(race.division))}</td>
+          <td class="race-dist">${esc(race.distanceLabel)}</td>
+          <td class="race-skaters">${skaters||'<span style="color:#aaa">TBD</span>'}</td>
+        </tr>`;
+      }).join('');
+      return `<div class="block">
+        <div class="block-name">${esc(block.name)}${block.notes?` <span class="block-notes">${esc(block.notes)}</span>`:''}</div>
+        <table><thead><tr><th>#</th><th>Division</th><th>Class</th><th>Dist</th><th>Skaters</th></tr></thead>
+        <tbody>${raceRows||'<tr><td colspan="5">No races</td></tr>'}</tbody></table>
+      </div>`;
+    }).join('');
+    return `<div class="day-section"><div class="day-header">${esc(day)}</div>${blockSections}</div>`;
+  }).join('');
+
+  res.send(`<!doctype html><html><head><meta charset="utf-8">
+    <title>Schedule — ${esc(meet.meetName)}</title>
+    <style>
+      * { box-sizing:border-box; margin:0; padding:0; }
+      body { font-family:Arial,sans-serif; font-size:9px; color:#111; padding:12px; }
+      h1 { font-size:14px; margin-bottom:2px; }
+      .meta { font-size:9px; color:#555; margin-bottom:10px; }
+      .day-section { margin-bottom:14px; }
+      .day-header { font-size:12px; font-weight:bold; background:#0F1F3D; color:#fff; padding:4px 8px; margin-bottom:6px; border-radius:3px; }
+      .block { margin-bottom:8px; }
+      .block-name { font-size:10px; font-weight:bold; color:#0F1F3D; padding:3px 0; border-bottom:1px solid #0F1F3D; margin-bottom:3px; }
+      .block-notes { font-weight:normal; color:#888; font-size:9px; }
+      table { width:100%; border-collapse:collapse; }
+      th { font-size:8px; text-transform:uppercase; color:#888; padding:2px 4px; border-bottom:1px solid #ddd; text-align:left; }
+      td { padding:2px 4px; border-bottom:1px solid #f0f0f0; vertical-align:top; }
+      .race-num { width:24px; color:#888; font-weight:bold; }
+      .race-div { width:130px; font-weight:600; }
+      .race-class { width:55px; }
+      .race-dist { width:40px; }
+      .race-skaters { color:#333; }
+      .skater { white-space:nowrap; }
+      .break-row { background:#f8f8f8; padding:4px 8px; margin:4px 0; font-size:9px; color:#555; font-weight:600; border-left:3px solid #cbd5e1; border-radius:2px; }
+      @media print {
+        body { padding:6px; font-size:8px; }
+        .day-header { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+        @page { margin:8mm; size:letter; }
+      }
+      .print-btn { position:fixed; top:10px; right:10px; background:#F97316; color:#fff; border:none; padding:8px 16px; border-radius:6px; cursor:pointer; font-size:12px; font-weight:700; }
+      @media print { .print-btn { display:none; } }
+    </style>
+  </head><body>
+    <button class="print-btn" onclick="window.print()">🖨️ Print</button>
+    <h1>${esc(meet.meetName)}</h1>
+    <div class="meta">${esc(meetDateRange(meet))}${meet.startTime?' • '+esc(formatTime(meet.startTime)):''} • ${esc((db.rinks||[]).find(r=>Number(r.id)===Number(meet.rinkId))?.name||'')}</div>
+    ${daySections||'<div>No schedule yet.</div>'}
   </body></html>`);
 });
 
