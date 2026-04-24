@@ -977,7 +977,7 @@ function getOpenGroupIdForReg(reg) {
 function generateOpenRacesForMeet(meet) {
   // TT is now managed via ttConfig — clear any stale timeTrial flags so open races always generate
   (meet.openGroups||[]).forEach(og=>{og.timeTrial=false;og.ttDistance='';});
-  const nonOpenRaces=(meet.races||[]).filter(r=>!r.isOpenRace&&!r.isTimeTrial);
+  const nonOpenRaces=(meet.races||[]).filter(r=>!r.isOpenRace); // keep TT races — they are managed separately
   const openRaces=[]; let orderHint=9000;
   const TT_ORDER=['open_juv_girls','open_juv_boys','open_fresh_girls','open_fresh_boys','open_sr_ladies','open_sr_men','open_mast_ladies','open_mast_men'];
   for(const og of meet.openGroups||[]) {
@@ -1004,7 +1004,7 @@ function generateOpenRacesForMeet(meet) {
       isOpenRace:true,isQuadRace:false,isTimeTrial:false});
   }
   // Single combined Time Trial race — all ages 0-99, scored by age group
-  const hasTT=(meet.openGroups||[]).some(og=>og.timeTrial);
+  const hasTT=(meet.ttConfig?.enabled)||false;
   if(hasTT) {
     const ttDist=(meet.openGroups||[]).find(og=>og.timeTrial)?.ttDistance||'100m';
     const existingTT=(meet.races||[]).find(r=>r.isTimeTrial&&r.groupId==='tt_combined');
