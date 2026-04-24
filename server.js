@@ -4481,7 +4481,8 @@ app.post('/portal/meet/:meetId/blocks/auto-build', requireRole('meet_director'),
     // ── SATURDAY APR 25 ───────────────────────────────────────────────
     // Quad Short Race — races 10-18
     {id:'s1',name:'Quad Short Race',day:'Saturday Apr 25',type:'race',notes:'7:30am',raceIds:[
-      raceId(findQuad('Freshman Girls',300)),   // 10 heat
+      raceId(findQuad('Freshman Girls',300)),   // 10 heat 1
+      raceId(findQuad('Freshman Girls',300)),   // 10 heat 2
       raceId(findQuad('Juvenile Girls',200)),   // 11
       raceId(findQuad('Juvenile Boys',200)),    // 12
       raceId(findQuad('Freshman Boys',300)),    // 13
@@ -4489,7 +4490,6 @@ app.post('/portal/meet/:meetId/blocks/auto-build', requireRole('meet_director'),
       raceId(findQuad('Senior Men',300)),       // 15
       raceId(findQuad('Master Ladies',300)),    // 16
       raceId(findQuad('Master Men',300)),       // 17
-      raceId(findQuad('Freshman Girls',300)),   // 18 final
     ].filter(Boolean)},
 
     // Quad Long Race — races 19-27
