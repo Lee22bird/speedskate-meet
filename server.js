@@ -977,7 +977,7 @@ function getOpenGroupIdForReg(reg) {
 function generateOpenRacesForMeet(meet) {
   // TT is now managed via ttConfig — clear any stale timeTrial flags so open races always generate
   (meet.openGroups||[]).forEach(og=>{og.timeTrial=false;og.ttDistance='';});
-  const nonOpenRaces=(meet.races||[]).filter(r=>!r.isOpenRace); // keep TT races — they are managed separately
+  const nonOpenRaces=(meet.races||[]).filter(r=>!r.isOpenRace&&!r.isTimeTrial); // TT races rebuilt below with data preserved
   const openRaces=[]; let orderHint=9000;
   const TT_ORDER=['open_juv_girls','open_juv_boys','open_fresh_girls','open_fresh_boys','open_sr_ladies','open_sr_men','open_mast_ladies','open_mast_men'];
   for(const og of meet.openGroups||[]) {
@@ -1006,17 +1006,22 @@ function generateOpenRacesForMeet(meet) {
   // Single combined Time Trial race — all ages 0-99, scored by age group
   const hasTT=(meet.ttConfig?.enabled)||false;
   if(hasTT) {
-    const ttDist=(meet.openGroups||[]).find(og=>og.timeTrial)?.ttDistance||'100m';
+    const ttDist=String(meet.ttConfig?.distance||'100m');
     const existingTT=(meet.races||[]).find(r=>r.isTimeTrial&&r.groupId==='tt_combined');
-    const ttScored=(existingTT?.laneEntries||[]).filter(e=>e.time);
     let ttEntries;
-    if(ttScored.length||existingTT?.status==='closed') {
-      ttEntries=Array.isArray(existingTT?.laneEntries)?existingTT.laneEntries:[];
+    const ttHasTimes=(existingTT?.laneEntries||[]).some(e=>e.time);
+    if(existingTT&&(ttHasTimes||existingTT.status==='closed')) {
+      // Preserve all entries — times have been posted, never wipe
+      ttEntries=Array.isArray(existingTT.laneEntries)?existingTT.laneEntries:[];
+    } else if(existingTT&&(existingTT.laneEntries||[]).length) {
+      // Roster exists but no times yet — merge: keep existing entries, add any new registrants
+      const existingRegIds=new Set((existingTT.laneEntries||[]).map(e=>String(e.registrationId||'')).filter(Boolean));
+      const newRegs=(meet.registrations||[]).filter(r=>!!r.options?.timeTrials&&!existingRegIds.has(String(r.id))).sort((a,b)=>Number(a.age||0)-Number(b.age||0));
+      const merged=[...(existingTT.laneEntries||[]),...newRegs.map((reg,idx)=>({lane:(existingTT.laneEntries||[]).length+idx+1,registrationId:reg.id,helmetNumber:reg.helmetNumber,skaterName:reg.name,team:reg.team,age:reg.age,gender:reg.gender,place:'',time:'',status:''}))];
+      ttEntries=merged;
     } else {
-      // All skaters who selected Time Trials, sorted youngest to oldest
-      const ttRegs=(meet.registrations||[])
-        .filter(r=>!!r.options?.timeTrials)
-        .sort((a,b)=>Number(a.age||0)-Number(b.age||0));
+      // Fresh — build from registrations
+      const ttRegs=(meet.registrations||[]).filter(r=>!!r.options?.timeTrials).sort((a,b)=>Number(a.age||0)-Number(b.age||0));
       ttEntries=ttRegs.map((reg,idx)=>({lane:idx+1,registrationId:reg.id,helmetNumber:reg.helmetNumber,skaterName:reg.name,team:reg.team,age:reg.age,gender:reg.gender,place:'',time:'',status:''}));
     }
     openRaces.push({
