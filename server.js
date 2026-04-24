@@ -4428,9 +4428,10 @@ app.post('/portal/meet/:meetId/blocks/auto-build', requireRole('meet_director'),
   const usedRaceIds=new Set();
   function findRace(groupLabel, division, distance) {
     const gl=groupLabel.toLowerCase(); const div=division.toLowerCase(); const dist=String(distance).toLowerCase().replace('m','');
+    const words=gl.split(' ');
     const r=(meet.races||[]).find(r=>
       !usedRaceIds.has(r.id) &&
-      r.groupLabel?.toLowerCase()===gl &&
+      words.every(w=>r.groupLabel?.toLowerCase().includes(w)) &&
       r.division?.toLowerCase()===div &&
       r.distanceLabel?.toLowerCase().replace('m','')===dist &&
       !r.isOpenRace && !r.isQuadRace && !r.isTimeTrial
@@ -4439,17 +4440,25 @@ app.post('/portal/meet/:meetId/blocks/auto-build', requireRole('meet_director'),
     return r;
   }
   function findOpen(groupLabel) {
-    const gl=groupLabel.toLowerCase();
-    const r=(meet.races||[]).find(r=>!usedRaceIds.has(r.id)&&r.isOpenRace&&r.groupLabel?.toLowerCase().includes(gl.split(' ')[0]));
+    const gl=groupLabel.toLowerCase(); const words=gl.split(' ');
+    const r=(meet.races||[]).find(r=>!usedRaceIds.has(r.id)&&r.isOpenRace&&words.every(w=>r.groupLabel?.toLowerCase().includes(w)));
     if(r) usedRaceIds.add(r.id); return r;
   }
   function findTT(groupLabel) {
-    const r=(meet.races||[]).find(r=>!usedRaceIds.has(r.id)&&r.isTimeTrial&&r.groupLabel?.toLowerCase().includes(groupLabel.toLowerCase().split(' ')[0]));
+    const gl=groupLabel.toLowerCase(); const words=gl.split(' ');
+    const r=(meet.races||[]).find(r=>!usedRaceIds.has(r.id)&&r.isTimeTrial&&words.every(w=>r.groupLabel?.toLowerCase().includes(w)));
     if(r) usedRaceIds.add(r.id); return r;
   }
   function findQuad(groupLabel, distance) {
     const gl=groupLabel.toLowerCase(); const dist=String(distance).toLowerCase().replace('m','');
-    const r=(meet.races||[]).find(r=>!usedRaceIds.has(r.id)&&r.isQuadRace&&r.groupLabel?.toLowerCase().includes(gl.split(' ')[0])&&r.distanceLabel?.toLowerCase().replace('m','')===dist);
+    const QUAD_ID_MAP={'freshman girls':'quad_fresh_girls','freshman boys':'quad_fresh_boys',
+      'juvenile girls':'quad_juv_girls','juvenile boys':'quad_juv_boys',
+      'senior ladies':'quad_sr_ladies','senior men':'quad_sr_men',
+      'master ladies':'quad_mast_ladies','master men':'quad_mast_men'};
+    const targetId=QUAD_ID_MAP[gl];
+    const r=(meet.races||[]).find(r=>!usedRaceIds.has(r.id)&&r.isQuadRace&&
+      (targetId?r.groupId===targetId:r.groupLabel?.toLowerCase().includes(gl))&&
+      r.distanceLabel?.toLowerCase().replace('m','')===dist);
     if(r) usedRaceIds.add(r.id); return r;
   }
   function raceId(r){return r?.id||null;}
@@ -4482,7 +4491,7 @@ app.post('/portal/meet/:meetId/blocks/auto-build', requireRole('meet_director'),
     // Quad Short Race — races 10-18
     {id:'s1',name:'Quad Short Race',day:'Saturday Apr 25',type:'race',notes:'7:30am',raceIds:[
       raceId(findQuad('Freshman Girls',300)),   // 10 heat 1
-      raceId(findQuad('Freshman Girls',300)),   // 10 heat 2
+      raceId(findQuad('Freshman Girls',300)),   // 10 heat 2 (if exists)
       raceId(findQuad('Juvenile Girls',200)),   // 11
       raceId(findQuad('Juvenile Boys',200)),    // 12
       raceId(findQuad('Freshman Boys',300)),    // 13
@@ -4490,6 +4499,7 @@ app.post('/portal/meet/:meetId/blocks/auto-build', requireRole('meet_director'),
       raceId(findQuad('Senior Men',300)),       // 15
       raceId(findQuad('Master Ladies',300)),    // 16
       raceId(findQuad('Master Men',300)),       // 17
+      raceId(findQuad('Freshman Girls',300)),   // 18 final
     ].filter(Boolean)},
 
     // Quad Long Race — races 19-27
