@@ -1065,6 +1065,20 @@ function generateQuadRacesForMeet(meet) {
   meet.races=[...nonQuadRaces,...quadRaces]; meet.updatedAt=nowIso();
 }
 
+function getQuadGroupIdForReg(reg) {
+  const groupId=String(reg.divisionGroupId||reg.originalDivisionGroupId||'');
+  const groupIsFemale=groupId.includes('girls')||groupId.includes('women')||groupId.includes('ladies');
+  const groupIsMale=groupId.includes('boys')||groupId.includes('men');
+  const storedGender=String(reg.gender||'').toLowerCase();
+  const genderFemale=storedGender==='female'||storedGender==='girls'||storedGender==='women';
+  const isFemale=groupIsFemale?true:groupIsMale?false:genderFemale;
+  const age=Number(reg.age||0);
+  if(age<=9)  return isFemale?'quad_juv_girls':'quad_juv_boys';
+  if(age<=13) return isFemale?'quad_fresh_girls':'quad_fresh_boys';
+  if(age>=35) return isFemale?'quad_mast_ladies':'quad_mast_men';
+  return isFemale?'quad_sr_ladies':'quad_sr_men';
+}
+
 function rebuildRaceAssignments(meet) {
   ensureRegistrationTotalsAndNumbers(meet);
   const laneCount=Math.max(1,Number(meet.lanes)||4);
@@ -1091,22 +1105,7 @@ function rebuildRaceAssignments(meet) {
     }):[];
     newRaces.push(...buildRaceSetForEntries(baseRace,[...matchingRegs,...challengeUpRegs],laneCount));
   }
-  // Map inline group gender to quad group gender equivalent
-  const QUAD_GENDER_MAP={'girls':'girls','boys':'boys','women':'women','men':'men'};
-  // Map inline divisionGroupId to quad groupId based on age/gender
-  function getQuadGroupIdForReg(reg) {
-    const groupId=String(reg.divisionGroupId||reg.originalDivisionGroupId||'');
-    const groupIsFemale=groupId.includes('girls')||groupId.includes('women')||groupId.includes('ladies');
-    const groupIsMale=groupId.includes('boys')||groupId.includes('men');
-    const storedGender=String(reg.gender||'').toLowerCase();
-    const genderFemale=storedGender==='female'||storedGender==='girls'||storedGender==='women';
-    const isFemale=groupIsFemale?true:groupIsMale?false:genderFemale;
-    const age=Number(reg.age||0);
-    if(age<=9)  return isFemale?'quad_juv_girls':'quad_juv_boys';
-    if(age<=13) return isFemale?'quad_fresh_girls':'quad_fresh_boys';
-    if(age>=35) return isFemale?'quad_mast_ladies':'quad_mast_men';
-    return isFemale?'quad_sr_ladies':'quad_sr_men';
-  }
+  // getQuadGroupIdForReg is defined globally below
   const quadBaseRaces=(meet.races||[]).filter(r=>r.isQuadRace&&!['heat','semi'].includes(String(r.stage||'')));
   for(const baseRace of quadBaseRaces) {
     const matchingQuadRegs=(meet.registrations||[]).filter(reg=>
