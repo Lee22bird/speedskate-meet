@@ -975,11 +975,13 @@ function getOpenGroupIdForReg(reg) {
 }
 
 function generateOpenRacesForMeet(meet) {
+  // TT is now managed via ttConfig — clear any stale timeTrial flags so open races always generate
+  (meet.openGroups||[]).forEach(og=>{og.timeTrial=false;og.ttDistance='';});
   const nonOpenRaces=(meet.races||[]).filter(r=>!r.isOpenRace&&!r.isTimeTrial);
   const openRaces=[]; let orderHint=9000;
   const TT_ORDER=['open_juv_girls','open_juv_boys','open_fresh_girls','open_fresh_boys','open_sr_ladies','open_sr_men','open_mast_ladies','open_mast_men'];
   for(const og of meet.openGroups||[]) {
-    if(!og.enabled||!og.distance||og.timeTrial) continue; // TT handled below as single combined race
+    if(!og.enabled||!og.distance) continue;
     const existingRace=(meet.races||[]).find(r=>r.isOpenRace&&r.groupId===og.id&&!r.isTimeTrial);
     // Always recompute open race entries from registrations
     // Preserve scored/closed entries, but rebuild unscored entries from current registrations
