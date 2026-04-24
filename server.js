@@ -4997,6 +4997,26 @@ app.post('/api/meet/:meetId/race-day/unlock-race', requireRole('meet_director'),
 
 // ── Results ───────────────────────────────────────────────────────────────────
 
+app.get('/portal/meet/:meetId/fix-quad-helmets', requireRole('meet_director'), (req, res) => {
+  const meet=getMeetOr404(req.db,req.params.meetId);
+  if(!meet) return res.status(404).send('not found');
+  // Enable quad for specific helmet numbers from paper schedule
+  const helmets=String(req.query.h||'').split(',').map(h=>h.trim()).filter(Boolean);
+  let updated=0;
+  for(const reg of meet.registrations||[]) {
+    if(helmets.includes(String(reg.helmetNumber||''))) {
+      if(!reg.options) reg.options={};
+      reg.options.quad=true;
+      reg.totalCost=calcRegistrationCost(meet,reg.options);
+      updated++;
+    }
+  }
+  rebuildRaceAssignments(meet);
+  generateQuadRacesForMeet(meet);
+  saveDb(req.db);
+  res.send('Updated '+updated+' skaters. <a href="/portal/meet/'+meet.id+'/quad-builder">Check Quad Builder</a>');
+});
+
 app.get('/portal/meet/:meetId/debug-regs', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet) return res.status(404).send('not found');
