@@ -3868,7 +3868,14 @@ app.get('/portal/meet/:meetId/registered', requireRole('meet_director'), (req, r
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
   ensureRegistrationTotalsAndNumbers(meet); saveDb(req.db);
-  const rows=(meet.registrations||[]).map(r=>`
+  const qName=String(req.query.q||'').toLowerCase().trim();
+  const qTeam=String(req.query.team||'').toLowerCase().trim();
+  const regs=(meet.registrations||[]).filter(r=>{
+    if(qName&&!String(r.name||'').toLowerCase().includes(qName)) return false;
+    if(qTeam&&!String(r.team||'').toLowerCase().includes(qTeam)) return false;
+    return true;
+  });
+  const rows=regs.map(r=>`
     <tr>
       <td>${esc(r.meetNumber)}</td><td>${esc(r.helmetNumber)}</td>
       <td><strong>${esc(r.name)}</strong>${sponsorLineHtml(r.sponsor||'')}</td>
@@ -3897,8 +3904,16 @@ app.get('/portal/meet/:meetId/registered', requireRole('meet_director'), (req, r
   res.send(pageShell({title:'Registered',user:req.user,meet,activeTab:'registered', bodyHtml:`
     <div class="page-header"><h1>Registered</h1><div class="sub">${esc(meet.meetName)} • ${(meet.registrations||[]).length} skaters</div></div>
     <div class="card">
+      <form method="GET" action="/portal/meet/${meet.id}/registered" style="margin-bottom:14px">
+        <div class="row" style="gap:10px;flex-wrap:wrap">
+          <input name="q" value="${esc(qName)}" placeholder="Search name..." style="flex:1;min-width:180px" autocomplete="off" />
+          <input name="team" value="${esc(qTeam)}" placeholder="Search team..." style="flex:1;min-width:180px" autocomplete="off" />
+          <button class="btn-orange btn-sm" type="submit">Search</button>
+          ${qName||qTeam?`<a class="btn2 btn-sm" href="/portal/meet/${meet.id}/registered">Clear</a>`:''}
+        </div>
+      </form>
       <div class="row between" style="margin-bottom:14px">
-        <div class="note">Registration close: ${meet.registrationCloseAt?esc(meet.registrationCloseAt.replace('T',' ')):'Not set'}</div>
+        <div class="note">Registration close: ${meet.registrationCloseAt?esc(meet.registrationCloseAt.replace('T',' ')):'Not set'} • Showing ${regs.length} of ${(meet.registrations||[]).length}</div>
         <div class="action-row">
           <form method="POST" action="/portal/meet/${meet.id}/assign-races" onsubmit="return confirm('Rebuild will re-split heats and reassign lanes.\n\nYour block structure will be preserved but lane assignments will change.\n\nContinue?')"><button class="btn2" type="submit">Rebuild Assignments</button></form>
           <a class="btn-orange" href="/meet/${meet.id}/register" target="_blank">Public Registration</a>
@@ -3908,7 +3923,7 @@ app.get('/portal/meet/:meetId/registered', requireRole('meet_director'), (req, r
       <div style="overflow-x:auto">
         <table class="table">
           <thead><tr><th>#</th><th>Helmet</th><th>Name</th><th>Age</th><th>Team</th><th>Division</th><th>Entries</th><th>Total</th><th>Paid</th><th>In</th><th></th></tr></thead>
-          <tbody>${rows||`<tr><td colspan="11" class="muted">No registrations yet.</td></tr>`}</tbody>
+          <tbody>${rows||`<tr><td colspan="11" class="muted">No results.</td></tr>`}</tbody>
         </table>
       </div>
     </div>`}));
@@ -4409,26 +4424,33 @@ app.post('/portal/meet/:meetId/blocks/auto-build', requireRole('meet_director'),
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
 
-  // Helper to find a race by group label + division + distance (case insensitive)
+  // Track used race IDs globally to prevent duplicates across blocks
+  const usedRaceIds=new Set();
   function findRace(groupLabel, division, distance) {
-    const gl=groupLabel.toLowerCase(); const div=division.toLowerCase(); const dist=String(distance).toLowerCase();
-    return (meet.races||[]).find(r=>
+    const gl=groupLabel.toLowerCase(); const div=division.toLowerCase(); const dist=String(distance).toLowerCase().replace('m','');
+    const r=(meet.races||[]).find(r=>
+      !usedRaceIds.has(r.id) &&
       r.groupLabel?.toLowerCase()===gl &&
       r.division?.toLowerCase()===div &&
-      r.distanceLabel?.toLowerCase().replace('m','')===dist.replace('m','') &&
+      r.distanceLabel?.toLowerCase().replace('m','')===dist &&
       !r.isOpenRace && !r.isQuadRace && !r.isTimeTrial
     );
+    if(r) usedRaceIds.add(r.id);
+    return r;
   }
   function findOpen(groupLabel) {
     const gl=groupLabel.toLowerCase();
-    return (meet.races||[]).find(r=>r.isOpenRace&&r.groupLabel?.toLowerCase().includes(gl.split(' ')[0]));
+    const r=(meet.races||[]).find(r=>!usedRaceIds.has(r.id)&&r.isOpenRace&&r.groupLabel?.toLowerCase().includes(gl.split(' ')[0]));
+    if(r) usedRaceIds.add(r.id); return r;
   }
   function findTT(groupLabel) {
-    return (meet.races||[]).find(r=>r.isTimeTrial&&r.groupLabel?.toLowerCase().includes(groupLabel.toLowerCase().split(' ')[0]));
+    const r=(meet.races||[]).find(r=>!usedRaceIds.has(r.id)&&r.isTimeTrial&&r.groupLabel?.toLowerCase().includes(groupLabel.toLowerCase().split(' ')[0]));
+    if(r) usedRaceIds.add(r.id); return r;
   }
   function findQuad(groupLabel, distance) {
-    const gl=groupLabel.toLowerCase(); const dist=String(distance).toLowerCase();
-    return (meet.races||[]).find(r=>r.isQuadRace&&r.groupLabel?.toLowerCase().includes(gl.split(' ')[0])&&r.distanceLabel?.toLowerCase().replace('m','')===dist.replace('m',''));
+    const gl=groupLabel.toLowerCase(); const dist=String(distance).toLowerCase().replace('m','');
+    const r=(meet.races||[]).find(r=>!usedRaceIds.has(r.id)&&r.isQuadRace&&r.groupLabel?.toLowerCase().includes(gl.split(' ')[0])&&r.distanceLabel?.toLowerCase().replace('m','')===dist);
+    if(r) usedRaceIds.add(r.id); return r;
   }
   function raceId(r){return r?.id||null;}
 
@@ -4627,6 +4649,8 @@ app.post('/portal/meet/:meetId/blocks/auto-build', requireRole('meet_director'),
     {id:'blk_sun_awards',name:'Awards for Relays & High Point Team',day:'Sunday Apr 26',type:'awards',notes:'Thank You for Coming to the Spring Fling',raceIds:[]},
   ].map(b=>({...b, raceIds:(b.raceIds||[]).filter(Boolean)}));
 
+  // Deduplicate raceIds within each block (prevent same race appearing twice)
+  meet.blocks=meet.blocks.map(b=>({...b,raceIds:[...new Set((b.raceIds||[]).filter(Boolean))]}));
   // Put any remaining unassigned races into a catch-all block
   const assignedIds=new Set(meet.blocks.flatMap(b=>b.raceIds||[]));
   const remaining=(meet.races||[]).filter(r=>!assignedIds.has(r.id)).map(r=>r.id);
