@@ -4934,10 +4934,6 @@ app.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','judg
       </script>`;
 
   } else if(mode==='judges') {
-    // If current race is TT, redirect to dedicated TT panel
-    if(current?.isTimeTrial) {
-      return res.redirect(`/portal/meet/${meet.id}/race-day/tt`);
-    }
     body+=`
       <div class="card" style="margin-bottom:14px">
         <h2 style="margin:0">${current?`Race ${Math.max(info.idx+1,1)} — ${esc(current.groupLabel)} — ${esc(cap(current.division))} — ${esc(current.distanceLabel)}`:'No race selected'}</h2>
