@@ -1030,20 +1030,50 @@ function generateOpenRacesForMeet(meet) {
 
 function generateQuadRacesForMeet(meet) {
   const nonQuadRaces=(meet.races||[]).filter(r=>!r.isQuadRace); const quadRaces=[]; let orderHint=8000;
+  const laneCount=Math.max(1,Number(meet.lanes)||4);
   for(const qg of meet.quadGroups||[]) {
     if(!qg.enabled) continue;
     const distances=(qg.distances||[]).filter(Boolean);
+    // Get registrations for this quad group
+    const qgRegs=(meet.registrations||[]).filter(r=>!!r.options?.quad&&getQuadGroupIdForReg(r)===qg.id);
     distances.forEach((distance,i)=>{
-      const existingRace=(meet.races||[]).find(r=>r.isQuadRace&&r.groupId===qg.id&&r.distanceLabel===distance);
-      quadRaces.push({id:existingRace?.id||('r'+crypto.randomBytes(6).toString('hex')),orderHint:orderHint++,
-        groupId:qg.id,groupLabel:qg.label,ages:qg.ages,division:'quad',distanceLabel:distance,dayIndex:i+1,cost:Number(qg.cost||0),
-        stage:existingRace?.stage||'race',heatNumber:Number(existingRace?.heatNumber||0),
-        parentRaceKey:existingRace?.parentRaceKey||`quad|${qg.id}|${distance}`,startType:existingRace?.startType||'standing',
-        countsForOverall:typeof existingRace?.countsForOverall==='boolean'?existingRace.countsForOverall:true,
-        laneEntries:Array.isArray(existingRace?.laneEntries)?existingRace.laneEntries:[],
-        resultsMode:existingRace?.resultsMode||'places',status:existingRace?.status||'open',
-        notes:String(existingRace?.notes||''),isFinal:!!existingRace?.isFinal,closedAt:existingRace?.closedAt||'',
-        isOpenRace:false,isQuadRace:true});
+      const parentKey=`quad|${qg.id}|${distance}`;
+      const existingRaces=(meet.races||[]).filter(r=>r.isQuadRace&&r.groupId===qg.id&&r.distanceLabel===distance);
+      // If more skaters than lanes, create heats + final
+      const needsHeats=qgRegs.length>laneCount;
+      const heatCount=needsHeats?Math.ceil(qgRegs.length/laneCount):0;
+      if(needsHeats) {
+        // Create heat races
+        for(let h=1;h<=heatCount;h++) {
+          const existing=existingRaces.find(r=>r.heatNumber===h&&r.stage==='heat');
+          quadRaces.push({id:existing?.id||('r'+crypto.randomBytes(6).toString('hex')),orderHint:orderHint++,
+            groupId:qg.id,groupLabel:qg.label,ages:qg.ages,division:'quad',distanceLabel:distance,dayIndex:i+1,cost:Number(qg.cost||0),
+            stage:'heat',heatNumber:h,parentRaceKey:parentKey,startType:'standing',countsForOverall:true,
+            laneEntries:Array.isArray(existing?.laneEntries)?existing.laneEntries:[],
+            resultsMode:'places',status:existing?.status||'open',
+            notes:String(existing?.notes||`Heat ${h}`),isFinal:false,closedAt:existing?.closedAt||'',
+            isOpenRace:false,isQuadRace:true});
+        }
+        // Create final race
+        const existingFinal=existingRaces.find(r=>r.stage==='final'||r.isFinal);
+        quadRaces.push({id:existingFinal?.id||('r'+crypto.randomBytes(6).toString('hex')),orderHint:orderHint++,
+          groupId:qg.id,groupLabel:qg.label,ages:qg.ages,division:'quad',distanceLabel:distance,dayIndex:i+1,cost:Number(qg.cost||0),
+          stage:'final',heatNumber:0,parentRaceKey:parentKey,startType:'standing',countsForOverall:true,
+          laneEntries:Array.isArray(existingFinal?.laneEntries)?existingFinal.laneEntries:[],
+          resultsMode:'places',status:existingFinal?.status||'open',
+          notes:String(existingFinal?.notes||'Final'),isFinal:true,closedAt:existingFinal?.closedAt||'',
+          isOpenRace:false,isQuadRace:true});
+      } else {
+        // Single race (final only)
+        const existingRace=existingRaces[0];
+        quadRaces.push({id:existingRace?.id||('r'+crypto.randomBytes(6).toString('hex')),orderHint:orderHint++,
+          groupId:qg.id,groupLabel:qg.label,ages:qg.ages,division:'quad',distanceLabel:distance,dayIndex:i+1,cost:Number(qg.cost||0),
+          stage:'final',heatNumber:0,parentRaceKey:parentKey,startType:'standing',countsForOverall:true,
+          laneEntries:Array.isArray(existingRace?.laneEntries)?existingRace.laneEntries:[],
+          resultsMode:'places',status:existingRace?.status||'open',
+          notes:String(existingRace?.notes||''),isFinal:true,closedAt:existingRace?.closedAt||'',
+          isOpenRace:false,isQuadRace:true});
+      }
     });
   }
   meet.races=[...nonQuadRaces,...quadRaces]; meet.updatedAt=nowIso();
@@ -4456,6 +4486,7 @@ app.post('/portal/meet/:meetId/blocks/auto-build', requireRole('meet_director'),
       'senior ladies':'quad_sr_ladies','senior men':'quad_sr_men',
       'master ladies':'quad_mast_ladies','master men':'quad_mast_men'};
     const targetId=QUAD_ID_MAP[gl];
+    // Find next unused quad race (heat or final) for this group+distance
     const r=(meet.races||[]).find(r=>!usedRaceIds.has(r.id)&&r.isQuadRace&&
       (targetId?r.groupId===targetId:r.groupLabel?.toLowerCase().includes(gl))&&
       r.distanceLabel?.toLowerCase().replace('m','')===dist);
@@ -4491,7 +4522,7 @@ app.post('/portal/meet/:meetId/blocks/auto-build', requireRole('meet_director'),
     // Quad Short Race — races 10-18
     {id:'s1',name:'Quad Short Race',day:'Saturday Apr 25',type:'race',notes:'7:30am',raceIds:[
       raceId(findQuad('Freshman Girls',300)),   // 10 heat 1
-      raceId(findQuad('Freshman Girls',300)),   // 10 heat 2 (if exists)
+      raceId(findQuad('Freshman Girls',300)),   // 10 heat 2
       raceId(findQuad('Juvenile Girls',200)),   // 11
       raceId(findQuad('Juvenile Boys',200)),    // 12
       raceId(findQuad('Freshman Boys',300)),    // 13
@@ -4506,7 +4537,8 @@ app.post('/portal/meet/:meetId/blocks/auto-build', requireRole('meet_director'),
     {id:'s2',name:'Quad Long Race',day:'Saturday Apr 25',type:'race',notes:'8:00am',raceIds:[
       raceId(findQuad('Juvenile Girls',500)),   // 19
       raceId(findQuad('Juvenile Boys',500)),    // 20
-      raceId(findQuad('Freshman Girls',700)),   // 21 heat
+      raceId(findQuad('Freshman Girls',700)),   // 21 heat 1
+      raceId(findQuad('Freshman Girls',700)),   // 21 heat 2
       raceId(findQuad('Freshman Boys',700)),    // 22
       raceId(findQuad('Senior Ladies',1000)),   // 23
       raceId(findQuad('Senior Men',1000)),      // 24
@@ -4872,6 +4904,26 @@ app.post('/portal/meet/:meetId/race-day/judges/save', requireRole('judge','meet_
   if(req.body.action==='close') {
     const info=currentRaceInfo(meet);
     if(info.current&&info.current.id===race.id) { const next=info.ordered[info.idx+1]; if(next){meet.currentRaceId=next.id;meet.currentRaceIndex=info.idx+1;} }
+
+    // Auto-qualify: if this is a heat, populate top 3 into the final
+    if(race.stage==='heat' && race.parentRaceKey) {
+      const final=(meet.races||[]).find(r=>r.parentRaceKey===race.parentRaceKey&&(r.stage==='final'||r.isFinal)&&r.id!==race.id);
+      if(final) {
+        // Get top qualifiers from this heat (top 3, skip DNS/DQ)
+        const qualifiers=(race.laneEntries||[])
+          .filter(e=>e.skaterName&&!['DNS','DQ','Scratch'].includes(e.status||''))
+          .sort((a,b)=>Number(a.place||999)-Number(b.place||999))
+          .slice(0,3);
+        // Add to final if not already there
+        for(const q of qualifiers) {
+          const already=(final.laneEntries||[]).find(e=>e.registrationId&&e.registrationId===q.registrationId);
+          if(!already) {
+            const nextLane=(final.laneEntries||[]).length+1;
+            final.laneEntries.push({lane:nextLane,registrationId:q.registrationId,helmetNumber:q.helmetNumber,skaterName:q.skaterName,team:q.team,place:'',time:'',status:''});
+          }
+        }
+      }
+    }
   }
   saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/race-day/judges`);
 });
