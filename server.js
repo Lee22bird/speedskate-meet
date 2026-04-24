@@ -4734,7 +4734,7 @@ app.post('/portal/meet/:meetId/blocks/generate', requireRole('meet_director'), (
 // ── Race Day ──────────────────────────────────────────────────────────────────
 
 function raceDaySubTabs(meet,active) {
-  return `<div class="sub-tabs">${[['director','Director',`/portal/meet/${meet.id}/race-day/director`],['judges','Judges',`/portal/meet/${meet.id}/race-day/judges`],['announcer','Announcer',`/portal/meet/${meet.id}/race-day/announcer`],['live','Live View',`/portal/meet/${meet.id}/race-day/live`]].map(([k,label,href])=>`<a class="sub-tab ${active===k?'active':''}" href="${href}">${label}</a>`).join('')}</div>`;
+  return `<div class="sub-tabs">${[['director','Director',`/portal/meet/${meet.id}/race-day/director`],['judges','Judges',`/portal/meet/${meet.id}/race-day/judges`],['tt','⏱ Time Trials',`/portal/meet/${meet.id}/race-day/tt`],['announcer','Announcer',`/portal/meet/${meet.id}/race-day/announcer`],['live','Live View',`/portal/meet/${meet.id}/race-day/live`]].map(([k,label,href])=>`<a class="sub-tab ${active===k?'active':''}" href="${href}">${label}</a>`).join('')}</div>`;
 }
 
 app.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','judge','coach'), (req, res) => {
@@ -4868,6 +4868,126 @@ app.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','judg
       </div>`;
   }
   res.send(pageShell({title:'Race Day',user:req.user,meet,activeTab:'race-day', bodyHtml:body}));
+});
+
+app.get('/portal/meet/:meetId/race-day/tt', requireRole('judge','meet_director'), (req, res) => {
+  const meet=getMeetOr404(req.db,req.params.meetId);
+  if(!meet) return res.redirect('/portal');
+
+  // Get all TT races sorted youngest to oldest
+  const ttRaces=(meet.races||[])
+    .filter(r=>r.isTimeTrial)
+    .sort((a,b)=>{
+      const ageA=parseInt((a.ages||'999').match(/\d+/)?.[0]||999);
+      const ageB=parseInt((b.ages||'999').match(/\d+/)?.[0]||999);
+      return ageA-ageB;
+    });
+
+  // All TT entries sorted by time for overall leaderboard
+  const allEntries=ttRaces.flatMap(r=>(r.laneEntries||[]).filter(e=>e.time).map(e=>({...e,groupLabel:r.groupLabel})))
+    .sort((a,b)=>parseFloat(a.time||999)-parseFloat(b.time||999));
+
+  const regMap=new Map((meet.registrations||[]).map(r=>[Number(r.id),r]));
+
+  const groupSections=ttRaces.map(race=>{
+    const entries=(race.laneEntries||[]).filter(e=>e.skaterName||e.time);
+    const rows=entries.sort((a,b)=>parseFloat(a.time||999)-parseFloat(b.time||999)).map((e,i)=>`
+      <tr>
+        <td>${i+1}</td>
+        <td>${esc(e.helmetNumber?'#'+e.helmetNumber:'')}</td>
+        <td><strong>${esc(e.skaterName||'')}</strong></td>
+        <td>${esc(e.team||'')}</td>
+        <td><strong style="color:var(--orange)">${esc(e.time||'—')}</strong></td>
+        <td>
+          <form method="POST" action="/portal/meet/${meet.id}/race-day/judges/tt-post" style="display:flex;gap:6px;align-items:center">
+            <input type="hidden" name="raceId" value="${esc(race.id)}" />
+            <input type="hidden" name="registrationId" value="${esc(String(e.registrationId||''))}" />
+            <input type="hidden" name="skaterName" value="${esc(e.skaterName||'')}" />
+            <input type="hidden" name="helmetNumber" value="${esc(e.helmetNumber||'')}" />
+            <input type="hidden" name="team" value="${esc(e.team||'')}" />
+            <input name="time" value="${esc(e.time||'')}" placeholder="0.00" style="width:70px" />
+            <button class="btn2 btn-sm" type="submit">✓</button>
+          </form>
+        </td>
+      </tr>`).join('');
+
+    // Post new skater form
+    const skaterList=(meet.registrations||[]).map(r=>`<option value="${esc(r.name)}" data-id="${r.id}" data-helmet="${esc(r.helmetNumber||'')}" data-team="${esc(r.team||'')}">`).join('');
+
+    return `
+      <div class="card" style="margin-bottom:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <div>
+            <h3 style="margin:0">${esc(race.groupLabel)}</h3>
+            <div class="note">${esc(race.distanceLabel)} • ${entries.length} posted • <span style="color:${race.status==='closed'?'var(--green)':'var(--orange)'}">${race.status==='closed'?'Closed':'Open'}</span></div>
+          </div>
+          <form method="POST" action="/portal/meet/${meet.id}/race-day/judges/save" style="display:inline">
+            <input type="hidden" name="raceId" value="${esc(race.id)}" />
+            <input type="hidden" name="resultsMode" value="times" />
+            ${(race.laneEntries||[]).map(e=>`
+              <input type="hidden" name="skaterName_${e.lane}" value="${esc(e.skaterName||'')}" />
+              <input type="hidden" name="team_${e.lane}" value="${esc(e.team||'')}" />
+              <input type="hidden" name="place_${e.lane}" value="${esc(e.place||'')}" />
+              <input type="hidden" name="time_${e.lane}" value="${esc(e.time||'')}" />
+              <input type="hidden" name="status_${e.lane}" value="${esc(e.status||'')}" />
+            `).join('')}
+            <button class="btn2 btn-sm" name="action" value="close" type="submit" ${race.status==='closed'?'disabled':''}>Close Group</button>
+          </form>
+        </div>
+        ${rows?`<table class="table" style="font-size:13px">
+          <thead><tr><th>#</th><th>Helmet</th><th>Skater</th><th>Team</th><th>Time</th><th>Post</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>`:'<div class="muted">No times posted yet</div>'}
+        <form method="POST" action="/portal/meet/${meet.id}/race-day/judges/tt-post" style="margin-top:10px;display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+          <input type="hidden" name="raceId" value="${esc(race.id)}" />
+          <div><label style="font-size:11px">Skater</label>
+            <input name="skaterSearch" id="ss_${esc(race.id)}" list="sl_${esc(race.id)}" placeholder="Type name..." autocomplete="off" oninput="fillTT(this,'${esc(race.id)}')" style="width:200px" />
+            <datalist id="sl_${esc(race.id)}">${skaterList}</datalist>
+            <input type="hidden" name="registrationId" id="rid_${esc(race.id)}" />
+            <input type="hidden" name="helmetNumber" id="hnum_${esc(race.id)}" />
+            <input type="hidden" name="skaterName" id="sname_${esc(race.id)}" />
+            <input type="hidden" name="team" id="steam_${esc(race.id)}" />
+          </div>
+          <div><label style="font-size:11px">Time</label><input name="time" placeholder="0.00" style="width:80px" /></div>
+          <button class="btn-orange btn-sm" type="submit">Post Time</button>
+        </form>
+      </div>`;
+  }).join('');
+
+  const leaderboard=allEntries.slice(0,20).map((e,i)=>`
+    <tr>
+      <td>${i===0?'🥇':i===1?'🥈':i===2?'🥉':i+1}</td>
+      <td>${esc(e.helmetNumber?'#'+e.helmetNumber:'')}</td>
+      <td><strong>${esc(e.skaterName||'')}</strong></td>
+      <td style="font-size:11px;color:var(--muted)">${esc(e.groupLabel||'')}</td>
+      <td><strong style="color:var(--orange)">${esc(e.time)}</strong></td>
+    </tr>`).join('');
+
+  res.send(pageShell({title:'Time Trials',user:req.user,meet,activeTab:'race-day',bodyHtml:`
+    <div class="page-header"><h1>⏱ Time Trials</h1><div class="sub">${esc(meet.meetName)} • Youngest to Oldest</div></div>
+    ${raceDaySubTabs(meet,'tt')}
+    <div style="display:grid;grid-template-columns:1fr 300px;gap:20px;align-items:start">
+      <div>${groupSections||'<div class="card muted">No time trial races found.</div>'}</div>
+      <div class="card" style="position:sticky;top:80px">
+        <h3 style="margin-bottom:12px">🏆 Overall Fastest</h3>
+        ${leaderboard?`<table class="table" style="font-size:12px">
+          <thead><tr><th>#</th><th>Helmet</th><th>Skater</th><th>Group</th><th>Time</th></tr></thead>
+          <tbody>${leaderboard}</tbody>
+        </table>`:'<div class="muted">No times yet</div>'}
+      </div>
+    </div>
+    <script>
+      function fillTT(inp, raceId) {
+        const val=inp.value;
+        const opt=document.querySelector('#sl_'+raceId+' option[value="'+val.replace(/'/g,"\'")+'"');
+        if(opt) {
+          document.getElementById('rid_'+raceId).value=opt.getAttribute('data-id')||'';
+          document.getElementById('hnum_'+raceId).value=opt.getAttribute('data-helmet')||'';
+          document.getElementById('sname_'+raceId).value=val;
+          document.getElementById('steam_'+raceId).value=opt.getAttribute('data-team')||'';
+        }
+      }
+    </script>`}));
 });
 
 app.post('/portal/meet/:meetId/race-day/judges/save', requireRole('judge','meet_director'), (req, res) => {
