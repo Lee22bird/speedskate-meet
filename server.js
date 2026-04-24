@@ -4274,7 +4274,10 @@ app.get('/portal/meet/:meetId/blocks', requireRole('meet_director'), (req, res) 
           <form method="POST" action="/portal/meet/${meet.id}/blocks/generate" onsubmit="return confirm('⚠️ Generate Blocks will create races from your division settings.\n\nExisting block assignments will be cleared.\n\nContinue?')" style="display:inline">
               <button class="btn2" type="submit">Generate Blocks ⚠️</button>
             </form>
-            <a class="btn-orange" href="/portal/meet/${meet.id}/registered/print-race-list" target="_blank">Print Race List</a>
+            <form method="POST" action="/portal/meet/${meet.id}/blocks/auto-build" onsubmit="return confirm('Auto-build blocks using Wichita 2026 schedule order?\n\nThis will organize all races into blocks matching the paper schedule.')" style="display:inline">
+              <button class="btn-orange" type="submit">🗓 Auto-Build Schedule</button>
+            </form>
+            <a class="btn2" href="/portal/meet/${meet.id}/registered/print-race-list" target="_blank">Print Race List</a>
         </div>
       </div>
     </div>
@@ -4400,6 +4403,238 @@ app.post('/api/meet/:meetId/blocks/move-race', requireRole('meet_director'), (re
     block.raceIds.push(raceId);
   }
   ensureCurrentRace(meet); meet.updatedAt=nowIso(); saveDb(req.db); res.json({ok:true});
+});
+
+app.post('/portal/meet/:meetId/blocks/auto-build', requireRole('meet_director'), (req, res) => {
+  const meet=getMeetOr404(req.db,req.params.meetId);
+  if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
+
+  // Helper to find a race by group label + division + distance (case insensitive)
+  function findRace(groupLabel, division, distance) {
+    const gl=groupLabel.toLowerCase(); const div=division.toLowerCase(); const dist=String(distance).toLowerCase();
+    return (meet.races||[]).find(r=>
+      r.groupLabel?.toLowerCase()===gl &&
+      r.division?.toLowerCase()===div &&
+      r.distanceLabel?.toLowerCase().replace('m','')===dist.replace('m','') &&
+      !r.isOpenRace && !r.isQuadRace && !r.isTimeTrial
+    );
+  }
+  function findOpen(groupLabel) {
+    const gl=groupLabel.toLowerCase();
+    return (meet.races||[]).find(r=>r.isOpenRace&&r.groupLabel?.toLowerCase().includes(gl.split(' ')[0]));
+  }
+  function findTT(groupLabel) {
+    return (meet.races||[]).find(r=>r.isTimeTrial&&r.groupLabel?.toLowerCase().includes(groupLabel.toLowerCase().split(' ')[0]));
+  }
+  function findQuad(groupLabel, distance) {
+    const gl=groupLabel.toLowerCase(); const dist=String(distance).toLowerCase();
+    return (meet.races||[]).find(r=>r.isQuadRace&&r.groupLabel?.toLowerCase().includes(gl.split(' ')[0])&&r.distanceLabel?.toLowerCase().replace('m','')===dist.replace('m',''));
+  }
+  function raceId(r){return r?.id||null;}
+
+  // Build blocks matching Wichita 2026 schedule exactly
+  meet.blocks = [
+    // FRIDAY
+    {id:'blk_fri_tt',name:'Friday — Time Trials',day:'Friday Apr 24',type:'race',notes:'One Lap Time Trial • Youngest to Oldest • Determines Open Race Starting Position',raceIds:[
+      raceId(findTT('Juvenile Girls')),raceId(findTT('Juvenile Boys')),
+      raceId(findTT('Freshman Girls')),raceId(findTT('Freshman Boys')),
+      raceId(findTT('Senior Ladies')),raceId(findTT('Senior Men')),
+      raceId(findTT('Masters Ladies')),raceId(findTT('Masters Men')),
+    ].filter(Boolean)},
+    {id:'blk_fri_open',name:'Friday — Open Races',day:'Friday Apr 24',type:'race',notes:'6:30pm • Awards Follow Sr Mens Open',raceIds:[
+      raceId(findOpen('Juvenile Girls')),raceId(findOpen('Juvenile Boys')),
+      raceId(findOpen('Freshman Girls')),raceId(findOpen('Freshman Boys')),
+      raceId(findOpen('Masters Ladies')),raceId(findOpen('Masters Men')),
+      raceId(findOpen('Senior Ladies')),raceId(findOpen('Senior Men')),
+    ].filter(Boolean)},
+
+    // SATURDAY - QUAD SHORT
+    {id:'blk_sat_quad_short',name:'Saturday — Quad Short Race',day:'Saturday Apr 25',type:'race',notes:'7:30am',raceIds:[
+      raceId(findQuad('Freshman Girls',300)),raceId(findQuad('Juvenile Girls',200)),raceId(findQuad('Juvenile Boys',200)),
+      raceId(findQuad('Freshman Boys',300)),raceId(findQuad('Senior Ladies',300)),raceId(findQuad('Senior Men',300)),
+      raceId(findQuad('Masters Ladies',300)),raceId(findQuad('Masters Men',300)),
+    ].filter(Boolean)},
+    // QUAD LONG
+    {id:'blk_sat_quad_long',name:'Saturday — Quad Long Race',day:'Saturday Apr 25',type:'race',notes:'8:00am',raceIds:[
+      raceId(findQuad('Juvenile Girls',500)),raceId(findQuad('Juvenile Boys',500)),
+      raceId(findQuad('Freshman Girls',700)),raceId(findQuad('Freshman Boys',700)),
+      raceId(findQuad('Senior Ladies',1000)),raceId(findQuad('Senior Men',1000)),
+      raceId(findQuad('Masters Ladies',1000)),raceId(findQuad('Masters Men',1000)),
+    ].filter(Boolean)},
+
+    // ELITE SHORT BLOCK 1
+    {id:'blk_sat_elite_short1',name:'Saturday — Elite Short Race Block 1',day:'Saturday Apr 25',type:'race',notes:'Warm Up Standard Elite Divisions Short Race',raceIds:[
+      raceId(findRace('Elementary Girls','elite','300')),
+      raceId(findRace('Sophomore Men','elite','500')),
+      raceId(findRace('Senior Men','elite','500')),
+      raceId(findRace('Master Men','elite','500')),
+      raceId(findRace('Primary Girls','elite','200')),
+      raceId(findRace('Primary Boys','elite','200')),
+      raceId(findRace('Elementary Girls','elite','300')),
+      raceId(findRace('Elementary Boys','elite','300')),
+      raceId(findRace('Sophomore Ladies','elite','500')),
+      raceId(findRace('Sophomore Men','elite','500')),
+      raceId(findRace('Senior Ladies','elite','500')),
+      raceId(findRace('Senior Men','elite','500')),
+      raceId(findRace('Master Ladies','elite','500')),
+      raceId(findRace('Master Men','elite','500')),
+      raceId(findRace('Esquire Ladies','elite','500')),
+      raceId(findRace('Esquire Men','elite','500')),
+    ].filter(Boolean)},
+
+    // ELITE SHORT BLOCK 2
+    {id:'blk_sat_elite_short2',name:'Saturday — Elite Short Race Block 2',day:'Saturday Apr 25',type:'race',notes:'9:30am',raceIds:[
+      raceId(findRace('Freshman Girls','elite','300')),
+      raceId(findRace('Junior Men','elite','500')),
+      raceId(findRace('Tiny Tot Girls','elite','100')),
+      raceId(findRace('Juvenile Girls','elite','200')),
+      raceId(findRace('Juvenile Boys','elite','200')),
+      raceId(findRace('Freshman Girls','elite','300')),
+      raceId(findRace('Freshman Boys','elite','300')),
+      raceId(findRace('Junior Ladies','elite','500')),
+      raceId(findRace('Junior Men','elite','500')),
+      raceId(findRace('Classic Ladies','elite','500')),
+      raceId(findRace('Classic Men','elite','500')),
+      raceId(findRace('Veteran Men','elite','500')),
+    ].filter(Boolean)},
+
+    // DIAPER DASH
+    {id:'blk_diaper',name:'Diaper Dash',day:'Saturday Apr 25',type:'race',notes:'9:55am • Skaters 3 years & under • Starting Line to Finish Line',raceIds:
+      (meet.races||[]).filter(r=>r.isSkateabilityRace||r.groupLabel?.toLowerCase().includes('diaper')).map(r=>r.id).filter(Boolean)
+    },
+
+    // NOVICE SHORT
+    {id:'blk_sat_nov_short',name:'Saturday — Novice Short Race',day:'Saturday Apr 25',type:'race',notes:'10:00am',raceIds:[
+      raceId(findRace('Elementary Girls','novice','300')),
+      raceId(findRace('Juvenile Girls','novice','200')),
+      raceId(findRace('Juvenile Boys','novice','200')),
+      raceId(findRace('Elementary Boys','novice','300')),
+      raceId(findRace('Freshman Girls','novice','300')),
+      raceId(findRace('Freshman Boys','novice','300')),
+      raceId(findRace('Sophomore Ladies','novice','500')),
+      raceId(findRace('Sophomore Men','novice','500')),
+      raceId(findRace('Elementary Girls','novice','300')),
+      raceId(findRace('Junior Ladies','novice','500')),
+      raceId(findRace('Junior Men','novice','500')),
+      raceId(findRace('Senior Ladies','novice','500')),
+      raceId(findRace('Senior Men','novice','500')),
+      raceId(findRace('Master Ladies','novice','500')),
+      raceId(findRace('Master Men','novice','500')),
+    ].filter(Boolean)},
+
+    // ELITE MIDDLE BLOCK 1
+    {id:'blk_sat_elite_mid1',name:'Saturday — Elite Middle Race Block 1',day:'Saturday Apr 25',type:'race',notes:'11:45am',raceIds:[
+      raceId(findRace('Elementary Girls','elite','500')),
+      raceId(findRace('Sophomore Men','elite','1000')),
+      raceId(findRace('Senior Men','elite','1000')),
+      raceId(findRace('Master Men','elite','1000')),
+      raceId(findRace('Primary Girls','elite','300')),
+      raceId(findRace('Primary Boys','elite','300')),
+      raceId(findRace('Elementary Girls','elite','500')),
+      raceId(findRace('Elementary Boys','elite','500')),
+      raceId(findRace('Sophomore Ladies','elite','1000')),
+      raceId(findRace('Sophomore Men','elite','1000')),
+      raceId(findRace('Senior Ladies','elite','1000')),
+      raceId(findRace('Senior Men','elite','1000')),
+      raceId(findRace('Master Ladies','elite','700')),
+      raceId(findRace('Master Men','elite','700')),
+      raceId(findRace('Esquire Ladies','elite','700')),
+      raceId(findRace('Esquire Men','elite','700')),
+    ].filter(Boolean)},
+
+    // ELITE MIDDLE BLOCK 2
+    {id:'blk_sat_elite_mid2',name:'Saturday — Elite Middle Race Block 2',day:'Saturday Apr 25',type:'race',notes:'11:45am Block 2',raceIds:[
+      raceId(findRace('Freshman Girls','elite','500')),
+      raceId(findRace('Junior Men','elite','1000')),
+      raceId(findRace('Tiny Tot Girls','elite','200')),
+      raceId(findRace('Juvenile Girls','elite','300')),
+      raceId(findRace('Juvenile Boys','elite','300')),
+      raceId(findRace('Freshman Girls','elite','500')),
+      raceId(findRace('Freshman Boys','elite','500')),
+      raceId(findRace('Junior Ladies','elite','1000')),
+      raceId(findRace('Junior Men','elite','1000')),
+      raceId(findRace('Classic Ladies','elite','1000')),
+      raceId(findRace('Classic Men','elite','1000')),
+      raceId(findRace('Veteran Men','elite','700')),
+    ].filter(Boolean)},
+
+    // NOVICE LONG
+    {id:'blk_sat_nov_long',name:'Saturday — Novice Long Race',day:'Saturday Apr 25',type:'race',notes:'12:45pm',raceIds:[
+      raceId(findRace('Elementary Girls','novice','700')),
+      raceId(findRace('Juvenile Girls','novice','500')),
+      raceId(findRace('Juvenile Boys','novice','500')),
+      raceId(findRace('Elementary Girls','novice','700')),
+      raceId(findRace('Elementary Boys','novice','700')),
+      raceId(findRace('Freshman Girls','novice','1000')),
+      raceId(findRace('Freshman Boys','novice','1000')),
+      raceId(findRace('Sophomore Ladies','novice','1000')),
+      raceId(findRace('Sophomore Men','novice','1000')),
+      raceId(findRace('Junior Ladies','novice','1000')),
+      raceId(findRace('Junior Men','novice','1000')),
+      raceId(findRace('Senior Ladies','novice','1000')),
+      raceId(findRace('Senior Men','novice','1000')),
+      raceId(findRace('Master Ladies','novice','1000')),
+      raceId(findRace('Master Men','novice','1000')),
+    ].filter(Boolean)},
+
+    // ELITE LONG BLOCK 1
+    {id:'blk_sat_elite_long1',name:'Saturday — Elite Long Race Block 1',day:'Saturday Apr 25',type:'race',notes:'2:00pm',raceIds:[
+      raceId(findRace('Primary Girls','elite','400')),
+      raceId(findRace('Primary Boys','elite','400')),
+      raceId(findRace('Elementary Girls','elite','700')),
+      raceId(findRace('Elementary Boys','elite','700')),
+      raceId(findRace('Sophomore Ladies','elite','1500')),
+      raceId(findRace('Sophomore Men','elite','1500')),
+      raceId(findRace('Senior Ladies','elite','1500')),
+      raceId(findRace('Senior Men','elite','1500')),
+      raceId(findRace('Master Ladies','elite','1000')),
+      raceId(findRace('Master Men','elite','1000')),
+      raceId(findRace('Esquire Ladies','elite','1000')),
+      raceId(findRace('Esquire Men','elite','1000')),
+    ].filter(Boolean)},
+
+    // ELITE LONG BLOCK 2
+    {id:'blk_sat_elite_long2',name:'Saturday — Elite Long Race Block 2',day:'Saturday Apr 25',type:'race',notes:'2:00pm Block 2',raceIds:[
+      raceId(findRace('Tiny Tot Girls','elite','300')),
+      raceId(findRace('Juvenile Girls','elite','500')),
+      raceId(findRace('Juvenile Boys','elite','500')),
+      raceId(findRace('Freshman Girls','elite','1000')),
+      raceId(findRace('Freshman Boys','elite','1000')),
+      raceId(findRace('Junior Ladies','elite','1500')),
+      raceId(findRace('Junior Men','elite','1500')),
+      raceId(findRace('Classic Ladies','elite','1500')),
+      raceId(findRace('Classic Men','elite','1500')),
+      raceId(findRace('Veteran Men','elite','1000')),
+    ].filter(Boolean)},
+
+    // RACE OF CHAMPIONS
+    {id:'blk_sat_roc',name:'Saturday — Race of Champions',day:'Saturday Apr 25',type:'race',notes:'3:30pm • Top 3 placements from Standard Elite',raceIds:
+      (meet.races||[]).filter(r=>r.groupLabel?.toLowerCase().includes('race of champions')||r.notes?.toLowerCase().includes('champions')).map(r=>r.id).filter(Boolean)
+    },
+
+    {id:'blk_sat_awards',name:'Awards Presentation',day:'Saturday Apr 25',type:'awards',notes:'4:30pm • Trophies for Saturdays Events & Triple Crown Participation T-Shirts',raceIds:[]},
+
+    // SUNDAY RELAYS
+    {id:'blk_sun_2mixed',name:'Sunday — 2 Mixed Relays',day:'Sunday Apr 26',type:'race',notes:'7:00am',raceIds:
+      (meet.races||[]).filter(r=>r.isRelayRace&&r.groupLabel?.toLowerCase().includes('2')).map(r=>r.id).filter(Boolean)
+    },
+    {id:'blk_sun_3mixed',name:'Sunday — 3 Mixed Relays',day:'Sunday Apr 26',type:'race',notes:'8:00am',raceIds:
+      (meet.races||[]).filter(r=>r.isRelayRace&&r.groupLabel?.toLowerCase().includes('3')).map(r=>r.id).filter(Boolean)
+    },
+    {id:'blk_sun_4mixed',name:'Sunday — 4 Mixed Relays',day:'Sunday Apr 26',type:'race',notes:'',raceIds:
+      (meet.races||[]).filter(r=>r.isRelayRace&&r.groupLabel?.toLowerCase().includes('4')).map(r=>r.id).filter(Boolean)
+    },
+    {id:'blk_sun_awards',name:'Awards for Relays & High Point Team',day:'Sunday Apr 26',type:'awards',notes:'Thank You for Coming to the Spring Fling',raceIds:[]},
+  ].map(b=>({...b, raceIds:(b.raceIds||[]).filter(Boolean)}));
+
+  // Put any remaining unassigned races into a catch-all block
+  const assignedIds=new Set(meet.blocks.flatMap(b=>b.raceIds||[]));
+  const remaining=(meet.races||[]).filter(r=>!assignedIds.has(r.id)).map(r=>r.id);
+  if(remaining.length) meet.blocks.push({id:'blk_remaining',name:'Unscheduled Races',day:'Saturday Apr 25',type:'race',notes:'',raceIds:remaining});
+
+  meet.updatedAt=nowIso();
+  saveDb(req.db);
+  res.redirect(`/portal/meet/${meet.id}/blocks`);
 });
 
 app.post('/portal/meet/:meetId/blocks/generate', requireRole('meet_director'), (req, res) => {
@@ -5278,9 +5513,11 @@ app.post('/portal/meet/:meetId/import', requireRole('meet_director'), (req, res)
   }
 
   ensureRegistrationTotalsAndNumbers(meet);
-  // Auto-rebuild everything after import
-  rebuildRaceAssignments(meet);
+  // Auto-rebuild everything after import — same as Generate Blocks
+  generateBaseRacesForMeet(meet);
   generateOpenRacesForMeet(meet);
+  generateQuadRacesForMeet(meet);
+  rebuildRaceAssignments(meet);
   ensureAtLeastOneBlock(meet);
   ensureCurrentRace(meet);
   saveDb(req.db);
