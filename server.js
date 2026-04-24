@@ -1266,6 +1266,7 @@ function meetTabs(meet, active) {
     ['checkin','Check-In',`/portal/meet/${meet.id}/checkin`],
     ['race-day','Race Day',`/portal/meet/${meet.id}/race-day/director`],
     ['results','Results',`/portal/meet/${meet.id}/results`],
+    ['import','📥 Import',`/portal/meet/${meet.id}/import`],
   ];
   return `<div class="meet-tabs">${tabs.map(([key,label,href])=>`<a class="meet-tab${active===key?' active':''}" href="${href}">${label}</a>`).join('')}</div>`;
 }
@@ -5137,6 +5138,150 @@ app.get('/portal/meet/:meetId/registered/print-race-list', requireRole('meet_dir
     <div style="color:#555;margin-bottom:12px">${esc(meetDateRange(meet))}${meet.startTime?` • ${esc(meet.startTime)}`:''}</div>
     ${daySections||'<div>No blocks yet.</div>'}
   </body></html>`);
+});
+
+// ── Import Registrations ─────────────────────────────────────────────────────
+
+app.get('/portal/meet/:meetId/import', requireRole('meet_director'), (req, res) => {
+  const meet=getMeetOr404(req.db,req.params.meetId);
+  if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
+  const flash=req.query.result?`<div class="card" style="border-left:4px solid var(--${req.query.ok?'green':'orange'});margin-bottom:16px">${esc(decodeURIComponent(req.query.result))}</div>`:'';
+  res.send(pageShell({title:'Import — '+esc(meet.meetName),user:req.user,meet,activeTab:'import',bodyHtml:`
+    ${meetTabs(meet,'import')}
+    ${flash}
+    <div class="card">
+      <h2>📥 Import Registrations from CSV</h2>
+      <div class="note" style="margin:8px 0 16px">
+        Upload a CSV file or paste data directly. Required columns: <strong>Name</strong>.
+        Optional: Helmet, Age, Gender, Team, Sponsor, Novice, Elite, Open, Quad, TimeTrials, Relays, ChallengeUp, Division.
+        <br>For Division, use group labels like "Elementary Boys", "Juvenile Girls", etc.
+        <br>For event columns, use: <strong>yes / x / 1</strong> to mark entry. Existing skaters matched by name will be updated, not duplicated.
+      </div>
+      <form method="POST" action="/portal/meet/${meet.id}/import" enctype="multipart/form-data">
+        <div style="margin-bottom:14px">
+          <label>Upload CSV File</label>
+          <input type="file" name="csvfile" accept=".csv,.txt" style="display:block;margin-top:6px" />
+        </div>
+        <div style="margin-bottom:14px">
+          <label>— or paste CSV data directly —</label>
+          <textarea name="csvtext" rows="12" style="font-family:monospace;font-size:12px;width:100%;margin-top:6px" placeholder="Name,Helmet,Age,Gender,Team,Novice,Elite,Open,Division&#10;John Smith,42,11,male,Midwest Racing,yes,yes,yes,Elementary Boys&#10;Jane Doe,7,9,female,Team Velocity,no,yes,yes,Juvenile Girls"></textarea>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px">
+          <button class="btn-orange" type="submit">Import Skaters</button>
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px">
+            <input type="checkbox" name="overwrite" value="1" />
+            Overwrite existing skaters matched by name
+          </label>
+        </div>
+      </form>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h3>Column Name Reference</h3>
+      <table class="table" style="font-size:13px">
+        <thead><tr><th>Column Header</th><th>What it does</th><th>Example</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Name</strong></td><td>Skater full name (required)</td><td>John Smith</td></tr>
+          <tr><td><strong>Helmet</strong> or <strong>Number</strong></td><td>Helmet/bib number</td><td>42</td></tr>
+          <tr><td><strong>Age</strong></td><td>Age as of Jan 1</td><td>11</td></tr>
+          <tr><td><strong>Gender</strong></td><td>Male or Female</td><td>male</td></tr>
+          <tr><td><strong>Team</strong></td><td>Team name</td><td>Midwest Racing</td></tr>
+          <tr><td><strong>Sponsor</strong></td><td>Sponsor name</td><td>Bont</td></tr>
+          <tr><td><strong>Division</strong></td><td>Age group label</td><td>Elementary Boys</td></tr>
+          <tr><td><strong>Novice / Elite / Open / Quad / TimeTrials / Relays / ChallengeUp</strong></td><td>yes/x/1 = entered</td><td>yes</td></tr>
+        </tbody>
+      </table>
+    </div>`}));
+});
+
+app.post('/portal/meet/:meetId/import', requireRole('meet_director'), (req, res) => {
+  const meet=getMeetOr404(req.db,req.params.meetId);
+  if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
+  const overwrite=!!req.body.overwrite;
+  let csvText=String(req.body.csvtext||'').trim();
+  // If file uploaded, use that (handled by multer if available, else fallback to paste)
+  if(!csvText) return res.redirect(`/portal/meet/${meet.id}/import?result=${encodeURIComponent('No CSV data provided.')}&ok=0`);
+
+  // Parse CSV
+  const lines=csvText.split(/\r?\n/).filter(l=>l.trim());
+  if(lines.length<2) return res.redirect(`/portal/meet/${meet.id}/import?result=${encodeURIComponent('CSV needs at least a header row and one data row.')}&ok=0`);
+
+  // Parse headers
+  const headers=lines[0].split(',').map(h=>h.trim().toLowerCase().replace(/[^a-z0-9]/g,''));
+  const col=h=>headers.indexOf(h);
+  const get=(row,h)=>{const i=col(h);return i>=0?(row[i]||'').trim():'';};
+  const isYes=v=>/^(yes|y|x|1|true)$/i.test(String(v).trim());
+
+  // Group label to ID map
+  const groupLabelMap=new Map((meet.groups||[]).map(g=>[g.label.toLowerCase(),g.id]));
+
+  let added=0,updated=0,skipped=0;
+  for(let i=1;i<lines.length;i++) {
+    const row=lines[i].split(',').map(c=>c.trim().replace(/^"|"$/g,''));
+    const name=get(row,'name')||get(row,'skatername')||get(row,'skater');
+    if(!name) {skipped++;continue;}
+
+    const helmetRaw=get(row,'helmet')||get(row,'number')||get(row,'helmetnumber')||get(row,'bib')||'';
+    const age=Number(get(row,'age')||get(row,'usarsage')||0);
+    const genderRaw=(get(row,'gender')||get(row,'sex')||'male').toLowerCase();
+    const gender=genderRaw==='female'||genderRaw==='f'||genderRaw==='girl'||genderRaw==='girls'||genderRaw==='women'?'female':'male';
+    const team=get(row,'team')||get(row,'club')||'';
+    const sponsor=get(row,'sponsor')||'';
+    const divLabel=get(row,'division')||get(row,'divisiongroup')||get(row,'class')||'';
+    const divGroupId=divLabel?groupLabelMap.get(divLabel.toLowerCase())||'':'';
+    const divGroup=divGroupId?(meet.groups||[]).find(g=>g.id===divGroupId):null;
+
+    const opts={
+      novice:isYes(get(row,'novice')),
+      elite:isYes(get(row,'elite')),
+      open:isYes(get(row,'open')),
+      quad:isYes(get(row,'quad')),
+      timeTrials:isYes(get(row,'timetrials')||get(row,'timetrial')||get(row,'tt')),
+      relays:isYes(get(row,'relays')||get(row,'relay')),
+      challengeUp:isYes(get(row,'challengeup')||get(row,'cu')),
+      skateability:false,skateabilityGroups:[],
+    };
+
+    // Find existing by name match
+    const existing=(meet.registrations||[]).find(r=>r.name.toLowerCase()===name.toLowerCase());
+    if(existing) {
+      if(overwrite) {
+        if(helmetRaw) existing.helmetNumber=helmetRaw;
+        if(age) existing.age=age;
+        if(team) existing.team=team;
+        if(sponsor&&!existing.sponsor) existing.sponsor=sponsor; // preserve existing sponsor
+        existing.gender=gender;
+        if(divGroup) {existing.divisionGroupId=divGroup.id;existing.divisionGroupLabel=divGroup.label;}
+        existing.options=opts;
+        existing.totalCost=calcRegistrationCost(meet,opts);
+        updated++;
+      } else {
+        // Just update helmet if provided, leave rest alone
+        if(helmetRaw) existing.helmetNumber=helmetRaw;
+        skipped++;
+      }
+    } else {
+      // New registration
+      const baseGroup=divGroup||findAgeGroup(meet.groups,age,gender);
+      const totalCost=calcRegistrationCost(meet,opts);
+      const meetNumber=(meet.registrations||[]).reduce((max,r)=>Math.max(max,Number(r.meetNumber)||0),0)+1;
+      meet.registrations.push({
+        id:nextId(meet.registrations),createdAt:nowIso(),
+        name,birthdate:'',age,gender,email:'',
+        team,sponsor,
+        helmetNumber:helmetRaw,meetNumber,
+        divisionGroupId:baseGroup?.id||'',divisionGroupLabel:baseGroup?.label||'Unassigned',
+        challengeUpGroupId:'',challengeUpGroupLabel:'',
+        originalDivisionGroupId:baseGroup?.id||'',originalDivisionGroupLabel:baseGroup?.label||'',
+        totalCost,paid:false,checkedIn:false,options:opts,
+      });
+      added++;
+    }
+  }
+
+  ensureRegistrationTotalsAndNumbers(meet);
+  saveDb(req.db);
+  const msg=`✅ Import complete: ${added} added, ${updated} updated, ${skipped} skipped.`;
+  res.redirect(`/portal/meet/${meet.id}/import?result=${encodeURIComponent(msg)}&ok=1`);
 });
 
 // ── Public Print Schedule ────────────────────────────────────────────────────
