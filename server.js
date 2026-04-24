@@ -5156,7 +5156,7 @@ app.get('/portal/meet/:meetId/import', requireRole('meet_director'), (req, res) 
         <br>For Division, use group labels like "Elementary Boys", "Juvenile Girls", etc.
         <br>For event columns, use: <strong>yes / x / 1</strong> to mark entry. Existing skaters matched by name will be updated, not duplicated.
       </div>
-      <form method="POST" action="/portal/meet/${meet.id}/import" enctype="multipart/form-data">
+      <form method="POST" action="/portal/meet/${meet.id}/import">
         <div style="margin-bottom:14px">
           <label>Upload CSV File</label>
           <input type="file" name="csvfile" accept=".csv,.txt" style="display:block;margin-top:6px" />
