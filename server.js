@@ -4457,7 +4457,7 @@ app.post('/portal/meet/:meetId/blocks/auto-build', requireRole('meet_director'),
   // Build blocks matching Wichita 2026 schedule EXACTLY from paper schedule
   meet.blocks = [
     // ── FRIDAY APR 24 ────────────────────────────────────────────────
-    {id:'f1',name:'Friday — Time Trials',day:'Friday Apr 24',type:'race',notes:'5:00pm • One Lap TT Youngest to Oldest',raceIds:[
+    {id:'f1',name:'Friday — Time Trials',day:'Friday Apr 24',type:'race',notes:'5:00pm • One Lap TT • Youngest to Oldest • Determines Open Starting Position',raceIds:[
       raceId(findTT('Juvenile Girls')),
       raceId(findTT('Juvenile Boys')),
       raceId(findTT('Freshman Girls')),
@@ -4467,7 +4467,7 @@ app.post('/portal/meet/:meetId/blocks/auto-build', requireRole('meet_director'),
       raceId(findTT('Senior Ladies')),
       raceId(findTT('Senior Men')),
     ].filter(Boolean)},
-    {id:'f2',name:'Friday — Open Races',day:'Friday Apr 24',type:'race',notes:'6:30pm',raceIds:[
+    {id:'f2',name:'Friday — Open Races',day:'Friday Apr 24',type:'race',notes:'6:30pm • Rolling Start • Awards Follow Sr Mens Open',raceIds:[
       raceId(findOpen('Juvenile Girls')),
       raceId(findOpen('Juvenile Boys')),
       raceId(findOpen('Freshman Girls')),
@@ -4795,8 +4795,8 @@ app.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','judg
           <form method="POST" action="/portal/meet/${meet.id}/race-day/judges/save">
             <input type="hidden" name="raceId" value="${esc(current.id)}" />
             <div class="action-row" style="margin-bottom:14px">
-              <label class="toggle-wrap"><input type="radio" name="resultsMode" value="places" ${current.resultsMode!=='times'?'checked':''} style="width:auto" /> <span style="font-size:14px;font-weight:600">Places</span></label>
-              <label class="toggle-wrap"><input type="radio" name="resultsMode" value="times"  ${current.resultsMode==='times' ?'checked':''} style="width:auto" /> <span style="font-size:14px;font-weight:600">Times</span></label>
+              <label class="toggle-wrap"><input type="radio" name="resultsMode" value="places" ${current.resultsMode!=='times'&&!current.isTimeTrial?'checked':''} style="width:auto" /> <span style="font-size:14px;font-weight:600">Places</span></label>
+              <label class="toggle-wrap"><input type="radio" name="resultsMode" value="times"  ${current.resultsMode==='times'||current.isTimeTrial ?'checked':''} style="width:auto" /> <span style="font-size:14px;font-weight:600">Times</span></label>
             </div>
             <div style="overflow-x:auto">
               <table class="table">
@@ -4805,8 +4805,8 @@ app.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','judg
                   <td>${l.lane}</td><td>${l.helmetNumber?'#'+esc(l.helmetNumber):''}</td>
                   <td><input name="skaterName_${l.lane}" value="${esc(l.skaterName)}" />${reg?.sponsor?`<div class="sponsor-line">Sponsor: ${esc(reg.sponsor)}</div>`:''}</td>
                   <td><input name="team_${l.lane}"       value="${esc(l.team)}"       /></td>
-                  <td><input name="place_${l.lane}"      value="${esc(l.place)}"      /></td>
-                  <td><input name="time_${l.lane}"       value="${esc(l.time)}"       /></td>
+                  <td><input name="place_${l.lane}" value="${esc(l.place)}" ${current.isTimeTrial?'style="opacity:.3" tabindex="-1"':''} /></td>
+                  <td><input name="time_${l.lane}"  value="${esc(l.time)}"  ${!current.isTimeTrial&&current.resultsMode!=='times'?'style="opacity:.3" tabindex="-1"':''} /></td>
                   <td><select name="status_${l.lane}">
                     <option value="" ${!l.status?'selected':''}>—</option>
                     <option value="DNS" ${l.status==='DNS'?'selected':''}>DNS</option>
