@@ -5231,6 +5231,67 @@ app.post('/portal/meet/:meetId/reopen', requireRole('meet_director'), (req, res)
 
 
 // ── TV Display ────────────────────────────────────────────────────────────────
+app.get('/meet/:meetId/tt-live', (req, res) => {
+  const db=loadDb(); const meet=getMeetOr404(db,req.params.meetId);
+  if(!meet||!meet.isPublic) return res.redirect('/meets');
+
+  const ttRaces=(meet.races||[]).filter(r=>r.isTimeTrial)
+    .sort((a,b)=>{
+      const ageA=parseInt((a.ages||'999').match(/\d+/)?.[0]||999);
+      const ageB=parseInt((b.ages||'999').match(/\d+/)?.[0]||999);
+      return ageA-ageB;
+    });
+
+  const groupCards=ttRaces.map(race=>{
+    const top3=(race.laneEntries||[])
+      .filter(e=>e.skaterName&&e.time)
+      .sort((a,b)=>parseFloat(a.time||999)-parseFloat(b.time||999))
+      .slice(0,3);
+    const medals=['🥇','🥈','🥉'];
+    const rows=top3.map((e,i)=>`
+      <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.07)">
+        <span style="font-size:20px;width:28px">${medals[i]}</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-family:Orbitron,sans-serif;font-size:14px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(e.skaterName||'')}</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.45)">${esc(e.team||'')}</div>
+        </div>
+        <div style="font-family:Orbitron,sans-serif;font-size:16px;font-weight:700;color:#F97316">${esc(e.time)}</div>
+      </div>`).join('');
+
+    const isEmpty=top3.length===0;
+    return `
+      <div style="background:rgba(255,255,255,.05);border-radius:12px;padding:14px;border:1px solid rgba(255,255,255,.08)">
+        <div style="font-family:Orbitron,sans-serif;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.15em;color:#38BDF8;margin-bottom:8px">${esc(race.groupLabel?.replace(' — Time Trial',''))}</div>
+        ${isEmpty?'<div style="color:rgba(255,255,255,.3);font-size:12px;padding:8px 0">No times posted</div>':rows}
+      </div>`;
+  }).join('');
+
+  const html=`<!doctype html><html><head><meta charset="utf-8">
+    <title>Time Trials — ${esc(meet.meetName)}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Barlow:wght@400;600&display=swap" rel="stylesheet">
+    <meta http-equiv="refresh" content="8">
+    <style>
+      *{box-sizing:border-box;margin:0;padding:0}
+      body{background:#0a1628;color:#fff;font-family:Barlow,sans-serif;min-height:100vh;padding:20px}
+      .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;padding-bottom:16px;border-bottom:2px solid #F97316}
+      .meet-name{font-family:Orbitron,sans-serif;font-size:18px;font-weight:700;color:#fff}
+      .tt-label{font-family:Orbitron,sans-serif;font-size:12px;font-weight:700;color:#F97316;letter-spacing:.15em}
+      .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+    </style>
+  </head><body>
+    <div class="header">
+      <div>
+        <div class="tt-label">⏱ TIME TRIALS — LIVE TOP 3</div>
+        <div class="meet-name">${esc(meet.meetName)}</div>
+      </div>
+      <div style="font-family:Orbitron,sans-serif;font-size:11px;color:rgba(255,255,255,.4)">Auto-refreshes every 8s</div>
+    </div>
+    <div class="grid">${groupCards}</div>
+  </body></html>`;
+
+  res.send(html);
+});
+
 app.get('/meet/:meetId/tv', (req, res) => {
   const db=loadDb(); const meet=getMeetOr404(db,req.params.meetId);
   if(!meet) return res.redirect('/meets');
@@ -5520,6 +5581,7 @@ app.get('/meet/:meetId/live', (req, res) => {
     <div class="live-tabs" style="margin-bottom:0">
       <a class="live-tab active" href="/meet/${meet.id}/live">Live Board</a>
       <a class="live-tab" href="/meet/${meet.id}/results">Results</a>
+      <a class="live-tab" href="/meet/${meet.id}/tt-live" target="_blank">⏱ TT Live</a>
       <a class="live-tab" href="/meet/${meet.id}/alerts">📲 Text Alerts</a>
       <a class="live-tab" href="/meet/${meet.id}/print-schedule" target="_blank">🖨️ Print Schedule</a>
     </div>
