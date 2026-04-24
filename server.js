@@ -5278,9 +5278,14 @@ app.post('/portal/meet/:meetId/import', requireRole('meet_director'), (req, res)
   }
 
   ensureRegistrationTotalsAndNumbers(meet);
+  // Auto-rebuild everything after import
+  rebuildRaceAssignments(meet);
+  generateOpenRacesForMeet(meet);
+  ensureAtLeastOneBlock(meet);
+  ensureCurrentRace(meet);
   saveDb(req.db);
-  const msg=`✅ Import complete: ${added} added, ${updated} updated, ${skipped} skipped.`;
-  res.redirect(`/portal/meet/${meet.id}/import?result=${encodeURIComponent(msg)}&ok=1`);
+  const msg=`✅ Import complete: ${added} added, ${updated} updated, ${skipped} skipped. Race assignments rebuilt automatically.`;
+  res.redirect(`/portal/meet/${meet.id}/registered?imported=1`);
 });
 
 // ── Public Print Schedule ────────────────────────────────────────────────────
