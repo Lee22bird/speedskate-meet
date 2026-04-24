@@ -5147,7 +5147,6 @@ app.get('/portal/meet/:meetId/import', requireRole('meet_director'), (req, res) 
   if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
   const flash=req.query.result?`<div class="card" style="border-left:4px solid var(--${req.query.ok?'green':'orange'});margin-bottom:16px">${esc(decodeURIComponent(req.query.result))}</div>`:'';
   res.send(pageShell({title:'Import — '+esc(meet.meetName),user:req.user,meet,activeTab:'import',bodyHtml:`
-    ${meetTabs(meet,'import')}
     ${flash}
     <div class="card">
       <h2>📥 Import Registrations from CSV</h2>
