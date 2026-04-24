@@ -3736,8 +3736,10 @@ app.post('/portal/meet/:meetId/tt-builder/save', requireRole('meet_director'), (
   tt.distance=String(req.body.tt_distance||'100m').trim()||'100m';
   tt.showOverallLeaderboard=!!req.body.tt_showOverallLeaderboard;
   tt.groups.forEach((g,i)=>{ g.enabled=!!req.body[`ttg_${i}_enabled`]; });
-  // Sync openGroups timeTrial flags to match TT builder config
-  (meet.openGroups||[]).forEach(og=>{ og.timeTrial=tt.enabled; og.ttDistance=tt.distance; });
+  // TT config is self-contained in ttConfig — openGroups.timeTrial no longer used
+  (meet.openGroups||[]).forEach(og=>{ og.timeTrial=false; og.ttDistance=""; });
+
+
   generateOpenRacesForMeet(meet); ensureAtLeastOneBlock(meet); ensureCurrentRace(meet);
   saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/tt-builder?saved=1`);
 });
