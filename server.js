@@ -777,7 +777,7 @@ function computeMeetStandings(meet) {
     });
 
     // Assign places, detect ties and runoff needed
-    const tbMode = divisions[key].division==='novice' ? 'd3' : meetTbMode;
+    // tbMode already declared above
     const rows=allRows.map((row,idx,arr)=>{
       const prev=arr[idx-1];
       const isTied=prev&&prev.totalPoints===row.totalPoints;
