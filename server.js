@@ -4682,7 +4682,7 @@ app.post('/portal/meet/:meetId/blocks/auto-build', requireRole('meet_director'),
   meet.blocks = [
     // ── FRIDAY APR 24 ────────────────────────────────────────────────
     {id:'f1',name:'Friday — Time Trials',day:'Friday Apr 24',type:'race',notes:'5:00pm • One Lap TT • Youngest to Oldest • Determines Open Starting Position',raceIds:[
-      raceId((()=>{const r=(meet.races||[]).find(r=>r.isTimeTrial&&r.groupId==='tt_combined');if(r)usedRaceIds.add(r.id);return r;})()),
+      ...(()=>{const r=(meet.races||[]).find(r=>r.isTimeTrial&&r.groupId==='tt_combined');if(r){usedRaceIds.add(r.id);return[r.id];}return[];})(),
     ].filter(Boolean)},
     {id:'f2',name:'Friday — Open Races',day:'Friday Apr 24',type:'race',notes:'6:30pm • Rolling Start • Awards Follow Sr Mens Open',raceIds:[
       findOpen('Juvenile Girls'),    // Race 2
