@@ -5389,6 +5389,17 @@ app.get('/portal/meet/:meetId/fix-quad-helmets', requireRole('meet_director'), (
   res.send('Updated '+updated+' skaters. <a href="/portal/meet/'+meet.id+'/quad-builder">Check Quad Builder</a>');
 });
 
+app.get('/portal/meet/:meetId/debug-quad', requireRole('meet_director'), (req, res) => {
+  const meet=getMeetOr404(req.db,req.params.meetId);
+  const result={
+    quadGroups:(meet.quadGroups||[]).map(qg=>({id:qg.id,label:qg.label,enabled:qg.enabled,distances:qg.distances})),
+    freshBoyRegs:(meet.registrations||[]).filter(r=>!!r.options?.quad&&getQuadGroupIdForReg(r)==='quad_fresh_boys').map(r=>({name:r.name,age:r.age,gender:r.gender,helmet:r.helmetNumber,divisionGroupId:r.divisionGroupId,quadGroup:getQuadGroupIdForReg(r)})),
+    allQuadRegs:(meet.registrations||[]).filter(r=>!!r.options?.quad).map(r=>({name:r.name,age:r.age,gender:r.gender,helmet:r.helmetNumber,quadGroup:getQuadGroupIdForReg(r)})),
+    quadRaces:(meet.races||[]).filter(r=>r.isQuadRace).map(r=>({id:r.id,groupId:r.groupId,label:r.groupLabel,dist:r.distanceLabel,entries:(r.laneEntries||[]).length}))
+  };
+  res.json(result);
+});
+
 app.get('/portal/meet/:meetId/debug-regs', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet) return res.status(404).send('not found');
