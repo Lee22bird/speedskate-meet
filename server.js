@@ -715,6 +715,14 @@ function computeTiebreakerScore(raceScores, races, mode) {
     return -(midScore?.place||999);
   }
 
+  if(mode==='d3') {
+    // D3 long race tiebreaker: place in longest race — used for Novice (only 2 distances)
+    const longRace = sorted[sorted.length-1] || sorted[0];
+    if(!longRace) return 0;
+    const longScore = raceScores.find(s=>s.raceId===longRace.id);
+    return -(longScore?.place||999);
+  }
+
   // SR832 full formula
   let total=0;
   for(const rs of raceScores) {
@@ -729,7 +737,7 @@ function computeTiebreakerScore(raceScores, races, mode) {
 }
 
 function computeMeetStandings(meet) {
-  const tbMode = meet.tiebreaker || 'd2';
+  const meetTbMode = meet.tiebreaker || 'd2';
   const standings={}; const divisions={}; const regMap=new Map((meet.registrations||[]).map(r=>[Number(r.id),r]));
   for(const race of meet.races||[]) {
     if(race.isOpenRace||race.isQuadRace||race.isTimeTrial) continue;
@@ -753,6 +761,7 @@ function computeMeetStandings(meet) {
     const allRows=Object.values(standings[key]||{});
 
     // Sort: primary = totalPoints desc, tiebreaker when tied
+    const tbMode = divisions[key].division==='novice' ? 'd3' : meetTbMode;
     allRows.sort((a,b)=>{
       if(b.totalPoints!==a.totalPoints) return b.totalPoints-a.totalPoints;
       // Tied — apply tiebreaker
@@ -768,6 +777,7 @@ function computeMeetStandings(meet) {
     });
 
     // Assign places, detect ties and runoff needed
+    const tbMode = divisions[key].division==='novice' ? 'd3' : meetTbMode;
     const rows=allRows.map((row,idx,arr)=>{
       const prev=arr[idx-1];
       const isTied=prev&&prev.totalPoints===row.totalPoints;
@@ -1758,7 +1768,7 @@ function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
 
 function resultsSectionHtml(section) {
   const tbMode = section.tbMode || 'd2';
-  const tbLabel = tbMode==='sr832' ? 'SR832 Formula' : 'D2 Middle Race';
+  const tbLabel = tbMode==='sr832' ? 'SR832 Formula' : tbMode==='d3' ? 'D3 Long Race' : 'D2 Middle Race';
   const hasTiebreaker = section.standings.some(r=>r.tiebreakerUsed||r.runoffNeeded);
   const podium = section.standings.slice(0,3).map((row,i) => `
     <div class="podium-card">
