@@ -4608,45 +4608,65 @@ app.post('/portal/meet/:meetId/blocks/auto-build', requireRole('meet_director'),
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
 
+
   // Track used race IDs globally to prevent duplicates across blocks
   const usedRaceIds=new Set();
-  function findRace(groupLabel, division, distance) {
+
+  // Returns ALL races (Heat 1, Heat 2, ... Final) for a group+division+distance, in order.
+  // "Heats 1-2" on paper = Heat 1 + Heat 2 + Final = 3 separate race entries.
+  function findAllRaces(groupLabel, division, distance) {
     const gl=groupLabel.toLowerCase(); const div=division.toLowerCase(); const dist=String(distance).toLowerCase().replace('m','');
     const words=gl.split(' ');
-    const r=(meet.races||[]).find(r=>
+    const matches=(meet.races||[]).filter(r=>
       !usedRaceIds.has(r.id) &&
       words.every(w=>r.groupLabel?.toLowerCase().includes(w)) &&
       r.division?.toLowerCase()===div &&
       r.distanceLabel?.toLowerCase().replace('m','')===dist &&
       !r.isOpenRace && !r.isQuadRace && !r.isTimeTrial
     );
-    if(r) usedRaceIds.add(r.id);
-    return r;
+    // Sort: heats first by heatNumber, finals last
+    matches.sort((a,b)=>{
+      const aIsHeat=a.stage==='heat'; const bIsHeat=b.stage==='heat';
+      if(aIsHeat&&!bIsHeat) return -1;
+      if(!aIsHeat&&bIsHeat) return 1;
+      return Number(a.heatNumber||0)-Number(b.heatNumber||0);
+    });
+    matches.forEach(r=>usedRaceIds.add(r.id));
+    return matches.map(r=>r.id);
   }
+
   function findOpen(groupLabel) {
     const gl=groupLabel.toLowerCase(); const words=gl.split(' ');
     const r=(meet.races||[]).find(r=>!usedRaceIds.has(r.id)&&r.isOpenRace&&words.every(w=>r.groupLabel?.toLowerCase().includes(w)));
-    if(r) usedRaceIds.add(r.id); return r;
+    if(r) usedRaceIds.add(r.id); return r?.id||null;
   }
   function findTT(groupLabel) {
     const gl=groupLabel.toLowerCase(); const words=gl.split(' ');
     const r=(meet.races||[]).find(r=>!usedRaceIds.has(r.id)&&r.isTimeTrial&&words.every(w=>r.groupLabel?.toLowerCase().includes(w)));
-    if(r) usedRaceIds.add(r.id); return r;
+    if(r) usedRaceIds.add(r.id); return r?.id||null;
   }
-  function findQuad(groupLabel, distance) {
+
+  // Returns ALL quad races (heats + final) for a group+distance in order
+  function findAllQuad(groupLabel, distance) {
     const gl=groupLabel.toLowerCase(); const dist=String(distance).toLowerCase().replace('m','');
     const QUAD_ID_MAP={'freshman girls':'quad_fresh_girls','freshman boys':'quad_fresh_boys',
       'juvenile girls':'quad_juv_girls','juvenile boys':'quad_juv_boys',
       'senior ladies':'quad_sr_ladies','senior men':'quad_sr_men',
       'master ladies':'quad_mast_ladies','master men':'quad_mast_men'};
     const targetId=QUAD_ID_MAP[gl];
-    // Find next unused quad race (heat or final) for this group+distance
-    const r=(meet.races||[]).find(r=>!usedRaceIds.has(r.id)&&r.isQuadRace&&
+    const matches=(meet.races||[]).filter(r=>!usedRaceIds.has(r.id)&&r.isQuadRace&&
       (targetId?r.groupId===targetId:r.groupLabel?.toLowerCase().includes(gl))&&
       r.distanceLabel?.toLowerCase().replace('m','')===dist);
-    if(r) usedRaceIds.add(r.id); return r;
+    matches.sort((a,b)=>{
+      const aIsHeat=a.stage==='heat'; const bIsHeat=b.stage==='heat';
+      if(aIsHeat&&!bIsHeat) return -1;
+      if(!aIsHeat&&bIsHeat) return 1;
+      return Number(a.heatNumber||0)-Number(b.heatNumber||0);
+    });
+    matches.forEach(r=>usedRaceIds.add(r.id));
+    return matches.map(r=>r.id);
   }
-  function raceId(r){return r?.id||null;}
+
 
   // Build blocks matching Wichita 2026 schedule EXACTLY from paper schedule
   meet.blocks = [
@@ -4655,79 +4675,69 @@ app.post('/portal/meet/:meetId/blocks/auto-build', requireRole('meet_director'),
       raceId((()=>{const r=(meet.races||[]).find(r=>r.isTimeTrial&&r.groupId==='tt_combined');if(r)usedRaceIds.add(r.id);return r;})()),
     ].filter(Boolean)},
     {id:'f2',name:'Friday — Open Races',day:'Friday Apr 24',type:'race',notes:'6:30pm • Rolling Start • Awards Follow Sr Mens Open',raceIds:[
-      raceId(findOpen('Juvenile Girls')),    // Race 2
-      raceId(findOpen('Juvenile Boys')),     // Race 3
-      raceId(findOpen('Freshman Girls')),    // Race 4
-      raceId(findOpen('Freshman Boys')),     // Race 5
-      raceId(findOpen('Master Ladies')),     // Race 6
-      raceId(findOpen('Master Men')),        // Race 7
-      raceId(findOpen('Senior Ladies')),     // Race 8
-      raceId(findOpen('Senior Men')),        // Race 9
+      findOpen('Juvenile Girls'),    // Race 2
+      findOpen('Juvenile Boys'),     // Race 3
+      findOpen('Freshman Girls'),    // Race 4
+      findOpen('Freshman Boys'),     // Race 5
+      findOpen('Master Ladies'),     // Race 6
+      findOpen('Master Men'),        // Race 7
+      findOpen('Senior Ladies'),     // Race 8
+      findOpen('Senior Men'),        // Race 9
     ].filter(Boolean)},
 
     // ── SATURDAY APR 25 ───────────────────────────────────────────────
     // Quad Short Race 7:30am — races 10-18
     {id:'s1',name:'Quad Short Race',day:'Saturday Apr 25',type:'race',notes:'7:30am • Warm Up Quad Division Short Race',raceIds:[
-      raceId(findQuad('Freshman Girls',300)),   // 10 Heat 1
-      raceId(findQuad('Freshman Girls',300)),   // 10 Heat 2
-      raceId(findQuad('Juvenile Girls',200)),   // 11
-      raceId(findQuad('Juvenile Boys',200)),    // 12
-      raceId(findQuad('Freshman Boys',300)),    // 13
-      raceId(findQuad('Senior Ladies',300)),    // 14
-      raceId(findQuad('Senior Men',300)),       // 15
-      raceId(findQuad('Master Ladies',300)),    // 16
-      raceId(findQuad('Master Men',300)),       // 17
-      raceId(findQuad('Freshman Girls',300)),   // 18 Final
+      ...findAllQuad('Freshman Girls',300),   // 10 Heat 1, Heat 2 + Final
+      ...findAllQuad('Juvenile Girls',200),   // 11
+      ...findAllQuad('Juvenile Boys',200),    // 12
+      ...findAllQuad('Freshman Boys',300),    // 13
+      ...findAllQuad('Senior Ladies',300),    // 14
+      ...findAllQuad('Senior Men',300),       // 15
+      ...findAllQuad('Master Ladies',300),    // 16
+      ...findAllQuad('Master Men',300),       // 17
     ].filter(Boolean)},
 
     // Quad Long Race 8:00am — races 19-27
     {id:'s2',name:'Quad Long Race',day:'Saturday Apr 25',type:'race',notes:'8:00am • Warm Up Quad Division Long Race',raceIds:[
-      raceId(findQuad('Juvenile Girls',500)),   // 19
-      raceId(findQuad('Juvenile Boys',500)),    // 20
-      raceId(findQuad('Freshman Girls',700)),   // 21 Heat 1
-      raceId(findQuad('Freshman Girls',700)),   // 21 Heat 2
-      raceId(findQuad('Freshman Boys',700)),    // 22
-      raceId(findQuad('Senior Ladies',1000)),   // 23
-      raceId(findQuad('Senior Men',1000)),      // 24
-      raceId(findQuad('Master Ladies',1000)),   // 25
-      raceId(findQuad('Master Men',1000)),      // 26
-      raceId(findQuad('Freshman Girls',700)),   // 27 Final
+      ...findAllQuad('Juvenile Girls',500),   // 19
+      ...findAllQuad('Juvenile Boys',500),    // 20
+      ...findAllQuad('Freshman Girls',700),   // 21 Heat 1, Heat 2 + Final
+      ...findAllQuad('Freshman Boys',700),    // 22
+      ...findAllQuad('Senior Ladies',1000),   // 23
+      ...findAllQuad('Senior Men',1000),      // 24
+      ...findAllQuad('Master Ladies',1000),   // 25
+      ...findAllQuad('Master Men',1000),      // 26
     ].filter(Boolean)},
 
     // Elite Short Block 1 8:45am — races 28-43
     {id:'s3',name:'Elite Short Race — Block 1',day:'Saturday Apr 25',type:'race',notes:'8:45am • Warm Up Standard Elite Divisions Short Race',raceIds:[
-      raceId(findRace('Elementary Girls','elite','300')),   // 28 Heat 1-2
-      raceId(findRace('Sophomore Men','elite','500')),      // 29 Heat 1-2
-      raceId(findRace('Senior Men','elite','500')),         // 30 Heat 1-2
-      raceId(findRace('Master Men','elite','500')),         // 31 Heat 1-2
-      raceId(findRace('Primary Girls','elite','200')),      // 32 Final
-      raceId(findRace('Primary Boys','elite','200')),       // 33 Final
-      raceId(findRace('Elementary Girls','elite','300')),   // 34 Final
-      raceId(findRace('Elementary Boys','elite','300')),    // 35 Final
-      raceId(findRace('Sophomore Ladies','elite','500')),   // 36 Final
-      raceId(findRace('Sophomore Men','elite','500')),      // 37 Final
-      raceId(findRace('Senior Ladies','elite','500')),      // 38 Final
-      raceId(findRace('Senior Men','elite','500')),         // 39 Final
-      raceId(findRace('Master Ladies','elite','500')),      // 40 Final
-      raceId(findRace('Master Men','elite','500')),         // 41
-      raceId(findRace('Esquire Ladies','elite','500')),     // 42
-      raceId(findRace('Esquire Men','elite','500')),        // 43
+      ...findAllRaces('Elementary Girls','elite','300'),   // 28 Heats + 34 Final
+      ...findAllRaces('Sophomore Men','elite','500'),      // 29 Heats + 37 Final
+      ...findAllRaces('Senior Men','elite','500'),         // 30 Heats + 39 Final
+      ...findAllRaces('Master Men','elite','500'),         // 31 Heats + 41
+      ...findAllRaces('Primary Girls','elite','200'),      // 32 Final
+      ...findAllRaces('Primary Boys','elite','200'),       // 33 Final
+      ...findAllRaces('Elementary Boys','elite','300'),    // 35 Final
+      ...findAllRaces('Sophomore Ladies','elite','500'),   // 36 Final
+      ...findAllRaces('Senior Ladies','elite','500'),      // 38 Final
+      ...findAllRaces('Master Ladies','elite','500'),      // 40 Final
+      ...findAllRaces('Esquire Ladies','elite','500'),     // 42
+      ...findAllRaces('Esquire Men','elite','500'),        // 43
     ].filter(Boolean)},
 
     // Elite Short Block 2 9:30am — races 44-55
     {id:'s4',name:'Elite Short Race — Block 2',day:'Saturday Apr 25',type:'race',notes:'9:30am • Warm Up Standard Elite Divisions Short Race 2nd Block',raceIds:[
-      raceId(findRace('Freshman Girls','elite','300')),     // 44 Heat 1-2
-      raceId(findRace('Junior Men','elite','500')),         // 45 Heat 1-2
-      raceId(findRace('Tiny Tot Girls','elite','100')),     // 46 Final
-      raceId(findRace('Juvenile Girls','elite','200')),     // 47 Final
-      raceId(findRace('Juvenile Boys','elite','200')),      // 48 Final
-      raceId(findRace('Freshman Girls','elite','300')),     // 49 Final
-      raceId(findRace('Freshman Boys','elite','300')),      // 50 Final
-      raceId(findRace('Junior Ladies','elite','500')),      // 51 Final
-      raceId(findRace('Junior Men','elite','500')),         // 52 Final
-      raceId(findRace('Classic Ladies','elite','500')),     // 53 Final
-      raceId(findRace('Classic Men','elite','500')),        // 54 Final
-      raceId(findRace('Veteran Men','elite','500')),        // 55 Final
+      ...findAllRaces('Freshman Girls','elite','300'),     // 44 Heats + 49 Final
+      ...findAllRaces('Junior Men','elite','500'),         // 45 Heats + 52 Final
+      ...findAllRaces('Tiny Tot Girls','elite','100'),     // 46 Final
+      ...findAllRaces('Juvenile Girls','elite','200'),     // 47 Final
+      ...findAllRaces('Juvenile Boys','elite','200'),      // 48 Final
+      ...findAllRaces('Freshman Boys','elite','300'),      // 50 Final
+      ...findAllRaces('Junior Ladies','elite','500'),      // 51 Final
+      ...findAllRaces('Classic Ladies','elite','500'),     // 53 Final
+      ...findAllRaces('Classic Men','elite','500'),        // 54 Final
+      ...findAllRaces('Veteran Men','elite','500'),        // 55 Final
     ].filter(Boolean)},
 
     // Diaper Dash 9:55am — race 56
@@ -4737,106 +4747,99 @@ app.post('/portal/meet/:meetId/blocks/auto-build', requireRole('meet_director'),
 
     // Novice Short 10:00am — races 57-71
     {id:'s6',name:'Novice Short Race',day:'Saturday Apr 25',type:'race',notes:'10:00am • Warm Up Novice Divisions Short Race',raceIds:[
-      raceId(findRace('Elementary Girls','novice','300')),  // 57 Heat 1-2
-      raceId(findRace('Juvenile Girls','novice','200')),    // 58 Final
-      raceId(findRace('Juvenile Boys','novice','200')),     // 59 Final
-      raceId(findRace('Elementary Boys','novice','300')),   // 60 Final
-      raceId(findRace('Freshman Girls','novice','300')),    // 61 Final
-      raceId(findRace('Freshman Boys','novice','300')),     // 62 Final
-      raceId(findRace('Sophomore Ladies','novice','500')),  // 63 Final
-      raceId(findRace('Sophomore Men','novice','500')),     // 64 Final
-      raceId(findRace('Elementary Girls','novice','300')),  // 65 Final (Elem Girls heat final)
-      raceId(findRace('Junior Ladies','novice','500')),     // 66 Final
-      raceId(findRace('Junior Men','novice','500')),        // 67 Final
-      raceId(findRace('Senior Ladies','novice','500')),     // 68 Final
-      raceId(findRace('Senior Men','novice','500')),        // 69 Final
-      raceId(findRace('Master Ladies','novice','500')),     // 70 Final
-      raceId(findRace('Master Men','novice','500')),        // 71 Final
+      ...findAllRaces('Elementary Girls','novice','300'),  // 57 Heats + 65 Final
+      ...findAllRaces('Juvenile Girls','novice','200'),    // 58 Final
+      ...findAllRaces('Juvenile Boys','novice','200'),     // 59 Final
+      ...findAllRaces('Elementary Boys','novice','300'),   // 60 Final
+      ...findAllRaces('Freshman Girls','novice','300'),    // 61 Final
+      ...findAllRaces('Freshman Boys','novice','300'),     // 62 Final
+      ...findAllRaces('Sophomore Ladies','novice','500'),  // 63 Final
+      ...findAllRaces('Sophomore Men','novice','500'),     // 64 Final
+      ...findAllRaces('Junior Ladies','novice','500'),     // 66 Final
+      ...findAllRaces('Junior Men','novice','500'),        // 67 Final
+      ...findAllRaces('Senior Ladies','novice','500'),     // 68 Final
+      ...findAllRaces('Senior Men','novice','500'),        // 69 Final
+      ...findAllRaces('Master Ladies','novice','500'),     // 70 Final
+      ...findAllRaces('Master Men','novice','500'),        // 71 Final
     ].filter(Boolean)},
 
     // Elite Middle Block 1 10:45am — races 72-87
     {id:'s7',name:'Elite Middle Race — Block 1',day:'Saturday Apr 25',type:'race',notes:'10:45am • Warm Up Standard Elite Divisions Middle Race 1st Block',raceIds:[
-      raceId(findRace('Elementary Girls','elite','500')),   // 72 Heat 1-2
-      raceId(findRace('Sophomore Men','elite','1000')),     // 73 Heat 1-2
-      raceId(findRace('Senior Men','elite','1000')),        // 74 Heat 1-2
-      raceId(findRace('Master Men','elite','1000')),        // 75 Heat 1-2
-      raceId(findRace('Primary Girls','elite','300')),      // 76 Final
-      raceId(findRace('Primary Boys','elite','300')),       // 77 Final
-      raceId(findRace('Elementary Girls','elite','500')),   // 78 Final
-      raceId(findRace('Elementary Boys','elite','500')),    // 79 Final
-      raceId(findRace('Sophomore Ladies','elite','1000')),  // 80 Final
-      raceId(findRace('Sophomore Men','elite','1000')),     // 81 Final
-      raceId(findRace('Senior Ladies','elite','1000')),     // 82 Final
-      raceId(findRace('Senior Men','elite','1000')),        // 83 Final
-      raceId(findRace('Master Ladies','elite','700')),      // 84 Final
-      raceId(findRace('Master Men','elite','700')),         // 85 Final
-      raceId(findRace('Esquire Ladies','elite','700')),     // 86 Final
-      raceId(findRace('Esquire Men','elite','700')),        // 87 Final
+      ...findAllRaces('Elementary Girls','elite','500'),   // 72 Heats + 78 Final
+      ...findAllRaces('Sophomore Men','elite','1000'),     // 73 Heats + 81 Final
+      ...findAllRaces('Senior Men','elite','1000'),        // 74 Heats + 83 Final
+      ...findAllRaces('Master Men','elite','1000'),        // 75 Heats + 85 Final
+      ...findAllRaces('Primary Girls','elite','300'),      // 76 Final
+      ...findAllRaces('Primary Boys','elite','300'),       // 77 Final
+      ...findAllRaces('Elementary Boys','elite','500'),    // 79 Final
+      ...findAllRaces('Sophomore Ladies','elite','1000'),  // 80 Final
+      ...findAllRaces('Senior Ladies','elite','1000'),     // 82 Final
+      ...findAllRaces('Master Ladies','elite','700'),      // 84 Final
+      ...findAllRaces('Master Men','elite','700'),         // 85 Final
+      ...findAllRaces('Esquire Ladies','elite','700'),     // 86 Final
+      ...findAllRaces('Esquire Men','elite','700'),        // 87 Final
     ].filter(Boolean)},
 
     // Elite Middle Block 2 11:45am — races 88-99
     {id:'s8',name:'Elite Middle Race — Block 2',day:'Saturday Apr 25',type:'race',notes:'11:45am • Warm Up Standard Elite Divisions Middle Race 2nd Block',raceIds:[
-      raceId(findRace('Freshman Girls','elite','500')),     // 88 Heat 1-2
-      raceId(findRace('Junior Men','elite','1000')),        // 89 Heat 1-2
-      raceId(findRace('Tiny Tot Girls','elite','200')),     // 90 Final
-      raceId(findRace('Juvenile Girls','elite','300')),     // 91 Final
-      raceId(findRace('Juvenile Boys','elite','300')),      // 92 Final
-      raceId(findRace('Freshman Girls','elite','500')),     // 93 Final
-      raceId(findRace('Freshman Boys','elite','500')),      // 94 Final
-      raceId(findRace('Junior Ladies','elite','1000')),     // 95 Final
-      raceId(findRace('Junior Men','elite','1000')),        // 96 Final
-      raceId(findRace('Classic Ladies','elite','1000')),    // 97 Final
-      raceId(findRace('Classic Men','elite','1000')),       // 98 Final
-      raceId(findRace('Veteran Men','elite','700')),        // 99 Final
+      ...findAllRaces('Freshman Girls','elite','500'),     // 88 Heats + 93 Final
+      ...findAllRaces('Junior Men','elite','1000'),        // 89 Heats + 96 Final
+      ...findAllRaces('Tiny Tot Girls','elite','200'),     // 90 Final
+      ...findAllRaces('Juvenile Girls','elite','300'),     // 91 Final
+      ...findAllRaces('Juvenile Boys','elite','300'),      // 92 Final
+      ...findAllRaces('Freshman Boys','elite','500'),      // 94 Final
+      ...findAllRaces('Junior Ladies','elite','1000'),     // 95 Final
+      ...findAllRaces('Classic Ladies','elite','1000'),    // 97 Final
+      ...findAllRaces('Classic Men','elite','1000'),       // 98 Final
+      ...findAllRaces('Veteran Men','elite','700'),        // 99 Final
     ].filter(Boolean)},
 
     // Novice Long 12:45pm — races 100-114
     {id:'s9',name:'Novice Long Race',day:'Saturday Apr 25',type:'race',notes:'12:45pm • Warm Up Novice Divisions Long Race',raceIds:[
-      raceId(findRace('Elementary Girls','novice','700')),  // 100 Heat 1-2
-      raceId(findRace('Juvenile Girls','novice','500')),    // 101 Final
-      raceId(findRace('Juvenile Boys','novice','500')),     // 102 Final
-      raceId(findRace('Elementary Girls','novice','700')),  // 103 Final
-      raceId(findRace('Elementary Boys','novice','700')),   // 104 Final
-      raceId(findRace('Freshman Girls','novice','1000')),   // 105 Final
-      raceId(findRace('Freshman Boys','novice','1000')),    // 106 Final
-      raceId(findRace('Sophomore Ladies','novice','1000')), // 107 Final
-      raceId(findRace('Sophomore Men','novice','1000')),    // 108 Final
-      raceId(findRace('Junior Ladies','novice','1000')),    // 109 Final
-      raceId(findRace('Junior Men','novice','1000')),       // 110 Final
-      raceId(findRace('Senior Ladies','novice','1000')),    // 111 Final
-      raceId(findRace('Senior Men','novice','1000')),       // 112 Final
-      raceId(findRace('Master Ladies','novice','1000')),    // 113 Final
-      raceId(findRace('Master Men','novice','1000')),       // 114 Final
+      ...findAllRaces('Elementary Girls','novice','700'),  // 100 Heats + 103 Final
+      ...findAllRaces('Juvenile Girls','novice','500'),    // 101 Final
+      ...findAllRaces('Juvenile Boys','novice','500'),     // 102 Final
+      ...findAllRaces('Elementary Boys','novice','700'),   // 104 Final
+      ...findAllRaces('Freshman Girls','novice','1000'),   // 105 Final
+      ...findAllRaces('Freshman Boys','novice','1000'),    // 106 Final
+      ...findAllRaces('Sophomore Ladies','novice','1000'), // 107 Final
+      ...findAllRaces('Sophomore Men','novice','1000'),    // 108 Final
+      ...findAllRaces('Junior Ladies','novice','1000'),    // 109 Final
+      ...findAllRaces('Junior Men','novice','1000'),       // 110 Final
+      ...findAllRaces('Senior Ladies','novice','1000'),    // 111 Final
+      ...findAllRaces('Senior Men','novice','1000'),       // 112 Final
+      ...findAllRaces('Master Ladies','novice','1000'),    // 113 Final
+      ...findAllRaces('Master Men','novice','1000'),       // 114 Final
     ].filter(Boolean)},
 
     // Elite Long Block 1 1:45pm — races 115-126
     {id:'s10',name:'Elite Long Race — Block 1',day:'Saturday Apr 25',type:'race',notes:'1:45pm • Warm Up Standard Elite Divisions Long Race 1st Block',raceIds:[
-      raceId(findRace('Primary Girls','elite','400')),      // 115 Final
-      raceId(findRace('Primary Boys','elite','400')),       // 116 Final
-      raceId(findRace('Elementary Girls','elite','700')),   // 117 Final
-      raceId(findRace('Elementary Boys','elite','700')),    // 118 Final
-      raceId(findRace('Sophomore Ladies','elite','1500')),  // 119 Final
-      raceId(findRace('Sophomore Men','elite','1500')),     // 120 Final
-      raceId(findRace('Senior Ladies','elite','1500')),     // 121 Final
-      raceId(findRace('Senior Men','elite','1500')),        // 122 Final
-      raceId(findRace('Master Ladies','elite','1000')),     // 123 Final
-      raceId(findRace('Master Men','elite','1000')),        // 124 Final
-      raceId(findRace('Esquire Ladies','elite','1000')),    // 125 Final
-      raceId(findRace('Esquire Men','elite','1000')),       // 126 Final
+      ...findAllRaces('Primary Girls','elite','400'),      // 115 Final
+      ...findAllRaces('Primary Boys','elite','400'),       // 116 Final
+      ...findAllRaces('Elementary Girls','elite','700'),   // 117 Final
+      ...findAllRaces('Elementary Boys','elite','700'),    // 118 Final
+      ...findAllRaces('Sophomore Ladies','elite','1500'),  // 119 Final
+      ...findAllRaces('Sophomore Men','elite','1500'),     // 120 Final
+      ...findAllRaces('Senior Ladies','elite','1500'),     // 121 Final
+      ...findAllRaces('Senior Men','elite','1500'),        // 122 Final
+      ...findAllRaces('Master Ladies','elite','1000'),     // 123 Final
+      ...findAllRaces('Master Men','elite','1000'),        // 124 Final
+      ...findAllRaces('Esquire Ladies','elite','1000'),    // 125 Final
+      ...findAllRaces('Esquire Men','elite','1000'),       // 126 Final
     ].filter(Boolean)},
 
     // Elite Long Block 2 2:00pm — races 127-136
     {id:'s11',name:'Elite Long Race — Block 2',day:'Saturday Apr 25',type:'race',notes:'2:00pm • Warm Up Standard Elite Divisions Long Race 2nd Block',raceIds:[
-      raceId(findRace('Tiny Tot Girls','elite','300')),     // 127 Final
-      raceId(findRace('Juvenile Girls','elite','500')),     // 128 Final
-      raceId(findRace('Juvenile Boys','elite','500')),      // 129 Final
-      raceId(findRace('Freshman Girls','elite','1000')),    // 130 Final
-      raceId(findRace('Freshman Boys','elite','1000')),     // 131 Final
-      raceId(findRace('Junior Ladies','elite','1500')),     // 132 Final
-      raceId(findRace('Junior Men','elite','1500')),        // 133 Final
-      raceId(findRace('Classic Ladies','elite','1500')),    // 134 Final
-      raceId(findRace('Classic Men','elite','1500')),       // 135 Final
-      raceId(findRace('Veteran Men','elite','1000')),       // 136 Final
+      ...findAllRaces('Tiny Tot Girls','elite','300'),     // 127 Final
+      ...findAllRaces('Juvenile Girls','elite','500'),     // 128 Final
+      ...findAllRaces('Juvenile Boys','elite','500'),      // 129 Final
+      ...findAllRaces('Freshman Girls','elite','1000'),    // 130 Final
+      ...findAllRaces('Freshman Boys','elite','1000'),     // 131 Final
+      ...findAllRaces('Junior Ladies','elite','1500'),     // 132 Final
+      ...findAllRaces('Junior Men','elite','1500'),        // 133 Final
+      ...findAllRaces('Classic Ladies','elite','1500'),    // 134 Final
+      ...findAllRaces('Classic Men','elite','1500'),       // 135 Final
+      ...findAllRaces('Veteran Men','elite','1000'),       // 136 Final
     ].filter(Boolean)},
 
     // Junior Race of Champions 3:30pm — races 137-138
