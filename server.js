@@ -993,7 +993,7 @@ function getOpenGroupIdForReg(reg) {
 function generateOpenRacesForMeet(meet) {
   // TT is now managed via ttConfig — clear any stale timeTrial flags so open races always generate
   (meet.openGroups||[]).forEach(og=>{og.timeTrial=false;og.ttDistance='';});
-  const nonOpenRaces=(meet.races||[]).filter(r=>!r.isOpenRace&&!r.isTimeTrial); // TT races rebuilt below with data preserved
+  const nonOpenRaces=(meet.races||[]).filter(r=>!r.isOpenRace&&!r.isTimeTrial);
   const openRaces=[]; let orderHint=9000;
   const TT_ORDER=['open_juv_girls','open_juv_boys','open_fresh_girls','open_fresh_boys','open_sr_ladies','open_sr_men','open_mast_ladies','open_mast_men'];
   for(const og of meet.openGroups||[]) {
@@ -1019,39 +1019,7 @@ function generateOpenRacesForMeet(meet) {
       notes:String(existingRace?.notes||''),isFinal:true,closedAt:existingRace?.closedAt||'',
       isOpenRace:true,isQuadRace:false,isTimeTrial:false});
   }
-  // Single combined Time Trial race — all ages 0-99, scored by age group
-  const hasTT=(meet.ttConfig?.enabled)||false;
-  if(hasTT) {
-    const ttDist=String(meet.ttConfig?.distance||'100m');
-    const existingTT=(meet.races||[]).find(r=>r.isTimeTrial&&r.groupId==='tt_combined');
-    let ttEntries;
-    const ttHasTimes=(existingTT?.laneEntries||[]).some(e=>e.time);
-    if(existingTT&&(ttHasTimes||existingTT.status==='closed')) {
-      // Preserve all entries — times have been posted, never wipe
-      ttEntries=Array.isArray(existingTT.laneEntries)?existingTT.laneEntries:[];
-    } else if(existingTT&&(existingTT.laneEntries||[]).length) {
-      // Roster exists but no times yet — merge: keep existing entries, add any new registrants
-      const existingRegIds=new Set((existingTT.laneEntries||[]).map(e=>String(e.registrationId||'')).filter(Boolean));
-      const newRegs=(meet.registrations||[]).filter(r=>!!r.options?.timeTrials&&!existingRegIds.has(String(r.id))).sort((a,b)=>Number(a.age||0)-Number(b.age||0));
-      const merged=[...(existingTT.laneEntries||[]),...newRegs.map((reg,idx)=>({lane:(existingTT.laneEntries||[]).length+idx+1,registrationId:reg.id,helmetNumber:reg.helmetNumber,skaterName:reg.name,team:reg.team,age:reg.age,gender:reg.gender,place:'',time:'',status:''}))];
-      ttEntries=merged;
-    } else {
-      // Fresh — build from registrations
-      const ttRegs=(meet.registrations||[]).filter(r=>!!r.options?.timeTrials).sort((a,b)=>Number(a.age||0)-Number(b.age||0));
-      ttEntries=ttRegs.map((reg,idx)=>({lane:idx+1,registrationId:reg.id,helmetNumber:reg.helmetNumber,skaterName:reg.name,team:reg.team,age:reg.age,gender:reg.gender,place:'',time:'',status:''}));
-    }
-    openRaces.push({
-      id:existingTT?.id||('r'+crypto.randomBytes(6).toString('hex')),
-      orderHint:9500,
-      groupId:'tt_combined',groupLabel:'Time Trials — All Ages',ages:'0-99',
-      division:'open',distanceLabel:ttDist,dayIndex:1,cost:0,
-      stage:'final',heatNumber:0,parentRaceKey:'tt|combined',startType:'individual',countsForOverall:false,
-      laneEntries:ttEntries,
-      resultsMode:'times',status:existingTT?.status||'open',
-      notes:String(existingTT?.notes||''),isFinal:true,closedAt:existingTT?.closedAt||'',
-      isOpenRace:false,isQuadRace:false,isTimeTrial:true
-    });
-  }
+
   meet.races=[...nonOpenRaces,...openRaces]; meet.updatedAt=nowIso();
 }
 
@@ -1302,7 +1270,6 @@ function meetTabs(meet, active) {
     ['builder','Meet Builder',`/portal/meet/${meet.id}/builder`],
     ['open-builder','Open Builder',`/portal/meet/${meet.id}/open-builder`],
     ['quad-builder','Quad Builder',`/portal/meet/${meet.id}/quad-builder`],
-    ['tt-builder','⏱ TT Builder',`/portal/meet/${meet.id}/tt-builder`],
     ['relay-builder','Relay Builder',`/portal/meet/${meet.id}/relay-builder`],
     ['blocks','Block Builder',`/portal/meet/${meet.id}/blocks`],
     ['registered','Registered',`/portal/meet/${meet.id}/registered`],
@@ -3261,8 +3228,7 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
         </div>
         <div class="toggle-group">
           <div class="toggle-row">
-            <div><div class="toggle-row-label">Time Trials</div><div class="toggle-row-desc">Enable time trial entries</div></div>
-            ${toggleSwitch('timeTrialsEnabled', meet.timeTrialsEnabled)}
+
           </div>
           <div class="toggle-row">
             <div><div class="toggle-row-label">Relays</div><div class="toggle-row-desc">Enable relay entries</div></div>
@@ -3629,144 +3595,6 @@ app.post('/portal/meet/:meetId/open-builder/save', requireRole('meet_director'),
 });
 
 
-// ── TT Builder ────────────────────────────────────────────────────────────────
-
-const TT_AGE_GROUPS = [
-  {id:'tt_juv_girls',   label:'Juvenile Girls',   ages:'0-9',   gender:'girls'},
-  {id:'tt_juv_boys',    label:'Juvenile Boys',    ages:'0-9',   gender:'boys'},
-  {id:'tt_fresh_girls', label:'Freshman Girls',   ages:'10-13', gender:'girls'},
-  {id:'tt_fresh_boys',  label:'Freshman Boys',    ages:'10-13', gender:'boys'},
-  {id:'tt_sr_ladies',   label:'Senior Ladies',    ages:'14-34', gender:'women'},
-  {id:'tt_sr_men',      label:'Senior Men',       ages:'14-34', gender:'men'},
-  {id:'tt_mast_ladies', label:'Masters Ladies',   ages:'35-99', gender:'women'},
-  {id:'tt_mast_men',    label:'Masters Men',      ages:'35-99', gender:'men'},
-];
-
-function normalizeTTConfig(meet) {
-  if(!meet.ttConfig) meet.ttConfig = {
-    enabled: false,
-    distance: '100m',
-    showOverallLeaderboard: true,
-    groups: TT_AGE_GROUPS.map(g=>({...g, enabled:true}))
-  };
-  if(!meet.ttConfig.groups||!meet.ttConfig.groups.length)
-    meet.ttConfig.groups=TT_AGE_GROUPS.map(g=>({...g,enabled:true}));
-  return meet.ttConfig;
-}
-
-app.get('/portal/meet/:meetId/tt-builder', requireRole('meet_director'), (req,res)=>{
-  const meet=getMeetOr404(req.db,req.params.meetId);
-  if(!meet) return res.redirect('/portal');
-  if(!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
-  const tt=normalizeTTConfig(meet);
-  const flash=req.query.saved?'<div class="card" style="border-left:4px solid var(--green);margin-bottom:12px"><div class="good">✅ TT Builder saved.</div></div>':'';
-  const combinedRace=(meet.races||[]).find(r=>r.isTimeTrial&&r.groupId==='tt_combined');
-  const timesPosted=(combinedRace?.laneEntries||[]).filter(e=>e.time).length;
-  const totalSkaters=(combinedRace?.laneEntries||[]).filter(e=>e.skaterName).length;
-
-  const groupRows=tt.groups.map((g,i)=>{
-    const groupTimes=(combinedRace?.laneEntries||[]).filter(e=>e.time&&e.skaterName&&(()=>{
-      const reg=(meet.registrations||[]).find(r=>String(r.id)===String(e.registrationId||''));
-      if(reg) return getOpenGroupIdForReg(reg).includes(g.id.replace('tt_','open_').replace('juv','juv').replace('fresh','fresh').replace('sr','sr').replace('mast','mast').replace('girls','girls').replace('boys','boys').replace('ladies','ladies').replace('men','men'));
-      return false;
-    })()).length;
-    return `
-    <div style="display:flex;align-items:center;gap:16px;padding:12px 0;border-bottom:1px solid var(--border)">
-      <div style="flex:1">
-        <div style="font-weight:700">${esc(g.label)}</div>
-        <div style="font-size:12px;color:var(--muted)">Ages ${esc(g.ages)} • ${esc(g.gender)}</div>
-      </div>
-      ${groupTimes?`<div class="chip chip-sky">${groupTimes} time${groupTimes!==1?'s':''} posted</div>`:''}
-      <div>${toggleSwitch('ttg_'+i+'_enabled', g.enabled)}</div>
-    </div>`;
-  }).join('');
-
-  res.send(pageShell({title:'TT Builder',user:req.user,meet,activeTab:'tt-builder',bodyHtml:`
-    <div class="builder-banner" style="background:linear-gradient(135deg,#0ea5e9,#0369a1)">
-      <h2>⏱ Time Trial Builder</h2>
-      <div class="sub">Individual timed laps • Youngest to Oldest • All groups in one combined race</div>
-    </div>
-
-    ${flash}
-
-    <form method="POST" action="/portal/meet/${meet.id}/tt-builder/save" class="stack">
-      <!-- Master enable + distance -->
-      <div class="card">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-          <div>
-            <div style="font-weight:700;font-size:16px">Enable Time Trials</div>
-            <div style="font-size:12px;color:var(--muted)">Creates a single combined TT race with all skaters sorted youngest to oldest</div>
-          </div>
-          ${toggleSwitch('tt_enabled', tt.enabled)}
-        </div>
-        <div style="display:grid;grid-template-columns:180px 1fr;gap:16px;align-items:end">
-          <div>
-            <label>Distance</label>
-            <input name="tt_distance" value="${esc(tt.distance||'100m')}" placeholder="e.g. 100m" />
-          </div>
-          <div style="padding-bottom:8px;color:var(--muted);font-size:13px">One distance for all groups. Times are scored per age group below.</div>
-        </div>
-      </div>
-
-      <!-- Overall leaderboard toggle -->
-      <div class="card">
-        <div style="display:flex;align-items:center;justify-content:space-between">
-          <div>
-            <div style="font-weight:700">Overall TT Leaderboard</div>
-            <div style="font-size:12px;color:var(--muted)">Show a cross-group fastest times board on the TV display and Live Board</div>
-          </div>
-          ${toggleSwitch('tt_showOverallLeaderboard', tt.showOverallLeaderboard!==false)}
-        </div>
-      </div>
-
-      <!-- Per-group toggles -->
-      <div class="card">
-        <div style="font-weight:700;font-size:15px;margin-bottom:4px">Age Groups</div>
-        <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Toggle which groups participate. Enabled groups appear in TT judges panel and results.</div>
-        ${groupRows}
-      </div>
-
-      <!-- Status summary -->
-      ${combinedRace?`
-      <div class="card" style="border-left:4px solid var(--sky2)">
-        <div style="font-weight:700;margin-bottom:8px">⏱ Live TT Status</div>
-        <div style="display:flex;gap:16px;flex-wrap:wrap">
-          <div class="chip chip-sky">${timesPosted} of ${totalSkaters} times posted</div>
-          <div class="chip chip-${combinedRace.status==='closed'?'green':'sky'}">${esc(combinedRace.status)}</div>
-          <a class="chip chip-orange" href="/meet/${meet.id}/tt-live" target="_blank">⏱ TT Live Board →</a>
-        </div>
-      </div>`:''}
-
-      <div class="card">
-        <div class="row between center">
-          <div class="muted">Saving regenerates the combined TT race. Existing times are preserved.</div>
-          <div class="action-row">
-            <a class="btn2" href="/portal/meet/${meet.id}/open-builder">← Open Builder</a>
-            <button class="btn-orange" type="submit">Save TT Builder</button>
-          </div>
-        </div>
-      </div>
-    </form>
-  `}));
-});
-
-app.post('/portal/meet/:meetId/tt-builder/save', requireRole('meet_director'), (req,res)=>{
-  const meet=getMeetOr404(req.db,req.params.meetId);
-  if(!meet) return res.redirect('/portal');
-  if(!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
-  const tt=normalizeTTConfig(meet);
-  tt.enabled=!!req.body.tt_enabled;
-  tt.distance=String(req.body.tt_distance||'100m').trim()||'100m';
-  tt.showOverallLeaderboard=!!req.body.tt_showOverallLeaderboard;
-  tt.groups.forEach((g,i)=>{ g.enabled=!!req.body[`ttg_${i}_enabled`]; });
-  // TT config is self-contained in ttConfig — openGroups.timeTrial no longer used
-  (meet.openGroups||[]).forEach(og=>{ og.timeTrial=false; og.ttDistance=""; });
-
-
-  generateOpenRacesForMeet(meet); ensureAtLeastOneBlock(meet); ensureCurrentRace(meet);
-  saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/tt-builder?saved=1`);
-});
-
 // ── Quad Builder ──────────────────────────────────────────────────────────────
 
 app.get('/portal/meet/:meetId/quad-builder', requireRole('meet_director'), (req, res) => {
@@ -3899,7 +3727,6 @@ app.get('/meet/:meetId/register', (req, res) => {
             <div class="toggle-row"><div><div class="toggle-row-label">Elite</div></div>${toggleSwitch('elite',false)}</div>
             <div class="toggle-row"><div><div class="toggle-row-label">Open</div></div>${toggleSwitch('open',false)}</div>
             ${(meet.quadGroups||[]).some(g=>g.enabled)?`<div class="toggle-row"><div><div class="toggle-row-label">Quad</div></div>${toggleSwitch('quad',false)}</div>`:''}
-            ${meet.timeTrialsEnabled?`<div class="toggle-row"><div><div class="toggle-row-label">Time Trials</div></div>${toggleSwitch('timeTrials',false)}</div>`:''}
             ${meet.relayEnabled?`<div class="toggle-row"><div><div class="toggle-row-label">Relays</div></div>${toggleSwitch('relays',false)}</div>`:''}
             ${(meet.skateabilityGroups||[]).map(sg=>`<div class="toggle-row"><div><div class="toggle-row-label">${esc(sg.ageGroupLabel||'Skateability')}</div><div class="toggle-row-desc">${sg.distances?.filter(Boolean).length?sg.distances.filter(Boolean).join(', '):''}</div></div>${toggleSwitch('sk_grp_'+sg.ageGroupId,false)}</div>`).join('')}
           </div>
@@ -3945,7 +3772,7 @@ app.post('/meet/:meetId/register', (req, res) => {
   const meetNumber=(meet.registrations||[]).reduce((max,r)=>Math.max(max,Number(r.meetNumber)||0),0)+1;
   const regEmail=String(req.body.email||'').trim();
   const skGroups=(meet.skateabilityGroups||[]).map(sg=>sg.ageGroupId).filter(id=>!!req.body['sk_grp_'+id]);
-  const regOpts={challengeUp:!!req.body.challengeUp,novice:!!req.body.novice,elite:!!req.body.elite,open:!!req.body.open,quad:!!req.body.quad,timeTrials:!!req.body.timeTrials,relays:!!req.body.relays,skateability:skGroups.length>0,skateabilityGroups:skGroups};
+  const regOpts={challengeUp:!!req.body.challengeUp,novice:!!req.body.novice,elite:!!req.body.elite,open:!!req.body.open,quad:!!req.body.quad,relays:!!req.body.relays,skateability:skGroups.length>0,skateabilityGroups:skGroups};
   const totalCost=calcRegistrationCost(meet,regOpts);
   meet.registrations.push({
     id:nextId(meet.registrations),createdAt:nowIso(),
@@ -4018,7 +3845,6 @@ function registrationForm(meet,reg,action,title) {
             <div class="toggle-row"><div><div class="toggle-row-label">Elite</div></div>${toggleSwitch('elite',!!reg.options?.elite)}</div>
             <div class="toggle-row"><div><div class="toggle-row-label">Open</div></div>${toggleSwitch('open',!!reg.options?.open)}</div>
             ${(meet.quadGroups||[]).some(g=>g.enabled)?`<div class="toggle-row"><div><div class="toggle-row-label">Quad</div></div>${toggleSwitch('quad',!!reg.options?.quad)}</div>`:''}
-            <div class="toggle-row"><div><div class="toggle-row-label">Time Trials</div></div>${toggleSwitch('timeTrials',!!reg.options?.timeTrials)}</div>
             <div class="toggle-row"><div><div class="toggle-row-label">Relays</div></div>${toggleSwitch('relays',!!reg.options?.relays)}</div>
             ${(meet.skateabilityGroups||[]).map(sg=>`<div class="toggle-row"><div><div class="toggle-row-label">${esc(sg.ageGroupLabel||'Skateability')}</div><div class="toggle-row-desc">${sg.distances?.filter(Boolean).length?sg.distances.filter(Boolean).join(', '):''}</div></div>${toggleSwitch('sk_grp_'+sg.ageGroupId,!!(reg.options?.skateabilityGroups||[]).includes(sg.ageGroupId))}</div>`).join('')}
           </div>
@@ -4140,7 +3966,7 @@ app.post('/portal/meet/:meetId/registered/:regId/edit', requireRole('meet_direct
   // Challenge Up is Elite only
   const editChallengeUpGroup=(!!req.body.challengeUp && !!req.body.elite)?findChallengeUpGroup(meet.groups||[],baseGroup?.id||''):null;
   const editSkGroups=(meet.skateabilityGroups||[]).map(sg=>sg.ageGroupId).filter(id=>!!req.body['sk_grp_'+id]);
-  const editOpts={challengeUp:!!req.body.challengeUp,novice:!!req.body.novice,elite:!!req.body.elite,open:!!req.body.open,quad:!!req.body.quad,timeTrials:!!req.body.timeTrials,relays:!!req.body.relays,skateability:editSkGroups.length>0,skateabilityGroups:editSkGroups};
+  const editOpts={challengeUp:!!req.body.challengeUp,novice:!!req.body.novice,elite:!!req.body.elite,open:!!req.body.open,quad:!!req.body.quad,relays:!!req.body.relays,skateability:editSkGroups.length>0,skateabilityGroups:editSkGroups};
   const editCost=calcRegistrationCost(meet,editOpts);
   Object.assign(reg,{name:String(req.body.name||'').trim(),birthdate,age:compAge,gender,team:String(req.body.team||'Midwest Racing').trim()||'Midwest Racing',sponsor:String(req.body.sponsor||'').trim(),originalDivisionGroupId:baseGroup?.id||'',originalDivisionGroupLabel:baseGroup?.label||'',divisionGroupId:baseGroup?.id||'',divisionGroupLabel:baseGroup?.label||'Unassigned',challengeUpGroupId:editChallengeUpGroup?.id||'',challengeUpGroupLabel:editChallengeUpGroup?.label||'',totalCost:editCost,options:editOpts});
   rebuildRaceAssignments(meet); saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/registered`);
@@ -4441,7 +4267,6 @@ app.get('/portal/meet/:meetId/blocks', requireRole('meet_director'), (req, res) 
           <span class="chip">Inline: ${(meet.races||[]).filter(r=>!r.isOpenRace&&!r.isQuadRace).length}</span>
           <span class="chip chip-orange">🏁 Open: ${(meet.races||[]).filter(r=>r.isOpenRace).length}</span>
           <span class="chip chip-purple">🛼 Quad: ${(meet.races||[]).filter(r=>r.isQuadRace).length}</span>
-          <span class="chip chip-sky">⏱ TT: ${(meet.races||[]).filter(r=>r.isTimeTrial).length}</span>
           <span class="chip" style="border-color:#93c5fd;color:#1d4ed8">🔄 Relays: ${(meet.races||[]).filter(r=>r.isRelayRace).length}</span>
           <span class="chip" id="unassignedChip">Unassigned: ${unassigned.length}</span>
         </div>
@@ -4688,7 +4513,7 @@ app.post('/portal/meet/:meetId/blocks/auto-build', requireRole('meet_director'),
   meet.blocks = [
     // ── FRIDAY APR 24 ────────────────────────────────────────────────
     {id:'f1',name:'Friday — Time Trials',day:'Friday Apr 24',type:'race',notes:'5:00pm • One Lap TT • Youngest to Oldest • Determines Open Starting Position',raceIds:[
-      ...(()=>{const r=(meet.races||[]).find(r=>r.isTimeTrial&&r.groupId==='tt_combined');if(r){usedRaceIds.add(r.id);return[r.id];}return[];})(),
+
     ].filter(Boolean)},
     {id:'f2',name:'Friday — Open Races',day:'Friday Apr 24',type:'race',notes:'6:30pm • Rolling Start • Awards Follow Sr Mens Open',raceIds:[
       findOpen('Juvenile Girls'),    // Race 2
@@ -4933,7 +4758,7 @@ app.post('/portal/meet/:meetId/blocks/generate', requireRole('meet_director'), (
 // ── Race Day ──────────────────────────────────────────────────────────────────
 
 function raceDaySubTabs(meet,active) {
-  return `<div class="sub-tabs">${[['director','Director',`/portal/meet/${meet.id}/race-day/director`],['judges','Judges',`/portal/meet/${meet.id}/race-day/judges`],['tt','⏱ Time Trials',`/portal/meet/${meet.id}/race-day/tt`],['announcer','Announcer',`/portal/meet/${meet.id}/race-day/announcer`],['live','Live View',`/portal/meet/${meet.id}/race-day/live`]].map(([k,label,href])=>`<a class="sub-tab ${active===k?'active':''}" href="${href}">${label}</a>`).join('')}</div>`;
+  return `<div class="sub-tabs">${[['director','Director',`/portal/meet/${meet.id}/race-day/director`],['judges','Judges',`/portal/meet/${meet.id}/race-day/judges`],['announcer','Announcer',`/portal/meet/${meet.id}/race-day/announcer`],['live','Live View',`/portal/meet/${meet.id}/race-day/live`]].map(([k,label,href])=>`<a class="sub-tab ${active===k?'active':''}" href="${href}">${label}</a>`).join('')}</div>`;
 }
 
 app.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','judge','coach'), (req, res) => {
@@ -5094,369 +4919,6 @@ app.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','judg
   res.send(pageShell({title:'Race Day',user:req.user,meet,activeTab:'race-day', bodyHtml:body}));
 });
 
-app.get('/portal/meet/:meetId/race-day/tt', requireRole('judge','meet_director'), (req, res) => {
-  const meet=getMeetOr404(req.db,req.params.meetId);
-  if(!meet) return res.redirect('/portal');
-
-  // Get all TT races sorted youngest to oldest by age range
-  const ttRaces=(meet.races||[]).filter(r=>r.isTimeTrial)
-    .sort((a,b)=>{
-      const ageA=parseInt((a.ages||'999').match(/\d+/)?.[0]||999);
-      const ageB=parseInt((b.ages||'999').match(/\d+/)?.[0]||999);
-      return ageA-ageB;
-    });
-
-  // Build one flat list of ALL skaters from ALL TT races, sorted youngest to oldest
-  const ttConfig=meet.ttConfig||{};
-  const enabledTTGroupIds=new Set((ttConfig.groups||[]).filter(g=>g.enabled!==false).map(g=>g.id));
-  const allSkaters=ttRaces.flatMap(race=>{
-    return (race.laneEntries||[])
-      .filter(e=>e.skaterName)
-      .map(e=>{
-        const reg=(meet.registrations||[]).find(r=>String(r.id)===String(e.registrationId||''));
-        const openGrp=reg?getOpenGroupIdForReg(reg):'';
-        // Map open group id to tt group id for enabled check
-        const ttGrpId='tt_'+openGrp.replace('open_','');
-        return {...e, race, groupLabel:race.groupLabel, ageNum:parseInt((race.ages||'999').match(/\d+/)?.[0]||999), ttGrpId};
-      });
-  }).sort((a,b)=>a.ageNum-b.ageNum);
-
-  // Overall fastest times leaderboard
-  const allTimes=ttRaces.flatMap(r=>(r.laneEntries||[]).filter(e=>e.time&&e.skaterName).map(e=>({...e,groupLabel:r.groupLabel})))
-    .sort((a,b)=>parseFloat(a.time||999)-parseFloat(b.time||999));
-
-  // Skater dropdown for posting new times
-  const skaterList=(meet.registrations||[])
-    .sort((a,b)=>Number(a.age||0)-Number(b.age||0))
-    .map(r=>`<option value="${esc(r.name)}" data-id="${r.id}" data-helmet="${esc(r.helmetNumber||'')}" data-team="${esc(r.team||'')}" data-race="${esc(ttRaces.find(t=>getOpenGroupIdForReg(r)===t.groupId.replace('open_','').replace('_','')||t.ages)?.id||'')}">`)
-    .join('');
-
-  // All skaters table
-  const skaterRows=allSkaters.map(e=>`
-    <tr id="sk-${esc(String(e.registrationId||e.lane))}">
-      <td style="color:var(--muted);font-size:12px">${esc(e.groupLabel||'')}</td>
-      <td>${esc(e.helmetNumber?'#'+e.helmetNumber:'')}</td>
-      <td><strong>${esc(e.skaterName||'')}</strong></td>
-      <td>${esc(e.team||'')}</td>
-      <td><strong style="color:var(--orange);font-size:16px">${esc(e.time||'—')}</strong></td>
-      <td>
-        <form method="POST" action="/portal/meet/${meet.id}/race-day/judges/tt-post" style="display:flex;gap:4px">
-          <input type="hidden" name="raceId" value="${esc(e.race.id)}" />
-          <input type="hidden" name="registrationId" value="${esc(String(e.registrationId||''))}" />
-          <input type="hidden" name="skaterName" value="${esc(e.skaterName||'')}" />
-          <input type="hidden" name="helmetNumber" value="${esc(e.helmetNumber||'')}" />
-          <input type="hidden" name="team" value="${esc(e.team||'')}" />
-          <input name="time" value="${esc(e.time||'')}" placeholder="0.00" style="width:72px" />
-          <button class="btn-orange btn-sm" type="submit">✓</button>
-        </form>
-      </td>
-    </tr>`).join('');
-
-  const leaderboard=allTimes.slice(0,20).map((e,i)=>`
-    <tr>
-      <td>${i===0?'🥇':i===1?'🥈':i===2?'🥉':i+1}</td>
-      <td>${esc(e.helmetNumber?'#'+e.helmetNumber:'')}</td>
-      <td><strong>${esc(e.skaterName||'')}</strong></td>
-      <td style="font-size:11px;color:var(--muted)">${esc(e.groupLabel||'')}</td>
-      <td><strong style="color:var(--orange)">${esc(e.time)}</strong></td>
-    </tr>`).join('');
-
-  // Quick-post form — type name, enter time, post
-  res.send(pageShell({title:'Time Trials',user:req.user,meet,activeTab:'race-day',bodyHtml:`
-    <div class="page-header"><h1>⏱ Time Trials</h1><div class="sub">${esc(meet.meetName)} • All groups • Youngest to Oldest</div></div>
-    ${raceDaySubTabs(meet,'tt')}
-    <div style="display:grid;grid-template-columns:1fr 280px;gap:20px;align-items:start">
-      <div>
-        <!-- Quick post form at top -->
-        <div class="card" style="margin-bottom:16px;background:var(--navy);color:#fff">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-            <div style="font-family:Orbitron,sans-serif;font-size:13px;font-weight:700;color:var(--orange)">⚡ POST TIME</div>
-            <div style="font-size:12px;color:rgba(255,255,255,.5)">${ttRaces.length?`${(ttRace?.laneEntries||[]).filter(e=>e.time).length} of ${(ttRace?.laneEntries||[]).filter(e=>e.skaterName).length} posted`:'No TT race found'}</div>
-          </div>
-          <form method="POST" action="/portal/meet/${meet.id}/race-day/judges/tt-post" style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
-            <input type="hidden" name="raceId" id="quick-race-id" value="${esc(ttRaces[0]?.id||'')}" />
-            <input type="hidden" name="registrationId" id="quick-reg-id" />
-            <input type="hidden" name="skaterName" id="quick-name" />
-            <input type="hidden" name="helmetNumber" id="quick-helmet" />
-            <input type="hidden" name="team" id="quick-team" />
-            <div style="flex:1;min-width:200px">
-              <label style="font-size:11px;color:rgba(255,255,255,.6)">Skater Name or Helmet#</label>
-              <input id="quick-search" list="quick-list" placeholder="Type name..." autocomplete="off"
-                style="background:rgba(255,255,255,.1);color:#fff;border-color:rgba(255,255,255,.2)"
-                oninput="quickFill(this)" />
-              <datalist id="quick-list">
-                ${(meet.registrations||[]).sort((a,b)=>Number(a.age||0)-Number(b.age||0)).map(r=>`<option value="${esc(r.name)}" data-id="${r.id}" data-helmet="${esc(r.helmetNumber||'')}" data-team="${esc(r.team||'')}" data-race-id="${esc(ttRaces.find(t=>t.groupLabel?.toLowerCase().includes(getOpenGroupIdForReg(r).replace('open_','').split('_')[0]))?.id||ttRaces[0]?.id||'')}">`).join('')}
-              </datalist>
-            </div>
-            <div>
-              <label style="font-size:11px;color:rgba(255,255,255,.6)">Time (seconds)</label>
-              <input id="quick-time" name="time" placeholder="0.00" style="width:90px;background:rgba(255,255,255,.1);color:#fff;border-color:rgba(255,255,255,.2);font-size:18px;font-family:Orbitron,sans-serif" />
-            </div>
-            <button class="btn-orange" type="submit" style="font-size:16px;padding:10px 24px">Post ✓</button>
-          </form>
-        </div>
-
-        <!-- All skaters table -->
-        <div class="card">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-            <div style="font-weight:700">All Skaters — Youngest to Oldest</div>
-            <button class="btn2 btn-sm" onclick="document.getElementById('add-skater-form').style.display=document.getElementById('add-skater-form').style.display==='none'?'flex':'none'">+ Add Skater</button>
-          </div>
-          <div id="add-skater-form" style="display:none;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px;padding:12px;background:#f8fafc;border-radius:8px;border:1px solid var(--border)">
-            <form method="POST" action="/portal/meet/${meet.id}/race-day/judges/tt-post" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;width:100%">
-              <input type="hidden" name="raceId" value="${esc(ttRaces[0]?.id||'')}" />
-              <input type="hidden" name="registrationId" id="add-reg-id" />
-              <input type="hidden" name="helmetNumber" id="add-helmet" />
-              <input type="hidden" name="skaterName" id="add-sname" />
-              <input type="hidden" name="team" id="add-team" />
-              <input type="hidden" name="age" id="add-age" />
-              <input type="hidden" name="gender" id="add-gender" />
-              <div style="flex:1;min-width:180px">
-                <label style="font-size:11px">Skater Name</label>
-                <input list="add-skater-list" placeholder="Type name or search..." autocomplete="off" oninput="addFill(this)" style="width:100%" id="add-name-input" />
-                <datalist id="add-skater-list">
-                  ${(meet.registrations||[]).map(r=>`<option value="${esc(r.name)}" data-id="${r.id}" data-helmet="${esc(r.helmetNumber||'')}" data-team="${esc(r.team||'')}" data-age="${esc(String(r.age||''))}" data-gender="${esc(r.gender||'')}">`).join('')}
-                </datalist>
-              </div>
-              <div><label style="font-size:11px">Helmet#</label><input id="add-helmet-show" name="helmetNumberManual" placeholder="#" style="width:70px" /></div>
-              <div><label style="font-size:11px">Age (walk-up)</label><input id="add-age-show" placeholder="e.g. 12" style="width:60px" oninput="document.getElementById('add-age').value=this.value" /></div>
-              <div><label style="font-size:11px">M/F</label><input id="add-gender-show" placeholder="M/F" style="width:44px" oninput="document.getElementById('add-gender').value=this.value" /></div>
-              <div><label style="font-size:11px">Time</label><input name="time" placeholder="0.00" style="width:80px" /></div>
-              <button class="btn-orange btn-sm" type="submit">Add + Post</button>
-            </form>
-          </div>
-          <table class="table" style="font-size:13px">
-            <thead><tr><th>Group</th><th>Helmet</th><th>Skater</th><th>Team</th><th>Time</th><th>Update</th></tr></thead>
-            <tbody>${skaterRows||'<tr><td colspan="6" class="muted">No skaters found in TT races</td></tr>'}</tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- Leaderboard -->
-      <div style="position:sticky;top:80px">
-        <div class="card" style="background:var(--navy);color:#fff">
-          <div style="font-family:Orbitron,sans-serif;font-size:12px;font-weight:700;color:var(--orange);margin-bottom:12px">🏆 OVERALL FASTEST</div>
-          ${leaderboard?`<table style="width:100%;font-size:12px;border-collapse:collapse">
-            <thead><tr style="color:rgba(255,255,255,.5);font-size:10px"><th style="text-align:left;padding:4px">#</th><th style="text-align:left;padding:4px">Helmet</th><th style="text-align:left;padding:4px">Skater</th><th style="text-align:right;padding:4px">Time</th></tr></thead>
-            <tbody>${leaderboard}</tbody>
-          </table>`:'<div style="color:rgba(255,255,255,.4);text-align:center;padding:20px">No times yet</div>'}
-        </div>
-      </div>
-    </div>
-    <script>
-      function addFill(inp) {
-        const opt=document.querySelector('#add-skater-list option[value="'+inp.value.replace(/'/g,"\'")+'"]');
-        if(opt) {
-          document.getElementById('add-reg-id').value=opt.getAttribute('data-id')||'';
-          document.getElementById('add-helmet').value=opt.getAttribute('data-helmet')||'';
-          document.getElementById('add-sname').value=inp.value;
-          document.getElementById('add-team').value=opt.getAttribute('data-team')||'';
-          document.getElementById('add-helmet-show').value=opt.getAttribute('data-helmet')||'';
-          const age=opt.getAttribute('data-age')||''; const gender=opt.getAttribute('data-gender')||'';
-          document.getElementById('add-age').value=age;
-          document.getElementById('add-age-show').value=age;
-          document.getElementById('add-gender').value=gender;
-          document.getElementById('add-gender-show').value=gender;
-        }
-      }
-      function quickFill(inp) {
-        const opt=document.querySelector('#quick-list option[value="'+inp.value.replace(/'/g,"\'")+'"]');
-        if(opt) {
-          document.getElementById('quick-reg-id').value=opt.getAttribute('data-id')||'';
-          document.getElementById('quick-helmet').value=opt.getAttribute('data-helmet')||'';
-          document.getElementById('quick-name').value=inp.value;
-          document.getElementById('quick-team').value=opt.getAttribute('data-team')||'';
-          const raceId=opt.getAttribute('data-race-id')||'';
-          if(raceId) document.getElementById('quick-race-id').value=raceId;
-          document.getElementById('quick-time').focus();
-        }
-      }
-    </script>`}));
-});
-
-
-
-app.post('/portal/meet/:meetId/race-day/judges/open-add-skater', requireRole('judge','meet_director'), (req, res) => {
-  const meet=getMeetOr404(req.db,req.params.meetId);
-  if(!meet) return res.redirect('/portal');
-  const race=(meet.races||[]).find(r=>r.id===String(req.body.raceId||'')&&r.isOpenRace);
-  if(!race) return res.redirect(`/portal/meet/${req.params.meetId}/race-day/judges`);
-  const skaterName=String(req.body.skaterName||'').trim();
-  const regId=String(req.body.registrationId||'').trim();
-  const helmetNumber=String(req.body.helmetNumber||req.body.helmetNumberManual||'').trim();
-  const team=String(req.body.team||'').trim();
-  if(!skaterName) return res.redirect(`/portal/meet/${meet.id}/race-day/judges`);
-  // Don't add if already in race
-  const already=(race.laneEntries||[]).find(e=>e.skaterName===skaterName||(regId&&String(e.registrationId||'')===regId));
-  if(!already) {
-    const nextLane=(race.laneEntries||[]).length+1;
-    race.laneEntries.push({lane:nextLane,registrationId:regId,helmetNumber,skaterName,team,place:'',time:'',status:''});
-  }
-  meet.updatedAt=nowIso(); saveDb(req.db);
-  res.redirect(`/portal/meet/${meet.id}/race-day/judges`);
-});
-
-app.post('/portal/meet/:meetId/race-day/judges/save', requireRole('judge','meet_director'), (req, res) => {
-  const meet=getMeetOr404(req.db,req.params.meetId);
-  if(!meet) return res.redirect('/portal');
-  const race=(meet.races||[]).find(r=>r.id===String(req.body.raceId||''));
-  if(!race) return res.redirect(`/portal/meet/${meet.id}/race-day/judges`);
-  const laneCount=(race.isOpenRace||isOpenDivision(race.division))?Math.max((race.laneEntries||[]).length,1):Math.max(1,Number(meet.lanes)||4);
-  const prevEntries=[...(race.laneEntries||[])];
-  race.laneEntries=[];
-  for(let i=1;i<=laneCount;i++) {
-    const existing=prevEntries.find(x=>Number(x.lane)===i)||{};
-    race.laneEntries.push({lane:i,registrationId:existing.registrationId||'',helmetNumber:existing.helmetNumber||'',skaterName:String(req.body[`skaterName_${i}`]||'').trim(),team:String(req.body[`team_${i}`]||'').trim(),place:String(req.body[`place_${i}`]||'').trim(),time:String(req.body[`time_${i}`]||'').trim(),status:String(req.body[`status_${i}`]||'').trim()});
-  }
-  race.resultsMode=String(req.body.resultsMode||'places')==='times'?'times':'places';
-  race.notes=String(req.body.notes||''); race.status=req.body.action==='close'?'closed':'open';
-  race.closedAt=req.body.action==='close'?nowIso():race.closedAt;
-  meet.updatedAt=nowIso();
-  if(req.body.action==='close') {
-    const info=currentRaceInfo(meet);
-    if(info.current&&info.current.id===race.id) { const next=info.ordered[info.idx+1]; if(next){meet.currentRaceId=next.id;meet.currentRaceIndex=info.idx+1;} }
-
-    // Auto-qualify: if this is a heat, populate top 3 into the final
-    if(race.stage==='heat' && race.parentRaceKey) {
-      const final=(meet.races||[]).find(r=>r.parentRaceKey===race.parentRaceKey&&(r.stage==='final'||r.isFinal)&&r.id!==race.id);
-      if(final) {
-        // Get top qualifiers from this heat (top 3, skip DNS/DQ)
-        const qualifiers=(race.laneEntries||[])
-          .filter(e=>e.skaterName&&!['DNS','DQ','Scratch'].includes(e.status||''))
-          .sort((a,b)=>Number(a.place||999)-Number(b.place||999))
-          .slice(0,3);
-        // Add to final if not already there
-        for(const q of qualifiers) {
-          const already=(final.laneEntries||[]).find(e=>e.registrationId&&e.registrationId===q.registrationId);
-          if(!already) {
-            const nextLane=(final.laneEntries||[]).length+1;
-            final.laneEntries.push({lane:nextLane,registrationId:q.registrationId,helmetNumber:q.helmetNumber,skaterName:q.skaterName,team:q.team,place:'',time:'',status:''});
-          }
-        }
-      }
-    }
-  }
-  saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/race-day/judges`);
-});
-
-app.post('/portal/meet/:meetId/race-day/judges/tt-post', requireRole('judge','meet_director'), (req, res) => {
-  const meet=getMeetOr404(req.db,req.params.meetId);
-  if(!meet) return res.redirect('/portal');
-  const race=(meet.races||[]).find(r=>r.id===String(req.body.raceId||'')&&r.isTimeTrial);
-  if(!race) return res.redirect(`/portal/meet/${req.params.meetId}/race-day/judges`);
-  const time=String(req.body.time||'').trim();
-  const regId=String(req.body.registrationId||'').trim();
-  const skaterName=String(req.body.skaterName||'').trim();
-  const helmetNumber=String(req.body.helmetNumber||req.body.helmetNumberManual||'').trim();
-  const team=String(req.body.team||'').trim();
-  const walkUpAge=String(req.body.age||'').trim();
-  const walkUpGender=String(req.body.gender||'').trim();
-  if(!time) return res.redirect(`/portal/meet/${meet.id}/race-day/tt`);
-  // Remove existing entry for this skater if re-posting
-  if(regId) race.laneEntries=(race.laneEntries||[]).filter(e=>String(e.registrationId||'')!==regId);
-  else if(skaterName) race.laneEntries=(race.laneEntries||[]).filter(e=>!(e.skaterName===skaterName&&!e.registrationId));
-  // Assign a pseudo-lane as running order number
-  const nextLane=(race.laneEntries||[]).length+1;
-  race.laneEntries.push({lane:nextLane,registrationId:regId,helmetNumber,skaterName,team,age:walkUpAge,gender:walkUpGender,time,place:'',status:''});
-  // Auto-assign places by time within each age group
-  const groups={};
-  race.laneEntries.forEach(e=>{
-    if(!e.time||!e.skaterName) return;
-    // Find their open group — use registration if available, else use stored age/gender on entry (walk-ups)
-    const reg=(meet.registrations||[]).find(r=>String(r.id)===String(e.registrationId||''));
-    const grp=reg?getOpenGroupIdForReg(reg):(e.age?getOpenGroupIdForReg({age:e.age,gender:e.gender,divisionGroupId:''}):'other');
-    if(!groups[grp]) groups[grp]=[];
-    groups[grp].push(e);
-  });
-  Object.values(groups).forEach(grp=>{
-    grp.sort((a,b)=>parseFloat(a.time||999)-parseFloat(b.time||999))
-       .forEach((e,i)=>{const orig=race.laneEntries.find(x=>x.lane===e.lane);if(orig)orig.groupPlace=String(i+1);});
-  });
-  // Overall place by time across all
-  const allTimed=[...race.laneEntries].filter(e=>e.time).sort((a,b)=>parseFloat(a.time||999)-parseFloat(b.time||999));
-  allTimed.forEach((e,i)=>{const orig=race.laneEntries.find(x=>x.lane===e.lane);if(orig)orig.place=String(i+1);});
-  if(req.body.action==='close') { race.status='closed'; race.closedAt=nowIso(); race.isFinal=true; }
-  meet.updatedAt=nowIso(); saveDb(req.db);
-  // Fire TT result alert for this skater
-  if(regId) {
-    const entry=race.laneEntries.find(e=>String(e.registrationId||'')===regId);
-    if(entry) fireResultAlerts(meet, race);
-  }
-  res.redirect(`/portal/meet/${meet.id}/race-day/tt`);
-});
-
-app.post('/portal/meet/:meetId/race-day/judges/tt-remove', requireRole('judge','meet_director'), (req, res) => {
-  const meet=getMeetOr404(req.db,req.params.meetId);
-  if(!meet) return res.redirect('/portal');
-  const race=(meet.races||[]).find(r=>r.id===String(req.body.raceId||'')&&r.isTimeTrial);
-  if(!race) return res.redirect(`/portal/meet/${req.params.meetId}/race-day/judges`);
-  const regId=String(req.body.registrationId||'');
-  race.laneEntries=(race.laneEntries||[]).filter(e=>String(e.registrationId||'')!==regId);
-  // Re-number lanes and re-assign places
-  race.laneEntries.forEach((e,i)=>e.lane=i+1);
-  const sorted=[...race.laneEntries].sort((a,b)=>parseFloat(a.time||'999')-parseFloat(b.time||'999'));
-  sorted.forEach((e,i)=>{ const orig=race.laneEntries.find(x=>x.lane===e.lane); if(orig) orig.place=String(i+1); });
-  meet.updatedAt=nowIso(); saveDb(req.db);
-  res.redirect(`/portal/meet/${meet.id}/race-day/judges`);
-});
-
-app.post('/api/meet/:meetId/race-day/set-current', requireRole('meet_director'), (req, res) => {
-  const meet=getMeetOr404(req.db,req.params.meetId);
-  if(!meet||!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
-  const ordered=orderedRaces(meet); const idx=ordered.findIndex(r=>r.id===String(req.body.raceId||''));
-  if(idx<0) return res.status(404).send('Race not found');
-  meet.currentRaceId=ordered[idx].id; meet.currentRaceIndex=idx; meet.updatedAt=nowIso(); saveDb(req.db); res.json({ok:true});
-});
-
-app.post('/api/meet/:meetId/race-day/step', requireRole('meet_director'), (req, res) => {
-  const meet=getMeetOr404(req.db,req.params.meetId);
-  if(!meet||!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
-  const info=currentRaceInfo(meet); const dir=Number(req.body.direction||1);
-  const idx=Math.max(0,Math.min(info.ordered.length-1,info.idx+(dir>=0?1:-1)));
-  if(info.ordered[idx]){meet.currentRaceId=info.ordered[idx].id;meet.currentRaceIndex=idx;}
-  meet.updatedAt=nowIso(); saveDb(req.db);
-  fireRaceAlerts(meet, idx, info.ordered);
-  res.json({ok:true});
-});
-
-app.post('/api/meet/:meetId/race-day/toggle-pause', requireRole('meet_director'), (req, res) => {
-  const meet=getMeetOr404(req.db,req.params.meetId);
-  if(!meet||!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
-  meet.raceDayPaused=!meet.raceDayPaused; saveDb(req.db); res.json({ok:true});
-});
-
-app.post('/api/meet/:meetId/race-day/unlock-race', requireRole('meet_director'), (req, res) => {
-  const meet=getMeetOr404(req.db,req.params.meetId);
-  if(!meet||!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
-  const race=(meet.races||[]).find(r=>r.id===String(req.body.raceId||''));
-  if(!race) return res.status(404).send('Race not found');
-  race.status='open'; race.closedAt=''; meet.currentRaceId=race.id;
-  meet.currentRaceIndex=orderedRaces(meet).findIndex(r=>r.id===race.id);
-  saveDb(req.db); res.json({ok:true});
-});
-
-// ── Results ───────────────────────────────────────────────────────────────────
-
-app.get('/portal/meet/:meetId/fix-quad-helmets', requireRole('meet_director'), (req, res) => {
-  const meet=getMeetOr404(req.db,req.params.meetId);
-  if(!meet) return res.status(404).send('not found');
-  // Enable quad for specific helmet numbers from paper schedule
-  const helmets=String(req.query.h||'').split(',').map(h=>h.trim()).filter(Boolean);
-  let updated=0;
-  for(const reg of meet.registrations||[]) {
-    if(helmets.includes(String(reg.helmetNumber||''))) {
-      if(!reg.options) reg.options={};
-      reg.options.quad=true;
-      reg.totalCost=calcRegistrationCost(meet,reg.options);
-      updated++;
-    }
-  }
-  rebuildRaceAssignments(meet);
-  generateQuadRacesForMeet(meet);
-  saveDb(req.db);
-  res.send('Updated '+updated+' skaters. <a href="/portal/meet/'+meet.id+'/quad-builder">Check Quad Builder</a>');
-});
-
 app.get('/portal/meet/:meetId/debug-quad', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
   const result={
@@ -5553,93 +5015,6 @@ app.post('/portal/meet/:meetId/reopen', requireRole('meet_director'), (req, res)
 
 
 // ── TV Display ────────────────────────────────────────────────────────────────
-app.get('/meet/:meetId/tt-live', (req, res) => {
-  const db=loadDb(); const meet=getMeetOr404(db,req.params.meetId);
-  if(!meet||!meet.isPublic) return res.redirect('/meets');
-
-  const ttCfg=meet.ttConfig||{};
-  const showOverall=ttCfg.showOverallLeaderboard!==false;
-  const enabledGroups=(ttCfg.groups&&ttCfg.groups.length)?ttCfg.groups.filter(g=>g.enabled!==false):TT_AGE_GROUPS;
-
-  const GROUP_LABELS={'open_juv_girls':'Juvenile Girls','open_juv_boys':'Juvenile Boys','open_fresh_girls':'Freshman Girls','open_fresh_boys':'Freshman Boys','open_sr_ladies':'Senior Ladies','open_sr_men':'Senior Men','open_mast_ladies':'Masters Ladies','open_mast_men':'Masters Men'};
-  const TT_TO_OPEN={'tt_juv_girls':'open_juv_girls','tt_juv_boys':'open_juv_boys','tt_fresh_girls':'open_fresh_girls','tt_fresh_boys':'open_fresh_boys','tt_sr_ladies':'open_sr_ladies','tt_sr_men':'open_sr_men','tt_mast_ladies':'open_mast_ladies','tt_mast_men':'open_mast_men'};
-
-  const combinedTT=(meet.races||[]).find(r=>r.isTimeTrial&&r.groupId==='tt_combined');
-
-  // Bucket entries by age group
-  const buckets={};
-  (combinedTT?.laneEntries||[]).filter(e=>e.skaterName).forEach(e=>{
-    const reg=(meet.registrations||[]).find(r=>String(r.id)===String(e.registrationId||''));
-    const openId=reg?getOpenGroupIdForReg(reg):null;
-    if(!openId) return;
-    if(!buckets[openId]) buckets[openId]=[];
-    buckets[openId].push(e);
-  });
-
-  const medals=['🥇','🥈','🥉'];
-
-  const groupCards=enabledGroups.map(g=>{
-    const openId=TT_TO_OPEN[g.id]||('open_'+g.id.replace('tt_',''));
-    const label=GROUP_LABELS[openId]||g.label||openId;
-    const entries=buckets[openId]||[];
-    const top3=entries.filter(e=>e.time).sort((a,b)=>parseFloat(a.time||999)-parseFloat(b.time||999)).slice(0,3);
-    const rows=top3.map((e,i)=>`
-      <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.07)">
-        <span style="font-size:20px;width:28px">${medals[i]}</span>
-        <div style="flex:1;min-width:0">
-          <div style="font-family:Orbitron,sans-serif;font-size:14px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(e.skaterName||'')}</div>
-          <div style="font-size:11px;color:rgba(255,255,255,.45)">${esc(e.team||'')}</div>
-        </div>
-        <div style="font-family:Orbitron,sans-serif;font-size:16px;font-weight:700;color:#F97316">${esc(e.time)}</div>
-      </div>`).join('');
-    return `
-      <div style="background:rgba(255,255,255,.05);border-radius:12px;padding:14px;border:1px solid rgba(255,255,255,.08)">
-        <div style="font-family:Orbitron,sans-serif;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.15em;color:#38BDF8;margin-bottom:8px">${esc(label)}</div>
-        ${top3.length===0?'<div style="color:rgba(255,255,255,.3);font-size:12px;padding:8px 0">No times posted</div>':rows}
-      </div>`;
-  }).join('');
-
-  // Overall leaderboard card
-  const allTimed=(combinedTT?.laneEntries||[]).filter(e=>e.time&&e.skaterName)
-    .sort((a,b)=>parseFloat(a.time||999)-parseFloat(b.time||999)).slice(0,8);
-  const overallCard=showOverall&&allTimed.length?`
-    <div style="background:rgba(249,115,22,.08);border-radius:12px;padding:14px;border:1px solid rgba(249,115,22,.3);grid-column:1/-1">
-      <div style="font-family:Orbitron,sans-serif;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.15em;color:#F97316;margin-bottom:10px">🏆 Overall Fastest</div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px">
-        ${allTimed.map((e,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:4px 0">
-          <span style="font-size:16px;width:24px">${medals[i]||i+1+'.'}</span>
-          <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(e.skaterName)}</div></div>
-          <div style="font-family:Orbitron,sans-serif;font-size:14px;font-weight:700;color:#F97316">${esc(e.time)}</div>
-        </div>`).join('')}
-      </div>
-    </div>`:''
-
-  const html=`<!doctype html><html><head><meta charset="utf-8">
-    <title>Time Trials — ${esc(meet.meetName)}</title>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Barlow:wght@400;600&display=swap" rel="stylesheet">
-    <meta http-equiv="refresh" content="8">
-    <style>
-      *{box-sizing:border-box;margin:0;padding:0}
-      body{background:#0a1628;color:#fff;font-family:Barlow,sans-serif;min-height:100vh;padding:20px}
-      .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;padding-bottom:16px;border-bottom:2px solid #F97316}
-      .meet-name{font-family:Orbitron,sans-serif;font-size:18px;font-weight:700;color:#fff}
-      .tt-label{font-family:Orbitron,sans-serif;font-size:12px;font-weight:700;color:#F97316;letter-spacing:.15em}
-      .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
-    </style>
-  </head><body>
-    <div class="header">
-      <div>
-        <div class="tt-label">⏱ TIME TRIALS — LIVE TOP 3</div>
-        <div class="meet-name">${esc(meet.meetName)}</div>
-      </div>
-      <div style="font-family:Orbitron,sans-serif;font-size:11px;color:rgba(255,255,255,.4)">Auto-refreshes every 8s</div>
-    </div>
-    <div class="grid">${overallCard}${groupCards}</div>
-  </body></html>`;
-
-  res.send(html);
-});
-
 app.get('/meet/:meetId/tv', (req, res) => {
   const db=loadDb(); const meet=getMeetOr404(db,req.params.meetId);
   if(!meet) return res.redirect('/meets');
@@ -5929,7 +5304,6 @@ app.get('/meet/:meetId/live', (req, res) => {
     <div class="live-tabs" style="margin-bottom:0">
       <a class="live-tab active" href="/meet/${meet.id}/live">Live Board</a>
       <a class="live-tab" href="/meet/${meet.id}/results">Results</a>
-      <a class="live-tab" href="/meet/${meet.id}/tt-live" target="_blank">⏱ TT Live</a>
       <a class="live-tab" href="/meet/${meet.id}/alerts">📲 Text Alerts</a>
       <a class="live-tab" href="/meet/${meet.id}/print-schedule" target="_blank">🖨️ Print Schedule</a>
     </div>
