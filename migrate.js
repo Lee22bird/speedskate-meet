@@ -148,7 +148,7 @@ async function migrate() {
         parent_race_id: race.parentRaceId || null,
         status: race.status || 'pending',
         notes: race.notes || '',
-        order_hint: race.orderHint || 0,
+        order_hint: Math.round(race.orderHint || 0),
         counts_for_overall: race.countsForOverall !== false
       }, { onConflict: 'id' });
       if (raerr) { console.error('    race error:', race.groupLabel, raerr.message); continue; }
@@ -185,7 +185,7 @@ async function migrate() {
         name: block.name || '',
         day: block.day || '',
         notes: block.notes || '',
-        order_hint: block.orderHint || 0
+        order_hint: Math.round(block.orderHint || 0)
       }, { onConflict: 'id' });
       if (berr) { console.error('    block error:', block.name, berr.message); continue; }
       blockCount++;
