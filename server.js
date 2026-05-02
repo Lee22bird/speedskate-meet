@@ -520,7 +520,302 @@ function migrateMeet(meet,fallbackOwnerId) {
   }));
 }
 
+// ── Supabase DB layer ─────────────────────────────────────────────────────────
+// loadDb/saveDb now read/write Supabase but keep the same in-memory db shape
+// so all existing business logic works unchanged.
+
+async function loadDbAsync() {
+  const db = { version:19, sessions:[], users:[], rinks:[], meets:[], rosters:[] };
+
+  // Users
+  const { data: users } = await supabase.from('users').select('*');
+  db.users = (users||[]).map(u=>({
+    id:u.id, username:u.username, passwordHash:u.password_hash,
+    password:u.password_hash, // legacy compat
+    displayName:u.name||u.username, roles:u.role?[u.role]:['judge'],
+    email:u.email||'', active:true, createdAt:u.created_at
+  }));
+  if(!db.users.some(u=>u.username===ADMIN_USERNAME)) db.users.unshift(defaultDb().users[0]);
+
+  // Rinks
+  const { data: rinks } = await supabase.from('rinks').select('*');
+  db.rinks = (rinks||[]).map(r=>({
+    id:r.id, name:r.name, city:r.city||'', state:r.state||'',
+    trackLength:r.track_length||'', lanes:r.lanes||4,
+    createdAt:r.created_at, status:r.status||'active'
+  }));
+
+  // Sessions (still stored in JSON for speed)
+  const jsonDb = safeReadJson(DATA_FILE);
+  db.sessions = (jsonDb?.sessions||[]).filter(s=>s.expiresAt&&new Date(s.expiresAt).getTime()>Date.now());
+
+  // Meets — load all meets with their full nested data
+  const { data: meets } = await supabase.from('meets').select('*');
+  for(const m of meets||[]) {
+    const meet = await loadMeetFromSupabase(m);
+    db.meets.push(meet);
+  }
+
+  const fallbackOwnerId=(db.users[0]&&db.users[0].id)||'1';
+  db.meets.forEach(m=>migrateMeet(m,fallbackOwnerId));
+  sanitizeRinks(db);
+  return db;
+}
+
+async function loadMeetFromSupabase(m) {
+  const meetId = m.id;
+
+  const [
+    { data: regs },
+    { data: races },
+    { data: laneEntries },
+    { data: blocks },
+    { data: blockRaces },
+    { data: textAlerts }
+  ] = await Promise.all([
+    supabase.from('registrations').select('*').eq('meet_id', meetId),
+    supabase.from('races').select('*').eq('meet_id', meetId),
+    supabase.from('lane_entries').select('*').eq('meet_id', meetId),
+    supabase.from('blocks').select('*').eq('meet_id', meetId),
+    supabase.from('block_races').select('*'),
+    supabase.from('text_alerts').select('*').eq('meet_id', meetId)
+  ]);
+
+  // Map lane entries to races
+  const entriesByRace = {};
+  for(const e of laneEntries||[]) {
+    if(!entriesByRace[e.race_id]) entriesByRace[e.race_id]=[];
+    entriesByRace[e.race_id].push({
+      lane:e.lane, registrationId:e.registration_id,
+      helmetNumber:e.helmet_number, skaterName:e.skater_name,
+      team:e.team, place:e.place, time:e.time,
+      status:e.status||'', groupPlace:e.group_place, id:e.id
+    });
+  }
+
+  // Map block races
+  const racesByBlock = {};
+  for(const br of blockRaces||[]) {
+    if(!racesByBlock[br.block_id]) racesByBlock[br.block_id]=[];
+    racesByBlock[br.block_id].push({raceId:br.race_id, orderHint:br.order_hint});
+  }
+
+  const mappedRaces = (races||[]).map(r=>({
+    id:r.id, groupId:r.group_id, groupLabel:r.group_label,
+    division:r.division, distanceLabel:r.distance_label,
+    ages:r.ages, gender:r.gender,
+    isOpenRace:r.is_open_race, isQuadRace:r.is_quad_race,
+    isTimeTrial:r.is_time_trial, isRelayRace:r.is_relay_race,
+    isSkateabilityRace:r.is_skateability_race,
+    heatNumber:r.heat_number, isFinal:r.is_final,
+    parentRaceId:r.parent_race_id, status:r.status||'pending',
+    notes:r.notes||'', orderHint:r.order_hint||0,
+    countsForOverall:r.counts_for_overall!==false,
+    laneEntries:entriesByRace[r.id]||[], createdAt:r.created_at
+  }));
+
+  const mappedBlocks = (blocks||[])
+    .sort((a,b)=>(a.order_hint||0)-(b.order_hint||0))
+    .map(b=>{
+      const bRaces=(racesByBlock[b.id]||[]).sort((a,bb)=>(a.orderHint||0)-(bb.orderHint||0));
+      return {
+        id:b.id, name:b.name, day:b.day||'Day 1',
+        notes:b.notes||'', orderHint:b.order_hint||0,
+        raceIds:bRaces.map(br=>br.raceId)
+      };
+    });
+
+  const mappedRegs = (regs||[]).map(r=>({
+    id:r.id, createdAt:r.created_at, name:r.name,
+    age:r.age, gender:r.gender, team:r.team||'',
+    sponsor:r.sponsor||'', email:r.email||'',
+    birthdate:r.birthdate||'', helmetNumber:r.helmet_number,
+    divisionGroupId:r.division_group_id||'',
+    divisionGroupLabel:r.division_group_label||'',
+    originalDivisionGroupId:r.original_division_group_id||'',
+    challengeUpGroupId:r.challenge_up_group_id||'',
+    challengeUpGroupLabel:r.challenge_up_group_label||'',
+    meetNumber:r.meet_number, paid:r.paid, checkedIn:r.checked_in,
+    totalCost:r.total_cost||0,
+    options:{
+      elite:r.opt_elite, novice:r.opt_novice, open:r.opt_open,
+      quad:r.opt_quad, relays:r.opt_relays,
+      challengeUp:r.opt_challenge_up, skateability:r.opt_skateability
+    }
+  }));
+
+  return {
+    id:m.id, meetName:m.meet_name, date:m.date||'',
+    endDate:m.end_date||'', startTime:m.start_time||'',
+    rinkId:m.rink_id||'', trackLength:m.track_length||'',
+    lanes:m.lanes||4, status:m.status||'draft',
+    isPublic:m.is_public, baseEntryFee:m.base_entry_fee||0,
+    additionalEntryFee:m.additional_entry_fee||0,
+    entryCap:m.entry_cap||null,
+    registrationCloseAt:m.registration_close_at||'',
+    notes:m.notes||'', relayNotes:m.relay_notes||'',
+    relayEnabled:m.relay_enabled, tiebreaker:m.tiebreaker||'',
+    currentRaceId:m.current_race_id||'',
+    currentRaceIndex:m.current_race_index||0,
+    raceDayPaused:m.race_day_paused||false,
+    createdByUserId:m.created_by_user_id,
+    createdAt:m.created_at, updatedAt:m.updated_at,
+    registrations:mappedRegs, races:mappedRaces,
+    blocks:mappedBlocks,
+    textAlerts:(textAlerts||[]).map(a=>({
+      id:a.id, registrationId:a.registration_id,
+      skaterName:a.skater_name, phone:a.phone, createdAt:a.created_at
+    })),
+    // These are stored as JSON in Supabase meets table config cols — load from JSON backup for now
+    groups:[], openGroups:[], quadGroups:[], skateabilityGroups:[]
+  };
+}
+
+async function saveDbAsync(db) {
+  // Save sessions to JSON file (fast, no need for Supabase)
+  const jsonDb = safeReadJson(DATA_FILE)||defaultDb();
+  jsonDb.sessions = db.sessions||[];
+  jsonDb.version = 19;
+  jsonDb.updatedAt = nowIso();
+  writeJsonAtomic(DATA_FILE, jsonDb);
+
+  // Save users
+  for(const u of db.users||[]) {
+    await supabase.from('users').upsert({
+      id:String(u.id), username:u.username,
+      password_hash:u.passwordHash||u.password||'',
+      role:Array.isArray(u.roles)?u.roles[0]||'judge':'judge',
+      email:u.email||'', name:u.displayName||u.username
+    },{onConflict:'id'});
+  }
+
+  // Save rinks
+  for(const r of db.rinks||[]) {
+    await supabase.from('rinks').upsert({
+      id:String(r.id), name:r.name, city:r.city||'',
+      state:r.state||'', track_length:r.trackLength||'', lanes:r.lanes||4
+    },{onConflict:'id'});
+  }
+
+  // Save each meet
+  for(const meet of db.meets||[]) {
+    await saveMeetToSupabase(meet);
+  }
+}
+
+async function saveMeetToSupabase(meet) {
+  // Upsert meet row
+  await supabase.from('meets').upsert({
+    id:String(meet.id), meet_name:meet.meetName,
+    date:meet.date||null, end_date:meet.endDate||null,
+    start_time:meet.startTime||'',
+    rink_id:meet.rinkId||null, track_length:meet.trackLength||'',
+    lanes:meet.lanes||4, status:meet.status||'draft',
+    is_public:!!meet.isPublic, base_entry_fee:meet.baseEntryFee||0,
+    additional_entry_fee:meet.additionalEntryFee||0,
+    entry_cap:meet.entryCap||null,
+    registration_close_at:meet.registrationCloseAt||null,
+    notes:meet.notes||'', relay_notes:meet.relayNotes||'',
+    relay_enabled:!!meet.relayEnabled, tiebreaker:meet.tiebreaker||'',
+    current_race_id:meet.currentRaceId||'',
+    current_race_index:meet.currentRaceIndex||0,
+    race_day_paused:!!meet.raceDayPaused,
+    created_by_user_id:meet.createdByUserId||null,
+    updated_at:nowIso()
+  },{onConflict:'id'});
+
+  // Upsert registrations
+  for(const r of meet.registrations||[]) {
+    await supabase.from('registrations').upsert({
+      id:String(r.id), meet_id:String(meet.id),
+      name:r.name, age:r.age||null, gender:r.gender||'',
+      team:r.team||'', sponsor:r.sponsor||'', email:r.email||'',
+      birthdate:r.birthdate||null, helmet_number:String(r.helmetNumber||''),
+      division_group_id:r.divisionGroupId||'',
+      division_group_label:r.divisionGroupLabel||'',
+      original_division_group_id:r.originalDivisionGroupId||'',
+      challenge_up_group_id:r.challengeUpGroupId||'',
+      challenge_up_group_label:r.challengeUpGroupLabel||'',
+      meet_number:r.meetNumber||null, paid:!!r.paid,
+      checked_in:!!r.checkedIn, total_cost:r.totalCost||0,
+      opt_elite:!!r.options?.elite, opt_novice:!!r.options?.novice,
+      opt_open:!!r.options?.open, opt_quad:!!r.options?.quad,
+      opt_relays:!!r.options?.relays,
+      opt_challenge_up:!!r.options?.challengeUp,
+      opt_skateability:!!r.options?.skateability
+    },{onConflict:'id'});
+  }
+
+  // Upsert races + lane entries
+  for(const race of meet.races||[]) {
+    await supabase.from('races').upsert({
+      id:race.id, meet_id:String(meet.id),
+      group_id:race.groupId||'', group_label:race.groupLabel||'',
+      division:race.division||'', distance_label:race.distanceLabel||'',
+      ages:race.ages||'', gender:race.gender||'',
+      race_type:race.isQuadRace?'quad':race.isOpenRace?'open':race.isRelayRace?'relay':race.isSkateabilityRace?'skateability':'elite',
+      is_open_race:!!race.isOpenRace, is_quad_race:!!race.isQuadRace,
+      is_time_trial:false, is_relay_race:!!race.isRelayRace,
+      is_skateability_race:!!race.isSkateabilityRace,
+      heat_number:race.heatNumber||null, is_final:!!race.isFinal,
+      parent_race_id:race.parentRaceId||null,
+      status:race.status||'pending', notes:race.notes||'',
+      order_hint:Math.round(race.orderHint||0),
+      counts_for_overall:race.countsForOverall!==false
+    },{onConflict:'id'});
+
+    // Delete and re-insert lane entries for this race
+    await supabase.from('lane_entries').delete().eq('race_id',race.id);
+    for(const e of race.laneEntries||[]) {
+      if(!e.skaterName&&!e.registrationId) continue;
+      await supabase.from('lane_entries').insert({
+        race_id:race.id, meet_id:String(meet.id),
+        registration_id:e.registrationId?String(e.registrationId):null,
+        lane:e.lane||null, skater_name:e.skaterName||'',
+        helmet_number:String(e.helmetNumber||''),
+        team:e.team||'',
+        place:e.place?parseInt(e.place):null,
+        time:e.time||null, status:e.status||null,
+        group_place:e.groupPlace?parseInt(e.groupPlace):null
+      });
+    }
+  }
+
+  // Upsert blocks + block_races
+  for(const block of meet.blocks||[]) {
+    await supabase.from('blocks').upsert({
+      id:block.id, meet_id:String(meet.id),
+      name:block.name||'', day:block.day||'Day 1',
+      notes:block.notes||'', order_hint:block.orderHint||0
+    },{onConflict:'id'});
+    await supabase.from('block_races').delete().eq('block_id',block.id);
+    for(let i=0;i<(block.raceIds||[]).length;i++) {
+      if(!block.raceIds[i]) continue;
+      await supabase.from('block_races').insert({
+        block_id:block.id, race_id:block.raceIds[i], order_hint:i
+      });
+    }
+  }
+
+  // Upsert text alerts
+  for(const a of meet.textAlerts||[]) {
+    await supabase.from('text_alerts').upsert({
+      id:a.id, meet_id:String(meet.id),
+      registration_id:a.registrationId?String(a.registrationId):null,
+      skater_name:a.skaterName||'', phone:a.phone,
+      created_at:a.createdAt||nowIso()
+    },{onConflict:'id'});
+  }
+}
+
+// Async wrapper for route handlers
+function ah(fn) {
+  return (req,res,next)=>Promise.resolve(fn(req,res,next)).catch(next);
+}
+
+// Async versions of loadDb/saveDb for backward compat
 function loadDb() {
+  // Fallback to JSON for sync contexts (session middleware etc)
   let db=safeReadJson(DATA_FILE);
   if(!db) { db=defaultDb(); writeJsonAtomic(DATA_FILE,db); return db; }
   if(!Array.isArray(db.users)||db.users.length===0) db.users=defaultDb().users;
@@ -536,7 +831,11 @@ function loadDb() {
   db.version=19; db.updatedAt=nowIso(); return db;
 }
 
-function saveDb(db) { db.version=19; db.updatedAt=nowIso(); writeJsonAtomic(DATA_FILE,db); }
+function saveDb(db) {
+  db.version=19; db.updatedAt=nowIso(); writeJsonAtomic(DATA_FILE,db);
+  // Also async-sync to Supabase in background
+  saveDbAsync(db).catch(err=>console.error('[Supabase sync error]',err.message));
+}
 
 function getSessionUser(req) {
   const token=parseCookies(req)[SESSION_COOKIE]; if(!token) return null;
