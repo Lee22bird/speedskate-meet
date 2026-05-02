@@ -4501,7 +4501,8 @@ app.get('/portal/meet/:meetId/blocks', requireRole('meet_director'), (req, res) 
         data-race-id="${esc(race.id)}"
         data-group-label="${esc(String(race.groupLabel||'').toLowerCase())}"
         data-division="${esc(race.division)}"
-        data-day-index="${esc(race.dayIndex)}">
+        data-day-index="${esc(race.dayIndex)}"
+        data-search="${esc([String(race.groupLabel||''),cap(race.division),race.distanceLabel,raceDisplayStage(race),cap(race.startType),'D'+race.dayIndex].join(' ').toLowerCase())}">
         <div class="race-label">${tag}${esc(race.groupLabel)} <span style="opacity:.6">•</span> ${esc(cap(race.division))}</div>
         <div class="race-meta">${esc(race.distanceLabel)} • D${esc(race.dayIndex)} • ${esc(raceDisplayStage(race))} • ${esc(cap(race.startType))}</div>
       </div>`;
@@ -4672,7 +4673,7 @@ app.get('/portal/meet/:meetId/blocks', requireRole('meet_director'), (req, res) 
         const items=Array.from(document.querySelectorAll('#unassignedZone .race-item'));
         let v=0;
         for(const item of items){
-          const mS=!q||(item.getAttribute('data-group-label')||'').includes(q);
+          const mS=!q||(item.getAttribute('data-search')||item.getAttribute('data-group-label')||'').includes(q);
           const mC=klass==='all'||item.getAttribute('data-division')===klass;
           const mD=dist==='all'||item.getAttribute('data-day-index')===dist;
           const show=mS&&mC&&mD; item.classList.toggle('hidden',!show); if(show) v++;
