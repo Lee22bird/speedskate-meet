@@ -4609,7 +4609,7 @@ app.get('/portal/meet/:meetId/blocks', requireRole('meet_director'), (req, res) 
               </select>
             </div>
           </div>
-          <div class="drop-zone" data-drop-block="__unassigned__" id="unassignedZone">
+          <div class="drop-zone" data-drop-block="__unassigned__" id="unassignedZone" style="max-height:calc(100vh - 260px);overflow-y:auto;">
             ${unassigned.map(race=>raceItemHtml(race,meet.currentRaceId===race.id)).join('')||`<div class="note" style="padding:8px">All races assigned.</div>`}
           </div>
         </div>
