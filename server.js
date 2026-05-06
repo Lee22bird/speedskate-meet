@@ -4389,16 +4389,10 @@ app.get('/portal/meet/:meetId/checkin', requireRole('meet_director'), (req, res)
       </td>
       <td><strong>$${esc(r.totalCost)}</strong></td>
       <td onclick="event.stopPropagation()">
-        <form method="POST" action="/portal/meet/${meet.id}/checkin/toggle-paid/${r.id}" class="checkin-form"
-          onsubmit="sessionStorage.setItem('ciY',String(window.scrollY))">
-          <button class="${r.paid?'btn-good':'btn2'} btn-sm" type="submit">${r.paid?'✔ Paid':'Mark Paid'}</button>
-        </form>
+        <button class="${r.paid?'btn-good':'btn2'} btn-sm" onclick="togglePaid('${r.id}',this)">${r.paid?'✔ Paid':'Mark Paid'}</button>
       </td>
       <td onclick="event.stopPropagation()">
-        <form method="POST" action="/portal/meet/${meet.id}/checkin/toggle-checkin/${r.id}" class="checkin-form"
-          onsubmit="sessionStorage.setItem('ciY',String(window.scrollY))">
-          <button class="${r.checkedIn?'btn-good':'btn2'} btn-sm" type="submit">${r.checkedIn?'✔ In':'Check In'}</button>
-        </form>
+        <button class="${r.checkedIn?'btn-good':'btn2'} btn-sm" onclick="toggleCheckin('${r.id}',this)">${r.checkedIn?'✔ In':'Check In'}</button>
       </td>
     </tr>`;
   }).join('');
@@ -4453,12 +4447,46 @@ app.get('/portal/meet/:meetId/checkin', requireRole('meet_director'), (req, res)
         if(r.options?.skateability&&!entries.length) entries.push('Skateability');
         return [String(r.id),{name:r.name,team:r.team,division:r.divisionGroupLabel,sponsor:r.sponsor||'',
           helmet:r.helmetNumber,totalCost:r.totalCost,age:r.age||'?',paid:!!r.paid,checkedIn:!!r.checkedIn,entries,
+          regId:String(r.id),
           paidUrl:'/portal/meet/'+meet.id+'/checkin/toggle-paid/'+r.id,
           checkinUrl:'/portal/meet/'+meet.id+'/checkin/toggle-checkin/'+r.id,
           editUrl:'/portal/meet/'+meet.id+'/registered/'+r.id+'/edit'}];
       })))};
-      const savedY=sessionStorage.getItem('ciY');
-      if(savedY) { window.scrollTo(0,parseInt(savedY,10)); sessionStorage.removeItem('ciY'); }
+
+      const MEET_ID='${meet.id}';
+      async function togglePaid(regId, btn) {
+        btn.disabled=true;
+        const r=await fetch('/portal/meet/'+MEET_ID+'/checkin/toggle-paid/'+regId,{method:'POST'});
+        const data=await r.json();
+        if(data.ok) {
+          const paid=data.paid;
+          btn.textContent=paid?'\u2714 Paid':'Mark Paid';
+          btn.className=(paid?'btn-good':'btn2')+(btn.className.includes('btn-sm')?' btn-sm':'');
+          btn.style.background=paid?'':''; btn.style.color=paid?'':''; btn.style.border=paid?'':'';
+          // update modal button if open
+          const mb=document.getElementById('modal-paid-btn');
+          if(mb&&mb.getAttribute('data-reg-id')===regId){
+            mb.textContent=paid?'\u2714 Paid':'Mark Paid';
+            mb.style.cssText=mb.style.cssText.replace(/border:[^;]+;background:[^;]+;color:[^;]+/,paid?'border:1.5px solid #6ee7b7;background:#ecfdf5;color:#059669':'border:1.5px solid #cbd5e1;background:#fff;color:#64748b');
+          }
+          // update CI_DATA
+          if(CI_DATA[regId]) CI_DATA[regId].paid=paid;
+        }
+        btn.disabled=false;
+      }
+      async function toggleCheckin(regId, btn) {
+        btn.disabled=true;
+        const r=await fetch('/portal/meet/'+MEET_ID+'/checkin/toggle-checkin/'+regId,{method:'POST'});
+        const data=await r.json();
+        if(data.ok) {
+          const ci=data.checkedIn;
+          btn.textContent=ci?'\u2714 In':'Check In';
+          btn.className=(ci?'btn-good':'btn2')+(btn.className.includes('btn-sm')?' btn-sm':'');
+          // update CI_DATA
+          if(CI_DATA[regId]) CI_DATA[regId].checkedIn=ci;
+        }
+        btn.disabled=false;
+      }
       function openCiModal(row) {
         var d=CI_DATA[row.getAttribute('data-reg-id')];
         if(!d) return;
@@ -4481,12 +4509,8 @@ app.get('/portal/meet/:meetId/checkin', requireRole('meet_director'), (req, res)
             chips+
           '</div>'+
           '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
-            '<form method="POST" action="'+d.paidUrl+'" style="flex:1" onsubmit="sessionStorage.setItem(\'ciY\',String(window.scrollY))">'+
-              '<button type="submit" style="width:100%;padding:11px;border-radius:10px;font-weight:700;font-size:13px;cursor:pointer;'+paidSt+'">'+(d.paid?'&#x2714; Paid':'Mark Paid')+'</button>'+
-            '</form>'+
-            '<form method="POST" action="'+d.checkinUrl+'" style="flex:1" onsubmit="sessionStorage.setItem(\'ciY\',String(window.scrollY))">'+
-              '<button type="submit" style="width:100%;padding:11px;border-radius:10px;font-weight:700;font-size:13px;cursor:pointer;'+ciSt+'">'+(d.checkedIn?'&#x2714; Checked In':'Check In')+'</button>'+
-            '</form>'+
+            '<button id="modal-paid-btn" style="flex:1;width:100%;padding:11px;border-radius:10px;font-weight:700;font-size:13px;cursor:pointer;border:none;'+paidSt+'" onclick="togglePaid(\''+d.regId+'\',this)">'+(d.paid?'&#x2714; Paid':'Mark Paid')+'</button>'+
+            '<button id="modal-ci-btn" style="flex:1;width:100%;padding:11px;border-radius:10px;font-weight:700;font-size:13px;cursor:pointer;border:none;'+ciSt+'" onclick="toggleCheckin(\''+d.regId+'\',this)">'+(d.checkedIn?'&#x2714; Checked In':'Check In')+'</button>'+
             '<a href="'+d.editUrl+'" style="flex:1;display:block;padding:11px;border-radius:10px;font-weight:700;font-size:13px;text-align:center;border:1.5px solid #cbd5e1;background:#fff;color:#0F1F3D;text-decoration:none">Edit</a>'+
           '</div>';
         document.getElementById('ci-modal').style.display='flex';
@@ -4499,16 +4523,16 @@ app.get('/portal/meet/:meetId/checkin', requireRole('meet_director'), (req, res)
 
 app.post('/portal/meet/:meetId/checkin/toggle-paid/:regId', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
-  if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
+  if(!meet||!canEditMeet(req.user,meet)) return res.status(403).json({error:'forbidden'});
   const reg=(meet.registrations||[]).find(r=>Number(r.id)===Number(req.params.regId));
-  if(reg) reg.paid=!reg.paid; saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/checkin`);
+  if(reg) reg.paid=!reg.paid; saveDb(req.db); res.json({ok:true,paid:reg?reg.paid:false});
 });
 
 app.post('/portal/meet/:meetId/checkin/toggle-checkin/:regId', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
-  if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
+  if(!meet||!canEditMeet(req.user,meet)) return res.status(403).json({error:'forbidden'});
   const reg=(meet.registrations||[]).find(r=>Number(r.id)===Number(req.params.regId));
-  if(reg) reg.checkedIn=!reg.checkedIn; saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/checkin`);
+  if(reg) reg.checkedIn=!reg.checkedIn; saveDb(req.db); res.json({ok:true,checkedIn:reg?reg.checkedIn:false});
 });
 
 app.post('/portal/meet/:meetId/checkin/helmet/:regId', requireRole('meet_director'), (req, res) => {
