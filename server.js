@@ -1425,19 +1425,19 @@ function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
       min-height: 360px; display: flex; align-items: flex-end;
       background: var(--navy); margin-bottom: 28px; box-shadow: var(--shadow-lg);
     }
-    .hero.hero-centered { min-height: 300px; height: 38vh; max-height: 420px; align-items: center; justify-content: center; padding: 0; }
+    .hero.hero-centered { min-height: 360px; height: 44vh; max-height: 460px; align-items: center; justify-content: center; padding: 0; }
     .hero-centered { align-items: center; justify-content: center; padding: 18px 20px !important; }
     .hero-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 35%; opacity: .40; }
     .hero-gradient { position: absolute; inset: 0; background: linear-gradient(to top, rgba(15,31,61,.95) 25%, rgba(15,31,61,.20) 100%); }
     .hero-content { position: relative; z-index: 1; padding: 36px; }
-    .hero-content-centered { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 8px 20px 14px; text-align: center; width: 100%; }
-    .hero-logo { height: auto; width: 860px; max-width: 88vw; max-height: 230px; object-fit: contain; display: block; filter: drop-shadow(0 6px 32px rgba(0,0,0,.6)); flex-shrink: 0; }
+    .hero-content-centered { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 18px 20px 20px; text-align: center; width: 100%; }
+    .hero-logo { height: 175px; width: auto; max-width: 78vw; object-fit: contain; display: block; filter: drop-shadow(0 8px 34px rgba(0,0,0,.65)); flex-shrink: 0; }
     .hero-eyebrow { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .15em; color: var(--orange); margin-bottom: 8px; }
     .hero-title { font-family: 'Barlow Condensed',sans-serif; font-size: 64px; font-weight: 900; line-height: .95; letter-spacing: -1px; color: #fff; }
     .hero-title span { color: var(--orange); }
     .hero-sub { font-size: 17px; color: rgba(255,255,255,.80); margin-top: 12px; max-width: 520px; }
     .hero-actions { display: flex; gap: 12px; margin-top: 22px; flex-wrap: wrap; }
-    .hero-actions-centered { display: flex; gap: 12px; margin-top: 12px; flex-wrap: wrap; justify-content: center; }
+    .hero-actions-centered { display: flex; gap: 12px; margin-top: 20px; flex-wrap: wrap; justify-content: center; }
     .btn-white { background: rgba(255,255,255,.15) !important; color: #fff !important; border-color: rgba(255,255,255,.35) !important; backdrop-filter: blur(4px); }
     .btn-white:hover { background: rgba(255,255,255,.25) !important; }
 
@@ -1456,6 +1456,35 @@ function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
     .feature-title { font-family: 'Barlow Condensed',sans-serif; font-size: 24px; font-weight: 700; }
     .feature-desc  { font-size: 14px; opacity: .85; margin-top: 6px; line-height: 1.5; }
     .feature-cta   { font-size: 13px; font-weight: 700; color: var(--orange); margin-top: 12px; letter-spacing: .04em; }
+
+
+    /* ── Meet setup cleanup ──────────────────────────────────────── */
+    .setup-card { padding: 0; overflow: hidden; }
+    .setup-head { position: sticky; top: 0; z-index: 4; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 20px 24px; background: rgba(255,255,255,.96); border-bottom: 1px solid var(--border); backdrop-filter: blur(8px); }
+    .setup-title { margin: 0; font-family: 'Barlow Condensed',sans-serif; font-size: 34px; font-weight: 900; color: var(--navy); line-height: 1; }
+    .setup-sub { color: var(--muted); font-size: 13px; margin-top: 4px; }
+    .setup-body { padding: 22px 24px 24px; }
+    .setup-sections { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; }
+    .setup-section { border: 1.5px solid var(--border); border-radius: var(--radius); background: #fff; padding: 16px; box-shadow: 0 1px 0 rgba(15,31,61,.03); }
+    .setup-section-wide { grid-column: 1 / -1; }
+    .setup-section-title { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-family: 'Barlow Condensed',sans-serif; font-size: 24px; font-weight: 900; color: var(--navy); }
+    .setup-section-title small { font-family: inherit; font-size: 13px; font-weight: 700; color: var(--muted); letter-spacing: 0; }
+    .setup-fields { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+    .setup-fields.cols-3 { grid-template-columns: repeat(3,minmax(0,1fr)); }
+    .setup-field-full { grid-column: 1 / -1; }
+    .preset-row { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 8px; align-items: end; }
+    .meet-options-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 10px; }
+    .setup-notes-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; margin-top: 16px; }
+    .setup-card .toggle-row { border-radius: var(--radius-sm); padding: 13px 14px; }
+    @media(max-width:1000px){
+      .setup-sections { grid-template-columns: 1fr; }
+      .meet-options-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+    }
+    @media(max-width:700px){
+      .setup-head { align-items: flex-start; flex-direction: column; }
+      .setup-fields, .setup-fields.cols-3, .setup-notes-grid, .meet-options-grid { grid-template-columns: 1fr; }
+      .preset-row { grid-template-columns: 1fr; }
+    }
 
     /* ── Misc helpers ─────────────────────────────────────────────── */
     .spacer    { height: 16px; }
@@ -2991,90 +3020,121 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
       </div>
     </div>
     <form method="POST" action="/portal/meet/${meet.id}/builder/save" class="stack">
-      <div class="card">
-        <div class="row between" style="margin-bottom:16px">
-          <h2 style="margin:0">Meet Setup</h2>
+      <div class="card setup-card">
+        <div class="setup-head">
+          <div>
+            <h2 class="setup-title">Meet Setup</h2>
+            <div class="setup-sub">Core meet details, venue, rules, and reusable presets.</div>
+          </div>
           <button class="btn2" type="submit" formaction="/portal/meet/${meet.id}/builder/save-meet">Save Meet</button>
         </div>
-        <div class="form-grid cols-3" style="margin-bottom:14px">
-          <div><label>Meet Name</label><input name="meetName" value="${esc(meet.meetName)}" required /></div>
-          <div><label>Start Date</label><input type="date" name="date" value="${esc(meet.date)}" /></div>
-          <div><label>Optional End Date</label><input type="date" name="endDate" value="${esc(meet.endDate||'')}" /><div class="note">Leave blank for a single-day meet.</div></div>
-          <div><label>Start Time</label><input type="time" name="startTime" value="${esc(meet.startTime)}" /></div>
-          <div><label>Registration Close Date</label><input type="date" name="registrationCloseDate" value="${esc(meet.registrationCloseAt?meet.registrationCloseAt.slice(0,10):'')}" /></div>
-          <div><label>Registration Close Time</label><input type="time" name="registrationCloseTime" value="${esc(meet.registrationCloseAt?meet.registrationCloseAt.slice(11,16):'')}" /></div>
-          <div style="grid-column:span 2"><label>Rink</label>
-            <input name="rinkSearch" id="rinkSearch" list="rinkSuggestions" value="${esc(rinkInputValue)}" placeholder="Start typing rink name..." autocomplete="off" />
-            <input type="hidden" name="rinkId" id="rinkId" value="${esc(String(meet.rinkId||''))}" />
-            <datalist id="rinkSuggestions">${rinkDataList}</datalist>
-            <div class="note">Start typing and pick a saved rink, or leave your typed name as a one-time custom rink.</div>
+        <div class="setup-body">
+          <div class="setup-sections">
+            <section class="setup-section">
+              <div class="setup-section-title">📋 Meet Details</div>
+              <div class="setup-fields">
+                <div class="setup-field-full"><label>Meet Name</label><input name="meetName" value="${esc(meet.meetName)}" required /></div>
+                <div><label>Start Date</label><input type="date" name="date" value="${esc(meet.date)}" /></div>
+                <div><label>Optional End Date</label><input type="date" name="endDate" value="${esc(meet.endDate||'')}" /><div class="note">Blank = single-day meet.</div></div>
+                <div class="setup-field-full"><label>Start Time</label><input type="time" name="startTime" value="${esc(meet.startTime)}" /></div>
+              </div>
+            </section>
+
+            <section class="setup-section">
+              <div class="setup-section-title">📝 Registration</div>
+              <div class="setup-fields">
+                <div><label>Close Date</label><input type="date" name="registrationCloseDate" value="${esc(meet.registrationCloseAt?meet.registrationCloseAt.slice(0,10):'')}" /></div>
+                <div><label>Close Time</label><input type="time" name="registrationCloseTime" value="${esc(meet.registrationCloseAt?meet.registrationCloseAt.slice(11,16):'')}" /></div>
+                <div><label>Base Entry Fee ($)</label><input type="number" name="baseEntryFee" value="${esc(String(meet.baseEntryFee||0))}" min="0" /><div class="note">First event = base fee.</div></div>
+                <div><label>Status</label>
+                  <select name="status">
+                    <option value="draft"     ${meet.status==='draft'    ?'selected':''}>Draft</option>
+                    <option value="published" ${meet.status==='published'?'selected':''}>Published</option>
+                    <option value="live"      ${meet.status==='live'     ?'selected':''}>Live</option>
+                    <option value="complete"  ${meet.status==='complete' ?'selected':''}>Complete</option>
+                  </select>
+                </div>
+              </div>
+            </section>
+
+            <section class="setup-section setup-section-wide">
+              <div class="setup-section-title">📍 Venue <small>Saved rink or one-time custom rink</small></div>
+              <div class="setup-fields cols-3">
+                <div class="setup-field-full"><label>Rink</label>
+                  <input name="rinkSearch" id="rinkSearch" list="rinkSuggestions" value="${esc(rinkInputValue)}" placeholder="Start typing rink name..." autocomplete="off" />
+                  <input type="hidden" name="rinkId" id="rinkId" value="${esc(String(meet.rinkId||''))}" />
+                  <datalist id="rinkSuggestions">${rinkDataList}</datalist>
+                  <div class="note">Pick a saved rink when available. Typed names become custom for this meet only.</div>
+                </div>
+                <div><label>Track Length (m)</label><input name="trackLength" value="${esc(meet.trackLength)}" /></div>
+                <div><label>Lanes</label><input name="lanes" value="${esc(meet.lanes)}" /></div>
+              </div>
+            </section>
+
+            <section class="setup-section setup-section-wide">
+              <div class="setup-section-title">⚙️ Rules & Presets</div>
+              <div class="setup-fields">
+                <div><label>Tiebreaker Rule</label>
+                  <select name="tiebreaker">
+                    <option value="d2"    ${(meet.tiebreaker||'d2')==='d2'   ?'selected':''}>D2 Middle Race (local standard)</option>
+                    <option value="sr832" ${meet.tiebreaker==='sr832'?'selected':''}>USARS SR832 Formula (regionals/nationals)</option>
+                  </select>
+                  <div class="note">D2 = most common locally. SR832 = official weighted formula.</div>
+                </div>
+                <div><label>Save Setup For Future Use</label>
+                  <div class="preset-row">
+                    <input name="presetName" value="${esc(meet.presetName||'')}" placeholder="Mid South Speed League" />
+                    <button class="btn2 btn-sm" type="submit" formaction="/portal/meet/${meet.id}/builder/save-preset">Save Setup</button>
+                  </div>
+                  <div class="note">Saves divisions, distances, fees, tiebreaker, blocks, and race order.</div>
+                </div>
+              </div>
+            </section>
+
+            <section class="setup-section setup-section-wide">
+              <div class="setup-section-title">🎛️ Meet Options</div>
+              <script>
+                (function(){
+                  var rinks = ${rinkLookupScript};
+                  var input = document.getElementById('rinkSearch');
+                  var hidden = document.getElementById('rinkId');
+                  if(!input || !hidden) return;
+                  function syncRink(){
+                    var value = (input.value || '').trim().toLowerCase();
+                    var match = rinks.find(function(r){
+                      return String(r.label || '').trim().toLowerCase() === value || String(r.name || '').trim().toLowerCase() === value;
+                    });
+                    hidden.value = match ? String(match.id) : '';
+                  }
+                  input.addEventListener('input', syncRink);
+                  input.addEventListener('change', syncRink);
+                  syncRink();
+                })();
+              </script>
+              <div class="meet-options-grid">
+                <div class="toggle-row">
+                  <div><div class="toggle-row-label">Time Trials</div><div class="toggle-row-desc">Enable TT entries</div></div>
+                  ${toggleSwitch('timeTrialsEnabled', meet.timeTrialsEnabled)}
+                </div>
+                <div class="toggle-row">
+                  <div><div class="toggle-row-label">Relays</div><div class="toggle-row-desc">Enable relay entries</div></div>
+                  ${toggleSwitch('relayEnabled', meet.relayEnabled)}
+                </div>
+                <div class="toggle-row">
+                  <div><div class="toggle-row-label">Judges Panel</div><div class="toggle-row-desc">Require judge panel</div></div>
+                  ${toggleSwitch('judgesPanelRequired', meet.judgesPanelRequired)}
+                </div>
+                <div class="toggle-row">
+                  <div><div class="toggle-row-label">Find a Meet</div><div class="toggle-row-desc">Public registration</div></div>
+                  ${toggleSwitch('isPublic', meet.isPublic)}
+                </div>
+              </div>
+              <div class="setup-notes-grid">
+                <div><label>Meet Notes</label><textarea name="notes">${esc(meet.notes||'')}</textarea></div>
+                <div><label>Relay Notes</label><textarea name="relayNotes">${esc(meet.relayNotes||'')}</textarea></div>
+              </div>
+            </section>
           </div>
-          <div><label>Track Length (m)</label><input name="trackLength" value="${esc(meet.trackLength)}" /></div>
-          <div><label>Lanes</label><input name="lanes" value="${esc(meet.lanes)}" /></div>
-          <div><label>Base Entry Fee ($)</label><input type="number" name="baseEntryFee" value="${esc(String(meet.baseEntryFee||0))}" min="0" /><div class="note">Min charge per skater. First event = base fee, each additional adds its own cost.</div></div>
-          <div><label>Status</label>
-            <select name="status">
-              <option value="draft"     ${meet.status==='draft'    ?'selected':''}>Draft</option>
-              <option value="published" ${meet.status==='published'?'selected':''}>Published</option>
-              <option value="live"      ${meet.status==='live'     ?'selected':''}>Live</option>
-              <option value="complete"  ${meet.status==='complete' ?'selected':''}>Complete</option>
-            </select>
-          </div>
-          <div><label>Tiebreaker Rule</label>
-            <select name="tiebreaker">
-              <option value="d2"    ${(meet.tiebreaker||'d2')==='d2'   ?'selected':''}>D2 Middle Race (local standard)</option>
-              <option value="sr832" ${meet.tiebreaker==='sr832'?'selected':''}>USARS SR832 Formula (regionals/nationals)</option>
-            </select>
-            <div class="note">D2 = most common at local meets. SR832 = official weighted formula.</div>
-          </div>
-          <div><label>Save Setup For Future Use</label>
-            <div style="display:flex;gap:8px;align-items:center">
-              <input name="presetName" value="${esc(meet.presetName||'')}" placeholder="Mid South Speed League" />
-              <button class="btn2 btn-sm" type="submit" formaction="/portal/meet/${meet.id}/builder/save-preset">Save Setup</button>
-            </div>
-            <div class="note">Saves divisions, distances, fees, tiebreaker, race blocks, and race order — not date, rink, registrations, or results.</div>
-          </div>
-        </div>
-        <script>
-          (function(){
-            var rinks = ${rinkLookupScript};
-            var input = document.getElementById('rinkSearch');
-            var hidden = document.getElementById('rinkId');
-            if(!input || !hidden) return;
-            function syncRink(){
-              var value = (input.value || '').trim().toLowerCase();
-              var match = rinks.find(function(r){
-                return String(r.label || '').trim().toLowerCase() === value || String(r.name || '').trim().toLowerCase() === value;
-              });
-              hidden.value = match ? String(match.id) : '';
-            }
-            input.addEventListener('input', syncRink);
-            input.addEventListener('change', syncRink);
-            syncRink();
-          })();
-        </script>
-        <div class="toggle-group">
-          <div class="toggle-row">
-            <div><div class="toggle-row-label">Time Trials</div><div class="toggle-row-desc">Enable time trial entries</div></div>
-            ${toggleSwitch('timeTrialsEnabled', meet.timeTrialsEnabled)}
-          </div>
-          <div class="toggle-row">
-            <div><div class="toggle-row-label">Relays</div><div class="toggle-row-desc">Enable relay entries</div></div>
-            ${toggleSwitch('relayEnabled', meet.relayEnabled)}
-          </div>
-          <div class="toggle-row">
-            <div><div class="toggle-row-label">Judges Panel Required</div><div class="toggle-row-desc">Require a judges panel for this meet</div></div>
-            ${toggleSwitch('judgesPanelRequired', meet.judgesPanelRequired)}
-          </div>
-          <div class="toggle-row">
-            <div><div class="toggle-row-label">Show on Find a Meet</div><div class="toggle-row-desc">Make this meet public and open for registration</div></div>
-            ${toggleSwitch('isPublic', meet.isPublic)}
-          </div>
-        </div>
-        <div class="spacer-sm"></div>
-        <div class="form-grid cols-2">
-          <div><label>Meet Notes</label><textarea name="notes">${esc(meet.notes||'')}</textarea></div>
-          <div><label>Relay Notes</label><textarea name="relayNotes">${esc(meet.relayNotes||'')}</textarea></div>
         </div>
       </div>
       <div class="page-header"><h2>Division Groups</h2><div class="sub">Enable classes and set distances for each age group.</div></div>
