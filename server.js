@@ -2920,7 +2920,9 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet) return res.redirect('/portal');
   if(!canEditMeet(req.user,meet)) return res.status(403).send(pageShell({title:'Forbidden',user:req.user, bodyHtml:`<div class="page-header"><h1>Forbidden</h1></div><div class="card"><div class="danger">Only the meet owner can edit this meet.</div></div>`}));
-  const rinkOptions=req.db.rinks.map(r=>`<option value="${r.id}" ${Number(meet.rinkId)===Number(r.id)?'selected':''}>${esc(r.name)} (${esc(r.city||'')}, ${esc(r.state||'')})</option>`).join('');
+  const rinkInputValue = String(meet.customRinkName || '').trim() || (() => { const r = req.db.rinks.find(x => Number(x.id) === Number(meet.rinkId)); return r ? `${r.name} (${r.city || ''}${r.city && r.state ? ', ' : ''}${r.state || ''})` : ''; })();
+  const rinkDataList=req.db.rinks.map(r=>`<option value="${esc(r.name)} (${esc(r.city||'')}${r.city&&r.state?', ':''}${esc(r.state||'')})" data-id="${r.id}"></option>`).join('');
+  const rinkLookupScript=JSON.stringify((req.db.rinks||[]).map(r=>({id:r.id,label:`${r.name} (${r.city||''}${r.city&&r.state?', ':''}${r.state||''})`,name:r.name})));
   const openEnabledCount=(meet.openGroups||[]).filter(g=>g.enabled).length;
   const quadEnabledCount=(meet.quadGroups||[]).filter(g=>g.enabled).length;
   const savedFlash=req.query.saved?'<div class="card" style="border-left:4px solid var(--green);margin-bottom:12px"><div class="good">✅ Meet saved successfully.</div></div>':'';
@@ -3001,8 +3003,12 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
           <div><label>Start Time</label><input type="time" name="startTime" value="${esc(meet.startTime)}" /></div>
           <div><label>Registration Close Date</label><input type="date" name="registrationCloseDate" value="${esc(meet.registrationCloseAt?meet.registrationCloseAt.slice(0,10):'')}" /></div>
           <div><label>Registration Close Time</label><input type="time" name="registrationCloseTime" value="${esc(meet.registrationCloseAt?meet.registrationCloseAt.slice(11,16):'')}" /></div>
-          <div><label>Rink</label><select name="rinkId">${rinkOptions}</select><div class="note">Use the list when available.</div></div>
-          <div><label>Custom Rink Name</label><input name="customRinkName" value="${esc(meet.customRinkName||'')}" placeholder="Type rink name if not listed" /><div class="note">Overrides the selected rink display for this meet only.</div></div>
+          <div style="grid-column:span 2"><label>Rink</label>
+            <input name="rinkSearch" id="rinkSearch" list="rinkSuggestions" value="${esc(rinkInputValue)}" placeholder="Start typing rink name..." autocomplete="off" />
+            <input type="hidden" name="rinkId" id="rinkId" value="${esc(String(meet.rinkId||''))}" />
+            <datalist id="rinkSuggestions">${rinkDataList}</datalist>
+            <div class="note">Start typing and pick a saved rink, or leave your typed name as a one-time custom rink.</div>
+          </div>
           <div><label>Track Length (m)</label><input name="trackLength" value="${esc(meet.trackLength)}" /></div>
           <div><label>Lanes</label><input name="lanes" value="${esc(meet.lanes)}" /></div>
           <div><label>Base Entry Fee ($)</label><input type="number" name="baseEntryFee" value="${esc(String(meet.baseEntryFee||0))}" min="0" /><div class="note">Min charge per skater. First event = base fee, each additional adds its own cost.</div></div>
@@ -3029,6 +3035,24 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
             <div class="note">Saves divisions, distances, fees, tiebreaker, race blocks, and race order — not date, rink, registrations, or results.</div>
           </div>
         </div>
+        <script>
+          (function(){
+            var rinks = ${rinkLookupScript};
+            var input = document.getElementById('rinkSearch');
+            var hidden = document.getElementById('rinkId');
+            if(!input || !hidden) return;
+            function syncRink(){
+              var value = (input.value || '').trim().toLowerCase();
+              var match = rinks.find(function(r){
+                return String(r.label || '').trim().toLowerCase() === value || String(r.name || '').trim().toLowerCase() === value;
+              });
+              hidden.value = match ? String(match.id) : '';
+            }
+            input.addEventListener('input', syncRink);
+            input.addEventListener('change', syncRink);
+            syncRink();
+          })();
+        </script>
         <div class="toggle-group">
           <div class="toggle-row">
             <div><div class="toggle-row-label">Time Trials</div><div class="toggle-row-desc">Enable time trial entries</div></div>
@@ -3131,14 +3155,29 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
     </form>`}));
 });
 
-function saveMeetFields(meet, body) {
+function saveMeetFields(meet, body, db) {
   meet.meetName=String(body.meetName||'New Meet').trim();
   meet.date=String(body.date||'').trim();
   meet.endDate=String(body.endDate||'').trim();
   meet.startTime=String(body.startTime||'').trim();
   meet.registrationCloseAt=combineDateTime(body.registrationCloseDate,body.registrationCloseTime);
-  meet.rinkId=Number(body.rinkId||1);
-  meet.customRinkName=String(body.customRinkName||'').trim();
+  const rinkSearch = String(body.rinkSearch || '').trim();
+  let submittedRinkId = Number(body.rinkId || 0);
+  if (!submittedRinkId && db && Array.isArray(db.rinks) && rinkSearch) {
+    const key = rinkSearch.toLowerCase();
+    const matched = db.rinks.find(r => {
+      const label = `${r.name} (${r.city || ''}${r.city && r.state ? ', ' : ''}${r.state || ''})`.toLowerCase();
+      return label === key || String(r.name || '').toLowerCase() === key;
+    });
+    if (matched) submittedRinkId = Number(matched.id || 0);
+  }
+  if (submittedRinkId) {
+    meet.rinkId = submittedRinkId;
+    meet.customRinkName = '';
+  } else {
+    meet.rinkId = Number(meet.rinkId || 1);
+    meet.customRinkName = rinkSearch;
+  }
   meet.trackLength=Number(body.trackLength||100);
   meet.lanes=Number(body.lanes||4);
   meet.timeTrialsEnabled=!!body.timeTrialsEnabled;
@@ -3186,7 +3225,7 @@ app.post('/portal/meet/:meetId/builder/save-preset', requireRole('meet_director'
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet) return res.redirect('/portal');
   if(!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
-  saveMeetFields(meet, req.body);
+  saveMeetFields(meet, req.body, req.db);
   if(!Array.isArray(req.db.setupPresets)) req.db.setupPresets=[];
   const preset=makeSetupPresetFromMeet(req.db, meet, req.body.presetName, req.user.id);
   req.db.setupPresets.push(preset);
@@ -3198,7 +3237,7 @@ app.post('/portal/meet/:meetId/builder/save-meet', requireRole('meet_director'),
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet) return res.redirect('/portal');
   if(!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
-  saveMeetFields(meet, req.body);
+  saveMeetFields(meet, req.body, req.db);
   saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/builder?saved=1`);
 });
 
@@ -3207,7 +3246,7 @@ app.post('/portal/meet/:meetId/builder/save', requireRole('meet_director'), (req
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet) return res.redirect('/portal');
   if(!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
-  saveMeetFields(meet, req.body);
+  saveMeetFields(meet, req.body, req.db);
   generateBaseRacesForMeet(meet); rebuildRaceAssignments(meet); ensureAtLeastOneBlock(meet); ensureCurrentRace(meet);
   saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/blocks`);
 });
