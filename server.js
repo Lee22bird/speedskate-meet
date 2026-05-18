@@ -4,6 +4,12 @@ const path = require('path');
 const crypto = require('crypto');
 const { sendSms, normalizePhone } = require('./services/sms');
 const { sendEmail, emailHtmlWrap } = require('./services/email');
+const {
+  generateBaseRacesForMeet,
+  generateOpenRacesForMeet,
+  generateQuadRacesForMeet,
+  rebuildRaceAssignments,
+} = require('./services/raceGenerator');
 
 const app = express();
 app.use(express.urlencoded({ extended: true }));
@@ -846,121 +852,6 @@ function buildRaceSetForEntries(baseRace,regs,laneCount) {
   const finalRace=buildHeatRaceShell(baseRace,'final',0,99);
   finalRace.startType='standing'; finalRace.countsForOverall=true; finalRace.laneEntries=[];
   raceSet.push(finalRace); return raceSet;
-}
-
-function generateBaseRacesForMeet(meet) {
-  const oldMap=new Map((meet.races||[]).filter(r=>!r.isOpenRace&&!r.isQuadRace&&!['heat','semi'].includes(String(r.stage||''))).map(r=>[baseRaceKey(r.groupId,r.division,r.dayIndex,r.distanceLabel),r]));
-  const races=[]; let orderHint=1;
-  for(const group of meet.groups||[]) {
-    for(const divKey of ['novice','elite']) {
-      const div=group.divisions?.[divKey]; if(!div||!div.enabled) continue;
-      const distances=normalizeDistances(div.distances);
-      for(let i=0;i<4;i++) {
-        const distance=distances[i]; if(!distance) continue;
-        const key=baseRaceKey(group.id,divKey,i+1,distance); const old=oldMap.get(key); const isOpen=isOpenDivision(divKey);
-        races.push({id:old?.id||('r'+crypto.randomBytes(6).toString('hex')),orderHint:orderHint++,
-          groupId:group.id,groupLabel:group.label,ages:group.ages,division:divKey,distanceLabel:distance,dayIndex:i+1,cost:Number(div.cost||0),
-          stage:isOpen?'final':(old?.stage||'race'),heatNumber:isOpen?0:Number(old?.heatNumber||0),
-          parentRaceKey:old?.parentRaceKey||key,startType:isOpen?'rolling':(old?.startType||'standing'),
-          countsForOverall:isOpen?false:(typeof old?.countsForOverall==='boolean'?old.countsForOverall:true),
-          laneEntries:Array.isArray(old?.laneEntries)?old.laneEntries:[],
-          resultsMode:old?.resultsMode||'places',status:old?.status||'open',notes:String(old?.notes||''),
-          isFinal:isOpen?true:!!old?.isFinal,closedAt:old?.closedAt||'',isOpenRace:false,isQuadRace:false});
-      }
-    }
-  }
-  const existingSpecial=(meet.races||[]).filter(r=>r.isOpenRace||r.isQuadRace);
-  for(const r of existingSpecial) races.push(r);
-  const validIds=new Set(races.map(r=>r.id));
-  meet.blocks=(meet.blocks||[]).map(block=>({...block,raceIds:(block.raceIds||[]).filter(rid=>validIds.has(rid))}));
-  meet.races=races;
-  if(!validIds.has(meet.currentRaceId)){meet.currentRaceId='';meet.currentRaceIndex=-1;}
-  meet.updatedAt=nowIso();
-}
-
-function generateOpenRacesForMeet(meet) {
-  const nonOpenRaces=(meet.races||[]).filter(r=>!r.isOpenRace&&!r.isTimeTrial);
-  const openRaces=[]; let orderHint=9000;
-  // Open group order: youngest→oldest for TT ordering
-  const TT_ORDER=['open_juv_girls','open_juv_boys','open_fresh_girls','open_fresh_boys','open_sr_ladies','open_sr_men','open_mast_ladies','open_mast_men'];
-  for(const og of meet.openGroups||[]) {
-    if(!og.enabled||!og.distance) continue;
-    const existingRace=(meet.races||[]).find(r=>r.isOpenRace&&r.groupId===og.id&&!r.isTimeTrial);
-    openRaces.push({id:existingRace?.id||('r'+crypto.randomBytes(6).toString('hex')),orderHint:orderHint++,
-      groupId:og.id,groupLabel:og.label,ages:og.ages,division:'open',distanceLabel:og.distance,dayIndex:1,cost:Number(og.cost||0),
-      stage:'final',heatNumber:0,parentRaceKey:`open|${og.id}`,startType:'rolling',countsForOverall:false,
-      laneEntries:Array.isArray(existingRace?.laneEntries)?existingRace.laneEntries:[],
-      resultsMode:existingRace?.resultsMode||'places',status:existingRace?.status||'open',
-      notes:String(existingRace?.notes||''),isFinal:true,closedAt:existingRace?.closedAt||'',
-      isOpenRace:true,isQuadRace:false,isTimeTrial:false});
-  }
-  // Time Trial races — one per enabled group with timeTrial=true
-  let ttOrderHint=9500;
-  const ttSorted=[...(meet.openGroups||[])].sort((a,b)=>TT_ORDER.indexOf(a.id)-TT_ORDER.indexOf(b.id));
-  for(const og of ttSorted) {
-    if(!og.timeTrial) continue;
-    const dist=og.ttDistance||og.distance||'';
-    const existingTT=(meet.races||[]).find(r=>r.isTimeTrial&&r.groupId===og.id);
-    openRaces.push({id:existingTT?.id||('r'+crypto.randomBytes(6).toString('hex')),orderHint:ttOrderHint++,
-      groupId:og.id,groupLabel:og.label+' — Time Trial',ages:og.ages,division:'open',distanceLabel:dist,dayIndex:1,cost:0,
-      stage:'final',heatNumber:0,parentRaceKey:`tt|${og.id}`,startType:'individual',countsForOverall:false,
-      laneEntries:Array.isArray(existingTT?.laneEntries)?existingTT.laneEntries:[],
-      resultsMode:'times',status:existingTT?.status||'open',
-      notes:String(existingTT?.notes||''),isFinal:true,closedAt:existingTT?.closedAt||'',
-      isOpenRace:false,isQuadRace:false,isTimeTrial:true});
-  }
-  meet.races=[...nonOpenRaces,...openRaces]; meet.updatedAt=nowIso();
-}
-
-function generateQuadRacesForMeet(meet) {
-  const nonQuadRaces=(meet.races||[]).filter(r=>!r.isQuadRace); const quadRaces=[]; let orderHint=8000;
-  for(const qg of meet.quadGroups||[]) {
-    if(!qg.enabled) continue;
-    const distances=(qg.distances||[]).filter(Boolean);
-    distances.forEach((distance,i)=>{
-      const existingRace=(meet.races||[]).find(r=>r.isQuadRace&&r.groupId===qg.id&&r.distanceLabel===distance);
-      quadRaces.push({id:existingRace?.id||('r'+crypto.randomBytes(6).toString('hex')),orderHint:orderHint++,
-        groupId:qg.id,groupLabel:qg.label,ages:qg.ages,division:'quad',distanceLabel:distance,dayIndex:i+1,cost:Number(qg.cost||0),
-        stage:existingRace?.stage||'race',heatNumber:Number(existingRace?.heatNumber||0),
-        parentRaceKey:existingRace?.parentRaceKey||`quad|${qg.id}|${distance}`,startType:existingRace?.startType||'standing',
-        countsForOverall:typeof existingRace?.countsForOverall==='boolean'?existingRace.countsForOverall:true,
-        laneEntries:Array.isArray(existingRace?.laneEntries)?existingRace.laneEntries:[],
-        resultsMode:existingRace?.resultsMode||'places',status:existingRace?.status||'open',
-        notes:String(existingRace?.notes||''),isFinal:!!existingRace?.isFinal,closedAt:existingRace?.closedAt||'',
-        isOpenRace:false,isQuadRace:true});
-    });
-  }
-  meet.races=[...nonQuadRaces,...quadRaces]; meet.updatedAt=nowIso();
-}
-
-function rebuildRaceAssignments(meet) {
-  ensureRegistrationTotalsAndNumbers(meet);
-  const laneCount=Math.max(1,Number(meet.lanes)||4);
-  const originalBlocks=(meet.blocks||[]).map(block=>({...block,raceIds:[...(block.raceIds||[])]}));
-  const baseRaces=(meet.races||[]).filter(r=>!r.isOpenRace&&!r.isQuadRace&&!r.isTimeTrial&&!r.isRelayRace&&!['heat','semi'].includes(String(r.stage||'')));
-  const newRaces=[];
-  for(const baseRace of baseRaces) {
-    const matchingRegs=(meet.registrations||[]).filter(reg=>String(reg.divisionGroupId||'')===String(baseRace.groupId||'')&&divisionEnabledForRegistration(reg,baseRace.division));
-    newRaces.push(...buildRaceSetForEntries(baseRace,matchingRegs,laneCount));
-  }
-  const quadBaseRaces=(meet.races||[]).filter(r=>r.isQuadRace&&!['heat','semi'].includes(String(r.stage||'')));
-  for(const baseRace of quadBaseRaces) { const raceSet=buildRaceSetForEntries(baseRace,[],laneCount); newRaces.push(...raceSet); }
-  const openRaces=(meet.races||[]).filter(r=>r.isOpenRace||r.isTimeTrial||r.isRelayRace);
-  newRaces.push(...openRaces);
-  const mappedBlocks=originalBlocks.map(block=>{
-    const nextRaceIds=[];
-    for(const oldRid of block.raceIds||[]) {
-      const oldRace=(meet.races||[]).find(r=>r.id===oldRid); if(!oldRace) continue;
-      // Preserve open/TT/relay races as-is
-      if(oldRace.isOpenRace||oldRace.isTimeTrial||oldRace.isRelayRace){
-        if(!nextRaceIds.includes(oldRace.id)) nextRaceIds.push(oldRace.id); continue;
-      }
-      const parentKey=oldRace.parentRaceKey||baseRaceKey(oldRace.groupId,oldRace.division,oldRace.dayIndex,oldRace.distanceLabel);
-      const replacements=newRaces.filter(r=>(r.parentRaceKey||'')===parentKey);
-      for(const rep of replacements) if(!nextRaceIds.includes(rep.id)) nextRaceIds.push(rep.id);
-    } return {...block,raceIds:nextRaceIds};
-  });
-  meet.races=newRaces; meet.blocks=mappedBlocks; meet.updatedAt=nowIso(); ensureCurrentRace(meet);
 }
 
 function buildCostWidget(base,novC,eliC,opnC,qdC) {
