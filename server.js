@@ -295,8 +295,8 @@ function baseGroups() {
 function defaultMeet(ownerUserId) {
   return {
     id:null, createdByUserId:ownerUserId, createdAt:nowIso(), updatedAt:nowIso(),
-    meetName:'New Meet', date:'', startTime:'', registrationCloseAt:'',
-    rinkId:1, trackLength:100, lanes:4,
+    meetName:'New Meet', date:'', endDate:'', startTime:'', registrationCloseAt:'',
+    rinkId:1, customRinkName:'', trackLength:100, lanes:4,
     timeTrialsEnabled:false, relayEnabled:false, judgesPanelRequired:true,
     notes:'', relayNotes:'', isPublic:false, status:'draft', tiebreaker:'d2', baseEntryFee:0,
     groups:baseGroups(), openGroups:makeOpenGroupsTemplate(), quadGroups:makeQuadGroupsTemplate(),
@@ -318,7 +318,7 @@ function defaultDb() {
       address:'3234 S. Meridian Ave, Wichita, KS 67217',
       phone:'316-942-4555', website:'rollercitywichitaks.com', notes:'',
     }],
-    meets:[], rosters:[],
+    meets:[], rosters:[], setupPresets:[],
   };
 }
 
@@ -366,9 +366,11 @@ function migrateMeet(meet,fallbackOwnerId) {
   if(!meet.updatedAt) meet.updatedAt=nowIso();
   if(typeof meet.meetName!=='string') meet.meetName='New Meet';
   if(typeof meet.date!=='string') meet.date='';
+  if(typeof meet.endDate!=='string') meet.endDate='';
   if(typeof meet.startTime!=='string') meet.startTime='';
   if(typeof meet.registrationCloseAt!=='string') meet.registrationCloseAt='';
   if(typeof meet.rinkId!=='number') meet.rinkId=1;
+  if(typeof meet.customRinkName!=='string') meet.customRinkName='';
   if(!Number.isFinite(Number(meet.trackLength))) meet.trackLength=100;
   if(!Number.isFinite(Number(meet.lanes))) meet.lanes=4;
   if(typeof meet.timeTrialsEnabled!=='boolean') meet.timeTrialsEnabled=false;
@@ -443,6 +445,7 @@ function loadDb() {
   if(!Array.isArray(db.meets)) db.meets=[];
   if(!Array.isArray(db.sessions)) db.sessions=[];
   if(!Array.isArray(db.rosters)) db.rosters=[];
+  if(!Array.isArray(db.setupPresets)) db.setupPresets=[];
   sanitizeRinks(db);
   const fallbackOwnerId=(db.users[0]&&db.users[0].id)||1;
   db.meets.forEach(m=>migrateMeet(m,fallbackOwnerId));
@@ -480,6 +483,56 @@ function requireRole(...roles) {
 }
 
 function getMeetOr404(db,meetId) { return db.meets.find(m=>Number(m.id)===Number(meetId)); }
+function getMeetRink(db, meet) { return (db.rinks || []).find(r => Number(r.id) === Number(meet?.rinkId)); }
+function meetRinkLabel(db, meet) {
+  const custom = String(meet?.customRinkName || '').trim();
+  if (custom) return custom;
+  const rink = getMeetRink(db, meet);
+  if (!rink) return '';
+  return [rink.name, rink.city, rink.state].filter(Boolean).join(' • ');
+}
+function meetDateLabel(meet) {
+  const start = String(meet?.date || '').trim();
+  const end = String(meet?.endDate || '').trim();
+  if (start && end && start !== end) return `${start} to ${end}`;
+  return start;
+}
+function meetDayCount(meet) {
+  const start = String(meet?.date || '').trim();
+  const end = String(meet?.endDate || '').trim();
+  if (!start || !end || start === end) return 1;
+  const a = new Date(start + 'T00:00:00');
+  const b = new Date(end + 'T00:00:00');
+  const diff = Math.round((b.getTime() - a.getTime()) / 86400000) + 1;
+  return Number.isFinite(diff) && diff > 0 ? diff : 1;
+}
+function nextSetupPresetId(db) { return nextId(db.setupPresets || []); }
+function makeSetupPresetFromMeet(db, meet, name, ownerUserId) {
+  return {
+    id: nextSetupPresetId(db),
+    name: String(name || '').trim() || `${meet.meetName || 'Meet'} Setup`,
+    createdByUserId: ownerUserId,
+    createdAt: nowIso(),
+    updatedAt: nowIso(),
+    sourceMeetId: meet.id,
+    tiebreaker: meet.tiebreaker || 'd2',
+    baseEntryFee: Number(meet.baseEntryFee || 0),
+    trackLength: Number(meet.trackLength || 100),
+    lanes: Number(meet.lanes || 4),
+    timeTrialsEnabled: !!meet.timeTrialsEnabled,
+    relayEnabled: !!meet.relayEnabled,
+    judgesPanelRequired: !!meet.judgesPanelRequired,
+    groups: JSON.parse(JSON.stringify(meet.groups || [])),
+    openGroups: JSON.parse(JSON.stringify(meet.openGroups || [])),
+    quadGroups: JSON.parse(JSON.stringify(meet.quadGroups || [])),
+    skateabilityGroups: JSON.parse(JSON.stringify(meet.skateabilityGroups || [])),
+    blocks: JSON.parse(JSON.stringify(meet.blocks || [])),
+    raceOrder: orderedRaces(meet).map(r => ({
+      raceId: r.id, groupId: r.groupId, groupLabel: r.groupLabel, division: r.division,
+      distanceLabel: r.distanceLabel, dayIndex: r.dayIndex, blockId: r.blockId || '', blockName: r.blockName || ''
+    })),
+  };
+}
 function canEditMeet(user,meet) {
   if(hasRole(user,'super_admin')) return true;
   if(hasRole(user,'coach')&&!hasRole(user,'meet_director')) return false;
@@ -1957,7 +2010,7 @@ app.get('/meets', (req, res) => {
           <div>
             <h2 style="margin:0">${esc(m.meetName)}</h2>
             <div class="muted">${esc(m.date||'Date TBD')}${m.startTime?` • ${esc(m.startTime)}`:''}</div>
-            ${rink?`<div class="note">${esc(rink.name)} • ${esc(rink.city)}, ${esc(rink.state)}</div>`:''}
+            ${meetRinkLabel(db,m)?`<div class="note">${esc(meetRinkLabel(db,m))}</div>`:''}
           </div>
           <div class="row">
             <span class="chip">${(m.races||[]).length} Races</span>
@@ -2183,7 +2236,7 @@ app.get('/live', (req, res) => {
     return `
       <div class="card" style="margin-bottom:14px">
         <h2>${esc(m.meetName)}</h2>
-        <div class="muted">${rink?`${esc(rink.city)}, ${esc(rink.state)}`:''}</div>
+        <div class="muted">${esc(meetRinkLabel(db,m)||'')}</div>
         <div class="hr"></div>
         <div class="action-row">
           <a class="btn-orange" href="/meet/${m.id}/live">Open Live Board</a>
@@ -2415,7 +2468,7 @@ app.get('/portal/meet-picker', requireRole('judge','announcer','meet_director','
       <div class="row between center">
         <div>
           <h2 style="margin:0">${esc(meet.meetName)}</h2>
-          <div class="muted">${rink?esc(rink.name)+' • '+esc(rink.city)+', '+esc(rink.state):''} • ${esc(meet.date||'')}</div>
+          <div class="muted">${esc(meetRinkLabel(req.db,meet)||'')} • ${esc(meetDateLabel(meet)||'')}</div>
           ${isLive?'<span class="chip chip-orange" style="margin-top:6px">🔴 Live Now</span>':''}
         </div>
         <a class="btn-orange" href="/portal/meet/${meet.id}/race-day/${target}">Enter ${isJudge?'Judges Panel':'Announcer View'}</a>
@@ -2445,7 +2498,7 @@ app.get('/portal', requireRole('meet_director','judge','coach'), (req, res) => {
         <div class="row between" style="margin-bottom:12px">
           <div>
             <h2 style="margin:0">${esc(meet.meetName)}</h2>
-            <div class="muted" style="font-size:13px">${rink?`${esc(rink.city)}, ${esc(rink.state)} • `:``}${esc(meet.date||'Date TBD')} • <span class="chip chip-${meet.status==='live'?'green':meet.status==='complete'?'sky':'orange'}" style="font-size:11px">${esc(meet.status||'draft')}</span></div>
+            <div class="muted" style="font-size:13px">${meetRinkLabel(req.db,meet)?`${esc(meetRinkLabel(req.db,meet))} • `:``}${esc(meetDateLabel(meet)||'Date TBD')} • <span class="chip chip-${meet.status==='live'?'green':meet.status==='complete'?'sky':'orange'}" style="font-size:11px">${esc(meet.status||'draft')}</span></div>
           </div>
           <div class="row">
             <span class="chip">Inline: ${inlineCount}</span>
@@ -2871,6 +2924,7 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
   const openEnabledCount=(meet.openGroups||[]).filter(g=>g.enabled).length;
   const quadEnabledCount=(meet.quadGroups||[]).filter(g=>g.enabled).length;
   const savedFlash=req.query.saved?'<div class="card" style="border-left:4px solid var(--green);margin-bottom:12px"><div class="good">✅ Meet saved successfully.</div></div>':'';
+  const presetSavedFlash=req.query.presetSaved?'<div class="card" style="border-left:4px solid var(--green);margin-bottom:12px"><div class="good">✅ Meet setup preset saved for future use.</div></div>':'';
   const blockSavedFlash=req.query.saved?'<div class="card" style="border-left:4px solid var(--green);margin-bottom:12px"><div class="good">✅ Block Builder saved.</div></div>':'';
 
   function divCardHtml(group, gi, divKey) {
@@ -2913,6 +2967,7 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
   res.send(pageShell({title:'Meet Builder',user:req.user,meet,activeTab:'builder', bodyHtml:`
     <div class="page-header"><h1>Meet Builder</h1><div class="sub">${esc(meet.meetName)}</div></div>
     ${savedFlash}
+    ${presetSavedFlash}
     <div class="grid-2" style="margin-bottom:16px">
       <div class="card card-accent" style="border-left-color:var(--orange)">
         <div class="row between center">
@@ -2941,11 +2996,13 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
         </div>
         <div class="form-grid cols-3" style="margin-bottom:14px">
           <div><label>Meet Name</label><input name="meetName" value="${esc(meet.meetName)}" required /></div>
-          <div><label>Date</label><input type="date" name="date" value="${esc(meet.date)}" /></div>
+          <div><label>Start Date</label><input type="date" name="date" value="${esc(meet.date)}" /></div>
+          <div><label>Optional End Date</label><input type="date" name="endDate" value="${esc(meet.endDate||'')}" /><div class="note">Leave blank for a single-day meet.</div></div>
           <div><label>Start Time</label><input type="time" name="startTime" value="${esc(meet.startTime)}" /></div>
           <div><label>Registration Close Date</label><input type="date" name="registrationCloseDate" value="${esc(meet.registrationCloseAt?meet.registrationCloseAt.slice(0,10):'')}" /></div>
           <div><label>Registration Close Time</label><input type="time" name="registrationCloseTime" value="${esc(meet.registrationCloseAt?meet.registrationCloseAt.slice(11,16):'')}" /></div>
-          <div><label>Rink</label><select name="rinkId">${rinkOptions}</select></div>
+          <div><label>Rink</label><select name="rinkId">${rinkOptions}</select><div class="note">Use the list when available.</div></div>
+          <div><label>Custom Rink Name</label><input name="customRinkName" value="${esc(meet.customRinkName||'')}" placeholder="Type rink name if not listed" /><div class="note">Overrides the selected rink display for this meet only.</div></div>
           <div><label>Track Length (m)</label><input name="trackLength" value="${esc(meet.trackLength)}" /></div>
           <div><label>Lanes</label><input name="lanes" value="${esc(meet.lanes)}" /></div>
           <div><label>Base Entry Fee ($)</label><input type="number" name="baseEntryFee" value="${esc(String(meet.baseEntryFee||0))}" min="0" /><div class="note">Min charge per skater. First event = base fee, each additional adds its own cost.</div></div>
@@ -2963,6 +3020,13 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
               <option value="sr832" ${meet.tiebreaker==='sr832'?'selected':''}>USARS SR832 Formula (regionals/nationals)</option>
             </select>
             <div class="note">D2 = most common at local meets. SR832 = official weighted formula.</div>
+          </div>
+          <div><label>Save Setup For Future Use</label>
+            <div style="display:flex;gap:8px;align-items:center">
+              <input name="presetName" value="${esc(meet.presetName||'')}" placeholder="Mid South Speed League" />
+              <button class="btn2 btn-sm" type="submit" formaction="/portal/meet/${meet.id}/builder/save-preset">Save Setup</button>
+            </div>
+            <div class="note">Saves divisions, distances, fees, tiebreaker, race blocks, and race order — not date, rink, registrations, or results.</div>
           </div>
         </div>
         <div class="toggle-group">
@@ -3070,9 +3134,11 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
 function saveMeetFields(meet, body) {
   meet.meetName=String(body.meetName||'New Meet').trim();
   meet.date=String(body.date||'').trim();
+  meet.endDate=String(body.endDate||'').trim();
   meet.startTime=String(body.startTime||'').trim();
   meet.registrationCloseAt=combineDateTime(body.registrationCloseDate,body.registrationCloseTime);
   meet.rinkId=Number(body.rinkId||1);
+  meet.customRinkName=String(body.customRinkName||'').trim();
   meet.trackLength=Number(body.trackLength||100);
   meet.lanes=Number(body.lanes||4);
   meet.timeTrialsEnabled=!!body.timeTrialsEnabled;
@@ -3113,6 +3179,19 @@ function saveMeetFields(meet, body) {
   }
   meet.updatedAt=nowIso();
 }
+
+
+// Save reusable setup preset — excludes meet-specific date/rink/registrations/results
+app.post('/portal/meet/:meetId/builder/save-preset', requireRole('meet_director'), (req, res) => {
+  const meet=getMeetOr404(req.db,req.params.meetId);
+  if(!meet) return res.redirect('/portal');
+  if(!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
+  saveMeetFields(meet, req.body);
+  if(!Array.isArray(req.db.setupPresets)) req.db.setupPresets=[];
+  const preset=makeSetupPresetFromMeet(req.db, meet, req.body.presetName, req.user.id);
+  req.db.setupPresets.push(preset);
+  saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/builder?presetSaved=1`);
+});
 
 // Save meet fields only — does NOT touch races or blocks
 app.post('/portal/meet/:meetId/builder/save-meet', requireRole('meet_director'), (req, res) => {
@@ -3528,7 +3607,7 @@ app.post('/meet/:meetId/register', (req, res) => {
       <p>You're registered for <strong>${esc(meet.meetName)}</strong>!</p>
       <table style="width:100%;border-collapse:collapse;margin:16px 0">
         <tr><td style="padding:8px;border-bottom:1px solid #e2e8f0;color:#64748b">Date</td><td style="padding:8px;border-bottom:1px solid #e2e8f0"><strong>${esc(meet.date||'TBD')}</strong></td></tr>
-        <tr><td style="padding:8px;border-bottom:1px solid #e2e8f0;color:#64748b">Venue</td><td style="padding:8px;border-bottom:1px solid #e2e8f0"><strong>${rink?esc(rink.name)+', '+esc(rink.city)+' '+esc(rink.state):'TBD'}</strong></td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #e2e8f0;color:#64748b">Venue</td><td style="padding:8px;border-bottom:1px solid #e2e8f0"><strong>${esc(meetRinkLabel(db,meet)||'TBD')}</strong></td></tr>
         <tr><td style="padding:8px;border-bottom:1px solid #e2e8f0;color:#64748b">Division</td><td style="padding:8px;border-bottom:1px solid #e2e8f0"><strong>${esc(finalGroup?.label||'TBD')}</strong></td></tr>
         ${meet.startTime?'<tr><td style="padding:8px;color:#64748b">Start Time</td><td style="padding:8px"><strong>'+esc(meet.startTime)+'</strong></td></tr>':''}
       </table>
