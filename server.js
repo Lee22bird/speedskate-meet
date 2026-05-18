@@ -1425,13 +1425,13 @@ function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
       min-height: 360px; display: flex; align-items: flex-end;
       background: var(--navy); margin-bottom: 28px; box-shadow: var(--shadow-lg);
     }
-    .hero.hero-centered { min-height: 0; height: auto; align-items: center; justify-content: center; padding: 0; }
-    .hero-centered { align-items: center; justify-content: center; height: auto !important; min-height: 0 !important; padding: 24px 20px !important; }
-    .hero-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center top; opacity: .40; }
-    .hero-gradient { position: absolute; inset: 0; background: linear-gradient(to top, rgba(15,31,61,.95) 40%, rgba(15,31,61,.20) 100%); }
+    .hero.hero-centered { min-height: 300px; height: 38vh; max-height: 420px; align-items: center; justify-content: center; padding: 0; }
+    .hero-centered { align-items: center; justify-content: center; padding: 18px 20px !important; }
+    .hero-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 35%; opacity: .40; }
+    .hero-gradient { position: absolute; inset: 0; background: linear-gradient(to top, rgba(15,31,61,.95) 25%, rgba(15,31,61,.20) 100%); }
     .hero-content { position: relative; z-index: 1; padding: 36px; }
-    .hero-content-centered { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; text-align: center; width: 100%; }
-    .hero-logo { height: auto; width: 1000px; max-width: 92vw; display: block; filter: drop-shadow(0 6px 32px rgba(0,0,0,.6)); flex-shrink: 0; }
+    .hero-content-centered { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 8px 20px 14px; text-align: center; width: 100%; }
+    .hero-logo { height: auto; width: 860px; max-width: 88vw; max-height: 230px; object-fit: contain; display: block; filter: drop-shadow(0 6px 32px rgba(0,0,0,.6)); flex-shrink: 0; }
     .hero-eyebrow { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .15em; color: var(--orange); margin-bottom: 8px; }
     .hero-title { font-family: 'Barlow Condensed',sans-serif; font-size: 64px; font-weight: 900; line-height: .95; letter-spacing: -1px; color: #fff; }
     .hero-title span { color: var(--orange); }
