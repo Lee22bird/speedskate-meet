@@ -1471,7 +1471,11 @@ function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
     .setup-section-title small { font-family: inherit; font-size: 13px; font-weight: 700; color: var(--muted); letter-spacing: 0; }
     .setup-fields { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
     .setup-fields.cols-3 { grid-template-columns: repeat(3,minmax(0,1fr)); }
+    .setup-fields.cols-1 { grid-template-columns: 1fr; }
     .setup-field-full { grid-column: 1 / -1; }
+    .date-clear-row { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 8px; align-items: end; }
+    .date-clear-btn { height: 44px; padding: 0 14px; border-radius: 12px; border: 1.5px solid var(--border); background: #f8fafc; color: var(--navy); font-weight: 800; cursor: pointer; }
+    .date-clear-btn:hover { background: #fff7ed; border-color: rgba(249,115,22,.35); color: var(--orange); }
     .preset-row { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 8px; align-items: end; }
     .meet-options-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 10px; }
     .setup-notes-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; margin-top: 16px; }
@@ -3035,7 +3039,14 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
               <div class="setup-fields">
                 <div class="setup-field-full"><label>Meet Name</label><input name="meetName" value="${esc(meet.meetName)}" required /></div>
                 <div><label>Start Date</label><input type="date" name="date" value="${esc(meet.date)}" /></div>
-                <div><label>Optional End Date</label><input type="date" name="endDate" value="${esc(meet.endDate||'')}" /><div class="note">Blank = single-day meet.</div></div>
+                <div>
+                  <label>Optional End Date</label>
+                  <div class="date-clear-row">
+                    <input type="date" id="endDateInput" name="endDate" value="${esc(meet.endDate||'')}" />
+                    <button class="date-clear-btn" type="button" onclick="document.getElementById('endDateInput').value=''">Clear</button>
+                  </div>
+                  <div class="note">Leave blank for a single-day meet.</div>
+                </div>
                 <div class="setup-field-full"><label>Start Time</label><input type="time" name="startTime" value="${esc(meet.startTime)}" /></div>
               </div>
             </section>
@@ -3057,9 +3068,9 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
               </div>
             </section>
 
-            <section class="setup-section setup-section-wide">
+            <section class="setup-section">
               <div class="setup-section-title">📍 Venue <small>Saved rink or one-time custom rink</small></div>
-              <div class="setup-fields cols-3">
+              <div class="setup-fields">
                 <div class="setup-field-full"><label>Rink</label>
                   <input name="rinkSearch" id="rinkSearch" list="rinkSuggestions" value="${esc(rinkInputValue)}" placeholder="Start typing rink name..." autocomplete="off" />
                   <input type="hidden" name="rinkId" id="rinkId" value="${esc(String(meet.rinkId||''))}" />
@@ -3071,9 +3082,9 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
               </div>
             </section>
 
-            <section class="setup-section setup-section-wide">
+            <section class="setup-section">
               <div class="setup-section-title">⚙️ Rules & Presets</div>
-              <div class="setup-fields">
+              <div class="setup-fields cols-1">
                 <div><label>Tiebreaker Rule</label>
                   <select name="tiebreaker">
                     <option value="d2"    ${(meet.tiebreaker||'d2')==='d2'   ?'selected':''}>D2 Middle Race (local standard)</option>
