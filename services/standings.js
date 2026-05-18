@@ -26,9 +26,14 @@ function scoreRaceByStandardPoints(race) {
     const place = normalizePlaceValue(entry.place);
     if (place == null || place > 4) continue;
 
+    // Prevent blank/phantom placed lanes from becoming "Unknown" standings rows.
+    const hasRegistrationId = entry.registrationId !== undefined && entry.registrationId !== null && String(entry.registrationId).trim() !== '';
+    const hasSkaterName = String(entry.skaterName || '').trim() !== '';
+    if (!hasRegistrationId && !hasSkaterName) continue;
+
     results.push({
       registrationId: entry.registrationId,
-      skaterName: entry.skaterName,
+      skaterName: String(entry.skaterName || '').trim() || 'Unknown',
       team: entry.team,
       place,
     });
@@ -172,11 +177,7 @@ function computeMeetStandings(meet) {
         const tbA = computeTiebreakerScore(a.raceScores, divRaces, tbMode);
         const tbB = computeTiebreakerScore(b.raceScores, divRaces, tbMode);
 
-        if (tbMode === 'd2') {
-          if (tbA !== tbB) return tbB - tbA;
-        } else {
-          if (tbA !== tbB) return tbB - tbA;
-        }
+        if (tbA !== tbB) return tbB - tbA;
 
         return String(a.skaterName || '').localeCompare(String(b.skaterName || ''));
       });
@@ -326,6 +327,7 @@ function computeOpenResults(meet) {
       race,
       rows: (race.laneEntries || [])
         .filter(x => String(x.place || '').trim())
+        .filter(x => String(x.registrationId || '').trim() || String(x.skaterName || '').trim())
         .sort((a, b) => Number(a.place || 999) - Number(b.place || 999)),
     }));
 }
