@@ -18,6 +18,15 @@ const {
   computeOpenResults,
 } = require('./services/standings');
 
+const {
+  orderedRaces,
+  currentRaceInfo,
+  ensureCurrentRace,
+  laneRowsForRace,
+  recentClosedRaces,
+  raceDisplayStage,
+} = require('./services/raceDay');
+
 const app = express();
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json({ limit: '1mb' }));
@@ -622,47 +631,6 @@ function sponsorLineHtml(sponsor) {
 function normalizeDistances(arr4) { return [0,1,2,3].map(i=>String(arr4?.[i]??'').trim()); }
 function baseRaceKey(groupId,division,dayIndex,distanceLabel) { return `${groupId}|${division}|${dayIndex}|${distanceLabel}`; }
 function isOpenDivision(div) { return String(div||'').toLowerCase()==='open'; }
-
-function raceDisplayStage(race) {
-  if(race.stage==='heat') return `Heat ${race.heatNumber}`;
-  if(race.stage==='semi') return `Semi ${race.heatNumber}`;
-  if(race.stage==='final') return 'Final'; return 'Race';
-}
-
-function recentClosedRaces(meet,count=5) {
-  return (meet.races||[]).filter(r=>String(r.status||'')==='closed')
-    .sort((a,b)=>new Date(b.closedAt||0).getTime()-new Date(a.closedAt||0).getTime()).slice(0,count);
-}
-
-function orderedRaces(meet) {
-  const raceById=new Map((meet.races||[]).map(r=>[r.id,r])); const out=[];
-  for(const block of meet.blocks||[]) for(const raceId of block.raceIds||[]) { const race=raceById.get(raceId); if(race) out.push({...race,blockId:block.id,blockName:block.name,blockDay:block.day,blockType:block.type||'race',blockNotes:block.notes||''}); }
-  const assigned=new Set(out.map(r=>r.id));
-  for(const race of meet.races||[]) if(!assigned.has(race.id)) out.push({...race,blockId:'',blockName:'Unassigned',blockDay:'',blockType:'race',blockNotes:''});
-  return out;
-}
-
-function currentRaceInfo(meet) {
-  const ordered=orderedRaces(meet);
-  let idx=ordered.findIndex(r=>r.id===meet.currentRaceId);
-  if(idx<0) idx=Number.isFinite(meet.currentRaceIndex)?meet.currentRaceIndex:-1;
-  if(idx<0&&ordered.length) idx=0;
-  return {ordered,idx,current:idx>=0?ordered[idx]:null,next:idx>=0&&ordered[idx+1]?ordered[idx+1]:null,coming:idx>=0?ordered.slice(idx+2,idx+5):ordered.slice(0,3)};
-}
-
-function ensureCurrentRace(meet) {
-  const info=currentRaceInfo(meet);
-  if(info.current&&meet.currentRaceId!==info.current.id) { meet.currentRaceId=info.current.id; meet.currentRaceIndex=info.idx; }
-}
-
-function laneRowsForRace(race,meet) {
-  const out=[];
-  const maxLanes=(race.isOpenRace||String(race.division||'')==='open')?Math.max((race.laneEntries||[]).length,1):Math.max(1,Number(meet.lanes)||4);
-  for(let lane=1;lane<=maxLanes;lane++) {
-    const existing=(race.laneEntries||[]).find(x=>Number(x.lane)===lane)||{};
-    out.push({lane,registrationId:existing.registrationId||'',helmetNumber:existing.helmetNumber||'',skaterName:existing.skaterName||'',team:existing.team||'',place:existing.place||'',time:existing.time||'',status:existing.status||''});
-  } return out;
-}
 
 function registrationSortKey(reg) { return [String(reg.team||''),String(reg.name||''),Number(reg.age||0),Number(reg.id||0)].join('|'); }
 
