@@ -2,6 +2,8 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { sendSms, normalizePhone } = require('./services/sms');
+const { sendEmail, emailHtmlWrap } = require('./services/email');
 
 const app = express();
 app.use(express.urlencoded({ extended: true }));
@@ -77,74 +79,6 @@ function ssmRedirectForUser(user) {
   if (hasRole(user, 'coach') && !hasRole(user, 'meet_director') && !hasRole(user, 'super_admin')) return '/portal/coach';
   if ((hasRole(user, 'judge') || hasRole(user, 'announcer')) && !hasRole(user, 'meet_director') && !hasRole(user, 'super_admin')) return '/portal/meet-picker';
   return '/portal';
-}
-
-// ── Twilio ────────────────────────────────────────────────────────────────────
-const TWILIO_SID    = process.env.TWILIO_ACCOUNT_SID;
-const TWILIO_TOKEN  = process.env.TWILIO_AUTH_TOKEN;
-const TWILIO_FROM   = process.env.TWILIO_FROM_NUMBER;
-const TWILIO_READY  = !!(TWILIO_SID && TWILIO_TOKEN && TWILIO_FROM);
-
-async function sendSms(to, body) {
-  if(!TWILIO_READY) { console.log('[SMS disabled] To:', to, '\n', body); return; }
-  try {
-    const creds = Buffer.from(TWILIO_SID+':'+TWILIO_TOKEN).toString('base64');
-    const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${TWILIO_SID}/Messages.json`, {
-      method: 'POST',
-      headers: { 'Authorization': 'Basic '+creds, 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ To: to, From: TWILIO_FROM, Body: body }).toString(),
-    });
-    const data = await res.json();
-    if(data.error_code) console.error('[SMS error]', data.error_code, data.message);
-    else console.log('[SMS sent]', to, data.sid);
-  } catch(err) { console.error('[SMS exception]', err.message); }
-}
-
-// ── SendGrid ──────────────────────────────────────────────────────────────────
-const SG_KEY       = process.env.SENDGRID_API_KEY;
-const SG_FROM      = process.env.SENDGRID_FROM      || 'noreply@speedskatemeet.com';
-const SG_FROM_NAME = process.env.SENDGRID_FROM_NAME || 'SpeedSkateMeet';
-const SG_READY     = !!SG_KEY;
-
-async function sendEmail(to, subject, htmlBody, textBody) {
-  if(!SG_READY) { console.log('[Email disabled] To:', to, 'Subject:', subject); return; }
-  try {
-    const res = await fetch('https://api.sendgrid.com/v3/mail/send', {
-      method: 'POST',
-      headers: { 'Authorization': 'Bearer '+SG_KEY, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        personalizations: [{ to: [{ email: to }] }],
-        from: { email: SG_FROM, name: SG_FROM_NAME },
-        subject,
-        content: [
-          { type: 'text/plain', value: textBody||subject },
-          { type: 'text/html',  value: htmlBody||'<p>'+subject+'</p>' },
-        ],
-      }),
-    });
-    if(res.status===202) console.log('[Email sent]', to, subject);
-    else { const d=await res.json(); console.error('[Email error]', d); }
-  } catch(err) { console.error('[Email exception]', err.message); }
-}
-
-function emailHtmlWrap(content) {
-  return `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;color:#0F1F3D">
-    <div style="background:#0F1F3D;padding:20px;border-radius:12px;text-align:center;margin-bottom:24px">
-      <img src="https://speedskatemeet.com/public/images/branding/ssm-logo.png" style="height:60px;width:auto;max-width:280px;display:block;margin:0 auto" alt="SpeedSkateMeet" />
-    </div>
-    ${content}
-    <div style="margin-top:32px;padding-top:16px;border-top:1px solid #e2e8f0;font-size:12px;color:#64748b;text-align:center">
-      SpeedSkateMeet.com — The Platform for Inline Speed Skating<br/>
-      <a href="https://speedskatemeet.com" style="color:#F97316">speedskatemeet.com</a>
-    </div>
-  </body></html>`;
-}
-
-function normalizePhone(raw) {
-  const digits = String(raw||'').replace(/\D/g,'');
-  if(digits.length===10) return '+1'+digits;
-  if(digits.length===11&&digits[0]==='1') return '+'+digits;
-  return null;
 }
 
 // Fire alerts when race advances — check 2-away and on-deck subscriptions
