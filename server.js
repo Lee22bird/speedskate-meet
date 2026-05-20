@@ -433,7 +433,7 @@ function migrateMeet(meet,fallbackOwnerId) {
     laneEntries:Array.isArray(r.laneEntries)?r.laneEntries:[],
     resultsMode:String(r.resultsMode||'places'), status:String(r.status||'open'),
     notes:String(r.notes||''), isFinal:!!r.isFinal, closedAt:String(r.closedAt||''),
-    isOpenRace:!!r.isOpenRace, isQuadRace:!!r.isQuadRace, isTimeTrial:!!r.isTimeTrial, isRelayRace:!!r.isRelayRace,
+    isOpenRace:!!r.isOpenRace, isQuadRace:!!r.isQuadRace, isTimeTrial:!!r.isTimeTrial, isRelayRace:!!r.isRelayRace, isAdditionalRace:!!r.isAdditionalRace, isSkateabilityRace:!!r.isSkateabilityRace,
   }));
   meet.blocks=meet.blocks.map((b,idx)=>({
     id:String(b.id||('b'+(idx+1))), name:String(b.name||`Block ${idx+1}`),
@@ -452,7 +452,7 @@ function migrateMeet(meet,fallbackOwnerId) {
     paid:!!reg.paid, checkedIn:!!reg.checkedIn, totalCost:Number(reg.totalCost||0),
     options:{challengeUp:!!reg.options?.challengeUp, novice:!!reg.options?.novice,
       elite:!!reg.options?.elite, open:!!reg.options?.open, quad:!!reg.options?.quad,
-      timeTrials:!!reg.options?.timeTrials, relays:!!reg.options?.relays},
+      timeTrials:!!reg.options?.timeTrials, relays:!!reg.options?.relays, skateability:!!reg.options?.skateability, skateabilityGroupId:String(reg.options?.skateabilityGroupId||'')},
   }));
 }
 
@@ -680,7 +680,75 @@ function buildRaceSetForEntries(baseRace,regs,laneCount) {
   raceSet.push(finalRace); return raceSet;
 }
 
-function buildCostWidget(base,novC,eliC,opnC,qdC) {
+
+function generateAdditionalRacesForMeet(meet) {
+  const additionalGroups = Array.isArray(meet.skateabilityGroups) ? meet.skateabilityGroups : [];
+  const nonAdditionalRaces = (meet.races || []).filter(r =>
+    String(r.division || '') !== 'skateability' &&
+    !r.isAdditionalRace &&
+    !r.isSkateabilityRace
+  );
+
+  const additionalRaces = [];
+  let orderHint = 8500;
+
+  for (const sg of additionalGroups) {
+    const ageGroupId = String(sg.ageGroupId || '').trim();
+    const ageGroupLabel = String(sg.ageGroupLabel || 'Additional Race').trim();
+    if (!ageGroupId) continue;
+
+    const ageGroup = (meet.groups || []).find(g => String(g.id) === ageGroupId);
+    const distances = (Array.isArray(sg.distances) ? sg.distances : [])
+      .map(d => String(d || '').trim())
+      .filter(Boolean);
+
+    distances.forEach((distance, idx) => {
+      const parentKey = `additional|${sg.id || ageGroupId}|${idx + 1}`;
+      const existingRace = (meet.races || []).find(r =>
+        String(r.parentRaceKey || '') === parentKey ||
+        (
+          (String(r.division || '') === 'skateability' || r.isAdditionalRace || r.isSkateabilityRace) &&
+          String(r.groupId || '') === ageGroupId &&
+          String(r.distanceLabel || '') === distance
+        )
+      );
+
+      additionalRaces.push({
+        id: existingRace?.id || ('r' + crypto.randomBytes(6).toString('hex')),
+        orderHint: Number(existingRace?.orderHint || orderHint++),
+        groupId: ageGroupId,
+        groupLabel: `${ageGroupLabel} — Additional Race`,
+        ages: ageGroup?.ages || '',
+        division: 'skateability',
+        distanceLabel: distance,
+        dayIndex: idx + 1,
+        cost: Number(sg.cost || 0),
+        stage: existingRace?.stage || 'race',
+        heatNumber: Number(existingRace?.heatNumber || 0),
+        parentRaceKey,
+        startType: existingRace?.startType || 'standing',
+        countsForOverall: typeof existingRace?.countsForOverall === 'boolean' ? existingRace.countsForOverall : false,
+        laneEntries: Array.isArray(existingRace?.laneEntries) ? existingRace.laneEntries : [],
+        resultsMode: existingRace?.resultsMode || 'places',
+        status: existingRace?.status || 'open',
+        notes: String(existingRace?.notes || ''),
+        isFinal: !!existingRace?.isFinal,
+        closedAt: existingRace?.closedAt || '',
+        isOpenRace: false,
+        isQuadRace: false,
+        isTimeTrial: false,
+        isRelayRace: false,
+        isAdditionalRace: true,
+        isSkateabilityRace: true,
+      });
+    });
+  }
+
+  meet.races = [...nonAdditionalRaces, ...additionalRaces];
+  meet.updatedAt = nowIso();
+}
+
+function buildCostWidget(base,novC,eliC,opnC,qdC,skC=0) {
   const html=[
     '<div class="card" style="background:#f8fafc;margin-top:8px">',
     '<div style="display:flex;justify-content:space-between;align-items:center">',
@@ -690,9 +758,9 @@ function buildCostWidget(base,novC,eliC,opnC,qdC) {
     '<div style="font-size:12px;color:#64748b;margin-top:4px" id="ssm-breakdown">Select events above</div>',
     '</div>',
     '<script>(function(){',
-    'var B='+base+',C={novice:'+novC+',elite:'+eliC+',open:'+opnC+',quad:'+qdC+',timeTrials:0,relays:0,challengeUp:0};',
+    'var B='+base+',C={novice:'+novC+',elite:'+eliC+',open:'+opnC+',quad:'+qdC+',skateability:'+skC+',timeTrials:0,relays:0,challengeUp:0};',
     'function upd(){var sel=[];',
-    '["novice","elite","open","quad","timeTrials","relays","challengeUp"].forEach(function(k){',
+    '["novice","elite","open","quad","skateability","timeTrials","relays","challengeUp"].forEach(function(k){',
     'var el=document.querySelector("[name="+k+"]");if(el&&el.value==="on")sel.push({name:k,cost:C[k]||0});',
     '});',
     'var t=document.getElementById("ssm-cost"),b=document.getElementById("ssm-breakdown");',
@@ -714,6 +782,7 @@ function calcRegistrationCost(meet, options) {
   if(options.elite){const cost=(meet.groups||[]).reduce((c,g)=>g.divisions&&g.divisions.elite&&g.divisions.elite.enabled?Number(g.divisions.elite.cost||0):c,0);events.push({name:'Elite',cost});}
   if(options.open){const cost=(meet.openGroups||[]).reduce((c,g)=>g.enabled?Number(g.cost||0):c,0);events.push({name:'Open',cost});}
   if(options.quad){const cost=(meet.quadGroups||[]).reduce((c,g)=>g.enabled?Number(g.cost||0):c,0);events.push({name:'Quad',cost});}
+  if(options.skateability){const selected=String(options.skateabilityGroupId||'');const group=(meet.skateabilityGroups||[]).find(g=>String(g.id)===selected)||(meet.skateabilityGroups||[])[0];events.push({name:'Additional Race',cost:Number(group?.cost||0)});}
   if(options.timeTrials) events.push({name:'Time Trials',cost:0});
   if(options.relays) events.push({name:'Relays',cost:0});
   if(!events.length) return base;
@@ -3037,7 +3106,7 @@ app.post('/portal/meet/:meetId/builder/save', requireRole('meet_director'), (req
   if(!meet) return res.redirect('/portal');
   if(!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
   saveMeetFields(meet, req.body, req.db);
-  generateBaseRacesForMeet(meet); rebuildRaceAssignments(meet); ensureAtLeastOneBlock(meet); ensureCurrentRace(meet);
+  generateBaseRacesForMeet(meet); generateAdditionalRacesForMeet(meet); rebuildRaceAssignments(meet); ensureAtLeastOneBlock(meet); ensureCurrentRace(meet);
   saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/blocks`);
 });
 
@@ -3349,7 +3418,8 @@ app.get('/meet/:meetId/register', (req, res) => {
   const eliC=(meet.groups||[]).reduce((c,g)=>g.divisions&&g.divisions.elite&&g.divisions.elite.enabled?Number(g.divisions.elite.cost||0):c,0);
   const opnC=(meet.openGroups||[]).reduce((c,g)=>g.enabled?Number(g.cost||0):c,0);
   const qdC=(meet.quadGroups||[]).reduce((c,g)=>g.enabled?Number(g.cost||0):c,0);
-  const costWidget=base>0 ? buildCostWidget(base,novC,eliC,opnC,qdC) : '';
+  const skC=(meet.skateabilityGroups||[]).reduce((c,g)=>Number(g.cost||0)>c?Number(g.cost||0):c,0);
+  const costWidget=base>0 ? buildCostWidget(base,novC,eliC,opnC,qdC,skC) : '';
   res.send(pageShell({title:'Register',user:data?.user||null, bodyHtml:`
     <div class="page-header"><h1>Register</h1><div class="sub">${esc(meet.meetName)}${meet.date?` • ${esc(meet.date)}`:''}</div></div>
     <div class="card">
@@ -3413,7 +3483,7 @@ app.post('/meet/:meetId/register', (req, res) => {
   const finalGroup=challengeAdjustedGroup(meet,baseGroup,!!req.body.challengeUp);
   const meetNumber=(meet.registrations||[]).reduce((max,r)=>Math.max(max,Number(r.meetNumber)||0),0)+1;
   const regEmail=String(req.body.email||'').trim();
-  const regOpts={challengeUp:!!req.body.challengeUp,novice:!!req.body.novice,elite:!!req.body.elite,open:!!req.body.open,quad:!!req.body.quad,timeTrials:!!req.body.timeTrials,relays:!!req.body.relays};
+  const regOpts={challengeUp:!!req.body.challengeUp,novice:!!req.body.novice,elite:!!req.body.elite,open:!!req.body.open,quad:!!req.body.quad,skateability:!!req.body.skateability,skateabilityGroupId:String(req.body.skateabilityGroupId||''),timeTrials:!!req.body.timeTrials,relays:!!req.body.relays};
   const totalCost=calcRegistrationCost(meet,regOpts);
   meet.registrations.push({
     id:nextId(meet.registrations),createdAt:nowIso(),
@@ -3426,7 +3496,7 @@ app.post('/meet/:meetId/register', (req, res) => {
     paid:false,checkedIn:false,totalCost,
     options:regOpts,
   });
-  rebuildRaceAssignments(meet); ensureCurrentRace(meet); saveDb(db);
+  generateAdditionalRacesForMeet(meet); rebuildRaceAssignments(meet); ensureCurrentRace(meet); saveDb(db);
   // Send confirmation email to registrant
   if(regEmail) {
     const rink=db.rinks.find(r=>Number(r.id)===Number(meet.rinkId));
@@ -3489,6 +3559,23 @@ function registrationForm(meet,reg,action,title) {
             ${(meet.quadGroups||[]).some(g=>g.enabled)?`<div class="toggle-row"><div><div class="toggle-row-label">Quad</div></div>${toggleSwitch('quad',!!reg.options?.quad)}</div>`:''}
             <div class="toggle-row"><div><div class="toggle-row-label">Time Trials</div></div>${toggleSwitch('timeTrials',!!reg.options?.timeTrials)}</div>
             <div class="toggle-row"><div><div class="toggle-row-label">Relays</div></div>${toggleSwitch('relays',!!reg.options?.relays)}</div>
+            ${(meet.skateabilityGroups||[]).length?`
+              <div class="toggle-row"><div><div class="toggle-row-label">Additional Races</div><div class="toggle-row-desc">Extra race division</div></div>${toggleSwitch('skateability',!!reg.options?.skateability)}</div>
+              <div id="edit-skateability-group-row" style="${reg.options?.skateability?'':'display:none'}">
+                <div class="toggle-row" style="flex-direction:column;align-items:flex-start;gap:8px">
+                  <div class="toggle-row-label">Additional Race Group</div>
+                  <select name="skateabilityGroupId" style="width:100%">
+                    <option value="">— Select group —</option>
+                    ${(meet.skateabilityGroups||[]).map(sg=>`<option value="${esc(sg.id)}" ${String(reg.options?.skateabilityGroupId||'')===String(sg.id)?'selected':''}>${esc(sg.ageGroupLabel)}</option>`).join('')}
+                  </select>
+                </div>
+              </div>
+              <script>
+                var editSkToggle = document.querySelector('input[name="skateability"]');
+                if(editSkToggle) editSkToggle.addEventListener('change', function() {
+                  document.getElementById('edit-skateability-group-row').style.display = this.checked ? '' : 'none';
+                });
+              </script>`:''}
           </div>
           <div class="action-row">
             <button class="btn" type="submit">Save Racer</button>
@@ -3511,7 +3598,7 @@ app.get('/portal/meet/:meetId/registered', requireRole('meet_director'), (req, r
       <td><strong>${esc(r.name)}</strong>${sponsorLineHtml(r.sponsor||'')}</td>
       <td>${esc(r.age)}</td><td>${esc(r.team)}</td>
       <td>${esc(r.divisionGroupLabel||'')}${r.options?.challengeUp?`<div class="note">↑ from ${esc(r.originalDivisionGroupLabel||'')}</div>`:''}</td>
-      <td>${['challengeUp','novice','elite','open','quad','timeTrials','relays'].filter(k=>r.options?.[k]).map(k=>k==='challengeUp'?'CU':cap(k)).join(', ')||'—'}</td>
+      <td>${['challengeUp','novice','elite','open','quad','skateability','timeTrials','relays'].filter(k=>r.options?.[k]).map(k=>k==='challengeUp'?'CU':(k==='skateability'?'Additional':cap(k))).join(', ')||'—'}</td>
       <td>$${esc(r.totalCost)}</td>
       <td>${r.paid?`<span class="good">✔</span>`:'—'}</td>
       <td>${r.checkedIn?`<span class="good">✔</span>`:'—'}</td>
@@ -3560,8 +3647,8 @@ app.post('/portal/meet/:meetId/registered/:regId/edit', requireRole('meet_direct
   const compAge=usarsAge(birthdate,meet.date)||Number(reg.age||0);
   const baseGroup=findAgeGroup(meet.groups,compAge,gender);
   const finalGroup=challengeAdjustedGroup(meet,baseGroup,!!req.body.challengeUp);
-  Object.assign(reg,{name:String(req.body.name||'').trim(),birthdate,age:compAge,gender,team:String(req.body.team||'Midwest Racing').trim()||'Midwest Racing',sponsor:String(req.body.sponsor||'').trim(),originalDivisionGroupId:baseGroup?.id||'',originalDivisionGroupLabel:baseGroup?.label||'',divisionGroupId:finalGroup?.id||'',divisionGroupLabel:finalGroup?.label||'Unassigned',options:{challengeUp:!!req.body.challengeUp,novice:!!req.body.novice,elite:!!req.body.elite,open:!!req.body.open,quad:!!req.body.quad,timeTrials:!!req.body.timeTrials,relays:!!req.body.relays}});
-  rebuildRaceAssignments(meet); saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/registered`);
+  Object.assign(reg,{name:String(req.body.name||'').trim(),birthdate,age:compAge,gender,team:String(req.body.team||'Midwest Racing').trim()||'Midwest Racing',sponsor:String(req.body.sponsor||'').trim(),originalDivisionGroupId:baseGroup?.id||'',originalDivisionGroupLabel:baseGroup?.label||'',divisionGroupId:finalGroup?.id||'',divisionGroupLabel:finalGroup?.label||'Unassigned',options:{challengeUp:!!req.body.challengeUp,novice:!!req.body.novice,elite:!!req.body.elite,open:!!req.body.open,quad:!!req.body.quad,skateability:!!req.body.skateability,skateabilityGroupId:String(req.body.skateabilityGroupId||''),timeTrials:!!req.body.timeTrials,relays:!!req.body.relays}});
+  generateAdditionalRacesForMeet(meet); rebuildRaceAssignments(meet); saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/registered`);
 });
 
 app.get('/portal/meet/:meetId/registered/:regId/delete', requireRole('meet_director'), (req, res) => {
@@ -3949,6 +4036,7 @@ app.post('/portal/meet/:meetId/blocks/generate', requireRole('meet_director'), (
   generateBaseRacesForMeet(meet);
   generateOpenRacesForMeet(meet);
   generateQuadRacesForMeet(meet);
+  generateAdditionalRacesForMeet(meet);
   rebuildRaceAssignments(meet);
   ensureAtLeastOneBlock(meet);
   ensureCurrentRace(meet);
