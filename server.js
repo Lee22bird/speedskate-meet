@@ -693,22 +693,25 @@ function generateAdditionalRacesForMeet(meet) {
   let orderHint = 8500;
 
   for (const sg of additionalGroups) {
-    const ageGroupId = String(sg.ageGroupId || '').trim();
-    const ageGroupLabel = String(sg.ageGroupLabel || 'Additional Race').trim();
-    if (!ageGroupId) continue;
-
-    const ageGroup = (meet.groups || []).find(g => String(g.id) === ageGroupId);
+    const savedId = String(sg.id || '').trim() || ('additional_' + crypto.randomBytes(4).toString('hex'));
+    const linkedAgeGroupId = String(sg.ageGroupId || '').trim();
+    const raceGroupId = savedId;
+    const title = String(sg.ageGroupLabel || sg.title || 'Additional Race').trim() || 'Additional Race';
+    const linkedAgeGroup = (meet.groups || []).find(g => String(g.id) === linkedAgeGroupId);
+    const ages = String(sg.ages || linkedAgeGroup?.ages || '').trim();
     const distances = (Array.isArray(sg.distances) ? sg.distances : [])
       .map(d => String(d || '').trim())
       .filter(Boolean);
 
     distances.forEach((distance, idx) => {
-      const parentKey = `additional|${sg.id || ageGroupId}|${idx + 1}`;
+      const parentKey = `additional|${savedId}|${idx + 1}`;
+      const legacyParentKey = linkedAgeGroupId ? `additional|${linkedAgeGroupId}|${idx + 1}` : '';
       const existingRace = (meet.races || []).find(r =>
         String(r.parentRaceKey || '') === parentKey ||
+        (legacyParentKey && String(r.parentRaceKey || '') === legacyParentKey) ||
         (
           (String(r.division || '') === 'skateability' || r.isAdditionalRace || r.isSkateabilityRace) &&
-          String(r.groupId || '') === ageGroupId &&
+          (String(r.groupId || '') === raceGroupId || (linkedAgeGroupId && String(r.groupId || '') === linkedAgeGroupId)) &&
           String(r.distanceLabel || '') === distance
         )
       );
@@ -716,9 +719,9 @@ function generateAdditionalRacesForMeet(meet) {
       additionalRaces.push({
         id: existingRace?.id || ('r' + crypto.randomBytes(6).toString('hex')),
         orderHint: Number(existingRace?.orderHint || orderHint++),
-        groupId: ageGroupId,
-        groupLabel: `${ageGroupLabel} — Additional Race`,
-        ages: ageGroup?.ages || '',
+        groupId: raceGroupId,
+        groupLabel: title,
+        ages,
         division: 'skateability',
         distanceLabel: distance,
         dayIndex: idx + 1,
@@ -2949,11 +2952,15 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
           ${(meet.skateabilityGroups||[]).map((sg,si)=>`
             <div class="group-pair-col" style="margin-bottom:12px" id="sk-${si}">
               <div class="group-pair-header">
-                <span class="group-pair-name">Additional Race — ${esc(sg.ageGroupLabel||'')}</span>
+                <span class="group-pair-name">Additional Race</span>
                 <button type="button" class="btn-danger btn-sm" onclick="removeSkateability(${si})">Remove</button>
               </div>
+              <input type="hidden" name="sk_${si}_id" value="${esc(sg.id||('sk_'+si))}" />
               <input type="hidden" name="sk_${si}_ageGroupId" value="${esc(sg.ageGroupId||'')}" />
-              <input type="hidden" name="sk_${si}_ageGroupLabel" value="${esc(sg.ageGroupLabel||'')}" />
+              <div class="form-grid cols-2" style="margin-top:10px">
+                <div><label>Division Title</label><input name="sk_${si}_ageGroupLabel" value="${esc(sg.ageGroupLabel||sg.title||'Additional Race')}" placeholder="Diaper Dash / Skateability / Extra Open" /></div>
+                <div><label>Age Range</label><input name="sk_${si}_ages" value="${esc(sg.ages||'')}" placeholder="5 & under / 6-9 / 35+" /></div>
+              </div>
               <div style="display:flex;gap:8px;align-items:flex-end;margin-top:10px">
                 <div style="width:80px;flex-shrink:0"><label>Cost $</label><input name="sk_${si}_cost" value="${esc(sg.cost||'0')}" placeholder="0" /></div>
                 <div style="flex:1"><label>D1</label><input name="sk_${si}_d1" value="${esc(sg.distances?.[0]||'')}" placeholder="100m" /></div>
@@ -2966,35 +2973,37 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
       </div>
 
       <script>
-        const AGE_GROUPS = ${JSON.stringify(meet.groups.map(g=>({id:g.id,label:g.label,ages:g.ages})))};
         let skCount = ${(meet.skateabilityGroups||[]).length};
 
         function addSkateability() {
-          const sel = prompt('Select age group for Additional Race:\n' + AGE_GROUPS.map((g,i)=>(i+1)+'. '+g.label+' ('+g.ages+')').join('\n') + '\n\nEnter number:');
-          if(!sel) return;
-          const idx = parseInt(sel)-1;
-          const g = AGE_GROUPS[idx];
-          if(!g) return alert('Invalid selection');
           const si = skCount++;
-          document.getElementById('skateability_count').value = skCount;
+          const countEl = document.getElementById('skateability_count');
+          if(countEl) countEl.value = skCount;
+          const list = document.getElementById('skateability-list');
+          if(!list) return;
           const div = document.createElement('div');
           div.className = 'group-pair-col';
           div.style.marginBottom = '12px';
           div.id = 'sk-'+si;
+          const newId = 'sk_custom_' + Date.now() + '_' + si;
           div.innerHTML =
             '<div class="group-pair-header">' +
-              '<span class="group-pair-name">Additional Race \u2014 '+g.label+'</span>' +
+              '<span class="group-pair-name">Additional Race</span>' +
               '<button type="button" class="btn-danger btn-sm" onclick="this.closest(\'.group-pair-col\').remove()">Remove</button>' +
             '</div>' +
-            '<input type="hidden" name="sk_'+si+'_ageGroupId" value="'+g.id+'" />' +
-            '<input type="hidden" name="sk_'+si+'_ageGroupLabel" value="'+g.label+'" />' +
+            '<input type="hidden" name="sk_'+si+'_id" value="'+newId+'" />' +
+            '<input type="hidden" name="sk_'+si+'_ageGroupId" value="" />' +
+            '<div class="form-grid cols-2" style="margin-top:10px">' +
+              '<div><label>Division Title</label><input name="sk_'+si+'_ageGroupLabel" value="Additional Race" placeholder="Diaper Dash / Skateability / Extra Open" /></div>' +
+              '<div><label>Age Range</label><input name="sk_'+si+'_ages" value="" placeholder="5 & under / 6-9 / 35+" /></div>' +
+            '</div>' +
             '<div style="display:flex;gap:8px;align-items:flex-end;margin-top:10px">' +
               '<div style="width:80px;flex-shrink:0"><label>Cost $</label><input name="sk_'+si+'_cost" value="0" placeholder="0" /></div>' +
               '<div style="flex:1"><label>D1</label><input name="sk_'+si+'_d1" value="" placeholder="100m" /></div>' +
               '<div style="flex:1"><label>D2</label><input name="sk_'+si+'_d2" value="" placeholder="200m" /></div>' +
               '<div style="flex:1"><label>D3</label><input name="sk_'+si+'_d3" value="" placeholder="300m" /></div>' +
             '</div>';
-          document.getElementById('skateability-list').appendChild(div);
+          list.appendChild(div);
         }
 
         function removeSkateability(si) {
@@ -3057,22 +3066,27 @@ function saveMeetFields(meet, body, db) {
       };
     }
   });
-  // Save skateability groups
+  // Save additional race groups
   const skCount = Number(body.skateability_count||0);
   meet.skateabilityGroups = [];
   for(let si=0; si<skCount; si++) {
+    const id = String(body[`sk_${si}_id`]||'').trim() || ('sk_custom_'+si+'_'+crypto.randomBytes(3).toString('hex'));
     const ageGroupId = String(body[`sk_${si}_ageGroupId`]||'').trim();
     const ageGroupLabel = String(body[`sk_${si}_ageGroupLabel`]||'').trim();
-    if(!ageGroupId) continue;
+    const ages = String(body[`sk_${si}_ages`]||'').trim();
+    const distances = [
+      String(body[`sk_${si}_d1`]||'').trim(),
+      String(body[`sk_${si}_d2`]||'').trim(),
+      String(body[`sk_${si}_d3`]||'').trim(),
+    ];
+    if(!ageGroupLabel && !ages && !distances.some(Boolean)) continue;
     meet.skateabilityGroups.push({
-      id: 'sk_'+si+'_'+ageGroupId,
-      ageGroupId, ageGroupLabel,
+      id,
+      ageGroupId,
+      ageGroupLabel: ageGroupLabel || 'Additional Race',
+      ages,
       cost: Number(String(body[`sk_${si}_cost`]||'0').trim()||0),
-      distances: [
-        String(body[`sk_${si}_d1`]||'').trim(),
-        String(body[`sk_${si}_d2`]||'').trim(),
-        String(body[`sk_${si}_d3`]||'').trim(),
-      ],
+      distances,
     });
   }
   meet.updatedAt=nowIso();
@@ -3456,7 +3470,7 @@ app.get('/meet/:meetId/register', (req, res) => {
                   <div class="toggle-row-label">Additional Race Group</div>
                   <select name="skateabilityGroupId" style="width:100%">
                     <option value="">— Select group —</option>
-                    ${(meet.skateabilityGroups||[]).map(sg=>`<option value="${esc(sg.id)}">${esc(sg.ageGroupLabel)}</option>`).join('')}
+                    ${(meet.skateabilityGroups||[]).map(sg=>`<option value="${esc(sg.id)}">${esc(sg.ageGroupLabel||'Additional Race')}${sg.ages?' ('+esc(sg.ages)+')':''}</option>`).join('')}
                   </select>
                 </div>
               </div>
@@ -3566,7 +3580,7 @@ function registrationForm(meet,reg,action,title) {
                   <div class="toggle-row-label">Additional Race Group</div>
                   <select name="skateabilityGroupId" style="width:100%">
                     <option value="">— Select group —</option>
-                    ${(meet.skateabilityGroups||[]).map(sg=>`<option value="${esc(sg.id)}" ${String(reg.options?.skateabilityGroupId||'')===String(sg.id)?'selected':''}>${esc(sg.ageGroupLabel)}</option>`).join('')}
+                    ${(meet.skateabilityGroups||[]).map(sg=>`<option value="${esc(sg.id)}" ${String(reg.options?.skateabilityGroupId||'')===String(sg.id)?'selected':''}>${esc(sg.ageGroupLabel||'Additional Race')}${sg.ages?' ('+esc(sg.ages)+')':''}</option>`).join('')}
                   </select>
                 </div>
               </div>
