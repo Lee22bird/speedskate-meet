@@ -2704,11 +2704,11 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
     groupsRows.push(
       '<div class="group-pair-row">' +
         '<div class="group-pair-col">' +
-          '<div class="group-pair-header"><span class="group-pair-name">'+esc(L.label)+'</span><span class="group-pair-age">'+esc(L.ages)+'</span></div>' +
+          '<div class="group-pair-header"><span class="group-pair-name">'+esc(L.label)+'</span><label class="group-pair-age" style="display:flex;align-items:center;gap:6px">Age Range <input name="g_'+i+'_ages" value="'+esc(L.ages||'')+'" style="width:110px;padding:6px 8px;font-size:12px" /></label></div>' +
           Lcards +
         '</div>' +
         (R?'<div class="group-pair-col">' +
-          '<div class="group-pair-header"><span class="group-pair-name">'+esc(R.label)+'</span><span class="group-pair-age">'+esc(R.ages)+'</span></div>' +
+          '<div class="group-pair-header"><span class="group-pair-name">'+esc(R.label)+'</span><label class="group-pair-age" style="display:flex;align-items:center;gap:6px">Age Range <input name="g_'+(i+1)+'_ages" value="'+esc(R.ages||'')+'" style="width:110px;padding:6px 8px;font-size:12px" /></label></div>' +
           Rcards +
         '</div>':'') +
       '</div>'
@@ -2871,16 +2871,16 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
       <div class="card" style="margin-top:8px">
         <div class="row between center" style="margin-bottom:14px">
           <div>
-            <h2 style="margin:0">🦋 Skateability</h2>
-            <div class="note">Add Skateability divisions for specific age groups — director sets distances manually.</div>
+            <h2 style="margin:0">➕ Additional Races</h2>
+            <div class="note">Add extra race groups for special events — director sets distances manually.</div>
           </div>
-          <button type="button" class="btn2 btn-sm" onclick="addSkateability()">+ Add Skateability</button>
+          <button type="button" class="btn2 btn-sm" onclick="addSkateability()">+ Add Additional Race</button>
         </div>
         <div id="skateability-list">
           ${(meet.skateabilityGroups||[]).map((sg,si)=>`
             <div class="group-pair-col" style="margin-bottom:12px" id="sk-${si}">
               <div class="group-pair-header">
-                <span class="group-pair-name">Skateability — ${esc(sg.ageGroupLabel||'')}</span>
+                <span class="group-pair-name">Additional Race — ${esc(sg.ageGroupLabel||'')}</span>
                 <button type="button" class="btn-danger btn-sm" onclick="removeSkateability(${si})">Remove</button>
               </div>
               <input type="hidden" name="sk_${si}_ageGroupId" value="${esc(sg.ageGroupId||'')}" />
@@ -2901,7 +2901,7 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
         let skCount = ${(meet.skateabilityGroups||[]).length};
 
         function addSkateability() {
-          const sel = prompt('Select age group for Skateability:\n' + AGE_GROUPS.map((g,i)=>(i+1)+'. '+g.label+' ('+g.ages+')').join('\n') + '\n\nEnter number:');
+          const sel = prompt('Select age group for Additional Race:\n' + AGE_GROUPS.map((g,i)=>(i+1)+'. '+g.label+' ('+g.ages+')').join('\n') + '\n\nEnter number:');
           if(!sel) return;
           const idx = parseInt(sel)-1;
           const g = AGE_GROUPS[idx];
@@ -2914,7 +2914,7 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
           div.id = 'sk-'+si;
           div.innerHTML =
             '<div class="group-pair-header">' +
-              '<span class="group-pair-name">Skateability \u2014 '+g.label+'</span>' +
+              '<span class="group-pair-name">Additional Race \u2014 '+g.label+'</span>' +
               '<button type="button" class="btn-danger btn-sm" onclick="this.closest(\'.group-pair-col\').remove()">Remove</button>' +
             '</div>' +
             '<input type="hidden" name="sk_'+si+'_ageGroupId" value="'+g.id+'" />' +
@@ -2978,6 +2978,8 @@ function saveMeetFields(meet, body, db) {
   meet.tiebreaker=String(body.tiebreaker||'d2')==='sr832'?'sr832':'d2';
   meet.baseEntryFee=Number(String(body.baseEntryFee||'0').trim()||0);
   meet.groups.forEach((group,gi)=>{
+    const submittedAges = String(body[`g_${gi}_ages`] || group.ages || '').trim();
+    if (submittedAges) group.ages = submittedAges;
     for(const divKey of ['novice','elite']) {
       group.divisions[divKey]={
         enabled:!!body[`g_${gi}_${divKey}_enabled`],
@@ -3378,10 +3380,10 @@ app.get('/meet/:meetId/register', (req, res) => {
             ${meet.timeTrialsEnabled?`<div class="toggle-row"><div><div class="toggle-row-label">Time Trials</div></div>${toggleSwitch('timeTrials',false)}</div>`:''}
             ${meet.relayEnabled?`<div class="toggle-row"><div><div class="toggle-row-label">Relays</div></div>${toggleSwitch('relays',false)}</div>`:''}
             ${(meet.skateabilityGroups||[]).length?`
-              <div class="toggle-row"><div><div class="toggle-row-label">Skateability</div><div class="toggle-row-desc">Special division — select your group below if enabled</div></div>${toggleSwitch('skateability',false)}</div>
+              <div class="toggle-row"><div><div class="toggle-row-label">Additional Races</div><div class="toggle-row-desc">Extra race division — select your group below if enabled</div></div>${toggleSwitch('skateability',false)}</div>
               <div id="skateability-group-row" style="display:none">
                 <div class="toggle-row" style="flex-direction:column;align-items:flex-start;gap:8px">
-                  <div class="toggle-row-label">Skateability Age Group</div>
+                  <div class="toggle-row-label">Additional Race Group</div>
                   <select name="skateabilityGroupId" style="width:100%">
                     <option value="">— Select group —</option>
                     ${(meet.skateabilityGroups||[]).map(sg=>`<option value="${esc(sg.id)}">${esc(sg.ageGroupLabel)}</option>`).join('')}
