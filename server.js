@@ -421,7 +421,7 @@ function migrateMeet(meet,fallbackOwnerId) {
   if(typeof meet.raceDayPaused!=='boolean') meet.raceDayPaused=false;
   if(!Number.isFinite(Number(meet.baseEntryFee))) meet.baseEntryFee=0;
   if(!Array.isArray(meet.textAlerts)) meet.textAlerts=[];
-  if(!Array.isArray(meet.skateabilityGroups)) meet.skateabilityGroups=[];
+  if(!Array.isArray(meet.skateabilityGroups)) meet.skateabilityGroups = Array.isArray(meet.additionalRaces) ? meet.additionalRaces : [];
   meet.races=meet.races.map((r,idx)=>({
     id:r.id||('r'+crypto.randomBytes(6).toString('hex')), orderHint:Number(r.orderHint||idx+1),
     groupId:String(r.groupId||''), groupLabel:String(r.groupLabel||''), ages:String(r.ages||''),
@@ -693,6 +693,8 @@ function generateAdditionalRacesForMeet(meet) {
   let orderHint = 8500;
 
   for (const sg of additionalGroups) {
+    // Skip groups that are present but not enabled
+    if (sg && sg.enabled === false) continue;
     const savedId = String(sg.id || '').trim() || ('additional_' + crypto.randomBytes(4).toString('hex'));
     const linkedAgeGroupId = String(sg.ageGroupId || '').trim();
     const raceGroupId = savedId;
@@ -2741,6 +2743,10 @@ app.post('/portal/rinks/:id/edit', requireRole('meet_director'), (req, res) => {
 app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet) return res.redirect('/portal');
+  // Support legacy/new naming: prefer `skateabilityGroups`, fall back to `additionalRaces`
+  if(!Array.isArray(meet.skateabilityGroups) && Array.isArray(meet.additionalRaces)) {
+    meet.skateabilityGroups = Array.isArray(meet.additionalRaces) ? meet.additionalRaces : [];
+  }
   if(!canEditMeet(req.user,meet)) return res.status(403).send(pageShell({title:'Forbidden',user:req.user, bodyHtml:`<div class="page-header"><h1>Forbidden</h1></div><div class="card"><div class="danger">Only the meet owner can edit this meet.</div></div>`}));
   const rinkInputValue = String(meet.customRinkName || '').trim() || (() => { const r = req.db.rinks.find(x => Number(x.id) === Number(meet.rinkId)); return r ? `${r.name} (${r.city || ''}${r.city && r.state ? ', ' : ''}${r.state || ''})` : ''; })();
   const rinkDataList=req.db.rinks.map(r=>`<option value="${esc(r.name)} (${esc(r.city||'')}${r.city&&r.state?', ':''}${esc(r.state||'')})" data-id="${r.id}"></option>`).join('');
@@ -2953,6 +2959,7 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
             <div class="group-pair-col" style="margin-bottom:12px" id="sk-${si}">
               <div class="group-pair-header">
                 <span class="group-pair-name">Additional Race</span>
+                ${toggleSwitch('sk_'+si+'_enabled', sg.enabled)}
                 <button type="button" class="btn-danger btn-sm" onclick="removeSkateability(${si})">Remove</button>
               </div>
               <input type="hidden" name="sk_${si}_id" value="${esc(sg.id||('sk_'+si))}" />
@@ -2989,7 +2996,11 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
           div.innerHTML =
             '<div class="group-pair-header">' +
               '<span class="group-pair-name">Additional Race</span>' +
-              '<button type="button" class="btn-danger btn-sm" onclick="this.closest(\'.group-pair-col\').remove()">Remove</button>' +
+              '<label class="toggle-wrap" style="margin-left:8px">' +
+                '<input type="checkbox" name="sk_'+si+'_enabled" value="on" class="toggle-input" checked />' +
+                '<span class="toggle-track"><span class="toggle-thumb"></span></span>' +
+              '</label>' +
+              '<button type="button" class="btn-danger btn-sm" onclick="removeSkateability('+si+')">Remove</button>' +
             '</div>' +
             '<input type="hidden" name="sk_'+si+'_id" value="'+newId+'" />' +
             '<input type="hidden" name="sk_'+si+'_ageGroupId" value="" />' +
@@ -3009,6 +3020,12 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
         function removeSkateability(si) {
           const el = document.getElementById('sk-'+si);
           if(el) el.remove();
+          // Re-sync count and hidden field so save reads correct number
+          const list = document.getElementById('skateability-list');
+          const newCount = list ? list.querySelectorAll('.group-pair-col').length : 0;
+          skCount = newCount;
+          const countEl = document.getElementById('skateability_count');
+          if(countEl) countEl.value = skCount;
         }
       </script>
 
@@ -3085,10 +3102,13 @@ function saveMeetFields(meet, body, db) {
       ageGroupId,
       ageGroupLabel: ageGroupLabel || 'Additional Race',
       ages,
+      enabled: !!body[`sk_${si}_enabled`],
       cost: Number(String(body[`sk_${si}_cost`]||'0').trim()||0),
       distances,
     });
   }
+  // Mirror into `additionalRaces` for compatibility and persistence
+  meet.additionalRaces = (meet.skateabilityGroups || []).map(g => ({ ...g }));
   meet.updatedAt=nowIso();
 }
 
