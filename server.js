@@ -352,8 +352,10 @@ function sanitizeRinks(db) {
 function normalizeDivisionSet(divs) {
   const out=divs||{};
   for(const key of ['novice','elite']) {
-    if(!out[key]) out[key]={enabled:false,cost:0,distances:['','','','']};
-    out[key].enabled=!!out[key].enabled; out[key].cost=Number(out[key].cost||0);
+    if(!out[key]) out[key]={enabled:false,cost:0,ages:'',distances:['','','','']};
+    out[key].enabled=!!out[key].enabled;
+    out[key].cost=Number(out[key].cost||0);
+    out[key].ages=String(out[key].ages||'').trim();
     if(!Array.isArray(out[key].distances)) out[key].distances=['','','',''];
     out[key].distances=[0,1,2,3].map(i=>String(out[key].distances[i]||'').trim());
   } return out;
@@ -577,11 +579,25 @@ function isRegistrationClosed(meet) {
   if(!Number.isFinite(ts)) return false; return Date.now()>ts;
 }
 
+function ageMatch(ages, age) {
+  const n=Number(age); if(!Number.isFinite(n)) return false;
+  const normalized=String(ages||'').trim();
+  if(!normalized) return false;
+  if(normalized.includes('& under')) { const limit=Number((normalized.match(/\d+/)||[0])[0]); return n<=limit; }
+  if(normalized.includes('+')) { const min=Number((normalized.match(/\d+/)||[999])[0]); return n>=min; }
+  const nums=normalized.match(/\d+/g)||[]; if(nums.length>=2) return n>=Number(nums[0])&&n<=Number(nums[1]); return false;
+}
+
 function groupAgeMatch(group,age) {
-  const n=Number(age); const ages=String(group.ages||'');
-  if(ages.includes('& under')) { const limit=Number((ages.match(/\d+/)||[0])[0]); return n<=limit; }
-  if(ages.includes('+')) { const min=Number((ages.match(/\d+/)||[999])[0]); return n>=min; }
-  const nums=ages.match(/\d+/g)||[]; if(nums.length>=2) return n>=Number(nums[0])&&n<=Number(nums[1]); return false;
+  const n=Number(age); if(!Number.isFinite(n)) return false;
+  if(group.divisions) {
+    for(const key of ['novice','elite']) {
+      const div=group.divisions[key];
+      if(div && String(div.ages||'').trim() && ageMatch(div.ages,n)) return true;
+    }
+  }
+  const ages=String(group.ages||'').trim();
+  return ageMatch(ages,n);
 }
 
 function findAgeGroup(groups,age,genderGuess) {
@@ -2760,13 +2776,17 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
   function divCardHtml(group, gi, divKey) {
     const div=group.divisions[divKey];
     const colors={novice:'var(--sky2)',elite:'var(--navy)'};
+    const ageRange = String(div.ages||'').trim() || String(group.ages||'').trim();
     return '<div class="group-div-card">' +
       '<div class="row between center" style="margin-bottom:10px">' +
         '<div style="font-weight:700;font-size:14px;color:'+colors[divKey]+'">'+divKey.toUpperCase()+'</div>' +
         toggleSwitch('g_'+gi+'_'+divKey+'_enabled', div.enabled) +
       '</div>' +
-      '<div style="display:flex;gap:8px;align-items:flex-end">' +
+      '<div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:10px">' +
+        '<div style="flex:1"><label>Age Range</label><input name="g_'+gi+'_'+divKey+'_ages" value="'+esc(ageRange)+'" placeholder="10-11" /></div>' +
         '<div style="width:80px;flex-shrink:0"><label>Cost $</label><input name="g_'+gi+'_'+divKey+'_cost" value="'+esc(div.cost)+'" placeholder="0" /></div>' +
+      '</div>' +
+      '<div style="display:flex;gap:8px;align-items:flex-end">' +
         '<div style="flex:1"><label>D1</label><input name="g_'+gi+'_'+divKey+'_d1" value="'+esc(div.distances[0]||'')+'" placeholder="200m" /></div>' +
         '<div style="flex:1"><label>D2</label><input name="g_'+gi+'_'+divKey+'_d2" value="'+esc(div.distances[1]||'')+'" placeholder="500m" /></div>' +
         '<div style="flex:1"><label>D3</label><input name="g_'+gi+'_'+divKey+'_d3" value="'+esc(div.distances[2]||'')+'" placeholder="1000m" /></div>' +
@@ -2782,11 +2802,11 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
     groupsRows.push(
       '<div class="group-pair-row">' +
         '<div class="group-pair-col">' +
-          '<div class="group-pair-header"><span class="group-pair-name">'+esc(L.label)+'</span><label class="group-pair-age" style="display:flex;align-items:center;gap:6px">Age Range <input name="g_'+i+'_ages" value="'+esc(L.ages||'')+'" style="width:110px;padding:6px 8px;font-size:12px" /></label></div>' +
+          '<div class="group-pair-header"><span class="group-pair-name">'+esc(L.label)+'</span></div>' +
           Lcards +
         '</div>' +
         (R?'<div class="group-pair-col">' +
-          '<div class="group-pair-header"><span class="group-pair-name">'+esc(R.label)+'</span><label class="group-pair-age" style="display:flex;align-items:center;gap:6px">Age Range <input name="g_'+(i+1)+'_ages" value="'+esc(R.ages||'')+'" style="width:110px;padding:6px 8px;font-size:12px" /></label></div>' +
+          '<div class="group-pair-header"><span class="group-pair-name">'+esc(R.label)+'</span></div>' +
           Rcards +
         '</div>':'') +
       '</div>'
@@ -3073,12 +3093,11 @@ function saveMeetFields(meet, body, db) {
   meet.tiebreaker=String(body.tiebreaker||'d2')==='sr832'?'sr832':'d2';
   meet.baseEntryFee=Number(String(body.baseEntryFee||'0').trim()||0);
   meet.groups.forEach((group,gi)=>{
-    const submittedAges = String(body[`g_${gi}_ages`] || group.ages || '').trim();
-    if (submittedAges) group.ages = submittedAges;
     for(const divKey of ['novice','elite']) {
-      group.divisions[divKey]={
+      group.divisions[divKey] = {
         enabled:!!body[`g_${gi}_${divKey}_enabled`],
         cost:Number(String(body[`g_${gi}_${divKey}_cost`]||'0').trim()||0),
+        ages:String(body[`g_${gi}_${divKey}_ages`]||group.divisions?.[divKey]?.ages||group.ages||'').trim(),
         distances:[String(body[`g_${gi}_${divKey}_d1`]||'').trim(),String(body[`g_${gi}_${divKey}_d2`]||'').trim(),String(body[`g_${gi}_${divKey}_d3`]||'').trim(),String(body[`g_${gi}_${divKey}_d4`]||'').trim()],
       };
     }
