@@ -3921,8 +3921,8 @@ app.get('/portal/meet/:meetId/blocks', requireRole('meet_director'), (req, res) 
       <div class="block-card">
         <div class="block-head" style="margin-bottom:12px">
           <div>
-            <div style="font-weight:700;font-size:17px;color:var(--navy)">${esc(block.name)}</div>
-            <div class="note">${esc(block.day||'Day 1')} ${displayNum? '• Race Block '+displayNum : ''}</div>
+            <div style="font-weight:700;font-size:17px;color:var(--navy)">Block ${displayNum}</div>
+            <div class="note">${esc(block.day||'Day 1')}</div>
           </div>
           <div class="action-row">
             <button class="btn2 btn-sm" onclick="moveBlockUp('${esc(block.id)}')">↑ Move Up</button>
