@@ -723,10 +723,10 @@ function generateAdditionalRacesForMeet(meet) {
     if (!distances.length) continue;
 
     distances.forEach((distance, idx) => {
-      const parentKey = `additional|${savedId}|${idx + 1}`;
+      const parentRaceKey = `additional|${savedId}|${idx + 1}`;
       const legacyParentKey = linkedAgeGroupId ? `additional|${linkedAgeGroupId}|${idx + 1}` : '';
       const existingRace = (meet.races || []).find(r =>
-        String(r.parentRaceKey || '') === parentKey ||
+        String(r.parentRaceKey || '') === parentRaceKey ||
         (legacyParentKey && String(r.parentRaceKey || '') === legacyParentKey) ||
         (
           (String(r.division || '') === 'skateability' || r.isAdditionalRace || r.isSkateabilityRace) &&
