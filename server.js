@@ -3997,8 +3997,37 @@ app.get('/portal/meet/:meetId/blocks', requireRole('meet_director'), (req, res) 
     </div>
     <script>
       let dragRaceId=null; const meetId=${JSON.stringify(meet.id)};
-      function saveFilters(){localStorage.setItem('ssm_s',document.getElementById('raceSearch').value||'');localStorage.setItem('ssm_c',document.getElementById('classFilter').value||'all');localStorage.setItem('ssm_d',document.getElementById('distFilter').value||'all');}
-      function restoreFilters(){document.getElementById('raceSearch').value=localStorage.getItem('ssm_s')||'';document.getElementById('classFilter').value=localStorage.getItem('ssm_c')||'all';document.getElementById('distFilter').value=localStorage.getItem('ssm_d')||'all';}
+      function scrollStorageKey(){return 'ssm_block_scroll_'+meetId;}
+      function unassignedScrollStorageKey(){return 'ssm_block_unassigned_scroll_'+meetId;}
+      function saveBuilderScroll(){
+        const left=document.querySelector('.bb-left');
+        if(left) sessionStorage.setItem(scrollStorageKey(), String(left.scrollTop));
+        const unassigned=document.querySelector('.unassigned-list');
+        if(unassigned) sessionStorage.setItem(unassignedScrollStorageKey(), String(unassigned.scrollTop));
+      }
+      function restoreBuilderScroll(){
+        const left=document.querySelector('.bb-left');
+        if(left){
+          const val=sessionStorage.getItem(scrollStorageKey());
+          if(val!==null) left.scrollTop=parseInt(val,10)||0;
+        }
+        const unassigned=document.querySelector('.unassigned-list');
+        if(unassigned){
+          const val=sessionStorage.getItem(unassignedScrollStorageKey());
+          if(val!==null) unassigned.scrollTop=parseInt(val,10)||0;
+        }
+      }
+      function saveFilters(){
+        localStorage.setItem('ssm_s',document.getElementById('raceSearch').value||'');
+        localStorage.setItem('ssm_c',document.getElementById('classFilter').value||'all');
+        localStorage.setItem('ssm_d',document.getElementById('distFilter').value||'all');
+        saveBuilderScroll();
+      }
+      function restoreFilters(){
+        document.getElementById('raceSearch').value=localStorage.getItem('ssm_s')||'';
+        document.getElementById('classFilter').value=localStorage.getItem('ssm_c')||'all';
+        document.getElementById('distFilter').value=localStorage.getItem('ssm_d')||'all';
+      }
       function attachDnD(){
         document.querySelectorAll('.race-item').forEach(el=>{
           if(el.getAttribute('draggable')!=='true') return;
@@ -4038,7 +4067,7 @@ app.get('/portal/meet/:meetId/blocks', requireRole('meet_director'), (req, res) 
         }
         document.getElementById('unassignedChip').textContent='Unassigned: '+v;
       }
-      restoreFilters(); attachDnD(); applyFilters();
+      restoreFilters(); restoreBuilderScroll(); attachDnD(); applyFilters();
     </script>`}));
 });
 app.post('/api/meet/:meetId/blocks/add', requireRole('meet_director'), (req, res) => {
