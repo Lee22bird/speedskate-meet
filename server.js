@@ -1173,9 +1173,14 @@ function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
     .group-div-card:last-child { margin-bottom: 0; }
 
     /* ── Block Builder ────────────────────────────────────────────── */
-    .bb-grid { display: grid; grid-template-columns: 1.3fr .85fr; gap: 18px; }
+    .bb-grid { display: grid; grid-template-columns: 1.3fr .85fr; gap: 18px; align-items: start; }
     @media(max-width:1040px) { .bb-grid { grid-template-columns: 1fr; } }
-    .bb-sticky { position: sticky; top: 80px; align-self: start; }
+    .bb-left { max-height: calc(100vh - 220px); overflow-y: auto; padding-right: 2px; }
+    .bb-right { position: sticky; top: 90px; align-self: start; max-height: calc(100vh - 90px); }
+    .bb-right .card { display: flex; flex-direction: column; min-height: 0; }
+    .unassigned-panel { display: flex; flex-direction: column; min-height: 0; }
+    .unassigned-list { overflow-y: auto; min-height: 0; max-height: calc(100vh - 240px); padding-right: 2px; }
+    .bb-right .filters-row { position: sticky; top: 0; z-index: 1; background: #fff; margin-bottom: 10px; }
     .block-card { border: 1.5px solid var(--border2); background: #fff; border-radius: var(--radius-lg); padding: 16px; margin-bottom: 14px; }
     .block-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
     .divider-card { margin-bottom: 14px; }
@@ -3961,27 +3966,31 @@ app.get('/portal/meet/:meetId/blocks', requireRole('meet_director'), (req, res) 
       </div>
     </div>
     <div class="bb-grid">
-      <div>${blocksHtml}</div>
-      <div class="bb-sticky">
-        <div class="card">
-          <h2 style="margin-bottom:12px">Unassigned Races</h2>
-          <div class="filters-row" style="margin-bottom:10px">
-            <div><label>Search</label><input id="raceSearch" placeholder="division..." oninput="applyFilters()" /></div>
-            <div><label>Class</label>
-              <select id="classFilter" onchange="applyFilters()">
-                <option value="all">All</option><option value="novice">Novice</option>
-                <option value="elite">Elite</option><option value="open">Open</option><option value="quad">Quad</option>
-              </select>
+      <div class="bb-left">${blocksHtml}</div>
+      <div class="bb-right">
+        <div class="bb-sticky">
+          <div class="card">
+            <h2 style="margin-bottom:12px">Unassigned Races</h2>
+            <div class="unassigned-panel">
+              <div class="filters-row">
+                <div><label>Search</label><input id="raceSearch" placeholder="division..." oninput="applyFilters()" /></div>
+                <div><label>Class</label>
+                  <select id="classFilter" onchange="applyFilters()">
+                    <option value="all">All</option><option value="novice">Novice</option>
+                    <option value="elite">Elite</option><option value="open">Open</option><option value="quad">Quad</option>
+                  </select>
+                </div>
+                <div><label>Distance</label>
+                  <select id="distFilter" onchange="applyFilters()">
+                    <option value="all">All</option><option value="1">D1</option><option value="2">D2</option>
+                    <option value="3">D3</option><option value="4">D4</option>
+                  </select>
+                </div>
+              </div>
+              <div class="unassigned-list drop-zone" data-drop-block="__unassigned__" id="unassignedZone">
+                ${unassigned.map(race=>raceItemHtml(race,meet.currentRaceId===race.id)).join('')||`<div class="note" style="padding:8px">All races assigned.</div>`}
+              </div>
             </div>
-            <div><label>Distance</label>
-              <select id="distFilter" onchange="applyFilters()">
-                <option value="all">All</option><option value="1">D1</option><option value="2">D2</option>
-                <option value="3">D3</option><option value="4">D4</option>
-              </select>
-            </div>
-          </div>
-          <div class="drop-zone" data-drop-block="__unassigned__" id="unassignedZone">
-            ${unassigned.map(race=>raceItemHtml(race,meet.currentRaceId===race.id)).join('')||`<div class="note" style="padding:8px">All races assigned.</div>`}
           </div>
         </div>
       </div>
