@@ -4816,7 +4816,7 @@ app.get('/portal/meet/:meetId/registered/print-race-list', requireRole('meet_dir
         const tag=race.isOpenRace?'🏁 ':race.isQuadRace?'🛼 ':'';
         return `<tr><td>${raceNo++}</td><td>${tag}${esc(race.groupLabel)}</td><td>${esc(race.distanceLabel)}</td><td>${esc(cap(race.division))}</td><td>${esc(raceDisplayStage(race))}</td><td>${esc(cap(race.startType))}</td><td>${esc(race.cost)}</td></tr>`;
       }).join('');
-      return `<div style="margin-bottom:18px"><h3>${esc(block.name)} ${displayNum?`<span style="font-weight:400;font-size:12px;color:#888">Race Block ${displayNum}</span>`:''}</h3>${block.notes?`<div style="color:#555;font-size:11px">${esc(block.notes)}</div>`:''}
+      return `<div style="margin-bottom:18px"><h3>Block ${displayNum}</h3>${block.notes?`<div style="color:#555;font-size:11px">${esc(block.notes)}</div>`:''}
         <table><thead><tr><th>Race</th><th>Division</th><th>Distance</th><th>Class</th><th>Stage</th><th>Start</th><th>Cost</th></tr></thead>
         <tbody>${raceRows||`<tr><td colspan="7">No races.</td></tr>`}</tbody></table></div>`;
     }).join('');
