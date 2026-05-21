@@ -3885,7 +3885,14 @@ app.get('/portal/meet/:meetId/blocks', requireRole('meet_director'), (req, res) 
       </div>`;
   }
 
-  let raceBlockNum = 0;
+  // Precompute visible race block numbers from current meet.blocks order
+  let _raceCount = 0;
+  const blockNumber = {};
+  for(const b of (meet.blocks||[])){
+    const isB = breakTypes.includes(b.type||'');
+    if(isB) blockNumber[b.id] = null;
+    else blockNumber[b.id] = ++_raceCount;
+  }
   const blocksHtml=(meet.blocks||[]).map(block=>{
     const isBreak=breakTypes.includes(block.type||'');
     if(isBreak) {
@@ -3909,13 +3916,13 @@ app.get('/portal/meet/:meetId/blocks', requireRole('meet_director'), (req, res) 
           </div>
         </div>`;
     }
-    raceBlockNum++;
+    const displayNum = blockNumber[block.id] || '';
     return `
       <div class="block-card">
         <div class="block-head" style="margin-bottom:12px">
           <div>
             <div style="font-weight:700;font-size:17px;color:var(--navy)">${esc(block.name)}</div>
-            <div class="note">${esc(block.day||'Day 1')} • Race Block ${raceBlockNum}</div>
+            <div class="note">${esc(block.day||'Day 1')} ${displayNum? '• Race Block '+displayNum : ''}</div>
           </div>
           <div class="action-row">
             <button class="btn2 btn-sm" onclick="moveBlockUp('${esc(block.id)}')">↑ Move Up</button>
@@ -4787,8 +4794,14 @@ app.get('/portal/meet/:meetId/registered/print-race-list', requireRole('meet_dir
   for(const block of meet.blocks||[]) { const day=block.day||'Day 1'; if(!blocksByDay[day]) blocksByDay[day]=[]; blocksByDay[day].push(block); }
   const breakTypes=['break','lunch','awards','practice'];
   const breakIcons={break:'☕',lunch:'🍽️',awards:'🏆',practice:'⛸️'};
-  let raceNo=1; let raceBlockNum=0;
+  let raceNo=1;
   const daySections=Object.keys(blocksByDay).sort().map(day=>{
+    // compute per-day visible race block numbers based on current order
+    let _cnt=0; const blockNumberDay = {};
+    for(const b of (blocksByDay[day]||[])){
+      if(breakTypes.includes(b.type||'')) blockNumberDay[b.id]=null;
+      else blockNumberDay[b.id]=++_cnt;
+    }
     const blockSections=blocksByDay[day].map(block=>{
       const isBreak=breakTypes.includes(block.type||'');
       if(isBreak) {
@@ -4797,13 +4810,13 @@ app.get('/portal/meet/:meetId/registered/print-race-list', requireRole('meet_dir
           ${icon} ${esc(block.name)}${block.notes?' — '+esc(block.notes):''}
         </div>`;
       }
-      raceBlockNum++;
+      const displayNum = blockNumberDay[block.id] || '';
       const raceRows=(block.raceIds||[]).map(rid=>{
         const race=(meet.races||[]).find(r=>r.id===rid); if(!race) return '';
         const tag=race.isOpenRace?'🏁 ':race.isQuadRace?'🛼 ':'';
         return `<tr><td>${raceNo++}</td><td>${tag}${esc(race.groupLabel)}</td><td>${esc(race.distanceLabel)}</td><td>${esc(cap(race.division))}</td><td>${esc(raceDisplayStage(race))}</td><td>${esc(cap(race.startType))}</td><td>${esc(race.cost)}</td></tr>`;
       }).join('');
-      return `<div style="margin-bottom:18px"><h3>${esc(block.name)} <span style="font-weight:400;font-size:12px;color:#888">Race Block ${raceBlockNum}</span></h3>${block.notes?`<div style="color:#555;font-size:11px">${esc(block.notes)}</div>`:''}
+      return `<div style="margin-bottom:18px"><h3>${esc(block.name)} ${displayNum?`<span style="font-weight:400;font-size:12px;color:#888">Race Block ${displayNum}</span>`:''}</h3>${block.notes?`<div style="color:#555;font-size:11px">${esc(block.notes)}</div>`:''}
         <table><thead><tr><th>Race</th><th>Division</th><th>Distance</th><th>Class</th><th>Stage</th><th>Start</th><th>Cost</th></tr></thead>
         <tbody>${raceRows||`<tr><td colspan="7">No races.</td></tr>`}</tbody></table></div>`;
     }).join('');
