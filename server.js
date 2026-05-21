@@ -2777,7 +2777,9 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
   const quadEnabledCount=(meet.quadGroups||[]).filter(g=>g.enabled).length;
   const savedFlash=req.query.saved?'<div class="card" style="border-left:4px solid var(--green);margin-bottom:12px"><div class="good">✅ Meet saved successfully.</div></div>':'';
   const presetSavedFlash=req.query.presetSaved?'<div class="card" style="border-left:4px solid var(--green);margin-bottom:12px"><div class="good">✅ Meet setup preset saved for future use.</div></div>':'';
+  const presetLoadedFlash=req.query.presetLoaded?'<div class="card" style="border-left:4px solid var(--green);margin-bottom:12px"><div class="good">✅ Meet setup preset loaded into this meet.</div></div>':'';
   const blockSavedFlash=req.query.saved?'<div class="card" style="border-left:4px solid var(--green);margin-bottom:12px"><div class="good">✅ Block Builder saved.</div></div>':'';
+  const setupPresetOptions = (req.db.setupPresets||[]).map(p=>`<option value="${esc(p.id)}">${esc(p.name||p.presetName||'Preset')}</option>`).join('');
 
   function divCardHtml(group, gi, divKey) {
     const div=group.divisions[divKey];
@@ -2919,6 +2921,24 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
                     <button class="btn2 btn-sm" type="submit" formaction="/portal/meet/${meet.id}/builder/save-preset">Save Setup</button>
                   </div>
                   <div class="note">Saves divisions, distances, fees, tiebreaker, blocks, and race order.</div>
+                </div>
+                <div>
+                  <label>Load Setup</label>
+                  <form method="POST" action="/portal/meet/${meet.id}/setup-presets/load" onsubmit="return confirm('Load setup will overwrite current divisions, blocks, and race structure. Continue?')" style="display:flex;gap:8px;align-items:center;margin-top:6px">
+                    <select id="presetSelect" name="presetId" style="min-width:220px;padding:6px">${setupPresetOptions||'<option value="">(no presets)</option>'}</select>
+                    <button id="loadPresetBtn" class="btn2 btn-sm" type="submit">Load Setup</button>
+                  </form>
+                  <script>
+                    (function(){
+                      var sel = document.getElementById('presetSelect');
+                      var btn = document.getElementById('loadPresetBtn');
+                      if(!sel || !btn) return;
+                      function update(){ btn.disabled = !sel.value; }
+                      sel.addEventListener('change', update);
+                      update();
+                    })();
+                  </script>
+                  <div class="note">Loads divisions, fees, blocks, and race structure into this meet.</div>
                 </div>
               </div>
             </section>
@@ -3148,6 +3168,43 @@ app.post('/portal/meet/:meetId/builder/save-preset', requireRole('meet_director'
   const preset=makeSetupPresetFromMeet(req.db, meet, req.body.presetName, req.user.id);
   req.db.setupPresets.push(preset);
   saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/builder?presetSaved=1`);
+});
+
+// Load a saved setup preset into the current meet (copy reusable structure only)
+app.post('/portal/meet/:meetId/setup-presets/load', requireRole('meet_director'), (req, res) => {
+  const meet=getMeetOr404(req.db,req.params.meetId);
+  if(!meet) return res.redirect('/portal');
+  if(!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
+  const presetId = String(req.body.presetId||'').trim();
+  if(!Array.isArray(req.db.setupPresets)) req.db.setupPresets=[];
+  const preset = req.db.setupPresets.find(p=>String(p.id)===presetId);
+  if(!preset) return res.redirect(`/portal/meet/${meet.id}/builder`);
+
+  // Copy only allowed fields from preset into meet
+  meet.groups = JSON.parse(JSON.stringify(preset.groups || []));
+  meet.openGroups = JSON.parse(JSON.stringify(preset.openGroups || []));
+  meet.quadGroups = JSON.parse(JSON.stringify(preset.quadGroups || []));
+  meet.skateabilityGroups = JSON.parse(JSON.stringify(preset.skateabilityGroups || preset.additionalRaces || []));
+  meet.tiebreaker = preset.tiebreaker || meet.tiebreaker;
+  meet.baseEntryFee = Number(preset.baseEntryFee || 0);
+  meet.trackLength = preset.trackLength || meet.trackLength;
+  meet.lanes = preset.lanes || meet.lanes;
+  meet.timeTrialsEnabled = !!preset.timeTrialsEnabled;
+  meet.relayEnabled = !!preset.relayEnabled;
+  meet.judgesPanelRequired = !!preset.judgesPanelRequired;
+
+  // Blocks: import structure exactly but clear raceIds so races are regenerated fresh
+  meet.blocks = (preset.blocks || []).map(b => {
+    const nb = JSON.parse(JSON.stringify(b || {}));
+    nb.raceIds = [];
+    return nb;
+  });
+
+  // Mirror skateability into additionalRaces for compatibility
+  meet.additionalRaces = (meet.skateabilityGroups || []).map(g => ({ ...g }));
+  meet.updatedAt = nowIso();
+  saveDb(req.db);
+  res.redirect(`/portal/meet/${meet.id}/builder?presetLoaded=1`);
 });
 
 // Save meet fields only — does NOT touch races or blocks
