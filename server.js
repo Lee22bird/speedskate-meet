@@ -2778,8 +2778,9 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
   const savedFlash=req.query.saved?'<div class="card" style="border-left:4px solid var(--green);margin-bottom:12px"><div class="good">✅ Meet saved successfully.</div></div>':'';
   const presetSavedFlash=req.query.presetSaved?'<div class="card" style="border-left:4px solid var(--green);margin-bottom:12px"><div class="good">✅ Meet setup preset saved for future use.</div></div>':'';
   const presetLoadedFlash=req.query.presetLoaded?'<div class="card" style="border-left:4px solid var(--green);margin-bottom:12px"><div class="good">✅ Meet setup preset loaded into this meet.</div></div>':'';
-  const blockSavedFlash=req.query.saved?'<div class="card" style="border-left:4px solid var(--green);margin-bottom:12px"><div class="good">✅ Block Builder saved.</div></div>':'';
+  const presetDeletedFlash=req.query.presetDeleted?'<div class="card" style="border-left:4px solid var(--green);margin-bottom:12px"><div class="good">✅ Meet setup preset deleted.</div></div>':'';
   const setupPresetOptions = (req.db.setupPresets||[]).map(p=>`<option value="${esc(p.id)}">${esc(p.name||p.presetName||'Preset')}</option>`).join('');
+  const presetSelectHtml = `${req.query.clearPreset?'<option value="" selected>Choose a preset</option>':''}${setupPresetOptions||'<option value="">(no presets)</option>'}`;
 
   function divCardHtml(group, gi, divKey) {
     const div=group.divisions[divKey];
@@ -2826,6 +2827,8 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
     <div class="page-header"><h1>Meet Builder</h1><div class="sub">${esc(meet.meetName)}</div></div>
     ${savedFlash}
     ${presetSavedFlash}
+    ${presetLoadedFlash}
+    ${presetDeletedFlash}
     <div class="grid-2" style="margin-bottom:16px">
       <div class="card card-accent" style="border-left-color:var(--orange)">
         <div class="row between center">
@@ -2924,16 +2927,29 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
                 </div>
                 <div>
                   <label>Load Setup</label>
-                  <form method="POST" action="/portal/meet/${meet.id}/setup-presets/load" onsubmit="return confirm('Load setup will overwrite current divisions, blocks, and race structure. Continue?')" style="display:flex;gap:8px;align-items:center;margin-top:6px">
-                    <select id="presetSelect" name="presetId" style="min-width:220px;padding:6px">${setupPresetOptions||'<option value="">(no presets)</option>'}</select>
-                    <button id="loadPresetBtn" class="btn2 btn-sm" type="submit">Load Setup</button>
-                  </form>
+                  <div style="display:flex;gap:8px;align-items:center;margin-top:6px">
+                    <form id="loadPresetForm" method="POST" action="/portal/meet/${meet.id}/setup-presets/load" onsubmit="return confirm('Load setup will overwrite current divisions, blocks, and race structure. Continue?')" style="display:flex;gap:8px;align-items:center;">
+                      <select id="presetSelect" name="presetId" style="min-width:220px;padding:6px">${presetSelectHtml}</select>
+                      <button id="loadPresetBtn" class="btn2 btn-sm" type="submit">Load Setup</button>
+                    </form>
+                    <form id="deletePresetForm" method="POST" action="/portal/meet/${meet.id}/setup-presets/delete" onsubmit="return confirm('Delete selected setup preset? This cannot be undone.')">
+                      <input type="hidden" name="presetId" id="deletePresetId" value="" />
+                      <button id="deletePresetBtn" class="btn-danger btn-sm" type="submit">Delete</button>
+                    </form>
+                  </div>
                   <script>
                     (function(){
                       var sel = document.getElementById('presetSelect');
-                      var btn = document.getElementById('loadPresetBtn');
-                      if(!sel || !btn) return;
-                      function update(){ btn.disabled = !sel.value; }
+                      var loadBtn = document.getElementById('loadPresetBtn');
+                      var deleteBtn = document.getElementById('deletePresetBtn');
+                      var deleteInput = document.getElementById('deletePresetId');
+                      if(!sel || !loadBtn || !deleteBtn || !deleteInput) return;
+                      function update(){
+                        var selected = sel.value;
+                        loadBtn.disabled = !selected;
+                        deleteBtn.disabled = !selected;
+                        deleteInput.value = selected || '';
+                      }
                       sel.addEventListener('change', update);
                       update();
                     })();
@@ -3205,6 +3221,22 @@ app.post('/portal/meet/:meetId/setup-presets/load', requireRole('meet_director')
   meet.updatedAt = nowIso();
   saveDb(req.db);
   res.redirect(`/portal/meet/${meet.id}/builder?presetLoaded=1`);
+});
+
+// Delete a saved setup preset from the DB; does not alter existing meets that already used it
+app.post('/portal/meet/:meetId/setup-presets/delete', requireRole('meet_director'), (req, res) => {
+  const meet=getMeetOr404(req.db,req.params.meetId);
+  if(!meet) return res.redirect('/portal');
+  if(!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
+  const presetId = String(req.body.presetId||'').trim();
+  if(!Array.isArray(req.db.setupPresets)) req.db.setupPresets=[];
+  const index = req.db.setupPresets.findIndex(p=>String(p.id)===presetId);
+  if(index >= 0) {
+    req.db.setupPresets.splice(index, 1);
+    saveDb(req.db);
+    return res.redirect(`/portal/meet/${meet.id}/builder?presetDeleted=1&clearPreset=1`);
+  }
+  res.redirect(`/portal/meet/${meet.id}/builder`);
 });
 
 // Save meet fields only — does NOT touch races or blocks
