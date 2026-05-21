@@ -709,8 +709,8 @@ function generateAdditionalRacesForMeet(meet) {
   let orderHint = 8500;
 
   for (const sg of additionalGroups) {
-    // Skip groups that are present but not enabled
-    if (sg && sg.enabled === false) continue;
+    // Skip groups that are explicitly disabled; preserve legacy groups without enabled metadata.
+    if (!sg || sg.enabled === false || String(sg.enabled).toLowerCase() === 'false') continue;
     const savedId = String(sg.id || '').trim() || ('additional_' + crypto.randomBytes(4).toString('hex'));
     const linkedAgeGroupId = String(sg.ageGroupId || '').trim();
     const raceGroupId = savedId;
@@ -720,6 +720,7 @@ function generateAdditionalRacesForMeet(meet) {
     const distances = (Array.isArray(sg.distances) ? sg.distances : [])
       .map(d => String(d || '').trim())
       .filter(Boolean);
+    if (!distances.length) continue;
 
     distances.forEach((distance, idx) => {
       const parentKey = `additional|${savedId}|${idx + 1}`;

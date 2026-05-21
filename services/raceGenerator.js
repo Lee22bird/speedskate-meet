@@ -287,13 +287,14 @@ function generateBaseRacesForMeet(meet) {
         const key = baseRaceKey(group.id, divKey, i + 1, distance);
         const old = oldMap.get(key);
         const isOpen = isOpenDivision(divKey);
+        const ages = String(div.ages || group.ages || '').trim();
 
         races.push({
           id: old?.id || ('r' + crypto.randomBytes(6).toString('hex')),
           orderHint: orderHint++,
           groupId: group.id,
           groupLabel: group.label,
-          ages: group.ages,
+          ages,
           division: divKey,
           distanceLabel: distance,
           dayIndex: i + 1,
