@@ -3918,8 +3918,10 @@ app.get('/portal/meet/:meetId/blocks', requireRole('meet_director'), (req, res) 
             <div class="note">${esc(block.day||'Day 1')} • Race Block ${raceBlockNum}</div>
           </div>
           <div class="action-row">
+            <button class="btn2 btn-sm" onclick="moveBlockUp('${esc(block.id)}')">↑ Move Up</button>
+            <button class="btn2 btn-sm" onclick="moveBlockDown('${esc(block.id)}')">↓ Move Down</button>
             <button class="btn2 btn-sm" onclick="renameBlock('${esc(block.id)}')">Rename</button>
-            <button class="btn-danger btn-sm" onclick="deleteBlock('${esc(block.id)}')">Delete</button>
+              <button class="btn-danger btn-sm" onclick="deleteBlock('${esc(block.id)}')">Delete</button>
           </div>
         </div>
         <div class="form-grid cols-2" style="margin-bottom:12px">
@@ -4050,6 +4052,20 @@ app.get('/portal/meet/:meetId/blocks', requireRole('meet_director'), (req, res) 
       async function addDivider(type,name){saveFilters();const r=await fetch('/api/meet/'+meetId+'/blocks/add-divider',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type,name})});if(r.ok) location.reload();}
       async function renameBlock(id){const name=prompt('Name:');if(!name) return;saveFilters();const r=await fetch('/api/meet/'+meetId+'/blocks/update-meta',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({blockId:id,name})});if(r.ok) location.reload();}
       async function deleteBlock(id){if(!confirm('Remove this?')) return;saveFilters();const r=await fetch('/api/meet/'+meetId+'/blocks/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({blockId:id})});if(r.ok) location.reload();}
+      async function moveBlock(id,dir){
+        saveFilters();
+        try{
+          const r=await fetch('/api/meet/'+meetId+'/blocks/move',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({blockId:id,dir})});
+          if(r.ok){
+            const j=await r.json();
+            if(j&&j.ok) location.reload(); else if(j&&j.ok===false) location.reload(); else alert('Move failed');
+          } else {
+            alert('Move failed');
+          }
+        }catch(err){console.error(err);alert('Move failed');}
+      }
+      function moveBlockUp(id){ return moveBlock(id,'up'); }
+      function moveBlockDown(id){ return moveBlock(id,'down'); }
       async function setBlockDay(id,day){saveFilters();await fetch('/api/meet/'+meetId+'/blocks/update-meta',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({blockId:id,day})});}
       async function setBlockNotes(id,notes){saveFilters();await fetch('/api/meet/'+meetId+'/blocks/update-meta',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({blockId:id,notes})});}
       function applyFilters(){
@@ -4106,6 +4122,25 @@ app.post('/api/meet/:meetId/blocks/delete', requireRole('meet_director'), (req, 
   if(!(meet.blocks||[]).find(b=>b.id===blockId)) return res.status(404).send('Block not found');
   meet.blocks=(meet.blocks||[]).filter(b=>b.id!==blockId);
   ensureAtLeastOneBlock(meet); ensureCurrentRace(meet); meet.updatedAt=nowIso(); saveDb(req.db); res.json({ok:true});
+});
+
+app.post('/api/meet/:meetId/blocks/move', requireRole('meet_director'), (req, res) => {
+  const meet=getMeetOr404(req.db,req.params.meetId);
+  if(!meet||!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
+  const blockId=String(req.body.blockId||'');
+  const dir=String(req.body.dir||'').toLowerCase();
+  const blocks = meet.blocks || [];
+  const idx = blocks.findIndex(b=>b.id===blockId);
+  if(idx===-1) return res.status(404).send('Block not found');
+  let swapIdx = null;
+  if(dir==='up') swapIdx = idx-1;
+  else if(dir==='down') swapIdx = idx+1;
+  if(swapIdx===null || swapIdx<0 || swapIdx>=blocks.length) return res.json({ok:false});
+  // swap blocks
+  const tmp = blocks[swapIdx]; blocks[swapIdx] = blocks[idx]; blocks[idx] = tmp;
+  meet.blocks = blocks;
+  meet.updatedAt = nowIso(); saveDb(req.db);
+  res.json({ok:true});
 });
 
 app.post('/api/meet/:meetId/blocks/move-race', requireRole('meet_director'), (req, res) => {
