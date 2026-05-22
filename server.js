@@ -778,28 +778,56 @@ function generateAdditionalRacesForMeet(meet) {
   meet.updatedAt = nowIso();
 }
 
+function pricingFieldsFromMeet(meet) {
+  return {
+    baseEntryFee: Number(meet?.baseEntryFee || 0),
+    noviceEventFee: Number(meet?.noviceEventFee || 0),
+    eliteEventFee: Number(meet?.eliteEventFee || 0),
+    openEventFee: Number(meet?.openEventFee || 0),
+    quadEventFee: Number(meet?.quadEventFee || 0),
+    additionalRaceFee: Number(meet?.additionalRaceFee || 0),
+    relayEventFee: Number(meet?.relayEventFee || 0),
+    timeTrialEventFee: Number(meet?.timeTrialEventFee || 0),
+    maxRegistrationFee: Number(meet?.maxRegistrationFee || 0),
+  };
+}
+
+function buildRegistrationPricingPreview(meet) {
+  const fees = pricingFieldsFromMeet(meet || {});
+  return buildCostWidget(
+    fees.baseEntryFee,
+    fees.noviceEventFee,
+    fees.eliteEventFee,
+    fees.openEventFee,
+    fees.quadEventFee,
+    fees.additionalRaceFee,
+    fees.relayEventFee,
+    fees.timeTrialEventFee,
+    fees.maxRegistrationFee
+  );
+}
+
 function buildCostWidget(base,novC,eliC,opnC,qdC,skC=0,relayC=0,ttC=0,maxC=0) {
   const html=[
     '<div class="card" style="background:#f8fafc;margin-top:8px">',
     '<div style="display:flex;justify-content:space-between;align-items:center">',
-    '<div style="font-weight:700">Estimated Total</div>',
+    '<div style="font-weight:700">Live Registration Total</div>',
     '<div style="font-size:28px;font-weight:900;color:#F97316" id="ssm-cost">$'+base+'</div>',
     '</div>',
-    '<div style="font-size:12px;color:#64748b;margin-top:4px" id="ssm-breakdown">Select events above</div>',
+    '<div style="font-size:12px;color:#64748b;margin-top:4px" id="ssm-breakdown">Base entry fee</div>',
     '</div>',
     '<script>(function(){',
-    'var B='+base+',MAX='+maxC+',C={novice:'+novC+',elite:'+eliC+',open:'+opnC+',quad:'+qdC+',skateability:'+skC+',timeTrials:'+ttC+',relays:'+relayC+',challengeUp:0};',
+    'var B='+base+',M='+maxC+',C={novice:'+novC+',elite:'+eliC+',open:'+opnC+',quad:'+qdC+',skateability:'+skC+',timeTrials:'+ttC+',relays:'+relayC+',challengeUp:0};',
     'function money(n){return "$"+Number(n||0).toFixed(0);}',
+    'function checked(k){var el=document.querySelector("[name="+k+"]");return !!(el&&(el.checked||el.value==="on"));}',
     'function upd(){var sel=[];',
-    '["novice","elite","open","quad","skateability","timeTrials","relays","challengeUp"].forEach(function(k){',
-    'var el=document.querySelector("[name="+k+"]");if(el&&el.value==="on")sel.push({name:k,cost:C[k]||0});',
-    '});',
-    'var t=document.getElementById("ssm-cost"),b=document.getElementById("ssm-breakdown");',
+    '["novice","elite","open","quad","skateability","timeTrials","relays"].forEach(function(k){if(checked(k))sel.push({name:k,cost:C[k]||0});});',
     'var total=B,lines=["Base entry fee: "+money(B)];',
     'sel.forEach(function(item){total+=Number(item.cost||0);lines.push("+ "+item.name+": "+money(item.cost));});',
-    'if(MAX>0&&total>MAX){total=MAX;lines.push("Max registration cap: "+money(MAX));}',
-    't.textContent=money(total);b.textContent=lines.join(" | ");',
-    '}document.addEventListener("change",upd);setTimeout(upd,300);',
+    'if(M>0&&total>M){lines.push("Max registration cap applied: "+money(M));total=M;}',
+    'var t=document.getElementById("ssm-cost"),b=document.getElementById("ssm-breakdown");',
+    'if(t)t.textContent=money(total);if(b)b.textContent=lines.join(" | ");',
+    '}document.addEventListener("change",upd);document.addEventListener("input",upd);setTimeout(upd,100);',
     '})();</script>'
   ];
   return html.join("");
@@ -2900,8 +2928,9 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
                 <div><label>Relay Event</label><input type="number" name="relayEventFee" value="${esc(String(meet.relayEventFee||0))}" min="0" /></div>
                 <div><label>Time Trial Event</label><input type="number" name="timeTrialEventFee" value="${esc(String(meet.timeTrialEventFee||0))}" min="0" /></div>
                 <div><label>Additional Race</label><input type="number" name="additionalRaceFee" value="${esc(String(meet.additionalRaceFee||0))}" min="0" /></div>
+                <div><label>Max Registration Cap</label><input type="number" name="maxRegistrationFee" value="${esc(String(meet.maxRegistrationFee||0))}" min="0" /><div class="note">0 = no cap</div></div>
               </div>
-              <div style="margin-top:12px"><div class="note" style="margin:0">Total cost = base fee + selected event fees (once per event category, not per distance).</div></div>
+              <div style="margin-top:12px"><div class="note" style="margin:0">Total cost = base fee + selected event fees. Max cap applies when greater than 0.</div></div>
               <div class="setup-fields" style="margin-top:20px">
                 <div><label>Status</label>
                   <select name="status">
@@ -3159,6 +3188,7 @@ function saveMeetFields(meet, body, db) {
   meet.relayEventFee=Number(String(body.relayEventFee||'0').trim()||0);
   meet.timeTrialEventFee=Number(String(body.timeTrialEventFee||'0').trim()||0);
   meet.additionalRaceFee=Number(String(body.additionalRaceFee||'0').trim()||0);
+  meet.maxRegistrationFee=Number(String(body.maxRegistrationFee||'0').trim()||0);
   meet.groups.forEach((group,gi)=>{
     for(const divKey of ['novice','elite']) {
       group.divisions[divKey] = {
@@ -3423,12 +3453,12 @@ app.get('/portal/meet/:meetId/open-builder', requireRole('meet_director'), (req,
           </div>
           ${toggleSwitch(`og_${i}_enabled`, og.enabled, 'Open Race')}
         </div>
-        <div class="form-grid cols-3" style="margin-bottom:14px">
+        <div class="form-grid cols-2" style="margin-bottom:14px">
           <div>
             <label>Open Distance</label>
             <input name="og_${i}_distance" value="${esc(og.distance)}" placeholder="${esc(def?.defaultDistance||'')}" />
+            <div class="note">Uses the global Open Event fee from Meet Setup.</div>
           </div>
-          <div><label>Cost ($)</label><input name="og_${i}_cost" value="${esc(og.cost)}" placeholder="0" /></div>
           <div style="display:flex;align-items:flex-end">
             ${liveRace?`<div class="chip chip-green">Open Entries: ${(liveRace.laneEntries||[]).length}</div>`:`<div class="note">Open race generated on save.</div>`}
           </div>
@@ -3495,7 +3525,6 @@ app.post('/portal/meet/:meetId/open-builder/save', requireRole('meet_director'),
   meet.openGroups.forEach((og,i)=>{
     og.enabled=!!req.body[`og_${i}_enabled`];
     og.distance=String(req.body[`og_${i}_distance`]||'').trim()||og.distance;
-    og.cost=Number(String(req.body[`og_${i}_cost`]||'0').trim()||0);
     og.timeTrial=!!req.body[`og_${i}_timeTrial`];
     og.ttDistance=String(req.body[`og_${i}_ttDistance`]||'').trim();
   });
@@ -3528,7 +3557,7 @@ app.get('/portal/meet/:meetId/quad-builder', requireRole('meet_director'), (req,
           </div>
           ${toggleSwitch(`qg_${i}_enabled`, qg.enabled, 'Enable')}
         </div>
-        <div class="form-grid cols-3">
+        <div class="form-grid cols-2">
           <div>
             <label>Distance 1</label>
             <input name="qg_${i}_d1" value="${esc(qg.distances[0]||'')}" placeholder="${esc(def?.distances[0]||'')}" />
@@ -3539,12 +3568,8 @@ app.get('/portal/meet/:meetId/quad-builder', requireRole('meet_director'), (req,
             <input name="qg_${i}_d2" value="${esc(qg.distances[1]||'')}" placeholder="${esc(def?.distances[1]||'')}" />
             <div class="note">Default: ${esc(def?.distances[1]||'')}</div>
           </div>
-          <div>
-            <label>Cost ($)</label>
-            <input name="qg_${i}_cost" value="${esc(qg.cost)}" placeholder="0" />
-            ${liveRaces.length?`<div class="note" style="margin-top:6px">${liveRaces.map(r=>`${esc(r.distanceLabel)}: ${(r.laneEntries||[]).length} entries`).join(' | ')}</div>`:''}
-          </div>
         </div>
+        <div class="note" style="margin-top:8px">Uses the global Quad Event fee from Meet Setup.${liveRaces.length?` ${liveRaces.map(r=>`${esc(r.distanceLabel)}: ${(r.laneEntries||[]).length} entries`).join(' | ')}`:''}</div>
       </div>`;
     });
     return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">${cards.join('')}</div>`;
@@ -3594,7 +3619,6 @@ app.post('/portal/meet/:meetId/quad-builder/save', requireRole('meet_director'),
     qg.enabled=!!req.body[`qg_${i}_enabled`];
     qg.distances[0]=String(req.body[`qg_${i}_d1`]||'').trim()||qg.distances[0];
     qg.distances[1]=String(req.body[`qg_${i}_d2`]||'').trim()||qg.distances[1];
-    qg.cost=Number(String(req.body[`qg_${i}_cost`]||'0').trim()||0);
   });
   generateQuadRacesForMeet(meet); ensureAtLeastOneBlock(meet); ensureCurrentRace(meet);
   saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/quad-builder?saved=1`);
@@ -3605,16 +3629,7 @@ app.get('/meet/:meetId/register', (req, res) => {
   const db=loadDb(); const meet=getMeetOr404(db,req.params.meetId); const data=getSessionUser(req);
   if(!meet||!meet.isPublic) return res.redirect('/meets');
   const closed=isRegistrationClosed(meet);
-  const base=Number(meet.baseEntryFee||0);
-  const novC=Number(meet.noviceEventFee||0);
-  const eliC=Number(meet.eliteEventFee||0);
-  const opnC=Number(meet.openEventFee||0);
-  const qdC=Number(meet.quadEventFee||0);
-  const skC=Number(meet.additionalRaceFee||0);
-  const relayC=Number(meet.relayEventFee||0);
-  const ttC=Number(meet.timeTrialEventFee||0);
-  const maxC=Number(meet.maxRegistrationFee||0);
-  const costWidget=base>0 ? buildCostWidget(base,novC,eliC,opnC,qdC,skC,relayC,ttC,maxC) : '';
+  const costWidget=buildRegistrationPricingPreview(meet);
   res.send(pageShell({title:'Register',user:data?.user||null, bodyHtml:`
     <div class="page-header"><h1>Register</h1><div class="sub">${esc(meet.meetName)}${meet.date?` • ${esc(meet.date)}`:''}</div></div>
     <div class="card">
@@ -4950,10 +4965,10 @@ app.get('/portal/meet/:meetId/registered/print-race-list', requireRole('meet_dir
       const raceRows=(block.raceIds||[]).map(rid=>{
         const race=(meet.races||[]).find(r=>r.id===rid); if(!race) return '';
         const tag=race.isOpenRace?'🏁 ':race.isQuadRace?'🛼 ':'';
-        return `<tr><td>${raceNo++}</td><td>${tag}${esc(race.groupLabel)}</td><td>${esc(race.distanceLabel)}</td><td>${esc(cap(race.division))}</td><td>${esc(raceDisplayStage(race))}</td><td>${esc(cap(race.startType))}</td><td>${esc(race.cost)}</td></tr>`;
+        return `<tr><td>${raceNo++}</td><td>${tag}${esc(race.groupLabel)}</td><td>${esc(race.distanceLabel)}</td><td>${esc(cap(race.division))}</td><td>${esc(raceDisplayStage(race))}</td><td>${esc(cap(race.startType))}</td></tr>`;
       }).join('');
       return `<div style="margin-bottom:18px"><h3>Block ${displayNum}</h3>${block.notes?`<div style="color:#555;font-size:11px">${esc(block.notes)}</div>`:''}
-        <table><thead><tr><th>Race</th><th>Division</th><th>Distance</th><th>Class</th><th>Stage</th><th>Start</th><th>Cost</th></tr></thead>
+        <table><thead><tr><th>Race</th><th>Division</th><th>Distance</th><th>Class</th><th>Stage</th><th>Start</th></tr></thead>
         <tbody>${raceRows||`<tr><td colspan="7">No races.</td></tr>`}</tbody></table></div>`;
     }).join('');
     return `<div style="margin-bottom:24px"><h2>${esc(day)}</h2>${blockSections}</div>`;
