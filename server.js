@@ -34,6 +34,10 @@ const {
 const {
   buildCostWidget,
 } = require('./services/pricingUi');
+const {
+  defaultPricingFields,
+  normalizeMeetPricingFields,
+} = require('./services/pricingModel');
 
 const app = express();
 app.use(express.urlencoded({ extended: true }));
@@ -326,8 +330,8 @@ function defaultMeet(ownerUserId) {
     meetName:'New Meet', date:'', endDate:'', startTime:'', registrationCloseAt:'',
     rinkId:1, customRinkName:'', trackLength:100, lanes:4,
     timeTrialsEnabled:false, relayEnabled:false, judgesPanelRequired:true,
-    notes:'', scheduleNotes:'', relayNotes:'', isPublic:false, status:'draft', tiebreaker:'d2', baseEntryFee:0,
-    noviceEventFee:0, eliteEventFee:0, openEventFee:0, quadEventFee:0, relayEventFee:0, timeTrialEventFee:0, additionalRaceFee:0, maxRegistrationFee:0,
+    notes:'', scheduleNotes:'', relayNotes:'', isPublic:false, status:'draft', tiebreaker:'d2',
+    ...defaultPricingFields(),
     groups:baseGroups(), openGroups:makeOpenGroupsTemplate(), quadGroups:makeQuadGroupsTemplate(),
     races:[], blocks:[], registrations:[], skateabilityGroups:[],
     currentRaceId:'', currentRaceIndex:-1, raceDayPaused:false,
@@ -431,10 +435,7 @@ function migrateMeet(meet,fallbackOwnerId) {
   if(typeof meet.currentRaceId!=='string') meet.currentRaceId='';
   if(typeof meet.currentRaceIndex!=='number') meet.currentRaceIndex=-1;
   if(typeof meet.raceDayPaused!=='boolean') meet.raceDayPaused=false;
-  if(!Number.isFinite(Number(meet.baseEntryFee))) meet.baseEntryFee=0;
-  for (const feeField of ['noviceEventFee','eliteEventFee','openEventFee','quadEventFee','relayEventFee','timeTrialEventFee','additionalRaceFee','maxRegistrationFee']) {
-    meet[feeField] = Number.isFinite(Number(meet[feeField])) ? Number(meet[feeField]) : 0;
-  }
+  normalizeMeetPricingFields(meet);
   if(!Array.isArray(meet.textAlerts)) meet.textAlerts=[];
   if(!Array.isArray(meet.skateabilityGroups)) meet.skateabilityGroups = Array.isArray(meet.additionalRaces) ? meet.additionalRaces : [];
   meet.races=meet.races.map((r,idx)=>({
