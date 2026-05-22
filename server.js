@@ -319,6 +319,7 @@ function defaultMeet(ownerUserId) {
     rinkId:1, customRinkName:'', trackLength:100, lanes:4,
     timeTrialsEnabled:false, relayEnabled:false, judgesPanelRequired:true,
     notes:'', relayNotes:'', isPublic:false, status:'draft', tiebreaker:'d2', baseEntryFee:0,
+    noviceEventFee:0, eliteEventFee:0, openEventFee:0, quadEventFee:0, relayEventFee:0, timeTrialEventFee:0, additionalRaceFee:0, maxRegistrationFee:0,
     groups:baseGroups(), openGroups:makeOpenGroupsTemplate(), quadGroups:makeQuadGroupsTemplate(),
     races:[], blocks:[], registrations:[], skateabilityGroups:[],
     currentRaceId:'', currentRaceIndex:-1, raceDayPaused:false,
@@ -422,6 +423,9 @@ function migrateMeet(meet,fallbackOwnerId) {
   if(typeof meet.currentRaceIndex!=='number') meet.currentRaceIndex=-1;
   if(typeof meet.raceDayPaused!=='boolean') meet.raceDayPaused=false;
   if(!Number.isFinite(Number(meet.baseEntryFee))) meet.baseEntryFee=0;
+  for (const feeField of ['noviceEventFee','eliteEventFee','openEventFee','quadEventFee','relayEventFee','timeTrialEventFee','additionalRaceFee','maxRegistrationFee']) {
+    meet[feeField] = Number.isFinite(Number(meet[feeField])) ? Number(meet[feeField]) : 0;
+  }
   if(!Array.isArray(meet.textAlerts)) meet.textAlerts=[];
   if(!Array.isArray(meet.skateabilityGroups)) meet.skateabilityGroups = Array.isArray(meet.additionalRaces) ? meet.additionalRaces : [];
   meet.races=meet.races.map((r,idx)=>({
@@ -539,6 +543,13 @@ function makeSetupPresetFromMeet(db, meet, name, ownerUserId) {
     sourceMeetId: meet.id,
     tiebreaker: meet.tiebreaker || 'd2',
     baseEntryFee: Number(meet.baseEntryFee || 0),
+    noviceEventFee: Number(meet.noviceEventFee || 0),
+    eliteEventFee: Number(meet.eliteEventFee || 0),
+    openEventFee: Number(meet.openEventFee || 0),
+    quadEventFee: Number(meet.quadEventFee || 0),
+    relayEventFee: Number(meet.relayEventFee || 0),
+    timeTrialEventFee: Number(meet.timeTrialEventFee || 0),
+    additionalRaceFee: Number(meet.additionalRaceFee || 0),
     trackLength: Number(meet.trackLength || 100),
     lanes: Number(meet.lanes || 4),
     timeTrialsEnabled: !!meet.timeTrialsEnabled,
@@ -770,7 +781,7 @@ function generateAdditionalRacesForMeet(meet) {
   meet.updatedAt = nowIso();
 }
 
-function buildCostWidget(base,novC,eliC,opnC,qdC,skC=0) {
+function buildCostWidget(base,novC,eliC,opnC,qdC,skC=0,relayC=0,ttC=0) {
   const html=[
     '<div class="card" style="background:#f8fafc;margin-top:8px">',
     '<div style="display:flex;justify-content:space-between;align-items:center">',
@@ -780,7 +791,7 @@ function buildCostWidget(base,novC,eliC,opnC,qdC,skC=0) {
     '<div style="font-size:12px;color:#64748b;margin-top:4px" id="ssm-breakdown">Select events above</div>',
     '</div>',
     '<script>(function(){',
-    'var B='+base+',C={novice:'+novC+',elite:'+eliC+',open:'+opnC+',quad:'+qdC+',skateability:'+skC+',timeTrials:0,relays:0,challengeUp:0};',
+    'var B='+base+',C={novice:'+novC+',elite:'+eliC+',open:'+opnC+',quad:'+qdC+',skateability:'+skC+',timeTrials:'+ttC+',relays:'+relayC+',challengeUp:0};',
     'function upd(){var sel=[];',
     '["novice","elite","open","quad","skateability","timeTrials","relays","challengeUp"].forEach(function(k){',
     'var el=document.querySelector("[name="+k+"]");if(el&&el.value==="on")sel.push({name:k,cost:C[k]||0});',
@@ -798,20 +809,20 @@ function buildCostWidget(base,novC,eliC,opnC,qdC,skC=0) {
 }
 
 function calcRegistrationCost(meet, options) {
-  const base=Number(meet.baseEntryFee||0);
-  const events=[];
-  if(options.novice){const cost=(meet.groups||[]).reduce((c,g)=>g.divisions&&g.divisions.novice&&g.divisions.novice.enabled?Number(g.divisions.novice.cost||0):c,0);events.push({name:'Novice',cost});}
-  if(options.elite){const cost=(meet.groups||[]).reduce((c,g)=>g.divisions&&g.divisions.elite&&g.divisions.elite.enabled?Number(g.divisions.elite.cost||0):c,0);events.push({name:'Elite',cost});}
-  if(options.open){const cost=(meet.openGroups||[]).reduce((c,g)=>g.enabled?Number(g.cost||0):c,0);events.push({name:'Open',cost});}
-  if(options.quad){const cost=(meet.quadGroups||[]).reduce((c,g)=>g.enabled?Number(g.cost||0):c,0);events.push({name:'Quad',cost});}
-  if(options.skateability){const selected=String(options.skateabilityGroupId||'');const group=(meet.skateabilityGroups||[]).find(g=>String(g.id)===selected)||(meet.skateabilityGroups||[])[0];events.push({name:'Additional Race',cost:Number(group?.cost||0)});}
-  if(options.timeTrials) events.push({name:'Time Trials',cost:0});
-  if(options.relays) events.push({name:'Relays',cost:0});
-  if(!events.length) return base;
-  if(base===0) return events.reduce((t,e)=>t+e.cost,0);
-  events.sort((a,b)=>b.cost-a.cost);
-  let total=base;
-  for(let i=1;i<events.length;i++) total+=events[i].cost;
+  const base = Number(meet.baseEntryFee || 0);
+  let total = base;
+
+  if (options.novice) total += Number(meet.noviceEventFee || 0);
+  if (options.elite) total += Number(meet.eliteEventFee || 0);
+  if (options.open) total += Number(meet.openEventFee || 0);
+  if (options.quad) total += Number(meet.quadEventFee || 0);
+  if (options.skateability) total += Number(meet.additionalRaceFee || 0);
+  if (options.timeTrials) total += Number(meet.timeTrialEventFee || 0);
+  if (options.relays) total += Number(meet.relayEventFee || 0);
+
+  const maxFee = Number(meet.maxRegistrationFee || 0);
+  if (maxFee > 0) total = Math.min(total, maxFee);
+
   return total;
 }
 
@@ -2793,7 +2804,6 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
       '</div>' +
       '<div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:10px">' +
         '<div style="flex:1"><label>Age Range</label><input name="g_'+gi+'_'+divKey+'_ages" value="'+esc(ageRange)+'" placeholder="10-11" /></div>' +
-        '<div style="width:80px;flex-shrink:0"><label>Cost $</label><input name="g_'+gi+'_'+divKey+'_cost" value="'+esc(div.cost)+'" placeholder="0" /></div>' +
       '</div>' +
       '<div style="display:flex;gap:8px;align-items:flex-end">' +
         '<div style="flex:1"><label>D1</label><input name="g_'+gi+'_'+divKey+'_d1" value="'+esc(div.distances[0]||'')+'" placeholder="200m" /></div>' +
@@ -2882,7 +2892,20 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
               <div class="setup-fields">
                 <div><label>Close Date</label><input type="date" name="registrationCloseDate" value="${esc(meet.registrationCloseAt?meet.registrationCloseAt.slice(0,10):'')}" /></div>
                 <div><label>Close Time</label><input type="time" name="registrationCloseTime" value="${esc(meet.registrationCloseAt?meet.registrationCloseAt.slice(11,16):'')}" /></div>
-                <div><label>Base Entry Fee ($)</label><input type="number" name="baseEntryFee" value="${esc(String(meet.baseEntryFee||0))}" min="0" /><div class="note">First event = base fee.</div></div>
+              </div>
+              <div style="margin-bottom:20px"><h3 style="margin:12px 0 12px 0;font-size:14px;font-weight:600">Base & Event Fees</h3></div>
+              <div class="setup-fields" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px">
+                <div><label>Base Registration</label><input type="number" name="baseEntryFee" value="${esc(String(meet.baseEntryFee||0))}" min="0" /></div>
+                <div><label>Novice Event</label><input type="number" name="noviceEventFee" value="${esc(String(meet.noviceEventFee||0))}" min="0" /></div>
+                <div><label>Elite Event</label><input type="number" name="eliteEventFee" value="${esc(String(meet.eliteEventFee||0))}" min="0" /></div>
+                <div><label>Open Event</label><input type="number" name="openEventFee" value="${esc(String(meet.openEventFee||0))}" min="0" /></div>
+                <div><label>Quad Event</label><input type="number" name="quadEventFee" value="${esc(String(meet.quadEventFee||0))}" min="0" /></div>
+                <div><label>Relay Event</label><input type="number" name="relayEventFee" value="${esc(String(meet.relayEventFee||0))}" min="0" /></div>
+                <div><label>Time Trial Event</label><input type="number" name="timeTrialEventFee" value="${esc(String(meet.timeTrialEventFee||0))}" min="0" /></div>
+                <div><label>Additional Race</label><input type="number" name="additionalRaceFee" value="${esc(String(meet.additionalRaceFee||0))}" min="0" /></div>
+              </div>
+              <div style="margin-top:12px"><div class="note" style="margin:0">Total cost = base fee + selected event fees (once per event category, not per distance).</div></div>
+              <div class="setup-fields" style="margin-top:20px">
                 <div><label>Status</label>
                   <select name="status">
                     <option value="draft"     ${meet.status==='draft'    ?'selected':''}>Draft</option>
@@ -3031,7 +3054,6 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
                 <div><label>Age Range</label><input name="sk_${si}_ages" value="${esc(sg.ages||'')}" placeholder="5 & under / 6-9 / 35+" /></div>
               </div>
               <div style="display:flex;gap:8px;align-items:flex-end;margin-top:10px">
-                <div style="width:80px;flex-shrink:0"><label>Cost $</label><input name="sk_${si}_cost" value="${esc(sg.cost||'0')}" placeholder="0" /></div>
                 <div style="flex:1"><label>D1</label><input name="sk_${si}_d1" value="${esc(sg.distances?.[0]||'')}" placeholder="100m" /></div>
                 <div style="flex:1"><label>D2</label><input name="sk_${si}_d2" value="${esc(sg.distances?.[1]||'')}" placeholder="200m" /></div>
                 <div style="flex:1"><label>D3</label><input name="sk_${si}_d3" value="${esc(sg.distances?.[2]||'')}" placeholder="300m" /></div>
@@ -3071,7 +3093,6 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
               '<div><label>Age Range</label><input name="sk_'+si+'_ages" value="" placeholder="5 & under / 6-9 / 35+" /></div>' +
             '</div>' +
             '<div style="display:flex;gap:8px;align-items:flex-end;margin-top:10px">' +
-              '<div style="width:80px;flex-shrink:0"><label>Cost $</label><input name="sk_'+si+'_cost" value="0" placeholder="0" /></div>' +
               '<div style="flex:1"><label>D1</label><input name="sk_'+si+'_d1" value="" placeholder="100m" /></div>' +
               '<div style="flex:1"><label>D2</label><input name="sk_'+si+'_d2" value="" placeholder="200m" /></div>' +
               '<div style="flex:1"><label>D3</label><input name="sk_'+si+'_d3" value="" placeholder="300m" /></div>' +
@@ -3134,11 +3155,17 @@ function saveMeetFields(meet, body, db) {
   meet.relayNotes=String(body.relayNotes||'');
   meet.tiebreaker=String(body.tiebreaker||'d2')==='sr832'?'sr832':'d2';
   meet.baseEntryFee=Number(String(body.baseEntryFee||'0').trim()||0);
+  meet.noviceEventFee=Number(String(body.noviceEventFee||'0').trim()||0);
+  meet.eliteEventFee=Number(String(body.eliteEventFee||'0').trim()||0);
+  meet.openEventFee=Number(String(body.openEventFee||'0').trim()||0);
+  meet.quadEventFee=Number(String(body.quadEventFee||'0').trim()||0);
+  meet.relayEventFee=Number(String(body.relayEventFee||'0').trim()||0);
+  meet.timeTrialEventFee=Number(String(body.timeTrialEventFee||'0').trim()||0);
+  meet.additionalRaceFee=Number(String(body.additionalRaceFee||'0').trim()||0);
   meet.groups.forEach((group,gi)=>{
     for(const divKey of ['novice','elite']) {
       group.divisions[divKey] = {
         enabled:!!body[`g_${gi}_${divKey}_enabled`],
-        cost:Number(String(body[`g_${gi}_${divKey}_cost`]||'0').trim()||0),
         ages:String(body[`g_${gi}_${divKey}_ages`]||group.divisions?.[divKey]?.ages||group.ages||'').trim(),
         distances:[String(body[`g_${gi}_${divKey}_d1`]||'').trim(),String(body[`g_${gi}_${divKey}_d2`]||'').trim(),String(body[`g_${gi}_${divKey}_d3`]||'').trim(),String(body[`g_${gi}_${divKey}_d4`]||'').trim()],
       };
@@ -3164,7 +3191,6 @@ function saveMeetFields(meet, body, db) {
       ageGroupLabel: ageGroupLabel || 'Additional Race',
       ages,
       enabled: !!body[`sk_${si}_enabled`],
-      cost: Number(String(body[`sk_${si}_cost`]||'0').trim()||0),
       distances,
     });
   }
@@ -3203,6 +3229,26 @@ app.post('/portal/meet/:meetId/setup-presets/load', requireRole('meet_director')
   meet.skateabilityGroups = JSON.parse(JSON.stringify(preset.skateabilityGroups || preset.additionalRaces || []));
   meet.tiebreaker = preset.tiebreaker || meet.tiebreaker;
   meet.baseEntryFee = Number(preset.baseEntryFee || 0);
+  // Load new global pricing fields with migration from old per-group costs
+  if(preset.noviceEventFee !== undefined) {
+    meet.noviceEventFee = Number(preset.noviceEventFee || 0);
+  } else {
+    // Migration: extract from first group with novice cost
+    const oldCost = (preset.groups||[]).reduce((c,g)=>g.divisions?.novice?.cost||c,0);
+    meet.noviceEventFee = Number(oldCost || 0);
+  }
+  if(preset.eliteEventFee !== undefined) {
+    meet.eliteEventFee = Number(preset.eliteEventFee || 0);
+  } else {
+    // Migration: extract from first group with elite cost
+    const oldCost = (preset.groups||[]).reduce((c,g)=>g.divisions?.elite?.cost||c,0);
+    meet.eliteEventFee = Number(oldCost || 0);
+  }
+  meet.openEventFee = Number(preset.openEventFee || 0);
+  meet.quadEventFee = Number(preset.quadEventFee || 0);
+  meet.relayEventFee = Number(preset.relayEventFee || 0);
+  meet.timeTrialEventFee = Number(preset.timeTrialEventFee || 0);
+  meet.additionalRaceFee = Number(preset.additionalRaceFee || 0);
   meet.trackLength = preset.trackLength || meet.trackLength;
   meet.lanes = preset.lanes || meet.lanes;
   meet.timeTrialsEnabled = !!preset.timeTrialsEnabled;
@@ -3562,12 +3608,14 @@ app.get('/meet/:meetId/register', (req, res) => {
   if(!meet||!meet.isPublic) return res.redirect('/meets');
   const closed=isRegistrationClosed(meet);
   const base=Number(meet.baseEntryFee||0);
-  const novC=(meet.groups||[]).reduce((c,g)=>g.divisions&&g.divisions.novice&&g.divisions.novice.enabled?Number(g.divisions.novice.cost||0):c,0);
-  const eliC=(meet.groups||[]).reduce((c,g)=>g.divisions&&g.divisions.elite&&g.divisions.elite.enabled?Number(g.divisions.elite.cost||0):c,0);
-  const opnC=(meet.openGroups||[]).reduce((c,g)=>g.enabled?Number(g.cost||0):c,0);
-  const qdC=(meet.quadGroups||[]).reduce((c,g)=>g.enabled?Number(g.cost||0):c,0);
-  const skC=(meet.skateabilityGroups||[]).reduce((c,g)=>Number(g.cost||0)>c?Number(g.cost||0):c,0);
-  const costWidget=base>0 ? buildCostWidget(base,novC,eliC,opnC,qdC,skC) : '';
+  const novC=Number(meet.noviceEventFee||0);
+  const eliC=Number(meet.eliteEventFee||0);
+  const opnC=Number(meet.openEventFee||0);
+  const qdC=Number(meet.quadEventFee||0);
+  const skC=Number(meet.additionalRaceFee||0);
+  const relayC=Number(meet.relayEventFee||0);
+  const ttC=Number(meet.timeTrialEventFee||0);
+  const costWidget=base>0 ? buildCostWidget(base,novC,eliC,opnC,qdC,skC,relayC,ttC) : '';
   res.send(pageShell({title:'Register',user:data?.user||null, bodyHtml:`
     <div class="page-header"><h1>Register</h1><div class="sub">${esc(meet.meetName)}${meet.date?` • ${esc(meet.date)}`:''}</div></div>
     <div class="card">
