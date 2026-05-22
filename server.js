@@ -27,6 +27,11 @@ const {
   raceDisplayStage,
 } = require('./services/raceDay');
 
+const {
+  calcRegistrationCost,
+  calculateRegistrationTotal,
+} = require('./services/pricing');
+
 const app = express();
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json({ limit: '1mb' }));
@@ -637,9 +642,6 @@ function nextHelmetNumber(meet) {
   let n=1; while(used.has(n)) n+=1; return n;
 }
 
-function calculateRegistrationTotal(meet,reg) {
-  return calcRegistrationCost(meet, reg.options || {});
-}
 
 function ensureRegistrationTotalsAndNumbers(meet) {
   for(const reg of meet.registrations||[]) {
@@ -834,28 +836,6 @@ function buildCostWidget(base,novC,eliC,opnC,qdC,skC=0,relayC=0,ttC=0,maxC=0) {
   return html.join("");
 }
 
-function feeNumber(value) {
-  const n = Number(value || 0);
-  return Number.isFinite(n) && n > 0 ? n : 0;
-}
-
-function calcRegistrationCost(meet, options) {
-  const opts = options || {};
-  let total = feeNumber(meet.baseEntryFee);
-
-  if (opts.novice) total += feeNumber(meet.noviceEventFee);
-  if (opts.elite) total += feeNumber(meet.eliteEventFee);
-  if (opts.open) total += feeNumber(meet.openEventFee);
-  if (opts.quad) total += feeNumber(meet.quadEventFee);
-  if (opts.skateability) total += feeNumber(meet.additionalRaceFee);
-  if (opts.timeTrials) total += feeNumber(meet.timeTrialEventFee);
-  if (opts.relays) total += feeNumber(meet.relayEventFee);
-
-  const maxFee = feeNumber(meet.maxRegistrationFee);
-  if (maxFee > 0) total = Math.min(total, maxFee);
-
-  return total;
-}
 
 function racingSoonLabel(delta) {
   if(delta<=0) return 'NOW'; if(delta===1) return 'IN STAGING';
