@@ -3415,14 +3415,35 @@ app.get('/portal/meet/:meetId/relay-builder', requireRole('meet_director'), (req
       </td>
     </tr>`).join('');
 
-  const templateRows = RELAY_TEMPLATE_ROWS.map((row, idx)=>`
-    <tr>
-      <td style="width:52px;text-align:center"><input type="checkbox" name="enabled_${idx}" value="on" /></td>
-      <td><input name="relayType_${idx}" value="${esc(row.type)}" /></td>
-      <td><input name="ageGroup_${idx}" value="${esc(row.age)}" /></td>
-      <td><input name="distance_${idx}" value="${esc(row.distance)}" /></td>
-      <td><input name="notes_${idx}" value="${esc(row.notes)}" /></td>
-    </tr>`).join('');
+  const templateGroups = ['3 Person', '2 Person', '4 Person'].map(type => {
+    const rows = RELAY_TEMPLATE_ROWS.map((row, idx) => ({ row, idx })).filter(x => x.row.type === type);
+    return `
+      <div class="relay-type-card">
+        <div class="row between center" style="margin-bottom:12px">
+          <div>
+            <h3 style="margin:0">${esc(type)} Relays</h3>
+            <div class="note">Enable the age groups you want, then adjust labels/distances as needed.</div>
+          </div>
+          <button class="btn2 btn-sm" type="button" onclick="this.closest('.relay-type-card').querySelectorAll('input[type=checkbox]').forEach(cb=>cb.checked=true)">Select ${esc(type)}</button>
+        </div>
+        <div class="relay-card-grid">
+          ${rows.map(({ row, idx }) => `
+            <div class="relay-template-card">
+              <div class="row between center" style="margin-bottom:10px">
+                <div class="toggle-row-label">${esc(row.age)}</div>
+                ${toggleSwitch(`enabled_${idx}`, false, '', 'on')}
+              </div>
+              <input type="hidden" name="relayType_${idx}" value="${esc(row.type)}" />
+              <div><label>Age Group</label><input name="ageGroup_${idx}" value="${esc(row.age)}" /></div>
+              <div class="grid-2 tight-grid">
+                <div><label>Distance</label><input name="distance_${idx}" value="${esc(row.distance)}" /></div>
+                <div><label>Relay Type</label><input value="${esc(row.type)}" disabled /></div>
+              </div>
+              <div><label>Lap / Rotation Notes</label><input name="notes_${idx}" value="${esc(row.notes)}" /></div>
+            </div>`).join('')}
+        </div>
+      </div>`;
+  }).join('');
 
   res.send(pageShell({title:'Relay Builder',user:req.user,meet,activeTab:'relay-builder', bodyHtml:`
     <div class="builder-banner" style="background:linear-gradient(135deg,#1d4ed8 0%,#3b82f6 100%);margin-bottom:18px">
@@ -3464,19 +3485,24 @@ app.get('/portal/meet/:meetId/relay-builder', requireRole('meet_director'), (req
     </div>
 
     <div class="card" style="margin-top:16px">
+      <style>
+        .relay-type-card{background:#eef3f8;border:1px solid rgba(15,31,61,.10);border-radius:18px;padding:18px;margin-top:14px;}
+        .relay-card-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;}
+        .relay-template-card{background:#f8fafc;border:1px solid rgba(15,31,61,.10);border-radius:16px;padding:16px;box-shadow:0 1px 4px rgba(15,31,61,.04);}
+        .relay-template-card label{margin-top:8px;}
+        .tight-grid{gap:10px;}
+        @media(max-width:900px){.relay-card-grid{grid-template-columns:1fr;}}
+      </style>
       <div class="row between center" style="margin-bottom:12px">
         <div>
           <h2 style="margin:0">Quick Add MSSL-Style Relay Set</h2>
-          <div class="note">Customize labels, distances, and lap notes before adding. Existing matching relay races are skipped.</div>
+          <div class="note">Professional card layout matching the Meet Builder. Enable only the relay groups you want.</div>
         </div>
-        <button class="btn2 btn-sm" type="button" onclick="document.querySelectorAll('.relay-template-table input[type=checkbox]').forEach(cb=>cb.checked=true)">Select All</button>
+        <button class="btn2 btn-sm" type="button" onclick="document.querySelectorAll('.relay-type-card input[type=checkbox]').forEach(cb=>cb.checked=true)">Select All</button>
       </div>
       <form method="POST" action="/portal/meet/${meet.id}/relay-builder/add-template">
-        <table class="table relay-template-table">
-          <thead><tr><th>Add</th><th>Relay Type</th><th>Age Group</th><th>Distance</th><th>Lap / Rotation Notes</th></tr></thead>
-          <tbody>${templateRows}</tbody>
-        </table>
-        <div class="action-row" style="margin-top:12px">
+        ${templateGroups}
+        <div class="action-row" style="margin-top:16px">
           <button class="btn-sky" type="submit">Add Selected Relay Races</button>
         </div>
       </form>
