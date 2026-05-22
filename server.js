@@ -318,7 +318,7 @@ function defaultMeet(ownerUserId) {
     meetName:'New Meet', date:'', endDate:'', startTime:'', registrationCloseAt:'',
     rinkId:1, customRinkName:'', trackLength:100, lanes:4,
     timeTrialsEnabled:false, relayEnabled:false, judgesPanelRequired:true,
-    notes:'', relayNotes:'', isPublic:false, status:'draft', tiebreaker:'d2', baseEntryFee:0,
+    notes:'', scheduleNotes:'', relayNotes:'', isPublic:false, status:'draft', tiebreaker:'d2', baseEntryFee:0,
     noviceEventFee:0, eliteEventFee:0, openEventFee:0, quadEventFee:0, relayEventFee:0, timeTrialEventFee:0, additionalRaceFee:0, maxRegistrationFee:0,
     groups:baseGroups(), openGroups:makeOpenGroupsTemplate(), quadGroups:makeQuadGroupsTemplate(),
     races:[], blocks:[], registrations:[], skateabilityGroups:[],
@@ -400,6 +400,7 @@ function migrateMeet(meet,fallbackOwnerId) {
   if(typeof meet.relayEnabled!=='boolean') meet.relayEnabled=false;
   if(typeof meet.judgesPanelRequired!=='boolean') meet.judgesPanelRequired=true;
   if(typeof meet.notes!=='string') meet.notes='';
+  if(typeof meet.scheduleNotes!=='string') meet.scheduleNotes='';
   if(!meet.tiebreaker) meet.tiebreaker='d2';
   if(typeof meet.relayNotes!=='string') meet.relayNotes='';
   if(typeof meet.isPublic!=='boolean') meet.isPublic=false;
@@ -833,19 +834,24 @@ function buildCostWidget(base,novC,eliC,opnC,qdC,skC=0,relayC=0,ttC=0,maxC=0) {
   return html.join("");
 }
 
+function feeNumber(value) {
+  const n = Number(value || 0);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
 function calcRegistrationCost(meet, options) {
-  const base = Number(meet.baseEntryFee || 0);
-  let total = base;
+  const opts = options || {};
+  let total = feeNumber(meet.baseEntryFee);
 
-  if (options.novice) total += Number(meet.noviceEventFee || 0);
-  if (options.elite) total += Number(meet.eliteEventFee || 0);
-  if (options.open) total += Number(meet.openEventFee || 0);
-  if (options.quad) total += Number(meet.quadEventFee || 0);
-  if (options.skateability) total += Number(meet.additionalRaceFee || 0);
-  if (options.timeTrials) total += Number(meet.timeTrialEventFee || 0);
-  if (options.relays) total += Number(meet.relayEventFee || 0);
+  if (opts.novice) total += feeNumber(meet.noviceEventFee);
+  if (opts.elite) total += feeNumber(meet.eliteEventFee);
+  if (opts.open) total += feeNumber(meet.openEventFee);
+  if (opts.quad) total += feeNumber(meet.quadEventFee);
+  if (opts.skateability) total += feeNumber(meet.additionalRaceFee);
+  if (opts.timeTrials) total += feeNumber(meet.timeTrialEventFee);
+  if (opts.relays) total += feeNumber(meet.relayEventFee);
 
-  const maxFee = Number(meet.maxRegistrationFee || 0);
+  const maxFee = feeNumber(meet.maxRegistrationFee);
   if (maxFee > 0) total = Math.min(total, maxFee);
 
   return total;
@@ -2938,6 +2944,11 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
                   <div class="note">Leave blank for a single-day meet.</div>
                 </div>
                 <div class="setup-field-full"><label>Start Time</label><input type="time" name="startTime" value="${esc(meet.startTime)}" /></div>
+                <div class="setup-field-full">
+                  <label>Multi-Day Schedule Notes</label>
+                  <textarea name="scheduleNotes" rows="5" placeholder="Friday: Doors open 5:00 PM, racing 6:00 PM&#10;Saturday: Warmups 7:30 AM, racing 8:30 AM&#10;Sunday: Finals and awards schedule...">${esc(meet.scheduleNotes||'')}</textarea>
+                  <div class="note">Use this for day-by-day start times, warmups, doors-open times, awards, or schedule changes.</div>
+                </div>
               </div>
             </section>
 
@@ -3207,6 +3218,7 @@ function saveMeetFields(meet, body, db) {
   meet.isPublic=!!body.isPublic;
   meet.status=String(body.status||'draft');
   meet.notes=String(body.notes||'');
+  meet.scheduleNotes=String(body.scheduleNotes||'');
   meet.relayNotes=String(body.relayNotes||'');
   meet.tiebreaker=String(body.tiebreaker||'d2')==='sr832'?'sr832':'d2';
   meet.baseEntryFee=Number(String(body.baseEntryFee||'0').trim()||0);
