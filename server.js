@@ -3339,6 +3339,63 @@ app.post('/portal/meet/:meetId/builder/save', requireRole('meet_director'), (req
 
 // ── Relay Builder ─────────────────────────────────────────────────────────────
 
+const RELAY_TEMPLATE_ROWS = [
+  { type: '3 Person', age: 'Juvenile', distance: '900m', notes: '1 lap × 3 times each' },
+  { type: '3 Person', age: 'Freshman', distance: '900m', notes: '1 lap × 3 times each' },
+  { type: '3 Person', age: 'Senior', distance: '900m', notes: '1 lap × 3 times each' },
+  { type: '3 Person', age: 'Master', distance: '900m', notes: '1 lap × 3 times each' },
+  { type: '2 Person', age: 'Juvenile', distance: '1200m', notes: '2 laps × 3 times each' },
+  { type: '2 Person', age: 'Freshman', distance: '1200m', notes: '2 laps × 3 times each' },
+  { type: '2 Person', age: 'Senior', distance: '1200m', notes: '2 laps × 3 times each' },
+  { type: '2 Person', age: 'Master', distance: '1200m', notes: '2 laps × 3 times each' },
+  { type: '4 Person', age: 'Juvenile', distance: '1200m', notes: '3 laps × 1 time each' },
+  { type: '4 Person', age: 'Freshman', distance: '2000m', notes: '5 laps × 1 time each' },
+  { type: '4 Person', age: 'Senior', distance: '2000m', notes: '5 laps × 1 time each' },
+  { type: '4 Person', age: 'Master', distance: '2000m', notes: '5 laps × 1 time each' },
+];
+
+function makeRelayRace({ name, distance, notes, relayType='', ageGroup='' }) {
+  const raceToken = crypto.randomBytes(6).toString('hex');
+  return {
+    id:'r'+raceToken,
+    orderHint:9800,
+    groupId:'relay_'+crypto.randomBytes(4).toString('hex'),
+    groupLabel:String(name||'Relay Race').trim(),
+    ages:String(ageGroup||'').trim(),
+    division:'relay',
+    distanceLabel:String(distance||'').trim(),
+    dayIndex:1,
+    cost:0,
+    stage:'final',
+    heatNumber:0,
+    parentRaceKey:'relay_'+raceToken,
+    startType:'standing',
+    countsForOverall:false,
+    laneEntries:[],
+    resultsMode:'places',
+    status:'open',
+    notes:String(notes||'').trim(),
+    isFinal:true,
+    closedAt:'',
+    isOpenRace:false,
+    isQuadRace:false,
+    isTimeTrial:false,
+    isRelayRace:true,
+    relayType:String(relayType||'').trim(),
+    relayAgeGroup:String(ageGroup||'').trim(),
+  };
+}
+
+function relayRaceExists(meet, name, distance) {
+  const keyName = String(name||'').trim().toLowerCase();
+  const keyDistance = String(distance||'').trim().toLowerCase();
+  return (meet.races||[]).some(r =>
+    r.isRelayRace &&
+    String(r.groupLabel||'').trim().toLowerCase() === keyName &&
+    String(r.distanceLabel||'').trim().toLowerCase() === keyDistance
+  );
+}
+
 app.get('/portal/meet/:meetId/relay-builder', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet) return res.redirect('/portal');
@@ -3346,7 +3403,7 @@ app.get('/portal/meet/:meetId/relay-builder', requireRole('meet_director'), (req
   const relayRaces=(meet.races||[]).filter(r=>r.isRelayRace);
   const relayRows=relayRaces.map(r=>`
     <tr>
-      <td><strong>${esc(r.groupLabel)}</strong></td>
+      <td><strong>${esc(r.groupLabel)}</strong><div class="note">${esc(r.relayType||'Relay')} ${r.relayAgeGroup?`• ${esc(r.relayAgeGroup)}`:''}</div></td>
       <td>${esc(r.distanceLabel)}</td>
       <td>${esc(r.notes||'—')}</td>
       <td><span class="chip chip-${r.status==='closed'?'green':'sky'}">${esc(r.status)}</span></td>
@@ -3358,32 +3415,73 @@ app.get('/portal/meet/:meetId/relay-builder', requireRole('meet_director'), (req
       </td>
     </tr>`).join('');
 
+  const templateRows = RELAY_TEMPLATE_ROWS.map((row, idx)=>`
+    <tr>
+      <td style="width:52px;text-align:center"><input type="checkbox" name="enabled_${idx}" value="on" /></td>
+      <td><input name="relayType_${idx}" value="${esc(row.type)}" /></td>
+      <td><input name="ageGroup_${idx}" value="${esc(row.age)}" /></td>
+      <td><input name="distance_${idx}" value="${esc(row.distance)}" /></td>
+      <td><input name="notes_${idx}" value="${esc(row.notes)}" /></td>
+    </tr>`).join('');
+
   res.send(pageShell({title:'Relay Builder',user:req.user,meet,activeTab:'relay-builder', bodyHtml:`
     <div class="builder-banner" style="background:linear-gradient(135deg,#1d4ed8 0%,#3b82f6 100%);margin-bottom:18px">
       <h2>🔄 Relay Builder</h2>
-      <div class="sub">Create relay races manually. Judges fill in team names and skaters on race day.</div>
+      <div class="sub">Create 2-person, 3-person, and 4-person relay races. Pricing still uses the one-time Relay Event fee.</div>
     </div>
+
+    ${req.query.saved?'<div class="good" style="margin-bottom:12px">✅ Saved.</div>':''}
+    ${req.query.added?`<div class="good" style="margin-bottom:12px">✅ Added ${esc(req.query.added)} relay race(s).</div>`:''}
+
     <div class="grid-2">
       <div class="card">
-        <h2 style="margin-bottom:14px">Add Relay Race</h2>
+        <h2 style="margin-bottom:14px">Add Single Relay Race</h2>
         <form method="POST" action="/portal/meet/${meet.id}/relay-builder/add" class="stack">
-          <div><label>Relay Name</label><input name="name" placeholder="e.g. Senior 4 Man Relay" required /></div>
-          <div><label>Distance</label><input name="distance" placeholder="e.g. 4000m" required /></div>
-          <div><label>Notes (optional)</label><input name="notes" placeholder="e.g. Mixed relay, 4 skaters" /></div>
+          <div><label>Relay Type</label>
+            <select name="relayType">
+              <option value="2 Person">2 Person</option>
+              <option value="3 Person">3 Person</option>
+              <option value="4 Person">4 Person</option>
+              <option value="Custom">Custom</option>
+            </select>
+          </div>
+          <div><label>Age Group / Class</label><input name="ageGroup" placeholder="e.g. Juvenile, Freshman, Senior, Master" required /></div>
+          <div><label>Relay Name</label><input name="name" placeholder="Leave blank to auto-name from type + age group" /></div>
+          <div><label>Distance</label><input name="distance" placeholder="e.g. 900m, 1200m, 2000m" required /></div>
+          <div><label>Lap / Rotation Notes</label><input name="notes" placeholder="e.g. 1 lap × 3 times each" /></div>
           <div><button class="btn-sky" type="submit">+ Add Relay Race</button></div>
         </form>
-        ${req.query.saved?'<div class="good" style="margin-top:8px">✅ Saved.</div>':''}
       </div>
       <div class="card">
-        <h2 style="margin-bottom:6px">How it works</h2>
+        <h2 style="margin-bottom:6px">Race-Day Relay Workflow</h2>
         <div class="stack" style="margin-top:8px">
-          <div class="toggle-row"><div><div class="toggle-row-label">1. Add relay races here</div><div class="toggle-row-desc">Name it whatever — Senior 4 Man, Freshman 4 Girl, Junior 2 Mix, etc.</div></div></div>
-          <div class="toggle-row"><div><div class="toggle-row-label">2. Drag into Block Builder</div><div class="toggle-row-desc">Relay races show up in the unassigned pile tagged with 🔄</div></div></div>
-          <div class="toggle-row"><div><div class="toggle-row-label">3. Judges fill in on race day</div><div class="toggle-row-desc">Team name, skater names, and place — all manual on the judges panel</div></div></div>
-          <div class="toggle-row"><div><div class="toggle-row-label">4. Results show separately</div><div class="toggle-row-desc">Relay results don't count toward overall standings points</div></div></div>
+          <div class="toggle-row"><div><div class="toggle-row-label">Skater names stay manual</div><div class="toggle-row-desc">Judges type skater names directly into the race-day name fields.</div></div></div>
+          <div class="toggle-row"><div><div class="toggle-row-label">Team field can be color/team</div><div class="toggle-row-desc">Use Green, Red, Yellow, Blue, Midwest A, Midwest B, etc.</div></div></div>
+          <div class="toggle-row"><div><div class="toggle-row-label">Relays are placement-only</div><div class="toggle-row-desc">Relay results stay separate and do not count toward individual standings.</div></div></div>
+          <div class="toggle-row"><div><div class="toggle-row-label">Pricing</div><div class="toggle-row-desc">Registration charges the Relay Event fee once when relays are selected.</div></div></div>
         </div>
       </div>
     </div>
+
+    <div class="card" style="margin-top:16px">
+      <div class="row between center" style="margin-bottom:12px">
+        <div>
+          <h2 style="margin:0">Quick Add MSSL-Style Relay Set</h2>
+          <div class="note">Customize labels, distances, and lap notes before adding. Existing matching relay races are skipped.</div>
+        </div>
+        <button class="btn2 btn-sm" type="button" onclick="document.querySelectorAll('.relay-template-table input[type=checkbox]').forEach(cb=>cb.checked=true)">Select All</button>
+      </div>
+      <form method="POST" action="/portal/meet/${meet.id}/relay-builder/add-template">
+        <table class="table relay-template-table">
+          <thead><tr><th>Add</th><th>Relay Type</th><th>Age Group</th><th>Distance</th><th>Lap / Rotation Notes</th></tr></thead>
+          <tbody>${templateRows}</tbody>
+        </table>
+        <div class="action-row" style="margin-top:12px">
+          <button class="btn-sky" type="submit">Add Selected Relay Races</button>
+        </div>
+      </form>
+    </div>
+
     ${relayRaces.length?`
     <div class="card" style="margin-top:16px">
       <div class="row between" style="margin-bottom:12px">
@@ -3394,30 +3492,46 @@ app.get('/portal/meet/:meetId/relay-builder', requireRole('meet_director'), (req
         <thead><tr><th>Name</th><th>Distance</th><th>Notes</th><th>Status</th><th></th></tr></thead>
         <tbody>${relayRows}</tbody>
       </table>
-    </div>`:''}`}));
+    </div>`:''}` }));
 });
 
 app.post('/portal/meet/:meetId/relay-builder/add', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
-  const name=String(req.body.name||'').trim();
+  const relayType=String(req.body.relayType||'Custom').trim();
+  const ageGroup=String(req.body.ageGroup||'').trim();
+  const providedName=String(req.body.name||'').trim();
+  const name=providedName || [ageGroup, relayType, 'Relay'].filter(Boolean).join(' ');
   const distance=String(req.body.distance||'').trim();
   const notes=String(req.body.notes||'').trim();
   if(!name||!distance) return res.redirect(`/portal/meet/${meet.id}/relay-builder`);
-  const orderHint=9800+(meet.races||[]).filter(r=>r.isRelayRace).length;
-  meet.races.push({
-    id:'r'+crypto.randomBytes(6).toString('hex'), orderHint,
-    groupId:'relay_'+crypto.randomBytes(4).toString('hex'),
-    groupLabel:name, ages:'', division:'relay', distanceLabel:distance,
-    dayIndex:1, cost:0, stage:'final', heatNumber:0,
-    parentRaceKey:'relay_'+crypto.randomBytes(4).toString('hex'),
-    startType:'standing', countsForOverall:false,
-    laneEntries:[], resultsMode:'places', status:'open',
-    notes, isFinal:true, closedAt:'',
-    isOpenRace:false, isQuadRace:false, isTimeTrial:false, isRelayRace:true,
-  });
+  const race=makeRelayRace({ name, distance, notes, relayType, ageGroup });
+  race.orderHint=9800+(meet.races||[]).filter(r=>r.isRelayRace).length;
+  meet.races.push(race);
   meet.updatedAt=nowIso(); saveDb(req.db);
-  res.redirect(`/portal/meet/${meet.id}/relay-builder`);
+  res.redirect(`/portal/meet/${meet.id}/relay-builder?saved=1`);
+});
+
+app.post('/portal/meet/:meetId/relay-builder/add-template', requireRole('meet_director'), (req, res) => {
+  const meet=getMeetOr404(req.db,req.params.meetId);
+  if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
+  let added=0;
+  RELAY_TEMPLATE_ROWS.forEach((def, idx)=>{
+    if(req.body[`enabled_${idx}`] !== 'on') return;
+    const relayType=String(req.body[`relayType_${idx}`]||def.type).trim();
+    const ageGroup=String(req.body[`ageGroup_${idx}`]||def.age).trim();
+    const distance=String(req.body[`distance_${idx}`]||def.distance).trim();
+    const notes=String(req.body[`notes_${idx}`]||def.notes).trim();
+    const name=[ageGroup, relayType, 'Relay'].filter(Boolean).join(' ');
+    if(!name||!distance) return;
+    if(relayRaceExists(meet, name, distance)) return;
+    const race=makeRelayRace({ name, distance, notes, relayType, ageGroup });
+    race.orderHint=9800+(meet.races||[]).filter(r=>r.isRelayRace).length+added;
+    meet.races.push(race);
+    added+=1;
+  });
+  if(added>0) { meet.updatedAt=nowIso(); saveDb(req.db); }
+  res.redirect(`/portal/meet/${meet.id}/relay-builder?added=${added}`);
 });
 
 app.post('/portal/meet/:meetId/relay-builder/delete', requireRole('meet_director'), (req, res) => {
