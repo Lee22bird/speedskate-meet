@@ -819,7 +819,7 @@ function buildCostWidget(base,novC,eliC,opnC,qdC,skC=0,relayC=0,ttC=0,maxC=0) {
     '<script>(function(){',
     'var B='+base+',M='+maxC+',C={novice:'+novC+',elite:'+eliC+',open:'+opnC+',quad:'+qdC+',skateability:'+skC+',timeTrials:'+ttC+',relays:'+relayC+',challengeUp:0};',
     'function money(n){return "$"+Number(n||0).toFixed(0);}',
-    'function checked(k){var el=document.querySelector("[name="+k+"]");return !!(el&&(el.checked||el.value==="on"));}',
+    'function checked(k){var el=document.querySelector("[name="+k+"]");return !!(el&&((el.type==="checkbox"&&el.checked)||el.value==="on"));}',
     'function upd(){var sel=[];',
     '["novice","elite","open","quad","skateability","timeTrials","relays"].forEach(function(k){if(checked(k))sel.push({name:k,cost:C[k]||0});});',
     'var total=B,lines=["Base entry fee: "+money(B)];',
@@ -3787,6 +3787,7 @@ function registrationForm(meet,reg,action,title) {
                 });
               </script>`:''}
           </div>
+          ${buildRegistrationPricingPreview(meet)}
           <div class="action-row">
             <button class="btn" type="submit">Save Racer</button>
             <a class="btn2" href="/portal/meet/${meet.id}/registered">Back</a>
@@ -3857,7 +3858,8 @@ app.post('/portal/meet/:meetId/registered/:regId/edit', requireRole('meet_direct
   const compAge=usarsAge(birthdate,meet.date)||Number(reg.age||0);
   const baseGroup=findAgeGroup(meet.groups,compAge,gender);
   const finalGroup=challengeAdjustedGroup(meet,baseGroup,!!req.body.challengeUp);
-  Object.assign(reg,{name:String(req.body.name||'').trim(),birthdate,age:compAge,gender,team:String(req.body.team||'Midwest Racing').trim()||'Midwest Racing',sponsor:String(req.body.sponsor||'').trim(),originalDivisionGroupId:baseGroup?.id||'',originalDivisionGroupLabel:baseGroup?.label||'',divisionGroupId:finalGroup?.id||'',divisionGroupLabel:finalGroup?.label||'Unassigned',options:{challengeUp:!!req.body.challengeUp,novice:!!req.body.novice,elite:!!req.body.elite,open:!!req.body.open,quad:!!req.body.quad,skateability:!!req.body.skateability,skateabilityGroupId:String(req.body.skateabilityGroupId||''),timeTrials:!!req.body.timeTrials,relays:!!req.body.relays}});
+  const regOpts={challengeUp:!!req.body.challengeUp,novice:!!req.body.novice,elite:!!req.body.elite,open:!!req.body.open,quad:!!req.body.quad,skateability:!!req.body.skateability,skateabilityGroupId:String(req.body.skateabilityGroupId||''),timeTrials:!!req.body.timeTrials,relays:!!req.body.relays};
+  Object.assign(reg,{name:String(req.body.name||'').trim(),birthdate,age:compAge,gender,team:String(req.body.team||'Midwest Racing').trim()||'Midwest Racing',sponsor:String(req.body.sponsor||'').trim(),originalDivisionGroupId:baseGroup?.id||'',originalDivisionGroupLabel:baseGroup?.label||'',divisionGroupId:finalGroup?.id||'',divisionGroupLabel:finalGroup?.label||'Unassigned',options:regOpts,totalCost:calcRegistrationCost(meet,regOpts)});
   generateAdditionalRacesForMeet(meet); rebuildRaceAssignments(meet); saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/registered`);
 });
 
