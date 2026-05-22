@@ -550,6 +550,7 @@ function makeSetupPresetFromMeet(db, meet, name, ownerUserId) {
     relayEventFee: Number(meet.relayEventFee || 0),
     timeTrialEventFee: Number(meet.timeTrialEventFee || 0),
     additionalRaceFee: Number(meet.additionalRaceFee || 0),
+    maxRegistrationFee: Number(meet.maxRegistrationFee || 0),
     trackLength: Number(meet.trackLength || 100),
     lanes: Number(meet.lanes || 4),
     timeTrialsEnabled: !!meet.timeTrialsEnabled,
@@ -636,11 +637,7 @@ function nextHelmetNumber(meet) {
 }
 
 function calculateRegistrationTotal(meet,reg) {
-  let total=0;
-  for(const race of meet.races||[]) {
-    if(String(race.groupId)===String(reg.divisionGroupId)&&divisionEnabledForRegistration(reg,race.division))
-      total+=Number(race.cost||0);
-  } return total;
+  return calcRegistrationCost(meet, reg.options || {});
 }
 
 function ensureRegistrationTotalsAndNumbers(meet) {
@@ -781,7 +778,7 @@ function generateAdditionalRacesForMeet(meet) {
   meet.updatedAt = nowIso();
 }
 
-function buildCostWidget(base,novC,eliC,opnC,qdC,skC=0,relayC=0,ttC=0) {
+function buildCostWidget(base,novC,eliC,opnC,qdC,skC=0,relayC=0,ttC=0,maxC=0) {
   const html=[
     '<div class="card" style="background:#f8fafc;margin-top:8px">',
     '<div style="display:flex;justify-content:space-between;align-items:center">',
@@ -791,17 +788,17 @@ function buildCostWidget(base,novC,eliC,opnC,qdC,skC=0,relayC=0,ttC=0) {
     '<div style="font-size:12px;color:#64748b;margin-top:4px" id="ssm-breakdown">Select events above</div>',
     '</div>',
     '<script>(function(){',
-    'var B='+base+',C={novice:'+novC+',elite:'+eliC+',open:'+opnC+',quad:'+qdC+',skateability:'+skC+',timeTrials:'+ttC+',relays:'+relayC+',challengeUp:0};',
+    'var B='+base+',MAX='+maxC+',C={novice:'+novC+',elite:'+eliC+',open:'+opnC+',quad:'+qdC+',skateability:'+skC+',timeTrials:'+ttC+',relays:'+relayC+',challengeUp:0};',
+    'function money(n){return "$"+Number(n||0).toFixed(0);}',
     'function upd(){var sel=[];',
     '["novice","elite","open","quad","skateability","timeTrials","relays","challengeUp"].forEach(function(k){',
     'var el=document.querySelector("[name="+k+"]");if(el&&el.value==="on")sel.push({name:k,cost:C[k]||0});',
     '});',
     'var t=document.getElementById("ssm-cost"),b=document.getElementById("ssm-breakdown");',
-    'if(!sel.length){t.textContent="$"+B;b.textContent="Base entry fee";return;}',
-    'sel.sort(function(a,b){return b.cost-a.cost;});',
-    'var total=B,lines=["1st event (base): $"+B];',
-    'for(var i=1;i<sel.length;i++){total+=sel[i].cost;lines.push("+ "+sel[i].name+": $"+sel[i].cost);}',
-    't.textContent="$"+total;b.textContent=lines.join(" | ");',
+    'var total=B,lines=["Base entry fee: "+money(B)];',
+    'sel.forEach(function(item){total+=Number(item.cost||0);lines.push("+ "+item.name+": "+money(item.cost));});',
+    'if(MAX>0&&total>MAX){total=MAX;lines.push("Max registration cap: "+money(MAX));}',
+    't.textContent=money(total);b.textContent=lines.join(" | ");',
     '}document.addEventListener("change",upd);setTimeout(upd,300);',
     '})();</script>'
   ];
@@ -3249,6 +3246,7 @@ app.post('/portal/meet/:meetId/setup-presets/load', requireRole('meet_director')
   meet.relayEventFee = Number(preset.relayEventFee || 0);
   meet.timeTrialEventFee = Number(preset.timeTrialEventFee || 0);
   meet.additionalRaceFee = Number(preset.additionalRaceFee || 0);
+  meet.maxRegistrationFee = Number(preset.maxRegistrationFee || 0);
   meet.trackLength = preset.trackLength || meet.trackLength;
   meet.lanes = preset.lanes || meet.lanes;
   meet.timeTrialsEnabled = !!preset.timeTrialsEnabled;
@@ -3615,7 +3613,8 @@ app.get('/meet/:meetId/register', (req, res) => {
   const skC=Number(meet.additionalRaceFee||0);
   const relayC=Number(meet.relayEventFee||0);
   const ttC=Number(meet.timeTrialEventFee||0);
-  const costWidget=base>0 ? buildCostWidget(base,novC,eliC,opnC,qdC,skC,relayC,ttC) : '';
+  const maxC=Number(meet.maxRegistrationFee||0);
+  const costWidget=base>0 ? buildCostWidget(base,novC,eliC,opnC,qdC,skC,relayC,ttC,maxC) : '';
   res.send(pageShell({title:'Register',user:data?.user||null, bodyHtml:`
     <div class="page-header"><h1>Register</h1><div class="sub">${esc(meet.meetName)}${meet.date?` • ${esc(meet.date)}`:''}</div></div>
     <div class="card">
