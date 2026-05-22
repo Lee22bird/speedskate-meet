@@ -3223,6 +3223,9 @@ function saveMeetFields(meet, body, db) {
   }
   // Mirror into `additionalRaces` for compatibility and persistence
   meet.additionalRaces = (meet.skateabilityGroups || []).map(g => ({ ...g }));
+  // Keep existing registration totals in sync when global pricing changes.
+  // This does not touch race generation or legacy stored cost fields.
+  ensureRegistrationTotalsAndNumbers(meet);
   meet.updatedAt=nowIso();
 }
 
@@ -3292,6 +3295,8 @@ app.post('/portal/meet/:meetId/setup-presets/load', requireRole('meet_director')
 
   // Mirror skateability into additionalRaces for compatibility
   meet.additionalRaces = (meet.skateabilityGroups || []).map(g => ({ ...g }));
+  // Preset pricing can change global fees, so refresh existing registration totals immediately.
+  ensureRegistrationTotalsAndNumbers(meet);
   meet.updatedAt = nowIso();
   saveDb(req.db);
   res.redirect(`/portal/meet/${meet.id}/builder?presetLoaded=1`);
