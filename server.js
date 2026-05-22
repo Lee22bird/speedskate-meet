@@ -809,10 +809,10 @@ function buildRegistrationPricingPreview(meet) {
 
 function buildCostWidget(base,novC,eliC,opnC,qdC,skC=0,relayC=0,ttC=0,maxC=0) {
   const html=[
-    '<div class="card" style="background:#f8fafc;margin-top:8px">',
+    '<div class="card" style="background:var(--panel);margin-top:8px">',
     '<div style="display:flex;justify-content:space-between;align-items:center">',
-    '<div style="font-weight:700">Live Registration Total</div>',
-    '<div style="font-size:28px;font-weight:900;color:#F97316" id="ssm-cost">$'+base+'</div>',
+    '<div style="font-weight:750">Registration Total Preview</div>',
+    '<div style="font-size:26px;font-weight:800;color:#EA580C" id="ssm-cost">$'+base+'</div>',
     '</div>',
     '<div style="font-size:12px;color:#64748b;margin-top:4px" id="ssm-breakdown">Base entry fee</div>',
     '</div>',
@@ -976,31 +976,34 @@ function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
   <meta property="og:type" content="website" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;900&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet" />
   <style>
     /* ── Design Tokens ────────────────────────────────────────────── */
     :root {
-      --navy:    #0F1F3D;
-      --navy2:   #162847;
-      --navy3:   #1e3459;
+      --navy:    #13213a;
+      --navy2:   #1b2c4a;
+      --navy3:   #263c61;
       --orange:  #F97316;
       --orange2: #ea580c;
       --sky:     #38BDF8;
       --sky2:    #0ea5e9;
       --white:   #ffffff;
-      --off:     #f8fafc;
-      --card:    #ffffff;
-      --border:  rgba(15,31,61,.10);
-      --border2: rgba(15,31,61,.18);
-      --text:    #0F1F3D;
-      --muted:   #64748b;
+      --page:    #e8edf3;
+      --off:     #eef2f6;
+      --panel:   #f3f6f9;
+      --card:    #f8fafc;
+      --input:   #ffffff;
+      --border:  rgba(19,33,58,.10);
+      --border2: rgba(19,33,58,.16);
+      --text:    #24324a;
+      --muted:   #667085;
       --green:   #10b981;
       --red:     #ef4444;
       --yellow:  #f59e0b;
       --purple:  #7c3aed;
-      --shadow-sm: 0 1px 3px rgba(15,31,61,.08), 0 1px 2px rgba(15,31,61,.06);
-      --shadow:    0 4px 16px rgba(15,31,61,.10), 0 2px 6px rgba(15,31,61,.06);
-      --shadow-lg: 0 10px 40px rgba(15,31,61,.14), 0 4px 12px rgba(15,31,61,.08);
+      --shadow-sm: 0 1px 2px rgba(19,33,58,.05), 0 1px 1px rgba(19,33,58,.04);
+      --shadow:    0 4px 14px rgba(19,33,58,.07), 0 2px 4px rgba(19,33,58,.04);
+      --shadow-lg: 0 10px 30px rgba(19,33,58,.10), 0 4px 10px rgba(19,33,58,.06);
       --radius-sm: 8px;
       --radius:    14px;
       --radius-lg: 20px;
@@ -1010,9 +1013,9 @@ function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html { scroll-behavior: smooth; }
     body {
-      font-family: 'Barlow', ui-sans-serif, system-ui, sans-serif;
-      font-size: 15px; line-height: 1.7; color: var(--text);
-      background: #f1f5f9;
+      font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+      font-size: 15px; line-height: 1.65; color: var(--text);
+      background: var(--page);
       min-height: 100vh;
     }
     a { color: var(--sky2); text-decoration: none; }
@@ -1052,17 +1055,17 @@ function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
     /* ── Layout ───────────────────────────────────────────────────── */
     .wrap { max-width: 1340px; margin: 0 auto; padding: 36px 20px 80px; }
     .page-header { margin-bottom: 28px; }
-    .page-header h1 { font-family: 'Barlow Condensed', sans-serif; font-size: 48px; font-weight: 900; letter-spacing: -1px; line-height: 1; color: var(--navy); }
+    .page-header h1 { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; font-size: 42px; font-weight: 800; letter-spacing: -.04em; line-height: 1.08; color: var(--navy); }
     .page-header .sub { font-size: 16px; color: var(--muted); margin-top: 4px; }
-    h1 { font-family: 'Barlow Condensed', sans-serif; font-size: 40px; font-weight: 900; letter-spacing: -.5px; color: var(--navy); margin-bottom: 14px; }
-    h2 { font-family: 'Barlow Condensed', sans-serif; font-size: 26px; font-weight: 700; letter-spacing: -.3px; color: var(--navy); margin-bottom: 8px; }
-    h3 { font-family: 'Barlow Condensed', sans-serif; font-size: 20px; font-weight: 700; color: var(--navy); margin-bottom: 6px; }
+    h1 { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; font-size: 34px; font-weight: 800; letter-spacing: -.035em; color: var(--navy); margin-bottom: 14px; }
+    h2 { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; font-size: 24px; font-weight: 800; letter-spacing: -.03em; color: var(--navy); margin-bottom: 8px; }
+    h3 { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; font-size: 18px; font-weight: 750; color: var(--navy); margin-bottom: 6px; }
     p { margin-bottom: 12px; }
 
     /* ── Cards ────────────────────────────────────────────────────── */
     .card {
-      background: var(--card); border: 1px solid rgba(15,31,61,.07);
-      border-radius: var(--radius-lg); box-shadow: 0 2px 12px rgba(15,31,61,.06), 0 1px 3px rgba(15,31,61,.04); padding: 28px;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); padding: 28px;
     }
     .card-sm { padding: 14px; border-radius: var(--radius); }
     .card-accent { border-left: 4px solid var(--orange); }
@@ -1084,23 +1087,23 @@ function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
     .stat-card.yellow { background: linear-gradient(135deg, #d97706, var(--yellow)); }
     .stat-card.purple { background: linear-gradient(135deg, #6d28d9, var(--purple)); }
     .stat-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; opacity: .85; }
-    .stat-value { font-family: 'Barlow Condensed', sans-serif; font-size: 30px; font-weight: 900; line-height: 1.1; margin-top: 4px; }
+    .stat-value { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; font-size: 28px; font-weight: 800; line-height: 1.1; margin-top: 4px; }
     .stat-sub   { font-size: 13px; opacity: .85; margin-top: 2px; }
 
     /* ── Buttons ──────────────────────────────────────────────────── */
     .btn, .btn2, .btn-danger, .btn-good, .btn-orange, .btn-purple, .btn-sky {
       display: inline-flex; align-items: center; justify-content: center; gap: 6px;
       border: 0; border-radius: var(--radius-sm); padding: 10px 18px;
-      font-family: 'Barlow', sans-serif; font-weight: 700; font-size: 14px;
+      font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; font-weight: 700; font-size: 14px;
       cursor: pointer; transition: all .15s; white-space: nowrap; text-decoration: none;
     }
     .btn        { background: var(--navy);   color: #fff; box-shadow: var(--shadow-sm); }
     .btn:hover  { background: var(--navy2);  color: #fff; box-shadow: var(--shadow); transform: translateY(-1px); }
-    .btn2       { background: #fff; color: var(--navy); border: 1.5px solid var(--border2); box-shadow: var(--shadow-sm); }
+    .btn2       { background: var(--input); color: var(--navy); border: 1.5px solid var(--border2); box-shadow: var(--shadow-sm); }
     .btn2:hover { background: var(--off); color: var(--navy); box-shadow: var(--shadow); transform: translateY(-1px); }
-    .btn-danger       { background: #fff; color: var(--red); border: 1.5px solid #fca5a5; }
+    .btn-danger       { background: var(--input); color: var(--red); border: 1.5px solid #fca5a5; }
     .btn-danger:hover { background: #fef2f2; color: var(--red); }
-    .btn-good         { background: #fff; color: var(--green); border: 1.5px solid #6ee7b7; }
+    .btn-good         { background: var(--input); color: var(--green); border: 1.5px solid #6ee7b7; }
     .btn-good:hover   { background: #ecfdf5; color: var(--green); }
     .btn-orange       { background: var(--orange); color: #fff; box-shadow: 0 2px 8px rgba(249,115,22,.35); }
     .btn-orange:hover { background: var(--orange2); color: #fff; transform: translateY(-1px); }
@@ -1182,7 +1185,7 @@ function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
     .table tr:hover td { background: rgba(15,31,61,.02); }
 
     /* ── Chips / Badges ───────────────────────────────────────────── */
-    .chip { display: inline-flex; align-items: center; gap: 5px; padding: 5px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; border: 1px solid rgba(15,31,61,.12); background: #fff; color: var(--navy); white-space: nowrap; box-shadow: 0 1px 2px rgba(15,31,61,.05); letter-spacing:.01em; }
+    .chip { display: inline-flex; align-items: center; gap: 5px; padding: 5px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; border: 1px solid rgba(15,31,61,.12); background: var(--input); color: var(--navy); white-space: nowrap; box-shadow: 0 1px 2px rgba(15,31,61,.05); letter-spacing:.01em; }
     .chip-orange { background: #fff7ed; border-color: #fed7aa; color: var(--orange2); }
     .chip-purple { background: #faf5ff; border-color: #d8b4fe; color: var(--purple); }
     .chip-sky    { background: #f0f9ff; border-color: #bae6fd; color: var(--sky2); }
@@ -1365,6 +1368,32 @@ function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
     .live-tab { padding:10px 22px; border-radius:999px; font-weight:700; font-size:14px; border:1.5px solid rgba(15,31,61,.15); color:var(--navy); background:#fff; text-decoration:none; letter-spacing:.01em; transition:all .15s; box-shadow:0 1px 3px rgba(15,31,61,.06); }
     .live-tab:hover { background:var(--off); color:var(--navy); transform:translateY(-1px); box-shadow:0 3px 8px rgba(15,31,61,.10); }
     .live-tab.active { background:var(--navy); color:#fff; border-color:var(--navy); box-shadow:0 2px 10px rgba(15,31,61,.25); }
+
+    /* ── Calm operations theme overrides ───────────────────────────── */
+    .wrap { background: transparent; }
+    .page-header .sub, .note, .muted { color: var(--muted); }
+    .subtle-section, .panel, .soft-panel { background: var(--panel); }
+    input, select, textarea {
+      background: var(--input);
+      color: var(--text);
+      border-color: var(--border2);
+      box-shadow: inset 0 1px 1px rgba(19,33,58,.03);
+    }
+    input:focus, select:focus, textarea:focus {
+      border-color: rgba(249,115,22,.55);
+      box-shadow: 0 0 0 3px rgba(249,115,22,.12);
+      outline: none;
+    }
+    label { color: #5c6880; font-weight: 700; }
+    .toggle-row, .race-row, .registered-row, .result-row, .block-row {
+      background: var(--panel);
+      border-color: var(--border);
+    }
+    .card .card, .inner-card { background: var(--panel); }
+    table { background: var(--card); }
+    th { background: var(--off); color: #5c6880; }
+    td { border-color: var(--border); }
+
   </style>
 </head>
 <body>
@@ -1646,7 +1675,7 @@ app.get('/about', (req, res) => {
       <div class="card">
         <h2>What It Does</h2>
         <div class="stack">
-          <div class="toggle-row"><div><div class="toggle-row-label">🏗️ Meet Builder</div><div class="toggle-row-desc">Set up divisions, distances, costs, and registration — all in one place. Inline, Open, Quad, Time Trial, and Relay support.</div></div></div>
+          <div class="toggle-row"><div><div class="toggle-row-label">🏗️ Meet Builder</div><div class="toggle-row-desc">Set up divisions, distances, and registration — all in one place. Inline, Open, Quad, Time Trial, and Relay support.</div></div></div>
           <div class="toggle-row"><div><div class="toggle-row-label">🧱 Block Builder</div><div class="toggle-row-desc">Drag and drop races into blocks. Add breaks, lunch, and awards. Print your race list in one click.</div></div></div>
           <div class="toggle-row"><div><div class="toggle-row-label">🏁 Race Day</div><div class="toggle-row-desc">Director, judges, and announcer panels. Live scoreboard. TV display for AirPlay. Text alerts for parents.</div></div></div>
           <div class="toggle-row"><div><div class="toggle-row-label">📊 Standings</div><div class="toggle-row-desc">Automatic points, tiebreaker support (D2 and SR832), and real-time standings updated as races close.</div></div></div>
