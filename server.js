@@ -653,10 +653,10 @@ function isRegistrationClosed(meet) {
 
 function ageMatch(ages, age) {
   const n=Number(age); if(!Number.isFinite(n)) return false;
-  const normalized=String(ages||'').trim();
+  const normalized=String(ages||'').trim().toLowerCase();
   if(!normalized) return false;
-  if(normalized.includes('& under')) { const limit=Number((normalized.match(/\d+/)||[0])[0]); return n<=limit; }
-  if(normalized.includes('+')) { const min=Number((normalized.match(/\d+/)||[999])[0]); return n>=min; }
+  if(normalized.includes('& under') || normalized.includes('and under')) { const limit=Number((normalized.match(/\d+/)||[0])[0]); return n<=limit; }
+  if(normalized.includes('& older') || normalized.includes('and older') || normalized.includes('+')) { const min=Number((normalized.match(/\d+/)||[999])[0]); return n>=min; }
   const nums=normalized.match(/\d+/g)||[]; if(nums.length>=2) return n>=Number(nums[0])&&n<=Number(nums[1]); return false;
 }
 
@@ -3617,8 +3617,8 @@ function rebuildTimeTrialRace(meet) {
     id: oldTTRaces[0]?.id || ('r' + crypto.randomBytes(6).toString('hex')),
     orderHint: 7600,
     groupId: 'time_trials',
-    groupLabel: 'Time Trials',
-    ages: 'Youngest to oldest',
+    groupLabel: 'Time Trial Session',
+    ages: '0-100',
     division: 'time-trial',
     distanceLabel: '100m',
     dayIndex: 1,
@@ -3631,7 +3631,7 @@ function rebuildTimeTrialRace(meet) {
     laneEntries: [],
     resultsMode: 'times',
     status: oldTTRaces.some(r=>r.status==='closed') ? 'closed' : 'open',
-    notes: '100m / 1 lap • run youngest to oldest',
+    notes: '100m / 1 lap • one rolling queue • youngest to oldest',
     isFinal: true,
     closedAt: oldTTRaces.find(r=>r.closedAt)?.closedAt || '',
     isOpenRace: false,
@@ -3994,7 +3994,7 @@ app.post('/portal/meet/:meetId/open-builder/save', requireRole('meet_director'),
     og.ages=String(req.body[`og_${i}_ages`]||'').trim()||og.ages;
     og.distance=String(req.body[`og_${i}_distance`]||'').trim()||og.distance;
   });
-  generateOpenRacesForMeet(meet); ensureAtLeastOneBlock(meet); ensureCurrentRace(meet);
+  generateOpenRacesForMeet(meet); rebuildTimeTrialRace(meet); ensureAtLeastOneBlock(meet); ensureCurrentRace(meet);
   meet.updatedAt=nowIso();
   saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/open-builder?saved=1`);
 });
@@ -5092,73 +5092,115 @@ app.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','judg
   } else if(mode==='judges') {
     body+=`
       <div class="card" style="margin-bottom:14px">
-        <h2 style="margin:0">${current?`Race ${Math.max(info.idx+1,1)} — ${esc(current.groupLabel)} — ${esc(cap(current.division))} — ${esc(current.distanceLabel)}`:'No race selected'}</h2>
+        <h2 style="margin:0">${current?`Race ${Math.max(info.idx+1,1)} — ${current.isTimeTrial?'Time Trial Session':esc(current.groupLabel)} — ${current.isTimeTrial?'100m':esc(cap(current.division))+' — '+esc(current.distanceLabel)}`:'No race selected'}</h2>
         <div class="note">Judges always land on the current race. Save, then close race when done.</div>
       </div>
-      ${current?(current.isTimeTrial?`
+      ${current?(current.isTimeTrial?(()=>{
+        const ttEntries=timeTrialEntriesForMeet(meet);
+        const waiting=ttEntries.filter(e=>!String(e.time||'').trim());
+        const posted=ttEntries.filter(e=>String(e.time||'').trim()).sort((a,b)=>parseFloat(a.time||'999')-parseFloat(b.time||'999'));
+        const nextUp=waiting[0];
+        return `
         <div class="card" style="margin-bottom:14px">
-          <h2 style="margin-bottom:4px">⏱ 100m / 1 Lap Time Trial</h2>
-          <div class="note">Post one skater at a time. Time Trials save recorded times only — no points are awarded.</div>
-        </div>
-
-        <div class="card" style="margin-bottom:14px">
-          <form method="POST" action="/portal/meet/${meet.id}/race-day/judges/tt-post">
-            <input type="hidden" name="raceId" value="${esc(current.id)}" />
-            <div class="form-grid cols-3">
-              <div>
-                <label>Skater</label>
-                <select name="registrationId" required>
-                  <option value="">Select skater...</option>
-                  ${timeTrialEntriesForMeet(meet)
-                    .map(e=>`<option value="${esc(e.registrationId)}">#${esc(e.helmetNumber||'')} — ${esc(e.skaterName)} • ${esc(e.groupLabel||'')} ${e.time?'• '+esc(e.time):''}</option>`)
-                    .join('')}
-                </select>
-              </div>
-              <div>
-                <label>Time</label>
-                <input name="time" placeholder="ex: 11.42" required />
-              </div>
-              <div style="display:flex;align-items:end">
-                <button class="btn-orange" type="submit" name="action" value="save">Save Time</button>
-              </div>
-            </div>
-          </form>
-        </div>
-
-        <div class="card">
-          <div class="row between" style="margin-bottom:12px">
+          <div class="row between center">
             <div>
-              <h2 style="margin:0">Posted Times</h2>
-              <div class="note">${esc(current.groupLabel)} • ${esc(current.distanceLabel||'100m')}</div>
+              <h2 style="margin-bottom:4px">⏱ Time Trial Session — 100m / 1 Lap</h2>
+              <div class="note">One rolling queue. Click the next skater on the left, enter time, Save Time. Saved skaters leave the waiting list.</div>
             </div>
-            <form method="POST" action="/portal/meet/${meet.id}/race-day/judges/save" onsubmit="return confirm('Close this Time Trial and advance to the next race?')">
+            <form method="POST" action="/portal/meet/${meet.id}/race-day/judges/save" onsubmit="return confirm('Close this Time Trial Session and advance to the next race?')">
               <input type="hidden" name="raceId" value="${esc(current.id)}" />
               <button class="btn-orange" type="submit" name="action" value="close">Close Time Trial</button>
             </form>
           </div>
-          <div style="overflow-x:auto">
-            <table class="table">
-              <thead><tr><th>Place</th><th>Helmet</th><th>Skater</th><th>Team</th><th>Time</th><th></th></tr></thead>
-              <tbody>${[...(current.laneEntries||[])]
-                .sort((a,b)=>parseFloat(a.time||'999')-parseFloat(b.time||'999'))
-                .map(e=>`<tr>
-                  <td>${esc(e.place||'')}</td>
-                  <td>${e.helmetNumber?'#'+esc(e.helmetNumber):''}</td>
-                  <td><strong>${esc(e.skaterName||'')}</strong></td>
-                  <td>${esc(e.team||'')}</td>
-                  <td><strong>${esc(e.time||'')}</strong></td>
-                  <td>
-                    <form method="POST" action="/portal/meet/${meet.id}/race-day/judges/tt-remove" onsubmit="return confirm('Remove this posted time?')">
-                      <input type="hidden" name="raceId" value="${esc(current.id)}" />
-                      <input type="hidden" name="registrationId" value="${esc(e.registrationId||'')}" />
-                      <button class="btn-danger btn-sm" type="submit">Remove</button>
-                    </form>
-                  </td>
-                </tr>`).join('')||`<tr><td colspan="6" class="muted">No times posted yet.</td></tr>`}</tbody>
-            </table>
+        </div>
+
+        <div class="grid-2" style="align-items:start">
+          <div class="card">
+            <div class="row between center" style="margin-bottom:12px">
+              <div>
+                <h2 style="margin:0">Waiting Queue</h2>
+                <div class="note">Youngest to oldest • ${waiting.length} remaining</div>
+              </div>
+              ${nextUp?`<span class="chip chip-sky">Next: #${esc(nextUp.helmetNumber||'')} ${esc(nextUp.skaterName||'')}</span>`:''}
+            </div>
+            <div style="max-height:560px;overflow:auto;padding-right:4px">
+              ${waiting.map((e,idx)=>`
+                <button type="button" class="tt-queue-row" data-reg="${esc(e.registrationId)}" data-name="${esc(e.skaterName)}" data-helmet="${esc(e.helmetNumber||'')}" data-group="${esc(e.groupLabel||'')}" onclick="selectTTSkater(this)">
+                  <span class="tt-queue-num">${idx+1}</span>
+                  <span class="tt-queue-main"><strong>${e.helmetNumber?'#'+esc(e.helmetNumber)+' — ':''}${esc(e.skaterName||'')}</strong><small>${esc(e.groupLabel||'')} • Age ${esc(e.age||'')} • ${esc(e.team||'')}</small></span>
+                </button>`).join('')||`<div class="muted">All time trial skaters have posted times.</div>`}
+            </div>
           </div>
-        </div>`:`
-        <div class="card">
+
+          <div>
+            <div class="card" style="margin-bottom:14px">
+              <form method="POST" action="/portal/meet/${meet.id}/race-day/judges/tt-post">
+                <input type="hidden" name="raceId" value="${esc(current.id)}" />
+                <input type="hidden" id="ttSelectedReg" name="registrationId" value="${nextUp?esc(nextUp.registrationId):''}" />
+                <div class="note">Selected Skater</div>
+                <div id="ttSelectedName" style="font-family:Barlow Condensed,sans-serif;font-size:34px;font-weight:900;color:var(--navy);line-height:1.05;margin:4px 0">${nextUp?`${nextUp.helmetNumber?'#'+esc(nextUp.helmetNumber)+' — ':''}${esc(nextUp.skaterName)}`:'Select a skater'}</div>
+                <div id="ttSelectedMeta" class="note" style="margin-bottom:14px">${nextUp?`${esc(nextUp.groupLabel||'')} • Age ${esc(nextUp.age||'')} • ${esc(nextUp.team||'')}`:'Click a skater from the waiting queue.'}</div>
+                <div class="form-grid cols-2">
+                  <div>
+                    <label>Time</label>
+                    <input id="ttTimeInput" name="time" placeholder="ex: 11.42" required autocomplete="off" />
+                  </div>
+                  <div style="display:flex;align-items:end">
+                    <button class="btn-orange" type="submit" name="action" value="save">Save Time</button>
+                  </div>
+                </div>
+              </form>
+            </div>
+
+            <div class="card">
+              <h2 style="margin:0 0 4px">Posted Times</h2>
+              <div class="note" style="margin-bottom:12px">${posted.length} posted • sorted fastest first</div>
+              <div style="overflow-x:auto;max-height:430px">
+                <table class="table">
+                  <thead><tr><th>Place</th><th>Helmet</th><th>Skater</th><th>Group</th><th>Time</th><th></th></tr></thead>
+                  <tbody>${posted.map(e=>`<tr>
+                    <td>${esc(e.place||'')}</td>
+                    <td>${e.helmetNumber?'#'+esc(e.helmetNumber):''}</td>
+                    <td><strong>${esc(e.skaterName||'')}</strong><div class="note">${esc(e.team||'')}</div></td>
+                    <td>${esc(e.groupLabel||'')}</td>
+                    <td><strong>${esc(e.time||'')}</strong></td>
+                    <td>
+                      <form method="POST" action="/portal/meet/${meet.id}/race-day/judges/tt-remove" onsubmit="return confirm('Remove this posted time?')">
+                        <input type="hidden" name="raceId" value="${esc(current.id)}" />
+                        <input type="hidden" name="registrationId" value="${esc(e.registrationId||'')}" />
+                        <button class="btn-danger btn-sm" type="submit">Remove</button>
+                      </form>
+                    </td>
+                  </tr>`).join('')||`<tr><td colspan="6" class="muted">No times posted yet.</td></tr>`}</tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <style>
+          .tt-queue-row{width:100%;display:flex;gap:12px;align-items:center;text-align:left;background:#f8fafc;border:1px solid rgba(19,33,58,.10);border-radius:12px;padding:10px 12px;margin-bottom:8px;cursor:pointer;color:var(--text);box-shadow:var(--shadow-sm)}
+          .tt-queue-row:hover,.tt-queue-row.active{border-color:var(--sky2);background:#eef8ff}
+          .tt-queue-num{width:28px;height:28px;border-radius:999px;background:#e0f2fe;color:var(--sky2);display:flex;align-items:center;justify-content:center;font-weight:800;flex-shrink:0}
+          .tt-queue-main{display:flex;flex-direction:column;line-height:1.2}
+          .tt-queue-main small{color:var(--muted);font-weight:600;margin-top:3px}
+        </style>
+        <script>
+          function selectTTSkater(btn){
+            document.querySelectorAll('.tt-queue-row').forEach(x=>x.classList.remove('active'));
+            btn.classList.add('active');
+            var reg=btn.dataset.reg||'';
+            var name=btn.dataset.name||'';
+            var helmet=btn.dataset.helmet||'';
+            var group=btn.dataset.group||'';
+            document.getElementById('ttSelectedReg').value=reg;
+            document.getElementById('ttSelectedName').textContent=(helmet?'#'+helmet+' — ':'')+name;
+            document.getElementById('ttSelectedMeta').textContent=group;
+            var input=document.getElementById('ttTimeInput');
+            if(input){ input.value=''; input.focus(); }
+          }
+        </script>`;
+      })():`        <div class="card">
           <form method="POST" action="/portal/meet/${meet.id}/race-day/judges/save">
             <input type="hidden" name="raceId" value="${esc(current.id)}" />
             <div class="action-row" style="margin-bottom:14px">
@@ -5472,8 +5514,19 @@ app.get('/meet/:meetId/tv', (req, res) => {
     '</div>'
   ).join('');
 
-  const ttBoards = isTT ? timeTrialLeaderboards(meet, current) : null;
-  const ttBoardRowsHtml = rows => (rows||[]).slice(0,3).map((e,i)=>
+  let ttBoards = { overallFemale: [], overallMale: [], byGroup: [], overall: [] };
+  if(isTT) {
+    try {
+      ttBoards = timeTrialLeaderboards(meet, current) || ttBoards;
+      ttBoards.overallFemale = Array.isArray(ttBoards.overallFemale) ? ttBoards.overallFemale : [];
+      ttBoards.overallMale = Array.isArray(ttBoards.overallMale) ? ttBoards.overallMale : [];
+      ttBoards.byGroup = Array.isArray(ttBoards.byGroup) ? ttBoards.byGroup : [];
+      ttBoards.overall = Array.isArray(ttBoards.overall) ? ttBoards.overall : [];
+    } catch (err) {
+      console.error('TV time trial leaderboard error:', err);
+    }
+  }
+  const ttBoardRowsHtml = rows => (Array.isArray(rows)?rows:[]).slice(0,3).map((e,i)=>
     '<div class="tv-podium-row" style="padding:8px 10px;gap:10px">' +
     '<div class="tv-podium-medal" style="font-size:22px">'+(['🥇','🥈','🥉'][i]||String(i+1))+'</div>' +
     '<div style="flex:1"><div class="tv-next-name" style="font-size:21px">'+esc(e.skaterName||'')+'</div>' +
@@ -5482,8 +5535,8 @@ app.get('/meet/:meetId/tv', (req, res) => {
     '</div>'
   ).join('') || '<div style="opacity:.4;font-size:14px">No times yet</div>';
 
-  const ttGroupBoardsHtml = isTT && ttBoards ? ttBoards.byGroup.slice(0,4).map(section =>
-    '<div class="tv-sidebar-section"><div class="tv-sidebar-label">'+esc(section.group.label)+' Top 3</div><div class="tv-podium" style="gap:6px">'+ttBoardRowsHtml(section.rows)+'</div></div>'
+  const ttGroupBoardsHtml = isTT ? ttBoards.byGroup.slice(0,4).map(section =>
+    '<div class="tv-sidebar-section"><div class="tv-sidebar-label">'+esc(section?.group?.label || 'Group')+' Top 3</div><div class="tv-podium" style="gap:6px">'+ttBoardRowsHtml(section?.rows || [])+'</div></div>'
   ).join('') : '';
 
   const sidebarHtml = isTT ?
