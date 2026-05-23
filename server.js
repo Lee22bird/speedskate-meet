@@ -3454,36 +3454,6 @@ app.get('/portal/meet/:meetId/relay-builder', requireRole('meet_director'), (req
     ${req.query.saved?'<div class="good" style="margin-bottom:12px">✅ Saved.</div>':''}
     ${req.query.added?`<div class="good" style="margin-bottom:12px">✅ Added ${esc(req.query.added)} relay race(s).</div>`:''}
 
-    <div class="grid-2">
-      <div class="card">
-        <h2 style="margin-bottom:14px">Add Single Relay Race</h2>
-        <form method="POST" action="/portal/meet/${meet.id}/relay-builder/add" class="stack">
-          <div><label>Relay Type</label>
-            <select name="relayType">
-              <option value="2 Person">2 Person</option>
-              <option value="3 Person">3 Person</option>
-              <option value="4 Person">4 Person</option>
-              <option value="Custom">Custom</option>
-            </select>
-          </div>
-          <div><label>Age Group / Class</label><input name="ageGroup" placeholder="e.g. Juvenile, Freshman, Senior, Master" required /></div>
-          <div><label>Relay Name</label><input name="name" placeholder="Leave blank to auto-name from type + age group" /></div>
-          <div><label>Distance</label><input name="distance" placeholder="e.g. 900m, 1200m, 2000m" required /></div>
-          <div><label>Lap / Rotation Notes</label><input name="notes" placeholder="e.g. 1 lap × 3 times each" /></div>
-          <div><button class="btn-sky" type="submit">+ Add Relay Race</button></div>
-        </form>
-      </div>
-      <div class="card">
-        <h2 style="margin-bottom:6px">Race-Day Relay Workflow</h2>
-        <div class="stack" style="margin-top:8px">
-          <div class="toggle-row"><div><div class="toggle-row-label">Skater names stay manual</div><div class="toggle-row-desc">Judges type skater names directly into the race-day name fields.</div></div></div>
-          <div class="toggle-row"><div><div class="toggle-row-label">Team field can be color/team</div><div class="toggle-row-desc">Use Green, Red, Yellow, Blue, Midwest A, Midwest B, etc.</div></div></div>
-          <div class="toggle-row"><div><div class="toggle-row-label">Relays are placement-only</div><div class="toggle-row-desc">Relay results stay separate and do not count toward individual standings.</div></div></div>
-          <div class="toggle-row"><div><div class="toggle-row-label">Pricing</div><div class="toggle-row-desc">Registration charges the Relay Event fee once when relays are selected.</div></div></div>
-        </div>
-      </div>
-    </div>
-
     <div class="card" style="margin-top:16px">
       <style>
         .relay-type-card{background:#eef3f8;border:1px solid rgba(15,31,61,.10);border-radius:18px;padding:18px;margin-top:14px;}
@@ -3519,23 +3489,6 @@ app.get('/portal/meet/:meetId/relay-builder', requireRole('meet_director'), (req
         <tbody>${relayRows}</tbody>
       </table>
     </div>`:''}` }));
-});
-
-app.post('/portal/meet/:meetId/relay-builder/add', requireRole('meet_director'), (req, res) => {
-  const meet=getMeetOr404(req.db,req.params.meetId);
-  if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
-  const relayType=String(req.body.relayType||'Custom').trim();
-  const ageGroup=String(req.body.ageGroup||'').trim();
-  const providedName=String(req.body.name||'').trim();
-  const name=providedName || [ageGroup, relayType, 'Relay'].filter(Boolean).join(' ');
-  const distance=String(req.body.distance||'').trim();
-  const notes=String(req.body.notes||'').trim();
-  if(!name||!distance) return res.redirect(`/portal/meet/${meet.id}/relay-builder`);
-  const race=makeRelayRace({ name, distance, notes, relayType, ageGroup });
-  race.orderHint=9800+(meet.races||[]).filter(r=>r.isRelayRace).length;
-  meet.races.push(race);
-  meet.updatedAt=nowIso(); saveDb(req.db);
-  res.redirect(`/portal/meet/${meet.id}/relay-builder?saved=1`);
 });
 
 app.post('/portal/meet/:meetId/relay-builder/add-template', requireRole('meet_director'), (req, res) => {
