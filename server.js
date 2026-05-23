@@ -954,7 +954,6 @@ function meetTabs(meet, active) {
     ['open-builder','Open Builder',`/portal/meet/${meet.id}/open-builder`],
     ['quad-builder','Quad Builder',`/portal/meet/${meet.id}/quad-builder`],
     ['relay-builder','Relay Builder',`/portal/meet/${meet.id}/relay-builder`],
-    ['time-trials','Time Trials',`/portal/meet/${meet.id}/time-trials`],
     ['blocks','Block Builder',`/portal/meet/${meet.id}/blocks`],
     ['registered','Registered',`/portal/meet/${meet.id}/registered`],
     ['checkin','Check-In',`/portal/meet/${meet.id}/checkin`],
@@ -3240,9 +3239,21 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
                 })();
               </script>
               <div class="meet-options-grid">
-                <div class="toggle-row">
-                  <div><div class="toggle-row-label">Time Trials</div><div class="toggle-row-desc">Enable TT entries</div></div>
-                  ${toggleSwitch('timeTrialsEnabled', meet.timeTrialsEnabled)}
+                <div id="time-trials" class="toggle-row" style="grid-column:1/-1;border-left:4px solid var(--sky2);background:linear-gradient(135deg,#f0f9ff 0%,#ffffff 70%);padding:18px 20px">
+                  <div>
+                    <div class="toggle-row-label" style="font-size:20px">⏱ Time Trials</div>
+                    <div class="toggle-row-desc" style="font-size:14px;max-width:760px">
+                      Single <strong>100m / 1 Lap</strong> session. Runs youngest to oldest across all divisions. 
+                      Uses Open division groups for TV/live leaderboards. No points awarded.
+                    </div>
+                    <div class="action-row" style="margin-top:10px">
+                      <span class="chip chip-sky">100m</span>
+                      <span class="chip">1 Lap</span>
+                      <span class="chip">Youngest → Oldest</span>
+                      <span class="chip chip-green">Records Only</span>
+                    </div>
+                  </div>
+                  ${toggleSwitch('timeTrialsEnabled', meet.timeTrialsEnabled, 'Enable Time Trials')}
                 </div>
                 <div class="toggle-row">
                   <div><div class="toggle-row-label">Relays</div><div class="toggle-row-desc">Enable relay entries</div></div>
@@ -3384,6 +3395,9 @@ function saveMeetFields(meet, body, db) {
   meet.trackLength=Number(body.trackLength||100);
   meet.lanes=Number(body.lanes||4);
   meet.timeTrialsEnabled=!!body.timeTrialsEnabled;
+  if(Array.isArray(meet.openGroups)) {
+    meet.openGroups=normalizeOpenGroups(meet.openGroups).map(g=>({...g,timeTrial:!!meet.timeTrialsEnabled,ttDistance:'100m'}));
+  }
   meet.relayEnabled=!!body.relayEnabled;
   meet.judgesPanelRequired=!!body.judgesPanelRequired;
   meet.status=String(body.status||'draft');
@@ -4598,100 +4612,26 @@ app.post('/portal/meet/:meetId/checkin/reassign-helmets', requireRole('meet_dire
 });
 
 
-// ── Time Trial Builder ───────────────────────────────────────────────────────
+// ── Time Trial Builder removed: Time Trials are controlled from Meet Builder ─────
 app.get('/portal/meet/:meetId/time-trials', requireRole('meet_director'), (req, res) => {
-  const meet=getMeetOr404(req.db,req.params.meetId);
-  if(!meet) return res.redirect('/portal');
-  if(!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
-
-  meet.openGroups=normalizeOpenGroups(meet.openGroups);
-  const ttRace=timeTrialRaceForMeet(meet);
-  const entries=timeTrialEntriesForMeet(meet);
-  const enabledCount=(meet.openGroups||[]).filter(g=>g.timeTrial).length;
-
-  const openGroupPairs=[];
-  for(let i=0;i<meet.openGroups.length;i+=2) openGroupPairs.push([i,i+1].filter(x=>x<meet.openGroups.length));
-
-  const groupCards=openGroupPairs.map(pair=>{
-    const cards=pair.map(i=>{
-      const og=meet.openGroups[i];
-      const def=OPEN_GROUP_DEFAULTS[i];
-      const entryCount=entries.filter(e=>String(e.groupId||'')===String(og.id)).length;
-      return `
-      <div class="open-group-card" style="flex:1">
-        <div class="row between center" style="margin-bottom:12px">
-          <div>
-            <div style="font-weight:700;font-size:16px;color:var(--navy)">${esc(og.label)}</div>
-            <div style="max-width:180px;margin-top:5px">
-              <input name="tt_${i}_ages" value="${esc(og.ages)}" placeholder="${esc(def?.ages||'')}" style="padding:6px 9px;font-size:13px" />
-            </div>
-          </div>
-          ${toggleSwitch(`tt_${i}_enabled`, og.timeTrial, 'Time Trial')}
-        </div>
-        <div class="note">100m / 1 lap • run youngest to oldest${entryCount?` • ${entryCount} entered`:''}</div>
-      </div>`;
-    });
-    return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">${cards.join('')}</div>`;
-  }).join('');
-
-  res.send(pageShell({title:'Time Trials',user:req.user,meet,activeTab:'time-trials', bodyHtml:`
-    <div class="builder-banner" style="background:linear-gradient(135deg,#0369a1 0%,#0ea5e9 100%);margin-bottom:18px">
-      <h2>⏱ Time Trials</h2>
-      <div class="sub">Separate from Open races. One 100m / 1 lap queue runs youngest to oldest. Times save as records only — no points.</div>
-    </div>
-    ${req.query.saved?'<div class="card" style="border-left:4px solid var(--green);margin-bottom:12px"><div class="good">✅ Time Trial Builder saved.</div></div>':''}
-    <form method="POST" action="/portal/meet/${meet.id}/time-trials/save">
-      <div class="card" style="margin-bottom:16px">
-        <div class="row between center" style="margin-bottom:14px">
-          <div>
-            <h2 style="margin:0">100m Time Trial Groups</h2>
-            <div class="note">Use the same Open age-group examples, but edit the age ranges however MSSL runs them.</div>
-          </div>
-          <button class="btn-sky" type="submit">Save Time Trials</button>
-        </div>
-        ${groupCards}
-        <div class="action-row" style="margin-top:12px">
-          <button class="btn-sky" type="submit">Save Time Trials</button>
-          <span class="chip chip-sky">${enabledCount} group(s) enabled</span>
-          ${ttRace?`<span class="chip chip-green">${(ttRace.laneEntries||[]).filter(e=>e.time).length} time(s) posted</span>`:''}
-        </div>
-      </div>
-    </form>
-
-    <div class="card">
-      <h2>Current TT Queue</h2>
-      <div class="note" style="margin-bottom:12px">Generated from registered skaters with Time Trial selected.</div>
-      <div style="overflow-x:auto">
-        <table class="table">
-          <thead><tr><th>#</th><th>Helmet</th><th>Skater</th><th>Age</th><th>Team</th><th>Group</th><th>Time</th></tr></thead>
-          <tbody>${entries.map((e,idx)=>`<tr><td>${idx+1}</td><td>${e.helmetNumber?'#'+esc(e.helmetNumber):''}</td><td><strong>${esc(e.skaterName)}</strong></td><td>${esc(e.age||'')}</td><td>${esc(e.team||'')}</td><td>${esc(e.groupLabel||'')}</td><td>${esc(e.time||'')}</td></tr>`).join('')||`<tr><td colspan="7" class="muted">No time trial skaters yet.</td></tr>`}</tbody>
-        </table>
-      </div>
-    </div>`}));
+  res.redirect(`/portal/meet/${req.params.meetId}/builder#time-trials`);
 });
 
 app.post('/portal/meet/:meetId/time-trials/save', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet) return res.redirect('/portal');
   if(!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
-
-  meet.openGroups=normalizeOpenGroups(meet.openGroups);
-  let anyEnabled=false;
-  meet.openGroups.forEach((og,i)=>{
-    og.ages=String(req.body[`tt_${i}_ages`]||'').trim()||og.ages;
-    og.timeTrial=!!req.body[`tt_${i}_enabled`];
-    og.ttDistance='100m';
-    if(og.timeTrial) anyEnabled=true;
-  });
-  meet.timeTrialsEnabled=anyEnabled;
+  meet.timeTrialsEnabled=!!req.body.timeTrialsEnabled;
+  if(meet.openGroups) {
+    meet.openGroups=normalizeOpenGroups(meet.openGroups).map(g=>({...g,timeTrial:!!meet.timeTrialsEnabled,ttDistance:'100m'}));
+  }
   rebuildTimeTrialRace(meet);
   ensureAtLeastOneBlock(meet);
   ensureCurrentRace(meet);
   meet.updatedAt=nowIso();
   saveDb(req.db);
-  res.redirect(`/portal/meet/${meet.id}/time-trials?saved=1`);
+  res.redirect(`/portal/meet/${meet.id}/builder?saved=1#time-trials`);
 });
-
 
 // ── Block Builder ─────────────────────────────────────────────────────────────
 
