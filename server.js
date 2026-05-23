@@ -3801,7 +3801,7 @@ app.get('/portal/meet/:meetId/relay-builder', requireRole('meet_director'), (req
     </tr>`).join('');
 
   const templateGroups = ['3 Person', '2 Person', '4 Person'].map(type => {
-    const rows = RELAY_TEMPLATE_ROWS.map((row, idx) => ({ row, idx })).filter(x => x.row.type === type);
+    const rows = meet.relayTemplates.map((row, idx) => ({ row, idx })).filter(x => x.row.type === type);
     return `
       <div class="relay-type-card">
         <div class="row between center" style="margin-bottom:12px">
@@ -3816,7 +3816,7 @@ app.get('/portal/meet/:meetId/relay-builder', requireRole('meet_director'), (req
             <div class="relay-template-card">
               <div class="row between center" style="margin-bottom:10px">
                 <div class="toggle-row-label">${esc(row.age)}</div>
-                ${toggleSwitch(`enabled_${idx}`, false, '', 'on')}
+                ${toggleSwitch(`enabled_${idx}`, !!row.enabled, '', 'on')}
               </div>
               <input type="hidden" name="relayType_${idx}" value="${esc(row.type)}" />
               <div><label>Age Group</label><input name="ageGroup_${idx}" value="${esc(row.age)}" /></div>
@@ -3919,8 +3919,17 @@ app.post('/portal/meet/:meetId/relay-builder/delete', requireRole('meet_director
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
   const raceId=String(req.body.raceId||'');
+  const race=(meet.races||[]).find(r=>r.id===raceId);
   meet.races=(meet.races||[]).filter(r=>r.id!==raceId);
   meet.blocks=(meet.blocks||[]).map(b=>({...b,raceIds:(b.raceIds||[]).filter(id=>id!==raceId)}));
+  if(race && Array.isArray(meet.relayTemplates)) {
+    meet.relayTemplates=meet.relayTemplates.map(t=>{
+      const sameAge=String(t.age||'')===String(race.relayAgeGroup||'');
+      const sameType=String(t.type||'')===String(race.relayType||'');
+      const sameDistance=String(t.distance||'')===String(race.distanceLabel||'');
+      return (sameAge&&sameType&&sameDistance)?{...t,enabled:false}:t;
+    });
+  }
   meet.updatedAt=nowIso(); saveDb(req.db);
   res.redirect(`/portal/meet/${meet.id}/relay-builder`);
 });
