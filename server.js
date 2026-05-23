@@ -1274,6 +1274,125 @@ function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
     .live-race-name { font-family: 'Barlow Condensed',sans-serif; font-size: 28px; font-weight: 700; }
 
     /* ── Homepage hero ────────────────────────────────────────────── */
+    /* ── Home Hero ────────────────────────────────────────────────── */
+    .home-hero {
+      position: relative;
+      overflow: hidden;
+      border-radius: 28px;
+      min-height: 520px;
+      margin-bottom: 28px;
+      background: radial-gradient(circle at 50% 20%, rgba(56,189,248,.22), rgba(15,31,61,0) 38%),
+                  linear-gradient(135deg, #08152b 0%, #13213a 55%, #08152b 100%);
+      box-shadow: var(--shadow-lg);
+      border: 1px solid rgba(255,255,255,.12);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .home-hero-bg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center;
+      opacity: .30;
+      transform: scale(1.03);
+    }
+    .home-hero-wash {
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(circle at 50% 26%, rgba(249,115,22,.20), transparent 22%),
+        radial-gradient(circle at 18% 45%, rgba(56,189,248,.18), transparent 30%),
+        radial-gradient(circle at 82% 45%, rgba(249,115,22,.16), transparent 28%),
+        linear-gradient(180deg, rgba(8,21,43,.30), rgba(8,21,43,.86));
+    }
+    .home-hero-inner {
+      position: relative;
+      z-index: 1;
+      width: min(980px, 92%);
+      text-align: center;
+      padding: 54px 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .home-hero-logo {
+      width: min(520px, 82vw);
+      height: auto;
+      display: block;
+      margin: 0 auto 24px;
+      filter: drop-shadow(0 16px 42px rgba(0,0,0,.70));
+    }
+    .home-hero-kicker {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid rgba(255,255,255,.24);
+      background: rgba(255,255,255,.08);
+      color: rgba(255,255,255,.82);
+      border-radius: 999px;
+      padding: 7px 14px;
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .12em;
+      margin-bottom: 18px;
+      backdrop-filter: blur(8px);
+    }
+    .home-hero-title {
+      color: #fff;
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: clamp(48px, 7vw, 92px);
+      font-weight: 900;
+      line-height: .92;
+      letter-spacing: -.03em;
+      margin: 0;
+      text-shadow: 0 10px 38px rgba(0,0,0,.45);
+    }
+    .home-hero-copy {
+      color: rgba(255,255,255,.84);
+      font-size: clamp(16px, 2vw, 20px);
+      line-height: 1.55;
+      max-width: 760px;
+      margin: 18px auto 0;
+    }
+    .home-hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      margin-top: 28px;
+    }
+    .home-hero-actions .btn-orange,
+    .home-hero-actions .btn2 {
+      padding: 13px 24px;
+      font-size: 15px;
+      border-radius: 12px;
+    }
+    .home-hero-primary {
+      box-shadow: 0 10px 28px rgba(249,115,22,.34);
+    }
+    .home-hero-pills {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 26px;
+    }
+    .home-hero-pills span {
+      color: rgba(255,255,255,.78);
+      background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.14);
+      border-radius: 999px;
+      padding: 7px 12px;
+      font-size: 12px;
+      font-weight: 750;
+    }
+
+    /* Legacy hero classes retained for older internal pages if referenced. */
     .hero {
       position: relative; border-radius: var(--radius-lg); overflow: hidden;
       min-height: 360px; display: flex; align-items: flex-end;
@@ -1458,19 +1577,41 @@ function resultsSectionHtml(section) {
 app.get('/', (req, res) => {
   const data = getSessionUser(req);
   const portalLink = data ? '/portal' : '/admin/login';
-  res.send(pageShell({ title:'Home', description:'SpeedSkateMeet is the all-in-one platform for inline speed skating meets. Registration, heat assignments, live scoring, TV display, and text alerts for parents.', user:data?.user||null, bodyHtml:`
-    <div class="hero hero-centered">
-      <img class="hero-img" src="/public/images/home/hero-banner.jpg" alt="" />
-      <div class="hero-gradient"></div>
-      <div class="hero-content-centered">
-        <img src="/public/images/branding/ssm-logo.png" alt="SpeedSkateMeet.com" class="hero-logo" />
-        <div class="hero-actions-centered">
-          <a class="btn-orange" href="/meets">Find a Meet</a>
+
+  res.send(pageShell({
+    title: 'Home',
+    description: 'SpeedSkateMeet is the all-in-one platform for inline speed skating meets. Registration, race building, block scheduling, live scoring, and race-day operations.',
+    user: data?.user || null,
+    bodyHtml: `
+    <section class="home-hero">
+      <img class="home-hero-bg" src="/public/images/home/hero-banner.jpg" alt="" />
+      <div class="home-hero-wash"></div>
+
+      <div class="home-hero-inner">
+        <img src="/public/images/branding/ssm-logo.png" alt="SpeedSkateMeet.com" class="home-hero-logo" />
+
+        <div class="home-hero-kicker">Inline speed skating meet software</div>
+        <h1 class="home-hero-title">Run meets. Build races. Go live.</h1>
+        <p class="home-hero-copy">
+          Registration, race builders, manual block scheduling, live results, check-in,
+          standings, and race-day tools built specifically for inline speed skating.
+        </p>
+
+        <div class="home-hero-actions">
+          <a class="btn-orange home-hero-primary" href="/meets">Find a Meet</a>
           <a class="btn2 btn-white" href="/live">Live Race Day</a>
-          ${data ? '<a class="btn2 btn-white" href="/portal">Portal</a>' : '<a class="btn2 btn-white" href="/admin/login">Login</a>'}
+          <a class="btn2 btn-white" href="${portalLink}">${data ? 'Open Portal' : 'Login'}</a>
+        </div>
+
+        <div class="home-hero-pills">
+          <span>Meet Builder</span>
+          <span>Race Day</span>
+          <span>Live Results</span>
+          <span>Text Alerts</span>
         </div>
       </div>
-    </div>
+    </section>
+
     <div class="feature-grid">
       <a class="feature-card feature-card-link" href="/live">
         <img class="feature-card-bg" src="/public/images/home/feature-card-dark.jpg" alt="" />
@@ -1488,7 +1629,7 @@ app.get('/', (req, res) => {
         <div class="feature-card-content">
           <div class="feature-icon-emoji">📋</div>
           <div class="feature-title">Meet Management</div>
-          <div class="feature-desc">Build your meet from scratch. Inline, Open, and Quad race builders with block scheduling, check-in, and automatic standings.</div>
+          <div class="feature-desc">Build meets from scratch with registration, race builders, manual block scheduling, check-in, and standings.</div>
           <div class="feature-cta">Go to Portal →</div>
         </div>
       </a>
@@ -1502,7 +1643,8 @@ app.get('/', (req, res) => {
           <div class="feature-cta">Browse Rinks →</div>
         </div>
       </a>
-    </div>` }));
+    </div>`
+  }));
 });
 
 // ── Submit a Meet (public) ────────────────────────────────────────────────────
