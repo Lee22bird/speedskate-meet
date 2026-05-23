@@ -2095,7 +2095,7 @@ app.get('/help', (req, res) => {
 
 app.get('/meets', (req, res) => {
   const db=loadDb(); const data=getSessionUser(req);
-  const cards=(db.meets||[]).filter(m=>m.isPublic).map(m=>{
+  const cards=(db.meets||[]).filter(m=>m.isPublic || String(m.status||'').toLowerCase()==='published').map(m=>{
     const rink=db.rinks.find(r=>Number(r.id)===Number(m.rinkId));
     return `
       <div class="card" style="margin-bottom:14px">
@@ -2324,7 +2324,7 @@ app.get('/rinks', (req, res) => {
 
 app.get('/live', (req, res) => {
   const db=loadDb(); const data=getSessionUser(req);
-  const cards=(db.meets||[]).filter(m=>m.isPublic).map(m=>{
+  const cards=(db.meets||[]).filter(m=>m.isPublic || String(m.status||'').toLowerCase()==='published').map(m=>{
     const rink=db.rinks.find(r=>Number(r.id)===Number(m.rinkId));
     return `
       <div class="card" style="margin-bottom:14px">
@@ -3381,8 +3381,8 @@ function saveMeetFields(meet, body, db) {
   meet.timeTrialsEnabled=!!body.timeTrialsEnabled;
   meet.relayEnabled=!!body.relayEnabled;
   meet.judgesPanelRequired=!!body.judgesPanelRequired;
-  meet.isPublic=!!body.isPublic;
   meet.status=String(body.status||'draft');
+  meet.isPublic=!!body.isPublic || String(meet.status||'').toLowerCase()==='published';
   meet.notes=String(body.notes||'');
   meet.scheduleNotes=String(body.scheduleNotes||'');
   meet.relayNotes=String(body.relayNotes||'');
@@ -3543,7 +3543,7 @@ app.post('/portal/meet/:meetId/builder/save', requireRole('meet_director'), (req
   if(!meet) return res.redirect('/portal');
   if(!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
   saveMeetFields(meet, req.body, req.db);
-  generateBaseRacesForMeet(meet); generateAdditionalRacesForMeet(meet); rebuildRaceAssignments(meet); ensureAtLeastOneBlock(meet); ensureCurrentRace(meet);
+  generateBaseRacesForMeet(meet); generateAdditionalRacesForMeet(meet); rebuildTimeTrialRace(meet); rebuildRaceAssignments(meet); ensureAtLeastOneBlock(meet); ensureCurrentRace(meet);
   saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/blocks`);
 });
 
@@ -4694,7 +4694,7 @@ app.get('/portal/meet/:meetId/blocks', requireRole('meet_director'), (req, res) 
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet) return res.redirect('/portal');
   if(!canEditMeet(req.user,meet)) return res.status(403).send(pageShell({title:'Forbidden',user:req.user,bodyHtml:`<div class="page-header"><h1>Forbidden</h1></div><div class="card"><div class="danger">Only the meet owner can edit this meet.</div></div>`}));
-  ensureAtLeastOneBlock(meet); ensureCurrentRace(meet); saveDb(req.db);
+  rebuildTimeTrialRace(meet); ensureAtLeastOneBlock(meet); ensureCurrentRace(meet); saveDb(req.db);
   const raceById=new Map((meet.races||[]).map(r=>[r.id,r]));
   const assigned=new Set(); for(const block of meet.blocks||[]) for(const rid of block.raceIds||[]) assigned.add(rid);
   const unassigned=(meet.races||[]).filter(r=>!assigned.has(r.id));
@@ -5019,6 +5019,7 @@ function raceDaySubTabs(meet,active) {
 app.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','judge','coach'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet) return res.redirect('/portal');
+  rebuildTimeTrialRace(meet); saveDb(req.db);
   const mode=String(req.params.mode||'director');
   const info=currentRaceInfo(meet); const current=info.current;
   const currentLanes=current?laneRowsForRace(current,meet):[];
@@ -5481,6 +5482,7 @@ app.post('/portal/meet/:meetId/reopen', requireRole('meet_director'), (req, res)
 app.get('/meet/:meetId/tv', (req, res) => {
   const db=loadDb(); const meet=getMeetOr404(db,req.params.meetId);
   if(!meet) return res.redirect('/meets');
+  rebuildTimeTrialRace(meet);
   const info=currentRaceInfo(meet);
   const current=info.current;
   const lanes=current?laneRowsForRace(current,meet):[];
