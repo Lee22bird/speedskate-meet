@@ -1,13 +1,24 @@
-const GLOBAL_PRICING_FIELDS = [
+const ACTIVE_PRICING_FIELDS = [
   'baseEntryFee',
+  'additionalRaceFee',
+  'relay2PersonFee',
+  'relay3PersonFee',
+  'relay4PersonFee',
+  'maxRegistrationFee',
+];
+
+const LEGACY_PRICING_FIELDS = [
   'noviceEventFee',
   'eliteEventFee',
   'openEventFee',
   'quadEventFee',
   'relayEventFee',
   'timeTrialEventFee',
-  'additionalRaceFee',
-  'maxRegistrationFee',
+];
+
+const GLOBAL_PRICING_FIELDS = [
+  ...ACTIVE_PRICING_FIELDS,
+  ...LEGACY_PRICING_FIELDS,
 ];
 
 function toMoneyNumber(value) {
@@ -33,6 +44,8 @@ function normalizeMeetPricingFields(meet) {
 }
 
 module.exports = {
+  ACTIVE_PRICING_FIELDS,
+  LEGACY_PRICING_FIELDS,
   GLOBAL_PRICING_FIELDS,
   defaultPricingFields,
   normalizeMeetPricingFields,
