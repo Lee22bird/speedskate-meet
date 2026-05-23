@@ -366,9 +366,9 @@ function normalizeOpenGroups(raw) {
   if(!Array.isArray(raw)||raw.length===0) return defaults;
   return defaults.map(def=>{
     const saved=raw.find(r=>r.id===def.id); if(!saved) return def;
-    return {id:def.id,label:def.label,ages:def.ages,gender:def.gender,
+    return {id:def.id,label:def.label,ages:String(saved.ages || def.ages || '').trim(),gender:def.gender,
       enabled:!!saved.enabled, distance:String(saved.distance||def.defaultDistance||'').trim(), cost:Number(saved.cost||0),
-      timeTrial:!!saved.timeTrial, ttDistance:String(saved.ttDistance||'').trim()};
+      timeTrial:!!saved.timeTrial, ttDistance:String(saved.ttDistance || '100m').trim() || '100m'};
   });
 }
 
@@ -3756,7 +3756,9 @@ app.get('/portal/meet/:meetId/open-builder', requireRole('meet_director'), (req,
         <div class="row between center" style="margin-bottom:12px">
           <div>
             <div style="font-weight:700;font-size:16px;color:var(--navy)">${esc(og.label)}</div>
-            <div class="note">${esc(og.ages)}</div>
+            <div style="max-width:180px;margin-top:5px">
+              <input name="og_${i}_ages" value="${esc(og.ages)}" placeholder="${esc(def?.ages||'')}" style="padding:6px 9px;font-size:13px" />
+            </div>
           </div>
           ${toggleSwitch(`og_${i}_enabled`, og.enabled, 'Open Race')}
         </div>
@@ -3831,9 +3833,10 @@ app.post('/portal/meet/:meetId/open-builder/save', requireRole('meet_director'),
   meet.openGroups=normalizeOpenGroups(meet.openGroups);
   meet.openGroups.forEach((og,i)=>{
     og.enabled=!!req.body[`og_${i}_enabled`];
+    og.ages=String(req.body[`og_${i}_ages`]||'').trim()||og.ages;
     og.distance=String(req.body[`og_${i}_distance`]||'').trim()||og.distance;
     og.timeTrial=!!req.body[`og_${i}_timeTrial`];
-    og.ttDistance=String(req.body[`og_${i}_ttDistance`]||'').trim();
+    og.ttDistance='100m';
   });
   generateOpenRacesForMeet(meet); ensureAtLeastOneBlock(meet); ensureCurrentRace(meet);
   saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/open-builder?saved=1`);
