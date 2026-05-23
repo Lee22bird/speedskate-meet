@@ -51,6 +51,13 @@ const {
   writeJsonAtomic,
 } = require('./utils/db');
 
+const {
+  hasRole,
+  isSuperAdmin,
+  canEditMeet,
+} = require('./utils/auth');
+
+
 const app = express();
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json({ limit: '1mb' }));
@@ -482,7 +489,6 @@ function extendSession(db,token) {
   if(sess) sess.expiresAt=new Date(Date.now()+SESSION_TTL_MS).toISOString();
 }
 
-function hasRole(user,role) { return Array.isArray(user.roles)&&user.roles.includes(role); }
 
 function requireRole(...roles) {
   return (req,res,next)=>{
@@ -554,13 +560,6 @@ function makeSetupPresetFromMeet(db, meet, name, ownerUserId) {
       distanceLabel: r.distanceLabel, dayIndex: r.dayIndex, blockId: r.blockId || '', blockName: r.blockName || ''
     })),
   };
-}
-function canEditMeet(user,meet) {
-  if(hasRole(user,'super_admin')) return true;
-  if(hasRole(user,'coach')&&!hasRole(user,'meet_director')) return false;
-  if(hasRole(user,'judge')&&!hasRole(user,'meet_director')) return false;
-  if(hasRole(user,'announcer')&&!hasRole(user,'meet_director')) return false;
-  return Number(meet.createdByUserId)===Number(user.id);
 }
 
 function ensureAtLeastOneBlock(meet) {
