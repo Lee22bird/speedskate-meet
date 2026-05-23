@@ -39,6 +39,18 @@ const {
   normalizeMeetPricingFields,
 } = require('./services/pricingModel');
 
+const { esc, cap } = require('./utils/html');
+const { nowIso } = require('./utils/date');
+const {
+  parseCookies,
+  setCookie,
+  clearCookie,
+} = require('./utils/cookies');
+const {
+  safeReadJson,
+  writeJsonAtomic,
+} = require('./utils/db');
+
 const app = express();
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json({ limit: '1mb' }));
@@ -251,41 +263,7 @@ function makeQuadGroupsTemplate() {
   }));
 }
 
-function nowIso() { return new Date().toISOString(); }
-
-function esc(s) {
-  return String(s ?? '')
-    .replaceAll('&','&amp;').replaceAll('<','&lt;')
-    .replaceAll('>','&gt;').replaceAll('"','&quot;');
-}
-
-function cap(s) { const str=String(s||''); return str?str.charAt(0).toUpperCase()+str.slice(1):''; }
 function nextId(arr) { let max=0; for(const item of arr||[]) max=Math.max(max,Number(item.id)||0); return max+1; }
-
-function parseCookies(req) {
-  const raw=req.headers.cookie||''; const out={};
-  raw.split(';').map(s=>s.trim()).filter(Boolean).forEach(pair=>{
-    const idx=pair.indexOf('='); if(idx>-1) out[pair.slice(0,idx)]=decodeURIComponent(pair.slice(idx+1));
-  }); return out;
-}
-
-function setCookie(res,name,value,maxAgeSec) {
-  res.setHeader('Set-Cookie',`${name}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAgeSec}`);
-}
-function clearCookie(res,name) { res.setHeader('Set-Cookie',`${name}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`); }
-
-function safeReadJson(filePath) {
-  if(!fs.existsSync(filePath)) return null;
-  try { return JSON.parse(fs.readFileSync(filePath,'utf8')); } catch(err) { console.error('Failed reading JSON DB:',err); return null; }
-}
-
-function writeJsonAtomic(filePath,data) {
-  const dir=path.dirname(filePath);
-  if(!fs.existsSync(dir)) fs.mkdirSync(dir,{recursive:true});
-  const tmp=filePath+'.tmp';
-  fs.writeFileSync(tmp,JSON.stringify(data,null,2),'utf8');
-  fs.renameSync(tmp,filePath);
-}
 
 function makeDivisionsTemplate() {
   return {
