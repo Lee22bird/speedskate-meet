@@ -3631,7 +3631,7 @@ app.get('/portal/meet/:meetId/relay-builder', requireRole('meet_director'), (req
         <div class="row between center" style="margin-bottom:12px">
           <div>
             <h3 style="margin:0">${esc(type)} Relays</h3>
-            <div class="note">Enable the age groups you want, then adjust labels/distances as needed.</div>
+            <div class="note">Enable the age groups you want, adjust labels/distances, then click Save Relay Builder.</div>
           </div>
           <button class="btn2 btn-sm" type="button" onclick="this.closest('.relay-type-card').querySelectorAll('input[type=checkbox]').forEach(cb=>cb.checked=true)">Select ${esc(type)}</button>
         </div>
@@ -3661,7 +3661,7 @@ app.get('/portal/meet/:meetId/relay-builder', requireRole('meet_director'), (req
     </div>
 
     ${req.query.saved?'<div class="good" style="margin-bottom:12px">✅ Saved.</div>':''}
-    ${req.query.added?`<div class="good" style="margin-bottom:12px">✅ Added ${esc(req.query.added)} relay race(s).</div>`:''}
+    ${req.query.added?`<div class="good" style="margin-bottom:12px">✅ Relay Builder saved. Added ${esc(req.query.added)} new relay race(s).</div>`:''}
 
     <div class="card" style="margin-top:16px">
       <style>
@@ -3675,14 +3675,17 @@ app.get('/portal/meet/:meetId/relay-builder', requireRole('meet_director'), (req
       <div class="row between center" style="margin-bottom:12px">
         <div>
           <h2 style="margin:0">Quick Add MSSL-Style Relay Set</h2>
-          <div class="note">Professional card layout matching the Meet Builder. Enable only the relay groups you want.</div>
+          <div class="note">Enable relay groups, adjust labels/distances, then click Save Relay Builder. This page does not autosave.</div>
         </div>
-        <button class="btn2 btn-sm" type="button" onclick="document.querySelectorAll('.relay-type-card input[type=checkbox]').forEach(cb=>cb.checked=true)">Select All</button>
+        <div class="action-row">
+          <button class="btn2 btn-sm" type="button" onclick="document.querySelectorAll('.relay-type-card input[type=checkbox]').forEach(cb=>cb.checked=true)">Select All</button>
+          <button class="btn-sky btn-sm" type="submit" form="relayBuilderForm">Save Relay Builder</button>
+        </div>
       </div>
-      <form method="POST" action="/portal/meet/${meet.id}/relay-builder/add-template">
+      <form id="relayBuilderForm" method="POST" action="/portal/meet/${meet.id}/relay-builder/add-template">
         ${templateGroups}
         <div class="action-row" style="margin-top:16px">
-          <button class="btn-sky" type="submit">Add Selected Relay Races</button>
+          <button class="btn-sky" type="submit">Save Relay Builder</button>
         </div>
       </form>
     </div>
@@ -3720,7 +3723,7 @@ app.post('/portal/meet/:meetId/relay-builder/add-template', requireRole('meet_di
     added+=1;
   });
   if(added>0) { meet.updatedAt=nowIso(); saveDb(req.db); }
-  res.redirect(`/portal/meet/${meet.id}/relay-builder?added=${added}`);
+  res.redirect(`/portal/meet/${meet.id}/relay-builder?saved=1&added=${added}`);
 });
 
 app.post('/portal/meet/:meetId/relay-builder/delete', requireRole('meet_director'), (req, res) => {
