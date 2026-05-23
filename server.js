@@ -3695,7 +3695,7 @@ function timeTrialLeaderboards(meet, race) {
   });
 
   const byGroup = (meet.openGroups || []).filter(g => g.timeTrial).map(g => ({
-    group,
+    group: g,
     rows: withMeta.filter(e => String(e.groupId || '') === String(g.id)).slice(0,3),
   })).filter(x => x.rows.length);
 
@@ -5695,6 +5695,7 @@ app.post('/meet/:meetId/alerts/subscribe', (req, res) => {
 app.get('/meet/:meetId/live', (req, res) => {
   const db=loadDb(); const meet=getMeetOr404(db,req.params.meetId); const data=getSessionUser(req);
   if(!isPublicMeet(meet)) return res.redirect('/meets');
+  rebuildTimeTrialRace(meet);
   const info=currentRaceInfo(meet); const current=info.current;
   const lanes=current?laneRowsForRace(current,meet):[];
   const recent=recentClosedRaces(meet,5);
@@ -5735,20 +5736,24 @@ app.get('/meet/:meetId/live', (req, res) => {
       </div>
     </div>
     ${current&&current.isTimeTrial?(()=>{
-      const boards=timeTrialLeaderboards(meet,current);
-      const cardRows=(title,rows)=>`<div class="card"><h2>${title}</h2><div class="podium-grid">${(rows||[]).slice(0,3).map((e,i)=>`
+      let boards={overallFemale:[],overallMale:[],byGroup:[]};
+      try { boards=timeTrialLeaderboards(meet,current)||boards; } catch(err) { console.error('Live TT leaderboard error:', err); }
+      boards.overallFemale=Array.isArray(boards.overallFemale)?boards.overallFemale:[];
+      boards.overallMale=Array.isArray(boards.overallMale)?boards.overallMale:[];
+      boards.byGroup=Array.isArray(boards.byGroup)?boards.byGroup:[];
+      const cardRows=(title,rows)=>`<div class="card"><h2>${title}</h2><div class="podium-grid">${(Array.isArray(rows)?rows:[]).slice(0,3).map((e,i)=>`
         <div class="podium-card">
           <div class="podium-place">${['🥇','🥈','🥉'][i]}</div>
           <div class="podium-name">${esc(e.skaterName||'')}</div>
           <div class="podium-team">${esc(e.team||'')}</div>
-          <div style="font-family:Barlow Condensed,sans-serif;font-size:32px;font-weight:900;color:var(--sky2);margin-top:6px">${esc(e.time)}</div>
+          <div style="font-family:Barlow Condensed,sans-serif;font-size:32px;font-weight:900;color:var(--sky2);margin-top:6px">${esc(e.time||'')}</div>
         </div>`).join('')||'<div class="muted">No times posted yet.</div>'}</div></div>`;
       return `<div class="spacer"></div>
         <div class="grid-2">
           ${cardRows('⏱ Overall Girls/Women', boards.overallFemale)}
           ${cardRows('⏱ Overall Boys/Men', boards.overallMale)}
         </div>
-        ${boards.byGroup.length?`<div class="spacer"></div><div class="grid-2">${boards.byGroup.map(s=>cardRows('Top 3 — '+esc(s.group.label), s.rows)).join('')}</div>`:''}`;
+        ${boards.byGroup.length?`<div class="spacer"></div><div class="grid-2">${boards.byGroup.map(s=>cardRows('Top 3 — '+esc(s?.group?.label||'Group'), s?.rows||[])).join('')}</div>`:''}`;
     })():''}
     <script>setTimeout(()=>location.reload(),20000);</script>`}));
 });
