@@ -1,9 +1,6 @@
 const ACTIVE_PRICING_FIELDS = [
   'baseEntryFee',
   'additionalRaceFee',
-  'relay2PersonFee',
-  'relay3PersonFee',
-  'relay4PersonFee',
   'maxRegistrationFee',
 ];
 
@@ -14,6 +11,9 @@ const LEGACY_PRICING_FIELDS = [
   'quadEventFee',
   'relayEventFee',
   'timeTrialEventFee',
+  'relay2PersonFee',
+  'relay3PersonFee',
+  'relay4PersonFee',
 ];
 
 const GLOBAL_PRICING_FIELDS = [

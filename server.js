@@ -468,12 +468,7 @@ function migrateMeet(meet,fallbackOwnerId) {
     paid:!!reg.paid, checkedIn:!!reg.checkedIn, totalCost:Number(reg.totalCost||0),
     options:{challengeUp:!!reg.options?.challengeUp, novice:!!reg.options?.novice,
       elite:!!reg.options?.elite, open:!!reg.options?.open, quad:!!reg.options?.quad,
-      timeTrials:!!reg.options?.timeTrials,
-      relays:!!reg.options?.relays,
-      relay2Person:!!reg.options?.relay2Person,
-      relay3Person:!!reg.options?.relay3Person,
-      relay4Person:!!reg.options?.relay4Person,
-      skateability:!!reg.options?.skateability, skateabilityGroupId:String(reg.options?.skateabilityGroupId||'')},
+      timeTrials:!!reg.options?.timeTrials, relays:!!reg.options?.relays, relay2Person:!!reg.options?.relay2Person, relay3Person:!!reg.options?.relay3Person, relay4Person:!!reg.options?.relay4Person, skateability:!!reg.options?.skateability, skateabilityGroupId:String(reg.options?.skateabilityGroupId||'')},
   }));
 }
 
@@ -562,11 +557,8 @@ function makeSetupPresetFromMeet(db, meet, name, ownerUserId) {
     eliteEventFee: Number(meet.eliteEventFee || 0),
     openEventFee: Number(meet.openEventFee || 0),
     quadEventFee: Number(meet.quadEventFee || 0),
-    relayEventFee: Number(meet.relayEventFee || 0), // legacy compatibility
-    relay2PersonFee: Number(meet.relay2PersonFee || 0),
-    relay3PersonFee: Number(meet.relay3PersonFee || 0),
-    relay4PersonFee: Number(meet.relay4PersonFee || 0),
-    timeTrialEventFee: Number(meet.timeTrialEventFee || 0), // legacy compatibility
+    relayEventFee: Number(meet.relayEventFee || 0),
+    timeTrialEventFee: Number(meet.timeTrialEventFee || 0),
     additionalRaceFee: Number(meet.additionalRaceFee || 0),
     maxRegistrationFee: Number(meet.maxRegistrationFee || 0),
     trackLength: Number(meet.trackLength || 100),
@@ -797,19 +789,7 @@ function pricingFieldsFromMeet(meet) {
   return {
     baseEntryFee: Number(meet?.baseEntryFee || 0),
     additionalRaceFee: Number(meet?.additionalRaceFee || 0),
-    relay2PersonFee: Number(meet?.relay2PersonFee || 0),
-    relay3PersonFee: Number(meet?.relay3PersonFee || 0),
-    relay4PersonFee: Number(meet?.relay4PersonFee || 0),
     maxRegistrationFee: Number(meet?.maxRegistrationFee || 0),
-
-    // Legacy fields are intentionally kept on the meet object for old data/presets,
-    // but the simplified registration pricing model no longer uses them.
-    noviceEventFee: Number(meet?.noviceEventFee || 0),
-    eliteEventFee: Number(meet?.eliteEventFee || 0),
-    openEventFee: Number(meet?.openEventFee || 0),
-    quadEventFee: Number(meet?.quadEventFee || 0),
-    relayEventFee: Number(meet?.relayEventFee || 0),
-    timeTrialEventFee: Number(meet?.timeTrialEventFee || 0),
   };
 }
 
@@ -818,13 +798,9 @@ function buildRegistrationPricingPreview(meet) {
   return buildCostWidget(
     fees.baseEntryFee,
     fees.additionalRaceFee,
-    fees.relay2PersonFee,
-    fees.relay3PersonFee,
-    fees.relay4PersonFee,
     fees.maxRegistrationFee
   );
 }
-
 
 function racingSoonLabel(delta) {
   if(delta<=0) return 'NOW'; if(delta===1) return 'IN STAGING';
@@ -2927,16 +2903,13 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
                 <div><label>Close Date</label><input type="date" name="registrationCloseDate" value="${esc(meet.registrationCloseAt?meet.registrationCloseAt.slice(0,10):'')}" /></div>
                 <div><label>Close Time</label><input type="time" name="registrationCloseTime" value="${esc(meet.registrationCloseAt?meet.registrationCloseAt.slice(11,16):'')}" /></div>
               </div>
-              <div style="margin-bottom:20px"><h3 style="margin:12px 0 12px 0;font-size:14px;font-weight:600">Registration Pricing</h3></div>
-              <div class="setup-fields" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px">
-                <div><label>Base Registration</label><input type="number" name="baseEntryFee" value="${esc(String(meet.baseEntryFee||0))}" min="0" /><div class="note">Standard fee for each skater.</div></div>
-                <div><label>Additional Race Fee</label><input type="number" name="additionalRaceFee" value="${esc(String(meet.additionalRaceFee||0))}" min="0" /><div class="note">Charged when Additional Race is selected.</div></div>
-                <div><label>2 Person Relay Fee</label><input type="number" name="relay2PersonFee" value="${esc(String(meet.relay2PersonFee||0))}" min="0" /></div>
-                <div><label>3 Person Relay Fee</label><input type="number" name="relay3PersonFee" value="${esc(String(meet.relay3PersonFee||0))}" min="0" /></div>
-                <div><label>4 Person Relay Fee</label><input type="number" name="relay4PersonFee" value="${esc(String(meet.relay4PersonFee||0))}" min="0" /></div>
+              <div style="margin-bottom:20px"><h3 style="margin:12px 0 12px 0;font-size:14px;font-weight:600">Base & Event Fees</h3></div>
+              <div class="setup-fields" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px">
+                <div><label>Base Registration</label><input type="number" name="baseEntryFee" value="${esc(String(meet.baseEntryFee||0))}" min="0" /><div class="note">Covers the first selected event category.</div></div>
+                <div><label>Additional Event Fee</label><input type="number" name="additionalRaceFee" value="${esc(String(meet.additionalRaceFee||0))}" min="0" /><div class="note">Charged once for each selected event category after the first.</div></div>
                 <div><label>Max Registration Cap</label><input type="number" name="maxRegistrationFee" value="${esc(String(meet.maxRegistrationFee||0))}" min="0" /><div class="note">0 = no cap</div></div>
               </div>
-              <div style="margin-top:12px"><div class="note" style="margin:0">Total cost = base registration + selected relay/additional race fees. Max cap applies when greater than 0.</div></div>
+              <div style="margin-top:12px"><div class="note" style="margin:0">Total cost = base fee + selected event fees. Max cap applies when greater than 0.</div></div>
               <div class="setup-fields" style="margin-top:20px">
                 <div><label>Status</label>
                   <select name="status">
@@ -3189,9 +3162,6 @@ function saveMeetFields(meet, body, db) {
   meet.tiebreaker=String(body.tiebreaker||'d2')==='sr832'?'sr832':'d2';
   meet.baseEntryFee=Number(String(body.baseEntryFee||'0').trim()||0);
   meet.additionalRaceFee=Number(String(body.additionalRaceFee||'0').trim()||0);
-  meet.relay2PersonFee=Number(String(body.relay2PersonFee||'0').trim()||0);
-  meet.relay3PersonFee=Number(String(body.relay3PersonFee||'0').trim()||0);
-  meet.relay4PersonFee=Number(String(body.relay4PersonFee||'0').trim()||0);
   meet.maxRegistrationFee=Number(String(body.maxRegistrationFee||'0').trim()||0);
   meet.groups.forEach((group,gi)=>{
     for(const divKey of ['novice','elite']) {
@@ -3263,20 +3233,27 @@ app.post('/portal/meet/:meetId/setup-presets/load', requireRole('meet_director')
   meet.skateabilityGroups = JSON.parse(JSON.stringify(preset.skateabilityGroups || preset.additionalRaces || []));
   meet.tiebreaker = preset.tiebreaker || meet.tiebreaker;
   meet.baseEntryFee = Number(preset.baseEntryFee || 0);
+  // Load new global pricing fields with migration from old per-group costs
+  if(preset.noviceEventFee !== undefined) {
+    meet.noviceEventFee = Number(preset.noviceEventFee || 0);
+  } else {
+    // Migration: extract from first group with novice cost
+    const oldCost = (preset.groups||[]).reduce((c,g)=>g.divisions?.novice?.cost||c,0);
+    meet.noviceEventFee = Number(oldCost || 0);
+  }
+  if(preset.eliteEventFee !== undefined) {
+    meet.eliteEventFee = Number(preset.eliteEventFee || 0);
+  } else {
+    // Migration: extract from first group with elite cost
+    const oldCost = (preset.groups||[]).reduce((c,g)=>g.divisions?.elite?.cost||c,0);
+    meet.eliteEventFee = Number(oldCost || 0);
+  }
+  meet.openEventFee = Number(preset.openEventFee || 0);
+  meet.quadEventFee = Number(preset.quadEventFee || 0);
+  meet.relayEventFee = Number(preset.relayEventFee || 0);
+  meet.timeTrialEventFee = Number(preset.timeTrialEventFee || 0);
   meet.additionalRaceFee = Number(preset.additionalRaceFee || 0);
-  meet.relay2PersonFee = Number(preset.relay2PersonFee || 0);
-  meet.relay3PersonFee = Number(preset.relay3PersonFee || 0);
-  meet.relay4PersonFee = Number(preset.relay4PersonFee || 0);
   meet.maxRegistrationFee = Number(preset.maxRegistrationFee || 0);
-
-  // Preserve legacy pricing fields for older presets/data, but they are no longer used
-  // by the simplified registration pricing model.
-  meet.noviceEventFee = Number(preset.noviceEventFee || meet.noviceEventFee || 0);
-  meet.eliteEventFee = Number(preset.eliteEventFee || meet.eliteEventFee || 0);
-  meet.openEventFee = Number(preset.openEventFee || meet.openEventFee || 0);
-  meet.quadEventFee = Number(preset.quadEventFee || meet.quadEventFee || 0);
-  meet.relayEventFee = Number(preset.relayEventFee || meet.relayEventFee || 0);
-  meet.timeTrialEventFee = Number(preset.timeTrialEventFee || meet.timeTrialEventFee || 0);
   meet.trackLength = preset.trackLength || meet.trackLength;
   meet.lanes = preset.lanes || meet.lanes;
   meet.timeTrialsEnabled = !!preset.timeTrialsEnabled;
@@ -3446,7 +3423,7 @@ app.get('/portal/meet/:meetId/relay-builder', requireRole('meet_director'), (req
   res.send(pageShell({title:'Relay Builder',user:req.user,meet,activeTab:'relay-builder', bodyHtml:`
     <div class="builder-banner" style="background:linear-gradient(135deg,#1d4ed8 0%,#3b82f6 100%);margin-bottom:18px">
       <h2>🔄 Relay Builder</h2>
-      <div class="sub">Create 2-person, 3-person, and 4-person relay races. Registration can charge each relay type separately.</div>
+      <div class="sub">Create 2-person, 3-person, and 4-person relay races. Registration pricing counts each selected event category after the first as an additional event.</div>
     </div>
 
     ${req.query.saved?'<div class="good" style="margin-bottom:12px">✅ Saved.</div>':''}
@@ -3488,6 +3465,7 @@ app.get('/portal/meet/:meetId/relay-builder', requireRole('meet_director'), (req
       </table>
     </div>`:''}` }));
 });
+
 
 app.post('/portal/meet/:meetId/relay-builder/add-template', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
@@ -3552,7 +3530,7 @@ app.get('/portal/meet/:meetId/open-builder', requireRole('meet_director'), (req,
           <div>
             <label>Open Distance</label>
             <input name="og_${i}_distance" value="${esc(og.distance)}" placeholder="${esc(def?.defaultDistance||'')}" />
-            <div class="note">Pricing is handled by Base Registration and optional add-ons in Meet Setup.</div>
+            <div class="note">Uses the global Open Event fee from Meet Setup.</div>
           </div>
           <div style="display:flex;align-items:flex-end">
             ${liveRace?`<div class="chip chip-green">Open Entries: ${(liveRace.laneEntries||[]).length}</div>`:`<div class="note">Open race generated on save.</div>`}
@@ -3664,7 +3642,7 @@ app.get('/portal/meet/:meetId/quad-builder', requireRole('meet_director'), (req,
             <div class="note">Default: ${esc(def?.distances[1]||'')}</div>
           </div>
         </div>
-        <div class="note" style="margin-top:8px">Pricing is handled by Base Registration and optional add-ons in Meet Setup.${liveRaces.length?` ${liveRaces.map(r=>`${esc(r.distanceLabel)}: ${(r.laneEntries||[]).length} entries`).join(' | ')}`:''}</div>
+        <div class="note" style="margin-top:8px">Uses the global Quad Event fee from Meet Setup.${liveRaces.length?` ${liveRaces.map(r=>`${esc(r.distanceLabel)}: ${(r.laneEntries||[]).length} entries`).join(' | ')}`:''}</div>
       </div>`;
     });
     return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">${cards.join('')}</div>`;
@@ -3753,10 +3731,7 @@ app.get('/meet/:meetId/register', (req, res) => {
             <div class="toggle-row"><div><div class="toggle-row-label">Open</div></div>${toggleSwitch('open',false)}</div>
             ${(meet.quadGroups||[]).some(g=>g.enabled)?`<div class="toggle-row"><div><div class="toggle-row-label">Quad</div></div>${toggleSwitch('quad',false)}</div>`:''}
             ${meet.timeTrialsEnabled?`<div class="toggle-row"><div><div class="toggle-row-label">Time Trials</div></div>${toggleSwitch('timeTrials',false)}</div>`:''}
-            ${meet.relayEnabled?`
-              <div class="toggle-row"><div><div class="toggle-row-label">2 Person Relay</div></div>${toggleSwitch('relay2Person',false)}</div>
-              <div class="toggle-row"><div><div class="toggle-row-label">3 Person Relay</div></div>${toggleSwitch('relay3Person',false)}</div>
-              <div class="toggle-row"><div><div class="toggle-row-label">4 Person Relay</div></div>${toggleSwitch('relay4Person',false)}</div>`:''}
+            ${meet.relayEnabled?`<div class="toggle-row"><div><div class="toggle-row-label">2 Person Relay</div></div>${toggleSwitch('relay2Person',false)}</div><div class="toggle-row"><div><div class="toggle-row-label">3 Person Relay</div></div>${toggleSwitch('relay3Person',false)}</div><div class="toggle-row"><div><div class="toggle-row-label">4 Person Relay</div></div>${toggleSwitch('relay4Person',false)}</div>`:''}
             ${(meet.skateabilityGroups||[]).length?`
               <div class="toggle-row"><div><div class="toggle-row-label">Additional Races</div><div class="toggle-row-desc">Extra race division — select your group below if enabled</div></div>${toggleSwitch('skateability',false)}</div>
               <div id="skateability-group-row" style="display:none">
@@ -3791,7 +3766,7 @@ app.post('/meet/:meetId/register', (req, res) => {
   const finalGroup=challengeAdjustedGroup(meet,baseGroup,!!req.body.challengeUp);
   const meetNumber=(meet.registrations||[]).reduce((max,r)=>Math.max(max,Number(r.meetNumber)||0),0)+1;
   const regEmail=String(req.body.email||'').trim();
-  const regOpts={challengeUp:!!req.body.challengeUp,novice:!!req.body.novice,elite:!!req.body.elite,open:!!req.body.open,quad:!!req.body.quad,skateability:!!req.body.skateability,skateabilityGroupId:String(req.body.skateabilityGroupId||''),timeTrials:!!req.body.timeTrials,relays:!!req.body.relays,relay2Person:!!req.body.relay2Person,relay3Person:!!req.body.relay3Person,relay4Person:!!req.body.relay4Person};
+  const regOpts={challengeUp:!!req.body.challengeUp,novice:!!req.body.novice,elite:!!req.body.elite,open:!!req.body.open,quad:!!req.body.quad,skateability:!!req.body.skateability,skateabilityGroupId:String(req.body.skateabilityGroupId||''),timeTrials:!!req.body.timeTrials,relay2Person:!!req.body.relay2Person,relay3Person:!!req.body.relay3Person,relay4Person:!!req.body.relay4Person,relays:!!(req.body.relay2Person||req.body.relay3Person||req.body.relay4Person)};
   const totalCost=calcRegistrationCost(meet,regOpts);
   meet.registrations.push({
     id:nextId(meet.registrations),createdAt:nowIso(),
@@ -3866,9 +3841,7 @@ function registrationForm(meet,reg,action,title) {
             <div class="toggle-row"><div><div class="toggle-row-label">Open</div></div>${toggleSwitch('open',!!reg.options?.open)}</div>
             ${(meet.quadGroups||[]).some(g=>g.enabled)?`<div class="toggle-row"><div><div class="toggle-row-label">Quad</div></div>${toggleSwitch('quad',!!reg.options?.quad)}</div>`:''}
             <div class="toggle-row"><div><div class="toggle-row-label">Time Trials</div></div>${toggleSwitch('timeTrials',!!reg.options?.timeTrials)}</div>
-            <div class="toggle-row"><div><div class="toggle-row-label">2 Person Relay</div></div>${toggleSwitch('relay2Person',!!reg.options?.relay2Person)}</div>
-            <div class="toggle-row"><div><div class="toggle-row-label">3 Person Relay</div></div>${toggleSwitch('relay3Person',!!reg.options?.relay3Person)}</div>
-            <div class="toggle-row"><div><div class="toggle-row-label">4 Person Relay</div></div>${toggleSwitch('relay4Person',!!reg.options?.relay4Person)}</div>
+            ${meet.relayEnabled?`<div class="toggle-row"><div><div class="toggle-row-label">2 Person Relay</div></div>${toggleSwitch('relay2Person',!!reg.options?.relay2Person)}</div><div class="toggle-row"><div><div class="toggle-row-label">3 Person Relay</div></div>${toggleSwitch('relay3Person',!!reg.options?.relay3Person)}</div><div class="toggle-row"><div><div class="toggle-row-label">4 Person Relay</div></div>${toggleSwitch('relay4Person',!!reg.options?.relay4Person)}</div>`:''}
             ${(meet.skateabilityGroups||[]).length?`
               <div class="toggle-row"><div><div class="toggle-row-label">Additional Races</div><div class="toggle-row-desc">Extra race division</div></div>${toggleSwitch('skateability',!!reg.options?.skateability)}</div>
               <div id="edit-skateability-group-row" style="${reg.options?.skateability?'':'display:none'}">
@@ -3909,7 +3882,7 @@ app.get('/portal/meet/:meetId/registered', requireRole('meet_director'), (req, r
       <td><strong>${esc(r.name)}</strong>${sponsorLineHtml(r.sponsor||'')}</td>
       <td>${esc(r.age)}</td><td>${esc(r.team)}</td>
       <td>${esc(r.divisionGroupLabel||'')}${r.options?.challengeUp?`<div class="note">↑ from ${esc(r.originalDivisionGroupLabel||'')}</div>`:''}</td>
-      <td>${['challengeUp','novice','elite','open','quad','skateability','timeTrials','relay2Person','relay3Person','relay4Person','relays'].filter(k=>r.options?.[k]).map(k=>k==='challengeUp'?'CU':(k==='skateability'?'Additional':(k==='relay2Person'?'2P Relay':(k==='relay3Person'?'3P Relay':(k==='relay4Person'?'4P Relay':cap(k)))))).join(', ')||'—'}</td>
+      <td>${['challengeUp','novice','elite','open','quad','skateability','timeTrials','relay2Person','relay3Person','relay4Person'].filter(k=>r.options?.[k]).map(k=>k==='challengeUp'?'CU':(k==='skateability'?'Additional':(k==='relay2Person'?'2 Person Relay':(k==='relay3Person'?'3 Person Relay':(k==='relay4Person'?'4 Person Relay':cap(k)))))).join(', ')||'—'}</td>
       <td>$${esc(r.totalCost)}</td>
       <td>${r.paid?`<span class="good">✔</span>`:'—'}</td>
       <td>${r.checkedIn?`<span class="good">✔</span>`:'—'}</td>
@@ -3958,7 +3931,7 @@ app.post('/portal/meet/:meetId/registered/:regId/edit', requireRole('meet_direct
   const compAge=usarsAge(birthdate,meet.date)||Number(reg.age||0);
   const baseGroup=findAgeGroup(meet.groups,compAge,gender);
   const finalGroup=challengeAdjustedGroup(meet,baseGroup,!!req.body.challengeUp);
-  const regOpts={challengeUp:!!req.body.challengeUp,novice:!!req.body.novice,elite:!!req.body.elite,open:!!req.body.open,quad:!!req.body.quad,skateability:!!req.body.skateability,skateabilityGroupId:String(req.body.skateabilityGroupId||''),timeTrials:!!req.body.timeTrials,relays:!!req.body.relays,relay2Person:!!req.body.relay2Person,relay3Person:!!req.body.relay3Person,relay4Person:!!req.body.relay4Person};
+  const regOpts={challengeUp:!!req.body.challengeUp,novice:!!req.body.novice,elite:!!req.body.elite,open:!!req.body.open,quad:!!req.body.quad,skateability:!!req.body.skateability,skateabilityGroupId:String(req.body.skateabilityGroupId||''),timeTrials:!!req.body.timeTrials,relay2Person:!!req.body.relay2Person,relay3Person:!!req.body.relay3Person,relay4Person:!!req.body.relay4Person,relays:!!(req.body.relay2Person||req.body.relay3Person||req.body.relay4Person)};
   Object.assign(reg,{name:String(req.body.name||'').trim(),birthdate,age:compAge,gender,team:String(req.body.team||'Midwest Racing').trim()||'Midwest Racing',sponsor:String(req.body.sponsor||'').trim(),originalDivisionGroupId:baseGroup?.id||'',originalDivisionGroupLabel:baseGroup?.label||'',divisionGroupId:finalGroup?.id||'',divisionGroupLabel:finalGroup?.label||'Unassigned',options:regOpts,totalCost:calcRegistrationCost(meet,regOpts)});
   generateAdditionalRacesForMeet(meet); rebuildRaceAssignments(meet); saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/registered`);
 });
