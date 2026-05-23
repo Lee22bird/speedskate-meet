@@ -858,12 +858,26 @@ function generateConfiguredRacesForMeet(meet) {
   // - regenerates Open/Quad/Additional races
   // - collapses Time Trials to one unified session
   // - preserves Relay races created by Relay Builder
+  // - preserves Additional Race IDs so Block Builder drops survive reloads
   const relayRaces = (meet.races || []).filter(r => r.isRelayRace);
-  const relayIds = new Set(relayRaces.map(r => String(r.id)));
+  const additionalRacesBefore = (meet.races || []).filter(r =>
+    r.isAdditionalRace ||
+    r.isSkateabilityRace ||
+    String(r.division || '') === 'additional' ||
+    String(r.division || '') === 'skateability'
+  );
 
   generateBaseRacesForMeet(meet);
   generateOpenRacesForMeet(meet);
   generateQuadRacesForMeet(meet);
+
+  // Put previous additional races back temporarily so generateAdditionalRacesForMeet()
+  // can match parentRaceKey/group/distance and reuse the same IDs.
+  const idsAfterCore = new Set((meet.races || []).map(r => String(r.id)));
+  for (const race of additionalRacesBefore) {
+    if (!idsAfterCore.has(String(race.id))) meet.races.push(race);
+  }
+
   generateAdditionalRacesForMeet(meet);
 
   const existingIds = new Set((meet.races || []).map(r => String(r.id)));
