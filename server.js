@@ -53,7 +53,6 @@ const {
 
 const {
   hasRole,
-  isSuperAdmin,
   canEditMeet,
 } = require('./utils/auth');
 
@@ -563,6 +562,77 @@ function makeSetupPresetFromMeet(db, meet, name, ownerUserId) {
       distanceLabel: r.distanceLabel, dayIndex: r.dayIndex, blockId: r.blockId || '', blockName: r.blockName || ''
     })),
   };
+}
+
+function presetRaceSignature(row) {
+  return [
+    String(row?.groupId || ''),
+    String(row?.division || ''),
+    String(row?.dayIndex || ''),
+    String(row?.distanceLabel || ''),
+  ].join('|');
+}
+
+function restorePresetBlocksIntoMeet(preset, meet) {
+  const presetBlocks = Array.isArray(preset?.blocks) ? preset.blocks : [];
+  if (!presetBlocks.length) {
+    ensureAtLeastOneBlock(meet);
+    return;
+  }
+
+  const presetRaceOrder = Array.isArray(preset?.raceOrder) ? preset.raceOrder : [];
+  const presetRaceById = new Map(
+    presetRaceOrder.map(row => [String(row.raceId || ''), row])
+  );
+
+  const currentRaceIds = new Set((meet.races || []).map(r => String(r.id || '')));
+  const currentBySignature = new Map();
+
+  for (const race of [...(meet.races || [])].sort((a, b) => Number(a.orderHint || 0) - Number(b.orderHint || 0))) {
+    const key = presetRaceSignature(race);
+    if (!currentBySignature.has(key)) currentBySignature.set(key, []);
+    currentBySignature.get(key).push(String(race.id || ''));
+  }
+
+  const usedRaceIds = new Set();
+
+  meet.blocks = presetBlocks.map((block, idx) => {
+    const nextBlock = JSON.parse(JSON.stringify(block || {}));
+    nextBlock.id = String(nextBlock.id || ('b' + (idx + 1)));
+    nextBlock.name = String(nextBlock.name || `Block ${idx + 1}`);
+    nextBlock.day = String(nextBlock.day || 'Day 1');
+    nextBlock.type = String(nextBlock.type || 'race');
+    nextBlock.notes = String(nextBlock.notes || '');
+
+    const restoredRaceIds = [];
+
+    for (const originalRaceId of nextBlock.raceIds || []) {
+      const raceId = String(originalRaceId || '');
+
+      if (currentRaceIds.has(raceId) && !usedRaceIds.has(raceId)) {
+        restoredRaceIds.push(raceId);
+        usedRaceIds.add(raceId);
+        continue;
+      }
+
+      const presetRace = presetRaceById.get(raceId);
+      if (!presetRace) continue;
+
+      const signature = presetRaceSignature(presetRace);
+      const candidates = currentBySignature.get(signature) || [];
+      const replacement = candidates.find(id => !usedRaceIds.has(id));
+
+      if (replacement) {
+        restoredRaceIds.push(replacement);
+        usedRaceIds.add(replacement);
+      }
+    }
+
+    nextBlock.raceIds = restoredRaceIds;
+    return nextBlock;
+  });
+
+  ensureAtLeastOneBlock(meet);
 }
 
 function ensureAtLeastOneBlock(meet) {
@@ -1679,8 +1749,7 @@ app.get('/help', (req, res) => {
             <li>Meet Builder — set up divisions, distances, and open registration</li>
             <li>Open/Quad/Relay Builders — enable any special race types</li>
             <li>Skaters register publicly (or you register them in the portal)</li>
-            <li>Block Builder → Generate Blocks — create your race schedule</li>
-            <li>Block Builder — drag races into blocks, add breaks and lunch</li>
+            <li>Block Builder — manually create blocks, drag races into place, and add breaks/lunch/awards</li>
             <li>Check-In — mark who showed up on race day</li>
             <li>Block Builder → Rebuild — rebalance heats with actual attendees</li>
             <li>Race Day → Director panel — run the meet</li>
@@ -1695,9 +1764,7 @@ app.get('/help', (req, res) => {
       <div class="stack">
         <div><h3>What does "Save Meet" do?</h3><p style="line-height:1.7;color:var(--text)">Save Meet saves all your settings — name, date, venue, distances, toggles — without touching your races or block assignments. Use this whenever you update meet details.</p></div>
         <div class="hr"></div>
-        <div><h3>What does "Generate Blocks ⚠️" do in Block Builder?</h3><p style="line-height:1.7;color:var(--text)">Generate Blocks creates all races from your division settings. It will clear your existing block assignments, so only run it when you're ready to start fresh. It shows a confirmation dialog before doing anything.</p></div>
-        <div class="hr"></div>
-        <div><h3>What does "Rebuild Assignments" do?</h3><p style="line-height:1.7;color:var(--text)">Rebuild re-splits heats and reassigns lanes based on current registrations, while preserving your block structure. Use this after check-in to rebalance heats with skaters who actually showed up. It also automatically distributes skaters from the same team across different heats.</p></div>
+        <div><h3>What does "Rebuild Assignments" do?</h3><p style="line-height:1.7;color:var(--text)">Rebuild recalculates heats, finals, lane assignments, and race membership based on current registrations. Use it after late registrations, scratches, division changes, challenge-up changes, or lane count changes. Your manual Block Builder schedule is preserved.</p></div>
         <div class="hr"></div>
         <div><h3>What are D1, D2, D3?</h3><p style="line-height:1.7;color:var(--text)">D1, D2, and D3 are the three distance races per division per day — short, middle, and long. For example: 300m, 500m, 1000m. All three count toward overall standings points.</p></div>
         <div class="hr"></div>
@@ -1727,7 +1794,7 @@ app.get('/help', (req, res) => {
     <div class="card" style="margin-bottom:16px" id="block-builder">
       <h2 style="margin-bottom:16px">🧱 Block Builder</h2>
       <div class="stack">
-        <div><h3>How do I build my race schedule?</h3><p style="line-height:1.7;color:var(--text)">Click "Generate Blocks" to create all races from your division settings. Then click "+ Add Race Block" to create blocks (groups of races). Drag races from the Unassigned pile on the right into your blocks. Add dividers like Break, Lunch, Awards, and Practice between blocks.</p></div>
+        <div><h3>How do I build my race schedule?</h3><p style="line-height:1.7;color:var(--text)">Click "+ Add Race Block" to create blocks (groups of races). Drag races from the Unassigned pile on the right into your blocks. Add dividers like Break, Lunch, Awards, and Practice between blocks. Block Builder is manual so meet directors can protect proper race-day flow.</p></div>
         <div class="hr"></div>
         <div><h3>What are the colored tags on races?</h3><p style="line-height:1.7;color:var(--text)">🏁 Orange = Open race. 🛼 Purple = Quad race. ⏱ Blue = Time Trial. 🔄 Blue = Relay. Plain white = standard inline race.</p></div>
         <div class="hr"></div>
@@ -3240,17 +3307,21 @@ app.post('/portal/meet/:meetId/setup-presets/load', requireRole('meet_director')
   meet.relayEnabled = !!preset.relayEnabled;
   meet.judgesPanelRequired = !!preset.judgesPanelRequired;
 
-  // Blocks: import structure exactly but clear raceIds so races are regenerated fresh
-  meet.blocks = (preset.blocks || []).map(b => {
-    const nb = JSON.parse(JSON.stringify(b || {}));
-    nb.raceIds = [];
-    return nb;
-  });
+  // Presets should restore the director's block layout, not erase it.
+  // First rebuild the race structure from the preset settings, then map saved block raceIds
+  // onto the current meet's race IDs wherever possible.
+  generateBaseRacesForMeet(meet);
+  generateOpenRacesForMeet(meet);
+  generateQuadRacesForMeet(meet);
+  generateAdditionalRacesForMeet(meet);
+  rebuildRaceAssignments(meet);
+  restorePresetBlocksIntoMeet(preset, meet);
 
-  // Mirror skateability into additionalRaces for compatibility
+  // Mirror skateability into additionalRaces for compatibility.
   meet.additionalRaces = (meet.skateabilityGroups || []).map(g => ({ ...g }));
   // Preset pricing can change global fees, so refresh existing registration totals immediately.
   ensureRegistrationTotalsAndNumbers(meet);
+  ensureCurrentRace(meet);
   meet.updatedAt = nowIso();
   saveDb(req.db);
   res.redirect(`/portal/meet/${meet.id}/builder?presetLoaded=1`);
@@ -3944,7 +4015,15 @@ app.post('/portal/meet/:meetId/registered/:regId/delete', requireRole('meet_dire
 app.post('/portal/meet/:meetId/assign-races', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
-  rebuildRaceAssignments(meet); ensureCurrentRace(meet); saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/registered`);
+  rebuildRaceAssignments(meet);
+  ensureCurrentRace(meet);
+  saveDb(req.db);
+
+  if (String(req.query.returnTo || '') === 'blocks') {
+    return res.redirect(`/portal/meet/${meet.id}/blocks?rebuilt=1`);
+  }
+
+  res.redirect(`/portal/meet/${meet.id}/registered`);
 });
 
 // ── Check-In ──────────────────────────────────────────────────────────────────
@@ -4172,11 +4251,18 @@ app.get('/portal/meet/:meetId/blocks', requireRole('meet_director'), (req, res) 
             <button class="btn2 btn-sm" onclick="addDivider('awards','🏆 Awards')">🏆 Awards</button>
             <button class="btn2 btn-sm" onclick="addDivider('practice','⛸️ Practice')">⛸️ Practice</button>
           </div>
-          <form method="POST" action="/portal/meet/${meet.id}/assign-races" onsubmit="return confirm('Rebuild will re-split heats and reassign lanes.\n\nYour block structure is preserved.\n\nContinue?')"><button class="btn2" type="submit">Rebuild</button></form>
-          <form method="POST" action="/portal/meet/${meet.id}/blocks/generate" onsubmit="return confirm('⚠️ Generate Blocks will create races from your division settings.\n\nExisting block assignments will be cleared.\n\nContinue?')" style="display:inline">
-              <button class="btn2" type="submit">Generate Blocks ⚠️</button>
-            </form>
-            <a class="btn-orange" href="/portal/meet/${meet.id}/registered/print-race-list" target="_blank">Print Race List</a>
+          <form method="POST" action="/portal/meet/${meet.id}/assign-races?returnTo=blocks" onsubmit="return confirm('Rebuild recalculates heats, finals, race assignments, and lanes.\n\nYour manual block schedule is preserved.\n\nUse this after late registrations, scratches, division changes, challenge-up changes, or lane count changes.\n\nContinue?')"><button class="btn2" type="submit">Rebuild</button></form>
+          <a class="btn-orange" href="/portal/meet/${meet.id}/registered/print-race-list" target="_blank">Print Race List</a>
+        </div>
+
+        <div class="card card-sky" style="margin-top:16px;padding:16px 18px;background:#f8fafc">
+          <h3 style="margin-bottom:6px">🔄 Rebuild Races</h3>
+          <p class="note" style="margin-bottom:8px">
+            Use Rebuild after late registrations, scratches, division changes, challenge-up changes, or lane count changes.
+          </p>
+          <p style="margin:0;color:var(--text)">
+            Rebuild recalculates heats, finals, race assignments, and lanes while preserving your manual Block Builder schedule.
+          </p>
         </div>
       </div>
     </div>
@@ -4373,16 +4459,10 @@ app.post('/api/meet/:meetId/blocks/move-race', requireRole('meet_director'), (re
 app.post('/portal/meet/:meetId/blocks/generate', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
-  generateBaseRacesForMeet(meet);
-  generateOpenRacesForMeet(meet);
-  generateQuadRacesForMeet(meet);
-  generateAdditionalRacesForMeet(meet);
-  rebuildRaceAssignments(meet);
-  ensureAtLeastOneBlock(meet);
-  ensureCurrentRace(meet);
-  meet.updatedAt=nowIso();
-  saveDb(req.db);
-  res.redirect(`/portal/meet/${meet.id}/blocks`);
+
+  // Generate Blocks was intentionally retired because race-day block schedules
+  // need director-controlled ordering. Rebuild handles race structure only.
+  return res.redirect(`/portal/meet/${meet.id}/blocks?generateDisabled=1`);
 });
 
 // ── Race Day ──────────────────────────────────────────────────────────────────
