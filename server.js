@@ -236,14 +236,16 @@ function ageForReg(reg, meet) {
 }
 
 const OPEN_GROUP_DEFAULTS = [
-  { id: 'open_juv_girls',   label: 'Juvenile Girls',  ages: '9 & Under',  gender: 'girls', defaultDistance: '1500m' },
-  { id: 'open_juv_boys',    label: 'Juvenile Boys',   ages: '9 & Under',  gender: 'boys',  defaultDistance: '1500m' },
-  { id: 'open_fresh_girls', label: 'Freshman Girls',  ages: '10-13',      gender: 'girls', defaultDistance: '2000m' },
-  { id: 'open_fresh_boys',  label: 'Freshman Boys',   ages: '10-13',      gender: 'boys',  defaultDistance: '2000m' },
-  { id: 'open_sr_ladies',   label: 'Senior Ladies',   ages: '14 & Older', gender: 'women', defaultDistance: '3000m' },
-  { id: 'open_sr_men',      label: 'Senior Men',      ages: '14 & Older', gender: 'men',   defaultDistance: '5000m' },
-  { id: 'open_mast_ladies', label: 'Masters Ladies',  ages: '35 & Older', gender: 'women', defaultDistance: '1500m' },
-  { id: 'open_mast_men',    label: 'Masters Men',     ages: '35 & Older', gender: 'men',   defaultDistance: '2000m' },
+  { id: 'open_juv_girls',   label: 'Juvenile Girls',   ages: '9 & Under',  gender: 'girls', defaultDistance: '1500m' },
+  { id: 'open_juv_boys',    label: 'Juvenile Boys',    ages: '9 & Under',  gender: 'boys',  defaultDistance: '1500m' },
+  { id: 'open_fresh_girls', label: 'Freshman Girls',   ages: '10-13',      gender: 'girls', defaultDistance: '2000m' },
+  { id: 'open_fresh_boys',  label: 'Freshman Boys',    ages: '10-13',      gender: 'boys',  defaultDistance: '2000m' },
+  { id: 'open_soph_girls',  label: 'Sophomore Girls',  ages: '14-17',      gender: 'girls', defaultDistance: '2000m' },
+  { id: 'open_soph_boys',   label: 'Sophomore Boys',   ages: '14-17',      gender: 'boys',  defaultDistance: '2000m' },
+  { id: 'open_sr_ladies',   label: 'Senior Ladies',    ages: '14 & Older', gender: 'women', defaultDistance: '3000m' },
+  { id: 'open_sr_men',      label: 'Senior Men',       ages: '14 & Older', gender: 'men',   defaultDistance: '5000m' },
+  { id: 'open_mast_ladies', label: 'Masters Ladies',   ages: '35 & Older', gender: 'women', defaultDistance: '1500m' },
+  { id: 'open_mast_men',    label: 'Masters Men',      ages: '35 & Older', gender: 'men',   defaultDistance: '2000m' },
 ];
 
 function makeOpenGroupsTemplate() {
