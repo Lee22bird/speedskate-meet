@@ -57,11 +57,14 @@ const {
   canEditMeet,
 } = require('./utils/auth');
 
+const publicRoutes = require('./routes/publicRoutes');
+
 
 const app = express();
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json({ limit: '1mb' }));
 app.use('/public', express.static(path.join(__dirname, 'public')));
+app.use('/', publicRoutes);
 
 const PORT = process.env.PORT || 10000;
 const HOST = '0.0.0.0';
