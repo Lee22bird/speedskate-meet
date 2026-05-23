@@ -3095,14 +3095,14 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
         </div>
       </div>
     </div>
-    <form method="POST" action="/portal/meet/${meet.id}/builder/save" class="stack">
+    <form id="meetBuilderForm" method="POST" action="/portal/meet/${meet.id}/builder/save" class="stack">
       <div class="card setup-card">
         <div class="setup-head">
           <div>
             <h2 class="setup-title">Meet Setup</h2>
             <div class="setup-sub">Core meet details, venue, rules, and reusable presets.</div>
           </div>
-          <button class="btn2" type="submit" formaction="/portal/meet/${meet.id}/builder/save-meet">Save Meet</button>
+          <button class="btn2" type="submit" form="meetBuilderForm" formaction="/portal/meet/${meet.id}/builder/save-meet">Save Meet</button>
         </div>
         <div class="setup-body">
           <div class="setup-sections">
@@ -3187,14 +3187,10 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
                 <div>
                   <label>Load Setup</label>
                   <div style="display:flex;gap:8px;align-items:center;margin-top:6px">
-                    <form id="loadPresetForm" method="POST" action="/portal/meet/${meet.id}/setup-presets/load" onsubmit="return confirm('Load setup will overwrite current divisions, blocks, and race structure. Continue?')" style="display:flex;gap:8px;align-items:center;">
-                      <select id="presetSelect" name="presetId" style="min-width:220px;padding:6px">${presetSelectHtml}</select>
-                      <button id="loadPresetBtn" class="btn2 btn-sm" type="submit">Load Setup</button>
-                    </form>
-                    <form id="deletePresetForm" method="POST" action="/portal/meet/${meet.id}/setup-presets/delete" onsubmit="return confirm('Delete selected setup preset? This cannot be undone.')">
-                      <input type="hidden" name="presetId" id="deletePresetId" value="" />
-                      <button id="deletePresetBtn" class="btn-danger btn-sm" type="submit">Delete</button>
-                    </form>
+                    <select id="presetSelect" name="presetId" style="min-width:220px;padding:6px">${presetSelectHtml}</select>
+                      <button id="loadPresetBtn" class="btn2 btn-sm" type="submit" form="meetBuilderForm" formaction="/portal/meet/${meet.id}/setup-presets/load" onclick="return confirm('Load setup will overwrite current divisions, blocks, and race structure. Continue?')">Load Setup</button>
+                      <input type="hidden" name="deletePresetId" id="deletePresetId" value="" />
+                      <button id="deletePresetBtn" class="btn-danger btn-sm" type="submit" form="meetBuilderForm" formaction="/portal/meet/${meet.id}/setup-presets/delete" onclick="return confirm('Delete selected setup preset? This cannot be undone.')">Delete</button>
                   </div>
                   <script>
                     (function(){
@@ -3351,7 +3347,7 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
       <div class="card">
         <div class="row between center">
           <div class="muted">Save Meet saves all settings without touching races or blocks.</div>
-          <button class="btn2" type="submit" formaction="/portal/meet/${meet.id}/builder/save-meet">Save Meet</button>
+          <button class="btn2" type="submit" form="meetBuilderForm" formaction="/portal/meet/${meet.id}/builder/save-meet">Save Meet</button>
         </div>
       </div>
     </form>`}));
@@ -3394,40 +3390,45 @@ function saveMeetFields(meet, body, db) {
   meet.baseEntryFee=Number(String(body.baseEntryFee||'0').trim()||0);
   meet.additionalRaceFee=Number(String(body.additionalRaceFee||'0').trim()||0);
   meet.maxRegistrationFee=Number(String(body.maxRegistrationFee||'0').trim()||0);
-  meet.groups.forEach((group,gi)=>{
-    for(const divKey of ['novice','elite']) {
-      group.divisions[divKey] = {
-        enabled:!!body[`g_${gi}_${divKey}_enabled`],
-        ages:String(body[`g_${gi}_${divKey}_ages`]||group.divisions?.[divKey]?.ages||group.ages||'').trim(),
-        distances:[String(body[`g_${gi}_${divKey}_d1`]||'').trim(),String(body[`g_${gi}_${divKey}_d2`]||'').trim(),String(body[`g_${gi}_${divKey}_d3`]||'').trim(),String(body[`g_${gi}_${divKey}_d4`]||'').trim()],
-      };
-    }
-  });
-  // Save additional race groups
-  const skCount = Number(body.skateability_count||0);
-  meet.skateabilityGroups = [];
-  for(let si=0; si<skCount; si++) {
-    const id = String(body[`sk_${si}_id`]||'').trim() || ('sk_custom_'+si+'_'+crypto.randomBytes(3).toString('hex'));
-    const ageGroupId = String(body[`sk_${si}_ageGroupId`]||'').trim();
-    const ageGroupLabel = String(body[`sk_${si}_ageGroupLabel`]||'').trim();
-    const ages = String(body[`sk_${si}_ages`]||'').trim();
-    const distances = [
-      String(body[`sk_${si}_d1`]||'').trim(),
-      String(body[`sk_${si}_d2`]||'').trim(),
-      String(body[`sk_${si}_d3`]||'').trim(),
-    ];
-    if(!ageGroupLabel && !ages && !distances.some(Boolean)) continue;
-    meet.skateabilityGroups.push({
-      id,
-      ageGroupId,
-      ageGroupLabel: ageGroupLabel || 'Additional Race',
-      ages,
-      enabled: !!body[`sk_${si}_enabled`],
-      distances,
+  const hasGroupFields = Object.keys(body||{}).some(k=>/^g_\d+_(novice|elite)_/.test(k));
+  if(hasGroupFields) {
+    meet.groups.forEach((group,gi)=>{
+      for(const divKey of ['novice','elite']) {
+        group.divisions[divKey] = {
+          enabled:!!body[`g_${gi}_${divKey}_enabled`],
+          ages:String(body[`g_${gi}_${divKey}_ages`]||group.divisions?.[divKey]?.ages||group.ages||'').trim(),
+          distances:[String(body[`g_${gi}_${divKey}_d1`]||'').trim(),String(body[`g_${gi}_${divKey}_d2`]||'').trim(),String(body[`g_${gi}_${divKey}_d3`]||'').trim(),String(body[`g_${gi}_${divKey}_d4`]||'').trim()],
+        };
+      }
     });
   }
-  // Mirror into `additionalRaces` for compatibility and persistence
-  meet.additionalRaces = (meet.skateabilityGroups || []).map(g => ({ ...g }));
+  // Save additional race groups only when that section is actually posted.
+  if(Object.prototype.hasOwnProperty.call(body||{}, 'skateability_count')) {
+    const skCount = Number(body.skateability_count||0);
+    meet.skateabilityGroups = [];
+    for(let si=0; si<skCount; si++) {
+      const id = String(body[`sk_${si}_id`]||'').trim() || ('sk_custom_'+si+'_'+crypto.randomBytes(3).toString('hex'));
+      const ageGroupId = String(body[`sk_${si}_ageGroupId`]||'').trim();
+      const ageGroupLabel = String(body[`sk_${si}_ageGroupLabel`]||'').trim();
+      const ages = String(body[`sk_${si}_ages`]||'').trim();
+      const distances = [
+        String(body[`sk_${si}_d1`]||'').trim(),
+        String(body[`sk_${si}_d2`]||'').trim(),
+        String(body[`sk_${si}_d3`]||'').trim(),
+      ];
+      if(!ageGroupLabel && !ages && !distances.some(Boolean)) continue;
+      meet.skateabilityGroups.push({
+        id,
+        ageGroupId,
+        ageGroupLabel: ageGroupLabel || 'Additional Race',
+        ages,
+        enabled: !!body[`sk_${si}_enabled`],
+        distances,
+      });
+    }
+    // Mirror into `additionalRaces` for compatibility and persistence
+    meet.additionalRaces = (meet.skateabilityGroups || []).map(g => ({ ...g }));
+  }
   // Keep existing registration totals in sync when global pricing changes.
   // This does not touch race generation or legacy stored cost fields.
   ensureRegistrationTotalsAndNumbers(meet);
