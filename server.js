@@ -4839,7 +4839,71 @@ app.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','judg
         <h2 style="margin:0">${current?`Race ${Math.max(info.idx+1,1)} — ${esc(current.groupLabel)} — ${esc(cap(current.division))} — ${esc(current.distanceLabel)}`:'No race selected'}</h2>
         <div class="note">Judges always land on the current race. Save, then close race when done.</div>
       </div>
-      ${current?`
+      ${current?(current.isTimeTrial?`
+        <div class="card" style="margin-bottom:14px">
+          <h2 style="margin-bottom:4px">⏱ 100m / 1 Lap Time Trial</h2>
+          <div class="note">Post one skater at a time. Time Trials save recorded times only — no points are awarded.</div>
+        </div>
+
+        <div class="card" style="margin-bottom:14px">
+          <form method="POST" action="/portal/meet/${meet.id}/race-day/judges/tt-post">
+            <input type="hidden" name="raceId" value="${esc(current.id)}" />
+            <div class="form-grid cols-3">
+              <div>
+                <label>Skater</label>
+                <select name="registrationId" required>
+                  <option value="">Select skater...</option>
+                  ${(meet.registrations||[])
+                    .filter(r=>r.options?.timeTrials)
+                    .sort((a,b)=>String(a.name||'').localeCompare(String(b.name||'')))
+                    .map(r=>`<option value="${esc(r.id)}">#${esc(r.helmetNumber||'')} — ${esc(r.name)} • ${esc(r.team||'')}</option>`)
+                    .join('')}
+                </select>
+              </div>
+              <div>
+                <label>Time</label>
+                <input name="time" placeholder="ex: 11.42" required />
+              </div>
+              <div style="display:flex;align-items:end">
+                <button class="btn-orange" type="submit" name="action" value="save">Save Time</button>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        <div class="card">
+          <div class="row between" style="margin-bottom:12px">
+            <div>
+              <h2 style="margin:0">Posted Times</h2>
+              <div class="note">${esc(current.groupLabel)} • ${esc(current.distanceLabel||'100m')}</div>
+            </div>
+            <form method="POST" action="/portal/meet/${meet.id}/race-day/judges/save" onsubmit="return confirm('Close this Time Trial and advance to the next race?')">
+              <input type="hidden" name="raceId" value="${esc(current.id)}" />
+              <button class="btn-orange" type="submit" name="action" value="close">Close Time Trial</button>
+            </form>
+          </div>
+          <div style="overflow-x:auto">
+            <table class="table">
+              <thead><tr><th>Place</th><th>Helmet</th><th>Skater</th><th>Team</th><th>Time</th><th></th></tr></thead>
+              <tbody>${[...(current.laneEntries||[])]
+                .sort((a,b)=>parseFloat(a.time||'999')-parseFloat(b.time||'999'))
+                .map(e=>`<tr>
+                  <td>${esc(e.place||'')}</td>
+                  <td>${e.helmetNumber?'#'+esc(e.helmetNumber):''}</td>
+                  <td><strong>${esc(e.skaterName||'')}</strong></td>
+                  <td>${esc(e.team||'')}</td>
+                  <td><strong>${esc(e.time||'')}</strong></td>
+                  <td>
+                    <form method="POST" action="/portal/meet/${meet.id}/race-day/judges/tt-remove" onsubmit="return confirm('Remove this posted time?')">
+                      <input type="hidden" name="raceId" value="${esc(current.id)}" />
+                      <input type="hidden" name="registrationId" value="${esc(e.registrationId||'')}" />
+                      <button class="btn-danger btn-sm" type="submit">Remove</button>
+                    </form>
+                  </td>
+                </tr>`).join('')||`<tr><td colspan="6" class="muted">No times posted yet.</td></tr>`}</tbody>
+            </table>
+          </div>
+        </div>`:`
         <div class="card">
           <form method="POST" action="/portal/meet/${meet.id}/race-day/judges/save">
             <input type="hidden" name="raceId" value="${esc(current.id)}" />
@@ -4871,7 +4935,7 @@ app.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','judg
               <button class="btn-orange" type="submit" name="action" value="close">Close Race</button>
             </div>
           </form>
-        </div>`:`<div class="card"><div class="muted">No race selected yet.</div></div>`}`;
+        </div>`):`<div class="card"><div class="muted">No race selected yet.</div></div>`}`;
 
   } else if(mode==='announcer') {
     body+=`
@@ -4897,10 +4961,31 @@ app.post('/portal/meet/:meetId/race-day/judges/save', requireRole('judge','meet_
   if(!meet) return res.redirect('/portal');
   const race=(meet.races||[]).find(r=>r.id===String(req.body.raceId||''));
   if(!race) return res.redirect(`/portal/meet/${meet.id}/race-day/judges`);
-  const laneCount=(race.isOpenRace||isOpenDivision(race.division))?Math.max((race.laneEntries||[]).length,1):Math.max(1,Number(meet.lanes)||4);
+
+  // Time Trials use the dedicated tt-post / tt-remove flow.
+  // Never rebuild laneEntries here, or one saved TT result can wipe earlier posted times.
+  if(race.isTimeTrial) {
+    race.resultsMode = 'times';
+    race.status = req.body.action === 'close' ? 'closed' : 'open';
+    if(req.body.action === 'close') {
+      race.closedAt = nowIso();
+      race.isFinal = true;
+      const info=currentRaceInfo(meet);
+      if(info.current&&info.current.id===race.id) {
+        const next=info.ordered[info.idx+1];
+        if(next){meet.currentRaceId=next.id;meet.currentRaceIndex=info.idx+1;}
+      }
+    }
+    meet.updatedAt=nowIso();
+    saveDb(req.db);
+    return res.redirect(`/portal/meet/${meet.id}/race-day/judges`);
+  }
+
+  const existingLaneEntries = Array.isArray(race.laneEntries) ? [...race.laneEntries] : [];
+  const laneCount=(race.isOpenRace||isOpenDivision(race.division)||race.isRelayRace)?Math.max(existingLaneEntries.length,1):Math.max(1,Number(meet.lanes)||4);
   race.laneEntries=[];
   for(let i=1;i<=laneCount;i++) {
-    const existing=(race.laneEntries||[]).find(x=>Number(x.lane)===i)||{};
+    const existing=existingLaneEntries.find(x=>Number(x.lane)===i)||{};
     race.laneEntries.push({lane:i,registrationId:existing.registrationId||'',helmetNumber:existing.helmetNumber||'',skaterName:String(req.body[`skaterName_${i}`]||'').trim(),team:String(req.body[`team_${i}`]||'').trim(),place:String(req.body[`place_${i}`]||'').trim(),time:String(req.body[`time_${i}`]||'').trim(),status:String(req.body[`status_${i}`]||'').trim()});
   }
   race.resultsMode=String(req.body.resultsMode||'places')==='times'?'times':'places';
@@ -4919,29 +5004,63 @@ app.post('/portal/meet/:meetId/race-day/judges/tt-post', requireRole('judge','me
   if(!meet) return res.redirect('/portal');
   const race=(meet.races||[]).find(r=>r.id===String(req.body.raceId||'')&&r.isTimeTrial);
   if(!race) return res.redirect(`/portal/meet/${req.params.meetId}/race-day/judges`);
+
   const time=String(req.body.time||'').trim();
   const regId=String(req.body.registrationId||'').trim();
-  // fallback: try to match by skaterSearch text if regId missing
-  
-  const skaterName=String(req.body.skaterName||'').trim();
-  const helmetNumber=String(req.body.helmetNumber||'').trim();
-  const team=String(req.body.team||'').trim();
-  if(!time) return res.redirect(`/portal/meet/${meet.id}/race-day/judges`);
-  // Remove existing entry for this skater if re-posting
-  if(regId) race.laneEntries=(race.laneEntries||[]).filter(e=>String(e.registrationId||'')!==regId);
-  // Assign a pseudo-lane as running order number
-  const nextLane=(race.laneEntries||[]).length+1;
-  race.laneEntries.push({lane:nextLane,registrationId:regId,helmetNumber,skaterName,team,time,place:'',status:''});
-  // Auto-assign places by time (fastest=1)
+  if(!time || !regId) return res.redirect(`/portal/meet/${meet.id}/race-day/judges`);
+
+  const reg=(meet.registrations||[]).find(r=>String(r.id)===regId);
+  const skaterName=String(reg?.name || req.body.skaterName || '').trim();
+  const helmetNumber=String(reg?.helmetNumber || req.body.helmetNumber || '').trim();
+  const team=String(reg?.team || req.body.team || '').trim();
+
+  // Preserve all previous TT results and only replace this skater's posted time.
+  const previousEntries = Array.isArray(race.laneEntries) ? race.laneEntries : [];
+  race.laneEntries = previousEntries.filter(e=>String(e.registrationId||'')!==regId);
+
+  const previousOrder = previousEntries.find(e=>String(e.registrationId||'')===regId)?.lane;
+  const nextLane = previousOrder || (race.laneEntries.length + 1);
+
+  race.laneEntries.push({
+    lane: nextLane,
+    registrationId: regId,
+    helmetNumber,
+    skaterName,
+    team,
+    time,
+    place: '',
+    status: ''
+  });
+
+  // Keep posting order stable, then assign places by fastest time.
+  race.laneEntries = race.laneEntries
+    .sort((a,b)=>Number(a.lane||999)-Number(b.lane||999))
+    .map((entry,idx)=>({...entry,lane:idx+1}));
+
   const sorted=[...race.laneEntries].sort((a,b)=>parseFloat(a.time||'999')-parseFloat(b.time||'999'));
-  sorted.forEach((e,i)=>{ const orig=race.laneEntries.find(x=>x.lane===e.lane); if(orig) orig.place=String(i+1); });
-  if(req.body.action==='close') { race.status='closed'; race.closedAt=nowIso(); race.isFinal=true; }
-  meet.updatedAt=nowIso(); saveDb(req.db);
-  // Fire TT result alert for this skater
+  sorted.forEach((e,i)=>{
+    const orig=race.laneEntries.find(x=>String(x.registrationId||'')===String(e.registrationId||''));
+    if(orig) orig.place=String(i+1);
+  });
+
+  race.resultsMode='times';
+  race.distanceLabel='100m';
+  race.countsForOverall=false;
+
+  if(req.body.action==='close') {
+    race.status='closed';
+    race.closedAt=nowIso();
+    race.isFinal=true;
+  }
+
+  meet.updatedAt=nowIso();
+  saveDb(req.db);
+
   if(regId) {
     const entry=race.laneEntries.find(e=>String(e.registrationId||'')===regId);
     if(entry) fireResultAlerts(meet, race);
   }
+
   res.redirect(`/portal/meet/${meet.id}/race-day/judges`);
 });
 
@@ -5180,7 +5299,7 @@ app.get('/meet/:meetId/tv', (req, res) => {
       '<div class="tv-footer-results">'+lastResultHtml+'</div>'
       : '<div style="opacity:.4">No results yet</div>') +
     '</div></div>' +
-    '<script>setTimeout(()=>location.reload(),4000);</script>' +
+    '<script>setTimeout(()=>location.reload(),20000);</script>' +
     '</body></html>';
 
   res.send(html);
@@ -5357,7 +5476,7 @@ app.get('/meet/:meetId/live', (req, res) => {
           </div>`).join('')||'<div class="muted">No times posted yet.</div>'}
       </div>
     </div>`):''}
-    <script>setTimeout(()=>location.reload(),4000);</script>`}));
+    <script>setTimeout(()=>location.reload(),20000);</script>`}));
 });
 
 // ── Print Race List ───────────────────────────────────────────────────────────
