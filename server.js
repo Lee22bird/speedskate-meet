@@ -837,6 +837,42 @@ function generateAdditionalRacesForMeet(meet) {
   meet.updatedAt = nowIso();
 }
 
+
+function generateConfiguredRacesForMeet(meet) {
+  // One safe rebuild path for builder/block screens:
+  // - regenerates normal divisions
+  // - regenerates Open/Quad/Additional races
+  // - collapses Time Trials to one unified session
+  // - preserves Relay races created by Relay Builder
+  const relayRaces = (meet.races || []).filter(r => r.isRelayRace);
+  const relayIds = new Set(relayRaces.map(r => String(r.id)));
+
+  generateBaseRacesForMeet(meet);
+  generateOpenRacesForMeet(meet);
+  generateQuadRacesForMeet(meet);
+  generateAdditionalRacesForMeet(meet);
+
+  const existingIds = new Set((meet.races || []).map(r => String(r.id)));
+  for (const relay of relayRaces) {
+    if (!existingIds.has(String(relay.id))) meet.races.push(relay);
+  }
+
+  rebuildTimeTrialRace(meet);
+
+  const validIds = new Set((meet.races || []).map(r => String(r.id)));
+  meet.blocks = (meet.blocks || []).map(block => ({
+    ...block,
+    raceIds: (block.raceIds || []).filter(rid => validIds.has(String(rid))),
+  }));
+
+  if (!validIds.has(String(meet.currentRaceId || ''))) {
+    meet.currentRaceId = '';
+    meet.currentRaceIndex = -1;
+  }
+
+  meet.updatedAt = nowIso();
+}
+
 function pricingFieldsFromMeet(meet) {
   return {
     baseEntryFee: Number(meet?.baseEntryFee || 0),
@@ -3564,7 +3600,7 @@ app.post('/portal/meet/:meetId/builder/save', requireRole('meet_director'), (req
   if(!meet) return res.redirect('/portal');
   if(!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
   saveMeetFields(meet, req.body, req.db);
-  generateBaseRacesForMeet(meet); generateAdditionalRacesForMeet(meet); rebuildTimeTrialRace(meet); rebuildRaceAssignments(meet); ensureAtLeastOneBlock(meet); ensureCurrentRace(meet);
+  generateConfiguredRacesForMeet(meet); rebuildRaceAssignments(meet); ensureAtLeastOneBlock(meet); ensureCurrentRace(meet);
   saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/blocks`);
 });
 
@@ -4025,7 +4061,7 @@ app.post('/portal/meet/:meetId/open-builder/save', requireRole('meet_director'),
     og.ages=String(req.body[`og_${i}_ages`]||'').trim()||og.ages;
     og.distance=String(req.body[`og_${i}_distance`]||'').trim()||og.distance;
   });
-  generateOpenRacesForMeet(meet); rebuildTimeTrialRace(meet); ensureAtLeastOneBlock(meet); ensureCurrentRace(meet);
+  generateConfiguredRacesForMeet(meet); ensureAtLeastOneBlock(meet); ensureCurrentRace(meet);
   meet.updatedAt=nowIso();
   saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/open-builder?saved=1`);
 });
@@ -4118,7 +4154,7 @@ app.post('/portal/meet/:meetId/quad-builder/save', requireRole('meet_director'),
     qg.distances[0]=String(req.body[`qg_${i}_d1`]||'').trim()||qg.distances[0];
     qg.distances[1]=String(req.body[`qg_${i}_d2`]||'').trim()||qg.distances[1];
   });
-  generateQuadRacesForMeet(meet); ensureAtLeastOneBlock(meet); ensureCurrentRace(meet);
+  generateConfiguredRacesForMeet(meet); ensureAtLeastOneBlock(meet); ensureCurrentRace(meet);
   saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/quad-builder?saved=1`);
 });
 // ── Public Registration ───────────────────────────────────────────────────────
@@ -4650,7 +4686,7 @@ app.get('/portal/meet/:meetId/blocks', requireRole('meet_director'), (req, res) 
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet) return res.redirect('/portal');
   if(!canEditMeet(req.user,meet)) return res.status(403).send(pageShell({title:'Forbidden',user:req.user,bodyHtml:`<div class="page-header"><h1>Forbidden</h1></div><div class="card"><div class="danger">Only the meet owner can edit this meet.</div></div>`}));
-  rebuildTimeTrialRace(meet); ensureAtLeastOneBlock(meet); ensureCurrentRace(meet); saveDb(req.db);
+  generateConfiguredRacesForMeet(meet); ensureAtLeastOneBlock(meet); ensureCurrentRace(meet); saveDb(req.db);
   const raceById=new Map((meet.races||[]).map(r=>[r.id,r]));
   const assigned=new Set(); for(const block of meet.blocks||[]) for(const rid of block.raceIds||[]) assigned.add(rid);
   const unassigned=(meet.races||[]).filter(r=>!assigned.has(r.id));
