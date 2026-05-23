@@ -2093,9 +2093,14 @@ app.get('/help', (req, res) => {
   `}));
 });
 
+
+function isPublicMeet(meet) {
+  return !!(meet && (meet.isPublic || String(meet.status || '').toLowerCase() === 'published'));
+}
+
 app.get('/meets', (req, res) => {
   const db=loadDb(); const data=getSessionUser(req);
-  const cards=(db.meets||[]).filter(m=>m.isPublic || String(m.status||'').toLowerCase()==='published').map(m=>{
+  const cards=(db.meets||[]).filter(m=>isPublicMeet(m)).map(m=>{
     const rink=db.rinks.find(r=>Number(r.id)===Number(m.rinkId));
     return `
       <div class="card" style="margin-bottom:14px">
@@ -2324,7 +2329,7 @@ app.get('/rinks', (req, res) => {
 
 app.get('/live', (req, res) => {
   const db=loadDb(); const data=getSessionUser(req);
-  const cards=(db.meets||[]).filter(m=>m.isPublic || String(m.status||'').toLowerCase()==='published').map(m=>{
+  const cards=(db.meets||[]).filter(m=>isPublicMeet(m)).map(m=>{
     const rink=db.rinks.find(r=>Number(r.id)===Number(m.rinkId));
     return `
       <div class="card" style="margin-bottom:14px">
@@ -4095,7 +4100,7 @@ app.post('/portal/meet/:meetId/quad-builder/save', requireRole('meet_director'),
 
 app.get('/meet/:meetId/register', (req, res) => {
   const db=loadDb(); const meet=getMeetOr404(db,req.params.meetId); const data=getSessionUser(req);
-  if(!meet||!meet.isPublic) return res.redirect('/meets');
+  if(!isPublicMeet(meet)) return res.redirect('/meets');
   const closed=isRegistrationClosed(meet);
   const costWidget=buildRegistrationPricingPreview(meet);
   res.send(pageShell({title:'Register',user:data?.user||null, bodyHtml:`
@@ -4153,7 +4158,7 @@ app.get('/meet/:meetId/register', (req, res) => {
 
 app.post('/meet/:meetId/register', (req, res) => {
   const db=loadDb(); const meet=getMeetOr404(db,req.params.meetId);
-  if(!meet||!meet.isPublic||isRegistrationClosed(meet)) return res.redirect(`/meet/${req.params.meetId}/register`);
+  if(!isPublicMeet(meet)||isRegistrationClosed(meet)) return res.redirect(`/meet/${req.params.meetId}/register`);
   const gender=String(req.body.gender||'').trim()||'boys';
   const birthdate=String(req.body.birthdate||'').trim();
   const compAge=usarsAge(birthdate,meet.date)||Number(req.body.age||0);
@@ -5634,7 +5639,7 @@ app.get('/meet/:meetId/tv', (req, res) => {
 
 app.get('/meet/:meetId/results', (req, res) => {
   const db=loadDb(); const meet=getMeetOr404(db,req.params.meetId); const data=getSessionUser(req);
-  if(!meet||!meet.isPublic) return res.redirect('/meets');
+  if(!isPublicMeet(meet)) return res.redirect('/meets');
   const sections=computeMeetStandings(meet); const openSections=computeOpenResults(meet); const quadSections=computeQuadStandings(meet);
   res.send(pageShell({title:'Results',user:data?.user||null, bodyHtml:`
     <div class="page-header"><h1>${esc(meet.meetName)}</h1><div class="sub">Results</div></div>
@@ -5677,7 +5682,7 @@ app.get('/portal/meet/:meetId/results/print', requireRole('meet_director','judge
 
 app.get('/meet/:meetId/alerts', (req, res) => {
   const db=loadDb(); const meet=getMeetOr404(db,req.params.meetId);
-  if(!meet||!meet.isPublic) return res.redirect('/meets');
+  if(!isPublicMeet(meet)) return res.redirect('/meets');
   const data=getSessionUser(req);
   const regs=(meet.registrations||[]).slice().sort((a,b)=>String(a.name||'').localeCompare(String(b.name||'')));
   const ok=req.query.ok; const err=req.query.err;
@@ -5730,7 +5735,7 @@ app.get('/meet/:meetId/alerts', (req, res) => {
 
 app.post('/meet/:meetId/alerts/subscribe', (req, res) => {
   const db=loadDb(); const meet=getMeetOr404(db,req.params.meetId);
-  if(!meet||!meet.isPublic) return res.redirect('/meets');
+  if(!isPublicMeet(meet)) return res.redirect('/meets');
   const regId=String(req.body.registrationId||'').trim();
   const rawPhone=String(req.body.phone||'').trim();
   const phone=normalizePhone(rawPhone);
@@ -5749,7 +5754,7 @@ app.post('/meet/:meetId/alerts/subscribe', (req, res) => {
 
 app.get('/meet/:meetId/live', (req, res) => {
   const db=loadDb(); const meet=getMeetOr404(db,req.params.meetId); const data=getSessionUser(req);
-  if(!meet||!meet.isPublic) return res.redirect('/meets');
+  if(!isPublicMeet(meet)) return res.redirect('/meets');
   const info=currentRaceInfo(meet); const current=info.current;
   const lanes=current?laneRowsForRace(current,meet):[];
   const recent=recentClosedRaces(meet,5);
