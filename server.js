@@ -4724,8 +4724,8 @@ app.get('/portal/meet/:meetId/blocks', requireRole('meet_director'), (req, res) 
   const breakIcons={break:'☕',lunch:'🍽️',awards:'🏆',practice:'⛸️'};
 
   function raceItemHtml(race,isCurrent,draggable=true) {
-    const tag=race.isTimeTrial?'⏱ ':race.isRelayRace?'🔄 ':race.isOpenRace?'🏁 ':race.isQuadRace?'🛼 ':'';
-    const cls=race.isTimeTrial?'tt-item':race.isRelayRace?'relay-item':race.isOpenRace?'open-item':race.isQuadRace?'quad-item':'';
+    const tag=race.isTimeTrial?'⏱ ':race.isRelayRace?'🔄 ':race.isOpenRace?'🏁 ':race.isQuadRace?'🛼 ':(race.isAdditionalRace?'➕ ':'');
+    const cls=race.isTimeTrial?'tt-item':race.isRelayRace?'relay-item':race.isOpenRace?'open-item':race.isQuadRace?'quad-item':(race.isAdditionalRace?'additional-item':'');
     return `
       <div class="race-item ${isCurrent?'active-now':''} ${cls}" draggable="${draggable}"
         data-race-id="${esc(race.id)}"
@@ -4845,7 +4845,7 @@ app.get('/portal/meet/:meetId/blocks', requireRole('meet_director'), (req, res) 
                 <div><label>Class</label>
                   <select id="classFilter" onchange="applyFilters()">
                     <option value="all">All</option><option value="novice">Novice</option>
-                    <option value="elite">Elite</option><option value="open">Open</option><option value="quad">Quad</option>
+                    <option value="elite">Elite</option><option value="open">Open</option><option value="quad">Quad</option><option value="additional">Additional</option>
                   </select>
                 </div>
                 <div><label>Distance</label>
@@ -5012,15 +5012,33 @@ app.post('/api/meet/:meetId/blocks/move', requireRole('meet_director'), (req, re
 app.post('/api/meet/:meetId/blocks/move-race', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet||!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
-  const raceId=String(req.body.raceId||''); const destBlockId=String(req.body.destBlockId||'');
-  for(const block of meet.blocks||[]) block.raceIds=(block.raceIds||[]).filter(id=>id!==raceId);
+  const raceId=String(req.body.raceId||'').trim();
+  const destBlockId=String(req.body.destBlockId||'').trim();
+  if(!raceId) return res.status(400).send('Race missing');
+
+  // Make sure generated race IDs are current/stable before saving a block assignment.
+  // This is especially important for Additional Races, which are generated from builder config.
+  generateConfiguredRacesForMeet(meet);
+  ensureAtLeastOneBlock(meet);
+
+  const race=(meet.races||[]).find(r=>String(r.id)===raceId);
+  if(!race) return res.status(404).send('Race not found after rebuild');
+
+  for(const block of meet.blocks||[]) {
+    block.raceIds=(block.raceIds||[]).map(String).filter(id=>id!==raceId);
+  }
+
   if(destBlockId!=='__unassigned__') {
-    const block=(meet.blocks||[]).find(b=>b.id===destBlockId);
+    const block=(meet.blocks||[]).find(b=>String(b.id)===destBlockId);
     if(!block) return res.status(404).send('Block not found');
     if((block.type||'race')!=='race') return res.status(400).send('Cannot drop races into non-race blocks');
-    block.raceIds.push(raceId);
+    if(!(block.raceIds||[]).map(String).includes(raceId)) block.raceIds.push(raceId);
   }
-  ensureCurrentRace(meet); meet.updatedAt=nowIso(); saveDb(req.db); res.json({ok:true});
+
+  ensureCurrentRace(meet);
+  meet.updatedAt=nowIso();
+  saveDb(req.db);
+  res.json({ok:true});
 });
 
 app.post('/portal/meet/:meetId/blocks/generate', requireRole('meet_director'), (req, res) => {
