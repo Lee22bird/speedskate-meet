@@ -765,9 +765,13 @@ function buildRaceSetForEntries(baseRace,regs,laneCount) {
 
 
 function generateAdditionalRacesForMeet(meet) {
-  const additionalGroups = Array.isArray(meet.skateabilityGroups) ? meet.skateabilityGroups : [];
+  const rawGroups = Array.isArray(meet.skateabilityGroups)
+    ? meet.skateabilityGroups
+    : (Array.isArray(meet.additionalRaces) ? meet.additionalRaces : []);
+
   const nonAdditionalRaces = (meet.races || []).filter(r =>
     String(r.division || '') !== 'skateability' &&
+    String(r.division || '') !== 'additional' &&
     !r.isAdditionalRace &&
     !r.isSkateabilityRace
   );
@@ -775,28 +779,39 @@ function generateAdditionalRacesForMeet(meet) {
   const additionalRaces = [];
   let orderHint = 8500;
 
-  for (const sg of additionalGroups) {
-    // Skip groups that are explicitly disabled; preserve legacy groups without enabled metadata.
-    if (!sg || sg.enabled === false || String(sg.enabled).toLowerCase() === 'false') continue;
+  for (const sg of rawGroups) {
+    if (!sg) continue;
+
+    // Do not auto-create legacy/placeholder extras. Director must enable it.
+    const enabled = sg.enabled === true || String(sg.enabled || '').toLowerCase() === 'true' || String(sg.enabled || '').toLowerCase() === 'on';
+    if (!enabled) continue;
+
     const savedId = String(sg.id || '').trim() || ('additional_' + crypto.randomBytes(4).toString('hex'));
     const linkedAgeGroupId = String(sg.ageGroupId || '').trim();
     const raceGroupId = savedId;
-    const title = String(sg.ageGroupLabel || sg.title || 'Additional Race').trim() || 'Additional Race';
+
+    const rawTitle = String(sg.ageGroupLabel || sg.title || '').trim();
+    const title = rawTitle && rawTitle.toLowerCase() !== 'additional race' ? rawTitle : 'Additional Race';
+
     const linkedAgeGroup = (meet.groups || []).find(g => String(g.id) === linkedAgeGroupId);
     const ages = String(sg.ages || linkedAgeGroup?.ages || '').trim();
+
     const distances = (Array.isArray(sg.distances) ? sg.distances : [])
       .map(d => String(d || '').trim())
       .filter(Boolean);
+
+    // Must have at least one distance. Blank placeholder cards do not generate.
     if (!distances.length) continue;
 
     distances.forEach((distance, idx) => {
       const parentRaceKey = `additional|${savedId}|${idx + 1}`;
       const legacyParentKey = linkedAgeGroupId ? `additional|${linkedAgeGroupId}|${idx + 1}` : '';
+
       const existingRace = (meet.races || []).find(r =>
         String(r.parentRaceKey || '') === parentRaceKey ||
         (legacyParentKey && String(r.parentRaceKey || '') === legacyParentKey) ||
         (
-          (String(r.division || '') === 'skateability' || r.isAdditionalRace || r.isSkateabilityRace) &&
+          (String(r.division || '') === 'skateability' || String(r.division || '') === 'additional' || r.isAdditionalRace || r.isSkateabilityRace) &&
           (String(r.groupId || '') === raceGroupId || (linkedAgeGroupId && String(r.groupId || '') === linkedAgeGroupId)) &&
           String(r.distanceLabel || '') === distance
         )
@@ -808,7 +823,7 @@ function generateAdditionalRacesForMeet(meet) {
         groupId: raceGroupId,
         groupLabel: title,
         ages,
-        division: 'skateability',
+        division: 'additional',
         distanceLabel: distance,
         dayIndex: idx + 1,
         cost: Number(sg.cost || 0),
@@ -816,7 +831,7 @@ function generateAdditionalRacesForMeet(meet) {
         heatNumber: Number(existingRace?.heatNumber || 0),
         parentRaceKey,
         startType: existingRace?.startType || 'standing',
-        countsForOverall: typeof existingRace?.countsForOverall === 'boolean' ? existingRace.countsForOverall : false,
+        countsForOverall: false,
         laneEntries: Array.isArray(existingRace?.laneEntries) ? existingRace.laneEntries : [],
         resultsMode: existingRace?.resultsMode || 'places',
         status: existingRace?.status || 'open',
@@ -828,7 +843,7 @@ function generateAdditionalRacesForMeet(meet) {
         isTimeTrial: false,
         isRelayRace: false,
         isAdditionalRace: true,
-        isSkateabilityRace: true,
+        isSkateabilityRace: false,
       });
     });
   }
@@ -836,7 +851,6 @@ function generateAdditionalRacesForMeet(meet) {
   meet.races = [...nonAdditionalRaces, ...additionalRaces];
   meet.updatedAt = nowIso();
 }
-
 
 function generateConfiguredRacesForMeet(meet) {
   // One safe rebuild path for builder/block screens:
@@ -3329,7 +3343,7 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
           ${(meet.skateabilityGroups||[]).map((sg,si)=>`
             <div class="group-pair-col" style="margin-bottom:12px" id="sk-${si}">
               <div class="group-pair-header">
-                <span class="group-pair-name">Additional Race</span>
+                <span class="group-pair-name">${esc(sg.ageGroupLabel||sg.title||'Additional Race')}</span>
                 ${toggleSwitch('sk_'+si+'_enabled', sg.enabled)}
                 <button type="button" class="btn-danger btn-sm" onclick="removeSkateability(${si})">Remove</button>
               </div>
@@ -3375,7 +3389,7 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
             '<input type="hidden" name="sk_'+si+'_id" value="'+newId+'" />' +
             '<input type="hidden" name="sk_'+si+'_ageGroupId" value="" />' +
             '<div class="form-grid cols-2" style="margin-top:10px">' +
-              '<div><label>Division Title</label><input name="sk_'+si+'_ageGroupLabel" value="Additional Race" placeholder="Diaper Dash / Skateability / Extra Open" /></div>' +
+              '<div><label>Division Title</label><input name="sk_'+si+'_ageGroupLabel" value="" placeholder="Diaper Dash / Skateability / Extra Open" /></div>' +
               '<div><label>Age Range</label><input name="sk_'+si+'_ages" value="" placeholder="5 & under / 6-9 / 35+" /></div>' +
             '</div>' +
             '<div style="display:flex;gap:8px;align-items:flex-end;margin-top:10px">' +
@@ -3473,13 +3487,15 @@ function saveMeetFields(meet, body, db) {
         String(body[`sk_${si}_d2`]||'').trim(),
         String(body[`sk_${si}_d3`]||'').trim(),
       ];
-      if(!ageGroupLabel && !ages && !distances.some(Boolean)) continue;
+      const enabled = !!body[`sk_${si}_enabled`];
+      const hasRealContent = !!ageGroupLabel || !!ages || distances.some(Boolean);
+      if(!hasRealContent) continue;
       meet.skateabilityGroups.push({
         id,
         ageGroupId,
         ageGroupLabel: ageGroupLabel || 'Additional Race',
         ages,
-        enabled: !!body[`sk_${si}_enabled`],
+        enabled,
         distances,
       });
     }
