@@ -3688,6 +3688,21 @@ function timeTrialLeaderboards(meet, race) {
 }
 
 
+
+function normalizeRelayTemplates(saved){
+  const existing = Array.isArray(saved) ? saved : [];
+  return RELAY_TEMPLATE_ROWS.map((def, idx) => {
+    const row = existing[idx] || {};
+    return {
+      enabled: !!row.enabled,
+      type: String(row.type || def.type),
+      age: String(row.age || def.age),
+      distance: String(row.distance || def.distance),
+      notes: String(row.notes || def.notes),
+    };
+  });
+}
+
 const RELAY_TEMPLATE_ROWS = [
   { type: '3 Person', age: 'Juvenile', distance: '900m', notes: '1 lap × 3 times each' },
   { type: '3 Person', age: 'Freshman', distance: '900m', notes: '1 lap × 3 times each' },
@@ -3749,6 +3764,7 @@ app.get('/portal/meet/:meetId/relay-builder', requireRole('meet_director'), (req
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet) return res.redirect('/portal');
   if(!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
+  meet.relayTemplates=normalizeRelayTemplates(meet.relayTemplates);
   const relayRaces=(meet.races||[]).filter(r=>r.isRelayRace);
   const relayRows=relayRaces.map(r=>`
     <tr>
@@ -3848,21 +3864,34 @@ app.post('/portal/meet/:meetId/relay-builder/add-template', requireRole('meet_di
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
   let added=0;
-  RELAY_TEMPLATE_ROWS.forEach((def, idx)=>{
-    if(req.body[`enabled_${idx}`] !== 'on') return;
-    const relayType=String(req.body[`relayType_${idx}`]||def.type).trim();
-    const ageGroup=String(req.body[`ageGroup_${idx}`]||def.age).trim();
-    const distance=String(req.body[`distance_${idx}`]||def.distance).trim();
-    const notes=String(req.body[`notes_${idx}`]||def.notes).trim();
-    const name=[ageGroup, relayType, 'Relay'].filter(Boolean).join(' ');
-    if(!name||!distance) return;
-    if(relayRaceExists(meet, name, distance)) return;
-    const race=makeRelayRace({ name, distance, notes, relayType, ageGroup });
-    race.orderHint=9800+(meet.races||[]).filter(r=>r.isRelayRace).length+added;
-    meet.races.push(race);
-    added+=1;
+  meet.relayTemplates = RELAY_TEMPLATE_ROWS.map((base, idx)=>{
+    const enabled = req.body[`enabled_${idx}`] === 'on';
+    const relayType=String(req.body[`relayType_${idx}`]||base.type).trim();
+    const ageGroup=String(req.body[`ageGroup_${idx}`]||base.age).trim();
+    const distance=String(req.body[`distance_${idx}`]||base.distance).trim();
+    const notes=String(req.body[`notes_${idx}`]||base.notes).trim();
+
+    if(enabled){
+      const name=[ageGroup, relayType, 'Relay'].filter(Boolean).join(' ');
+      if(name && distance && !relayRaceExists(meet, name, distance)){
+        const race=makeRelayRace({ name, distance, notes, relayType, ageGroup });
+        race.orderHint=9800+(meet.races||[]).filter(r=>r.isRelayRace).length+added;
+        meet.races.push(race);
+        added+=1;
+      }
+    }
+
+    return {
+      enabled,
+      type: relayType,
+      age: ageGroup,
+      distance,
+      notes,
+    };
   });
-  if(added>0) { meet.updatedAt=nowIso(); saveDb(req.db); }
+
+  meet.updatedAt=nowIso();
+  saveDb(req.db);
   res.redirect(`/portal/meet/${meet.id}/relay-builder?saved=1&added=${added}`);
 });
 
@@ -3966,6 +3995,7 @@ app.post('/portal/meet/:meetId/open-builder/save', requireRole('meet_director'),
     og.distance=String(req.body[`og_${i}_distance`]||'').trim()||og.distance;
   });
   generateOpenRacesForMeet(meet); ensureAtLeastOneBlock(meet); ensureCurrentRace(meet);
+  meet.updatedAt=nowIso();
   saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/open-builder?saved=1`);
 });
 
