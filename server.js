@@ -279,10 +279,17 @@ function makeManualExtraRaceSlots(raw) {
   return [0,1,2,3].map(i => {
     const id = 'manual_extra_' + (i + 1);
     const match = saved.find(x => String(x.id || '') === id) || {};
+    let label = String(match.ageGroupLabel || match.title || '').trim();
+
+    // Purge old legacy placeholder names from the dynamic add/remove era.
+    if (!label || /^manual extra race/i.test(label) || /^skatability$/i.test(label) || /^skateability$/i.test(label)) {
+      label = `Additional ${i + 1}`;
+    }
+
     return {
       id,
       ageGroupId: '',
-      ageGroupLabel: (`Additional ${i + 1}`),
+      ageGroupLabel: label,
       ages: String(match.ages || '').trim(),
       enabled: !!match.enabled,
       distances: Array.isArray(match.distances) ? [0,1,2].map(n => String(match.distances[n] || '').trim()) : ['', '', ''],
@@ -895,6 +902,18 @@ function generateConfiguredRacesForMeet(meet) {
   }
 
   generateAdditionalRacesForMeet(meet);
+
+  // sync additional labels from manual slots so Block Builder never shows stale legacy names
+  const manualLabelById = new Map(makeManualExtraRaceSlots(meet.skateabilityGroups).map(g => [String(g.id), String(g.ageGroupLabel || '')]));
+  for (const race of meet.races || []) {
+    if (race.isAdditionalRace || String(race.division || '') === 'additional') {
+      const label = manualLabelById.get(String(race.groupId || ''));
+      if (label) race.groupLabel = label;
+      race.division = 'additional';
+      race.isAdditionalRace = true;
+      race.isSkateabilityRace = false;
+    }
+  }
 
   const existingIds = new Set((meet.races || []).map(r => String(r.id)));
   for (const relay of relayRaces) {
@@ -3392,7 +3411,7 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
             ${rows.map((sg,si)=>`
               <div class="group-pair-col" style="margin-bottom:12px" id="sk-${si}">
                 <div class="group-pair-header">
-                  <span class="group-pair-name">Additional ${si+1}${sg.ageGroupLabel?` — ${esc(sg.ageGroupLabel)}`:''}</span>
+                  <span class="group-pair-name">Additional ${si+1}</span>
                   ${toggleSwitch('sk_'+si+'_enabled', sg.enabled)}
                 </div>
                 <input type="hidden" name="sk_${si}_id" value="${esc(sg.id)}" />
@@ -3478,7 +3497,8 @@ function saveMeetFields(meet, body, db) {
     const nextManual = [];
     for(let si=0; si<4; si++) {
       const id = 'manual_extra_' + (si + 1);
-      const ageGroupLabel = String(body[`sk_${si}_ageGroupLabel`]||'').trim();
+      let ageGroupLabel = String(body[`sk_${si}_ageGroupLabel`]||'').trim();
+      if(!ageGroupLabel) ageGroupLabel = `Additional ${si + 1}`;
       const ages = String(body[`sk_${si}_ages`]||'').trim();
       const distances = [
         String(body[`sk_${si}_d1`]||'').trim(),
@@ -3488,7 +3508,7 @@ function saveMeetFields(meet, body, db) {
       nextManual.push({
         id,
         ageGroupId: '',
-        ageGroupLabel: ageGroupLabel || `Additional ${si + 1}`,
+        ageGroupLabel,
         ages,
         enabled: !!body[`sk_${si}_enabled`],
         distances,
