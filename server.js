@@ -6133,6 +6133,170 @@ app.post('/portal/meet/:meetId/time-trials/save', requireRole('meet_director'), 
   res.redirect(`/portal/meet/${meet.id}/builder?saved=1#time-trials`);
 });
 
+
+
+// ── Block race-flow auto-arranger ────────────────────────────────────────────
+// Real meet flow for blocks with heats:
+// 1) heats first in age/division order
+// 2) straight finals next in age/division order
+// 3) finals for heated divisions last in age/division order
+// This only reorders raceIds already inside each block. It does not rebuild races,
+// delete races, move races between blocks, or touch lane entries.
+function isStandardScheduleRace(race) {
+  const div = String(race?.division || '').toLowerCase();
+  if (!race) return false;
+  if (race.isOpenRace || race.isQuadRace || race.isRelayRace || race.isTimeTrial || race.isAdditionalRace || race.isSkateabilityRace) return false;
+  if (['open', 'quad', 'relay', 'additional', 'skateability'].includes(div)) return false;
+  return ['novice', 'elite'].includes(div);
+}
+
+function raceFlowSignature(race) {
+  const parent = String(race?.parentRaceKey || '').trim();
+  if (parent) return parent;
+  return [
+    String(race?.groupId || ''),
+    String(race?.division || ''),
+    String(race?.dayIndex || ''),
+    String(race?.distanceLabel || ''),
+  ].join('|');
+}
+
+function raceFlowStageKind(race) {
+  const stage = String(race?.stage || '').toLowerCase();
+  if (stage === 'heat' || stage === 'semi' || stage === 'quarter') return 'heat';
+  if (stage === 'final' || race?.isFinal) return 'final';
+  return 'final';
+}
+
+function raceGroupOrderIndex(meet, race) {
+  const groups = Array.isArray(meet?.groups) ? meet.groups : [];
+  const gid = String(race?.groupId || '');
+  const label = String(race?.groupLabel || '').trim().toLowerCase();
+  let idx = groups.findIndex(g => String(g.id || '') === gid);
+  if (idx >= 0) return idx;
+  idx = groups.findIndex(g => String(g.label || '').trim().toLowerCase() === label);
+  if (idx >= 0) return idx;
+
+  // Known fallback order when labels/groups have older saved IDs.
+  const fallback = [
+    'diaper dash','skate ability','skatability','additional','tiny tot girls','tiny tot boys',
+    'primary girls','primary boys','juvenile girls','juvenile boys','elementary girls','elementary boys',
+    'freshman girls','freshman boys','sophomore girls','sophomore boys','junior women','junior men',
+    'senior women','senior men','classic women','classic men','master women','master men',
+    'veteran women','veteran men','esquire women','esquire men'
+  ];
+  idx = fallback.findIndex(x => label.includes(x));
+  return idx >= 0 ? idx : 9999;
+}
+
+function raceDivisionOrderIndex(race) {
+  const div = String(race?.division || '').toLowerCase();
+  if (div === 'novice') return 0;
+  if (div === 'elite') return 1;
+  if (div === 'open') return 2;
+  if (div === 'quad') return 3;
+  if (div === 'additional') return 4;
+  if (div === 'relay') return 5;
+  return 9;
+}
+
+function raceFlowSortKey(meet, race, originalIndex) {
+  return [
+    raceGroupOrderIndex(meet, race),
+    Number(race?.dayIndex || 0),
+    raceDivisionOrderIndex(race),
+    String(race?.distanceLabel || ''),
+    Number(race?.heatNumber || 0),
+    originalIndex,
+  ];
+}
+
+function compareRaceFlowKeys(a, b) {
+  const ka = a.key;
+  const kb = b.key;
+  for (let i = 0; i < Math.max(ka.length, kb.length); i++) {
+    const av = ka[i];
+    const bv = kb[i];
+    if (typeof av === 'number' && typeof bv === 'number') {
+      if (av !== bv) return av - bv;
+    } else {
+      const cmp = String(av ?? '').localeCompare(String(bv ?? ''), undefined, { numeric: true, sensitivity: 'base' });
+      if (cmp) return cmp;
+    }
+  }
+  return 0;
+}
+
+function arrangeBlockHeatFinalFlow(meet, block) {
+  if (!block || String(block.type || 'race') !== 'race') return false;
+  const raceIds = Array.isArray(block.raceIds) ? block.raceIds.map(String) : [];
+  if (raceIds.length < 2) return false;
+
+  const raceById = new Map((meet.races || []).map(r => [String(r.id), r]));
+  const rows = raceIds.map((id, idx) => ({ id, race: raceById.get(id), originalIndex: idx }));
+
+  const signaturesWithHeats = new Set();
+  for (const row of rows) {
+    if (!isStandardScheduleRace(row.race)) continue;
+    if (raceFlowStageKind(row.race) === 'heat') signaturesWithHeats.add(raceFlowSignature(row.race));
+  }
+
+  // Blocks with no heats are usually already deliberate/manual. Leave them alone.
+  if (!signaturesWithHeats.size) return false;
+
+  const heatRows = [];
+  const directFinalRows = [];
+  const heatedFinalRows = [];
+  const unknownRows = [];
+
+  for (const row of rows) {
+    const race = row.race;
+    if (!race) {
+      unknownRows.push({ ...row, key: [row.originalIndex] });
+      continue;
+    }
+
+    const standard = isStandardScheduleRace(race);
+    const signature = raceFlowSignature(race);
+    const stageKind = raceFlowStageKind(race);
+
+    if (standard && signaturesWithHeats.has(signature) && stageKind === 'heat') {
+      heatRows.push({ ...row, key: raceFlowSortKey(meet, race, row.originalIndex) });
+    } else if (standard && signaturesWithHeats.has(signature) && stageKind === 'final') {
+      heatedFinalRows.push({ ...row, key: raceFlowSortKey(meet, race, row.originalIndex) });
+    } else if (standard) {
+      directFinalRows.push({ ...row, key: raceFlowSortKey(meet, race, row.originalIndex) });
+    } else if (race.isAdditionalRace || String(race.division || '').toLowerCase() === 'additional') {
+      // Additionals usually behave like straight finals, and directors often want them
+      // near the start of the direct-final section.
+      directFinalRows.push({ ...row, key: [-100, Number(race.dayIndex || 0), row.originalIndex] });
+    } else {
+      // Relays/open/quad/time-trials keep their original relative order if they happen
+      // to be inside a normal block, but they stay out of the heat/final split.
+      directFinalRows.push({ ...row, key: [10000, row.originalIndex] });
+    }
+  }
+
+  heatRows.sort(compareRaceFlowKeys);
+  directFinalRows.sort(compareRaceFlowKeys);
+  heatedFinalRows.sort(compareRaceFlowKeys);
+
+  const nextIds = [...heatRows, ...directFinalRows, ...heatedFinalRows, ...unknownRows].map(row => row.id);
+  const changed = nextIds.join('|') !== raceIds.join('|');
+  if (changed) block.raceIds = nextIds;
+  return changed;
+}
+
+function autoArrangeMeetHeatFinalFlow(meet) {
+  let changedBlocks = 0;
+  ensureAtLeastOneBlock(meet);
+  for (const block of meet.blocks || []) {
+    if (arrangeBlockHeatFinalFlow(meet, block)) changedBlocks += 1;
+  }
+  if (changedBlocks) meet.updatedAt = nowIso();
+  return changedBlocks;
+}
+
 // ── Block Builder ─────────────────────────────────────────────────────────────
 
 app.get('/portal/meet/:meetId/blocks', requireRole('meet_director'), (req, res) => {
@@ -6430,6 +6594,18 @@ app.post('/api/meet/:meetId/blocks/move', requireRole('meet_director'), (req, re
   meet.blocks = blocks;
   meet.updatedAt = nowIso(); saveDb(req.db);
   res.json({ok:true});
+});
+
+
+app.post('/portal/meet/:meetId/blocks/auto-flow', requireRole('meet_director'), (req, res) => {
+  const meet=getMeetOr404(req.db,req.params.meetId);
+  if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
+
+  const changedBlocks = autoArrangeMeetHeatFinalFlow(meet);
+  if (changedBlocks) saveDb(req.db);
+  else saveDb(req.db);
+
+  res.redirect(`/portal/meet/${meet.id}/blocks?autoFlow=${changedBlocks}`);
 });
 
 app.post('/api/meet/:meetId/blocks/move-race', requireRole('meet_director'), (req, res) => {
