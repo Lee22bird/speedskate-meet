@@ -888,7 +888,81 @@ function generateAdditionalRacesForMeet(meet) {
   meet.updatedAt = nowIso();
 }
 
+
+function raceBlockRestoreKey(race) {
+  if (!race) return '';
+  const parent = String(race.parentRaceKey || '').trim();
+  if (parent) return 'parent|' + parent;
+  const type = race.isRelayRace ? 'relay'
+    : race.isAdditionalRace || race.isSkateabilityRace || String(race.division || '') === 'additional' || String(race.division || '') === 'skateability' ? 'additional'
+    : race.isTimeTrial ? 'time_trial'
+    : race.isQuadRace ? 'quad'
+    : race.isOpenRace ? 'open'
+    : 'standard';
+  return [
+    'sig',
+    type,
+    String(race.groupId || ''),
+    String(race.groupLabel || ''),
+    String(race.division || ''),
+    String(race.dayIndex || ''),
+    String(race.distanceLabel || ''),
+  ].join('|');
+}
+
+function restoreBlockAssignmentsAfterRaceSync(meet, originalBlocks, originalRaceById) {
+  const validIds = new Set((meet.races || []).map(r => String(r.id || '')));
+  const currentByKey = new Map();
+
+  for (const race of meet.races || []) {
+    const key = raceBlockRestoreKey(race);
+    if (!key) continue;
+    if (!currentByKey.has(key)) currentByKey.set(key, []);
+    currentByKey.get(key).push(String(race.id || ''));
+  }
+
+  const usedByBlock = new Map();
+
+  meet.blocks = (originalBlocks || []).map(block => {
+    const nextIds = [];
+    const used = new Set();
+
+    for (const rawId of block.raceIds || []) {
+      const oldId = String(rawId || '');
+      if (!oldId) continue;
+
+      if (validIds.has(oldId) && !used.has(oldId)) {
+        nextIds.push(oldId);
+        used.add(oldId);
+        continue;
+      }
+
+      const oldRace = originalRaceById.get(oldId);
+      if (!oldRace) continue;
+
+      const key = raceBlockRestoreKey(oldRace);
+      const replacements = currentByKey.get(key) || [];
+      const replacement = replacements.find(id => !used.has(id));
+      if (replacement) {
+        nextIds.push(replacement);
+        used.add(replacement);
+      }
+    }
+
+    usedByBlock.set(String(block.id || ''), used);
+    return { ...block, raceIds: nextIds };
+  });
+
+  ensureAtLeastOneBlock(meet);
+}
+
 function generateConfiguredRacesForMeet(meet) {
+  const originalBlocks = (meet.blocks || []).map(block => ({
+    ...block,
+    raceIds: [...(block.raceIds || [])],
+  }));
+  const originalRaceById = new Map((meet.races || []).map(r => [String(r.id || ''), { ...r }]));
+
   // One safe rebuild path for builder/block screens:
   // - regenerates normal divisions
   // - regenerates Open/Quad/Additional races
@@ -936,10 +1010,11 @@ function generateConfiguredRacesForMeet(meet) {
   rebuildTimeTrialRace(meet);
 
   const validIds = new Set((meet.races || []).map(r => String(r.id)));
-  meet.blocks = (meet.blocks || []).map(block => ({
-    ...block,
-    raceIds: (block.raceIds || []).filter(rid => validIds.has(String(rid))),
-  }));
+
+  // Some lower-level generators temporarily filter block.raceIds while syncing the
+  // race list. Restore the director's block schedule after all configured races
+  // are back in place, including Relay and Additional races.
+  restoreBlockAssignmentsAfterRaceSync(meet, originalBlocks, originalRaceById);
 
   if (!validIds.has(String(meet.currentRaceId || ''))) {
     meet.currentRaceId = '';
@@ -3637,14 +3712,14 @@ app.post('/portal/meet/:meetId/setup-presets/delete', requireRole('meet_director
   res.redirect(`/portal/meet/${meet.id}/builder`);
 });
 
-// Save meet fields and sync configured races while preserving block assignments
+// Save meet fields and sync configured races while preserving the manual Block Builder schedule.
+// This save button must not rebalance heats or wipe block assignments.
 app.post('/portal/meet/:meetId/builder/save-meet', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet) return res.redirect('/portal');
   if(!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
   saveMeetFields(meet, req.body, req.db);
   generateConfiguredRacesForMeet(meet);
-  rebuildRaceAssignments(meet);
   ensureAtLeastOneBlock(meet);
   ensureCurrentRace(meet);
   saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/builder?saved=1`);
