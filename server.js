@@ -6276,7 +6276,7 @@ app.post('/portal/meet/:meetId/time-trials/save', requireRole('meet_director'), 
 
 
 // ── Block race-flow auto-arranger ────────────────────────────────────────────
-// Real meet flow for blocks with heats:
+// Real meet flow for blocks with heats, including standard and quad races:
 // 1) heats first in age/division order
 // 2) straight finals next in age/division order
 // 3) finals for heated divisions last in age/division order
@@ -6285,8 +6285,13 @@ app.post('/portal/meet/:meetId/time-trials/save', requireRole('meet_director'), 
 function isStandardScheduleRace(race) {
   const div = String(race?.division || '').toLowerCase();
   if (!race) return false;
-  if (race.isOpenRace || race.isQuadRace || race.isRelayRace || race.isTimeTrial || race.isAdditionalRace || race.isSkateabilityRace) return false;
-  if (['open', 'quad', 'relay', 'additional', 'skateability'].includes(div)) return false;
+
+  // Auto Flow should handle normal division races AND quad races.
+  // It should still leave opens, relays, time trials, and additionals alone.
+  if (race.isOpenRace || race.isRelayRace || race.isTimeTrial || race.isAdditionalRace || race.isSkateabilityRace) return false;
+  if (['open', 'relay', 'additional', 'skateability'].includes(div)) return false;
+
+  if (race.isQuadRace || div === 'quad') return true;
   return ['novice', 'elite'].includes(div);
 }
 
