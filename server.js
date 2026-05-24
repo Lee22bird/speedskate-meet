@@ -6406,6 +6406,7 @@ app.get('/portal/meet/:meetId/blocks', requireRole('meet_director'), (req, res) 
             <button class="btn2 btn-sm" onclick="addDivider('practice','⛸️ Practice')">⛸️ Practice</button>
           </div>
           <form method="POST" action="/portal/meet/${meet.id}/assign-races?returnTo=blocks" onsubmit="return confirm('Rebuild recalculates heats, finals, race assignments, and lanes.\n\nYour manual block schedule is preserved.\n\nUse this after late registrations, scratches, division changes, challenge-up changes, or lane count changes.\n\nContinue?')"><button class="btn2" type="submit">Rebuild</button></form>
+          <form method="POST" action="/portal/meet/${meet.id}/blocks/auto-flow" onsubmit="return confirm('Auto Flow only reorders races already assigned inside each block.\n\nIt does NOT rebuild races, delete races, or move races between blocks.\n\nOrder used: heats first, straight finals next, heated finals last.\n\nContinue?')"><button class="btn-good" type="submit">Auto Flow</button></form>
           <a class="btn-orange" href="/portal/meet/${meet.id}/registered/print-race-list" target="_blank">Print Race List</a>
         </div>
 
