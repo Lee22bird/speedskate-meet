@@ -5697,32 +5697,120 @@ function raceImportSignature(race) {
   ].join('|');
 }
 
+function raceFamilySignature(race) {
+  const type = race?.isQuadRace || String(race?.division || '').toLowerCase() === 'quad' ? 'quad'
+    : race?.isOpenRace || String(race?.division || '').toLowerCase() === 'open' ? 'open'
+    : race?.isRelayRace || String(race?.division || '').toLowerCase() === 'relay' ? 'relay'
+    : race?.isAdditionalRace || race?.isSkateabilityRace || ['additional','skateability'].includes(String(race?.division || '').toLowerCase()) ? 'additional'
+    : race?.isTimeTrial ? 'time_trial'
+    : 'standard';
+
+  return [
+    type,
+    String(race?.parentRaceKey || ''),
+    String(race?.groupId || ''),
+    String(race?.division || ''),
+    String(race?.dayIndex || ''),
+    String(race?.distanceLabel || ''),
+  ].join('|');
+}
+
+function raceStageRankForRestore(race) {
+  const stage = String(race?.stage || '').toLowerCase();
+  if (stage === 'heat') return 10 + Number(race?.heatNumber || 0);
+  if (stage === 'semi') return 50 + Number(race?.heatNumber || 0);
+  if (stage === 'final') return 100;
+  return 90;
+}
+
+function addRaceIdsUnique(target, ids) {
+  for (const id of ids || []) {
+    const sid = String(id || '');
+    if (sid && !target.includes(sid)) target.push(sid);
+  }
+}
+
 function restoreBlockAssignmentsBySignature(meet, previousBlocks, previousRaces) {
   const previousById = new Map((previousRaces || []).map(r => [String(r.id || ''), r]));
   const currentIds = new Set((meet.races || []).map(r => String(r.id || '')));
   const currentBySignature = new Map();
+  const currentByFamily = new Map();
 
   for (const race of meet.races || []) {
+    const id = String(race.id || '');
     const sig = raceImportSignature(race);
     if (!currentBySignature.has(sig)) currentBySignature.set(sig, []);
-    currentBySignature.get(sig).push(String(race.id || ''));
+    currentBySignature.get(sig).push(id);
+
+    const family = raceFamilySignature(race);
+    if (!currentByFamily.has(family)) currentByFamily.set(family, []);
+    currentByFamily.get(family).push(race);
+  }
+
+  for (const races of currentByFamily.values()) {
+    races.sort((a, b) => {
+      const byStage = raceStageRankForRestore(a) - raceStageRankForRestore(b);
+      if (byStage !== 0) return byStage;
+      return Number(a.orderHint || 0) - Number(b.orderHint || 0);
+    });
   }
 
   meet.blocks = (previousBlocks || []).map(block => {
     const nextIds = [];
+
+    const oldRacesInBlock = (block.raceIds || [])
+      .map(id => previousById.get(String(id || '')))
+      .filter(Boolean);
+
+    const oldFamilyStageCounts = new Map();
+    for (const oldRace of oldRacesInBlock) {
+      const family = raceFamilySignature(oldRace);
+      if (!oldFamilyStageCounts.has(family)) oldFamilyStageCounts.set(family, new Set());
+      oldFamilyStageCounts.get(family).add(String(oldRace.stage || '').toLowerCase() || 'race');
+    }
+
     for (const oldIdRaw of block.raceIds || []) {
       const oldId = String(oldIdRaw || '');
-      if (currentIds.has(oldId)) {
-        if (!nextIds.includes(oldId)) nextIds.push(oldId);
+      const oldRace = previousById.get(oldId);
+
+      if (!oldRace) {
+        if (currentIds.has(oldId)) addRaceIdsUnique(nextIds, [oldId]);
         continue;
       }
-      const oldRace = previousById.get(oldId);
-      if (!oldRace) continue;
-      const replacements = currentBySignature.get(raceImportSignature(oldRace)) || [];
-      for (const rid of replacements) {
-        if (!nextIds.includes(rid)) nextIds.push(rid);
+
+      const family = raceFamilySignature(oldRace);
+      const familyRaces = currentByFamily.get(family) || [];
+      const familyStages = oldFamilyStageCounts.get(family) || new Set();
+      const oldStage = String(oldRace.stage || '').toLowerCase();
+      const isFinalish = oldStage === 'final' || oldStage === 'race' || oldRace.isFinal;
+      const oldBlockAlreadyHadHeatForFamily = familyStages.has('heat') || familyStages.has('semi');
+      const currentFamilyHasHeats = familyRaces.some(r => ['heat','semi'].includes(String(r.stage || '').toLowerCase()));
+
+      // Important for new/test meets and presets:
+      // A preset often stores only the final race shell because no skaters/heats existed yet.
+      // After importing skaters and rebuilding assignments, that same division may split into
+      // Heat 1 / Heat 2 / Final. If we only restore the old final ID/signature, the new heats
+      // get kicked into Unassigned. When an old block had only the final/race shell for a family,
+      // expand it to the full rebuilt family and keep those heats in the same block.
+      if (isFinalish && !oldBlockAlreadyHadHeatForFamily && currentFamilyHasHeats) {
+        addRaceIdsUnique(nextIds, familyRaces.map(r => String(r.id || '')));
+        continue;
       }
+
+      if (currentIds.has(oldId)) {
+        addRaceIdsUnique(nextIds, [oldId]);
+        continue;
+      }
+
+      const exactReplacements = currentBySignature.get(raceImportSignature(oldRace)) || [];
+      if (exactReplacements.length) {
+        addRaceIdsUnique(nextIds, exactReplacements);
+        continue;
+      }
+
+      addRaceIdsUnique(nextIds, familyRaces.map(r => String(r.id || '')));
     }
+
     return { ...block, raceIds: nextIds };
   });
 }
