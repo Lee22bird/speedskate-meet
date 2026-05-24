@@ -588,7 +588,9 @@ function makeSetupPresetFromMeet(db, meet, name, ownerUserId) {
     trackLength: Number(meet.trackLength || 100),
     lanes: Number(meet.lanes || 4),
     timeTrialsEnabled: !!meet.timeTrialsEnabled,
-    relayEnabled: !!meet.relayEnabled,
+    relayEnabled: !!meet.relayEnabled || (meet.races || []).some(r => r.isRelayRace),
+    relayTemplates: JSON.parse(JSON.stringify(meet.relayTemplates || [])),
+    relayRaces: JSON.parse(JSON.stringify((meet.races || []).filter(r => r.isRelayRace))),
     judgesPanelRequired: !!meet.judgesPanelRequired,
     groups: JSON.parse(JSON.stringify(meet.groups || [])),
     openGroups: JSON.parse(JSON.stringify(meet.openGroups || [])),
@@ -3640,11 +3642,25 @@ app.post('/portal/meet/:meetId/builder/save-preset', requireRole('meet_director'
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet) return res.redirect('/portal');
   if(!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
+
+  // IMPORTANT: this button submits the whole Meet Builder form. Save the current
+  // form values first so the preset captures the lane count, relay toggle, pricing,
+  // divisions, opens, quads, and additionals the director is looking at right now.
+  // Without this, presets could capture stale meet.lanes (usually 4) and stale
+  // relayEnabled state.
+  const oldLaneCount = Number(meet.lanes || 4);
+  const oldTrackLength = Number(meet.trackLength || 100);
   saveMeetFields(meet, req.body, req.db);
+  const laneOrTrackChanged = Number(meet.lanes || 4) !== oldLaneCount || Number(meet.trackLength || 100) !== oldTrackLength;
+  if (laneOrTrackChanged) {
+    generateConfiguredRacesForMeet(meet);
+    rebuildRaceAssignmentsSafe(meet);
+  }
+
   if(!Array.isArray(req.db.setupPresets)) req.db.setupPresets=[];
   const preset=makeSetupPresetFromMeet(req.db, meet, req.body.presetName, req.user.id);
   req.db.setupPresets.push(preset);
-  saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/builder?presetSaved=1`);
+  saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/builder?presetSaved=1${laneOrTrackChanged?'&lanesSaved=1':''}`);
 });
 
 // Load a saved setup preset into the current meet (copy reusable structure only)
@@ -3689,10 +3705,26 @@ app.post('/portal/meet/:meetId/setup-presets/load', requireRole('meet_director')
   meet.additionalRaceFee = Number(preset.additionalRaceFee || 0);
   meet.maxRegistrationFee = Number(preset.maxRegistrationFee || 0);
   meet.trackLength = preset.trackLength || meet.trackLength;
-  meet.lanes = preset.lanes || meet.lanes;
+  const presetLaneCount = Number(preset.lanes);
+  if (Number.isFinite(presetLaneCount) && presetLaneCount > 0) meet.lanes = presetLaneCount;
+  const presetTrackLength = Number(preset.trackLength);
+  if (Number.isFinite(presetTrackLength) && presetTrackLength > 0) meet.trackLength = presetTrackLength;
   meet.timeTrialsEnabled = !!preset.timeTrialsEnabled;
-  meet.relayEnabled = !!preset.relayEnabled;
+  meet.relayTemplates = JSON.parse(JSON.stringify(preset.relayTemplates || meet.relayTemplates || []));
+  const presetRelayRaces = Array.isArray(preset.relayRaces) ? JSON.parse(JSON.stringify(preset.relayRaces)) : [];
+  meet.relayEnabled = !!preset.relayEnabled || presetRelayRaces.length > 0;
   meet.judgesPanelRequired = !!preset.judgesPanelRequired;
+
+  // Presets should restore the director's relay races too. Relay Builder creates
+  // actual race shells, so saving only relayEnabled was not enough for templates.
+  meet.races = (meet.races || []).filter(r => !r.isRelayRace);
+  for (const relay of presetRelayRaces) {
+    relay.isRelayRace = true;
+    relay.division = relay.division || 'relay';
+    relay.status = relay.status || 'open';
+    relay.laneEntries = Array.isArray(relay.laneEntries) ? relay.laneEntries : [];
+    meet.races.push(relay);
+  }
 
   // Presets should restore the director's block layout, not erase it.
   // First rebuild the race structure from the preset settings, then map saved block raceIds
