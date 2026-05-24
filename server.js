@@ -274,6 +274,23 @@ function makeQuadGroupsTemplate() {
   }));
 }
 
+function makeManualExtraRaceSlots(raw) {
+  const saved = Array.isArray(raw) ? raw : [];
+  return [0,1,2,3].map(i => {
+    const id = 'manual_extra_' + (i + 1);
+    const match = saved.find(x => String(x.id || '') === id) || {};
+    return {
+      id,
+      ageGroupId: '',
+      ageGroupLabel: String(match.ageGroupLabel || match.title || '').trim(),
+      ages: String(match.ages || '').trim(),
+      enabled: !!match.enabled,
+      distances: Array.isArray(match.distances) ? [0,1,2].map(n => String(match.distances[n] || '').trim()) : ['', '', ''],
+    };
+  });
+}
+
+
 function nextId(arr) { let max=0; for(const item of arr||[]) max=Math.max(max,Number(item.id)||0); return max+1; }
 
 function makeDivisionsTemplate() {
@@ -322,7 +339,7 @@ function defaultMeet(ownerUserId) {
     notes:'', scheduleNotes:'', relayNotes:'', isPublic:false, status:'draft', tiebreaker:'d2',
     ...defaultPricingFields(),
     groups:baseGroups(), openGroups:makeOpenGroupsTemplate(), quadGroups:makeQuadGroupsTemplate(),
-    races:[], blocks:[], registrations:[], skateabilityGroups:[],
+    races:[], blocks:[], registrations:[], skateabilityGroups:makeManualExtraRaceSlots([]),
     currentRaceId:'', currentRaceIndex:-1, raceDayPaused:false,
   };
 }
@@ -426,7 +443,7 @@ function migrateMeet(meet,fallbackOwnerId) {
   if(typeof meet.raceDayPaused!=='boolean') meet.raceDayPaused=false;
   normalizeMeetPricingFields(meet);
   if(!Array.isArray(meet.textAlerts)) meet.textAlerts=[];
-  if(!Array.isArray(meet.skateabilityGroups)) meet.skateabilityGroups = Array.isArray(meet.additionalRaces) ? meet.additionalRaces : [];
+  meet.skateabilityGroups = makeManualExtraRaceSlots(meet.skateabilityGroups); meet.additionalRaces = meet.skateabilityGroups.map(g => ({ ...g }));
   meet.races=meet.races.map((r,idx)=>({
     id:r.id||('r'+crypto.randomBytes(6).toString('hex')), orderHint:Number(r.orderHint||idx+1),
     groupId:String(r.groupId||''), groupLabel:String(r.groupLabel||''), ages:String(r.ages||''),
@@ -765,9 +782,7 @@ function buildRaceSetForEntries(baseRace,regs,laneCount) {
 
 
 function generateAdditionalRacesForMeet(meet) {
-  const rawGroups = Array.isArray(meet.skateabilityGroups)
-    ? meet.skateabilityGroups
-    : (Array.isArray(meet.additionalRaces) ? meet.additionalRaces : []);
+  const rawGroups = makeManualExtraRaceSlots(meet.skateabilityGroups);
 
   const nonAdditionalRaces = (meet.races || []).filter(r =>
     String(r.division || '') !== 'skateability' &&
@@ -791,7 +806,7 @@ function generateAdditionalRacesForMeet(meet) {
     const raceGroupId = savedId;
 
     const rawTitle = String(sg.ageGroupLabel || sg.title || '').trim();
-    const title = rawTitle && rawTitle.toLowerCase() !== 'additional race' ? rawTitle : 'Manual Extra Race';
+    const title = rawTitle && rawTitle.toLowerCase() !== 'additional race' ? rawTitle : `Manual Extra Race ${String(savedId).replace('manual_extra_','')}`;
 
     const linkedAgeGroup = (meet.groups || []).find(g => String(g.id) === linkedAgeGroupId);
     const ages = String(sg.ages || linkedAgeGroup?.ages || '').trim();
@@ -3355,7 +3370,7 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
           <span class="chip chip-sky">4 Manual Slots</span>
         </div>
         ${(()=>{
-          const saved = Array.isArray(meet.skateabilityGroups) ? meet.skateabilityGroups : [];
+          const saved = makeManualExtraRaceSlots(meet.skateabilityGroups);
           const defaults = [0,1,2,3].map(i => ({
             id: 'manual_extra_' + (i + 1),
             ageGroupLabel: '',
@@ -3364,7 +3379,7 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
             distances: ['', '', ''],
           }));
           const rows = defaults.map((def, i) => {
-            const found = saved.find(x => String(x.id || '') === def.id) || saved[i] || {};
+            const found = saved.find(x => String(x.id || '') === def.id) || {};
             return {
               id: def.id,
               ageGroupLabel: String(found.ageGroupLabel || found.title || def.ageGroupLabel || ''),
@@ -3458,13 +3473,11 @@ function saveMeetFields(meet, body, db) {
       }
     });
   }
-  // Save additional race groups only when that section is actually posted.
+  // Save four fixed manual extra race slots.
   if(Object.prototype.hasOwnProperty.call(body||{}, 'skateability_count')) {
-    const skCount = Number(body.skateability_count||0);
-    meet.skateabilityGroups = [];
-    for(let si=0; si<skCount; si++) {
-      const id = String(body[`sk_${si}_id`]||'').trim() || ('sk_custom_'+si+'_'+crypto.randomBytes(3).toString('hex'));
-      const ageGroupId = String(body[`sk_${si}_ageGroupId`]||'').trim();
+    const nextManual = [];
+    for(let si=0; si<4; si++) {
+      const id = 'manual_extra_' + (si + 1);
       const ageGroupLabel = String(body[`sk_${si}_ageGroupLabel`]||'').trim();
       const ages = String(body[`sk_${si}_ages`]||'').trim();
       const distances = [
@@ -3472,20 +3485,17 @@ function saveMeetFields(meet, body, db) {
         String(body[`sk_${si}_d2`]||'').trim(),
         String(body[`sk_${si}_d3`]||'').trim(),
       ];
-      const enabled = !!body[`sk_${si}_enabled`];
-      const hasRealContent = !!ageGroupLabel || !!ages || distances.some(Boolean);
-      if(!hasRealContent) continue;
-      meet.skateabilityGroups.push({
+      nextManual.push({
         id,
-        ageGroupId,
-        ageGroupLabel: ageGroupLabel || ('Manual Extra Race ' + (si + 1)),
+        ageGroupId: '',
+        ageGroupLabel,
         ages,
-        enabled,
+        enabled: !!body[`sk_${si}_enabled`],
         distances,
       });
     }
-    // Mirror into `additionalRaces` for compatibility and persistence
-    meet.additionalRaces = (meet.skateabilityGroups || []).map(g => ({ ...g }));
+    meet.skateabilityGroups = makeManualExtraRaceSlots(nextManual);
+    meet.additionalRaces = meet.skateabilityGroups.map(g => ({ ...g }));
   }
   // Keep existing registration totals in sync when global pricing changes.
   // This does not touch race generation or legacy stored cost fields.
@@ -4687,7 +4697,7 @@ app.get('/portal/meet/:meetId/blocks', requireRole('meet_director'), (req, res) 
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet) return res.redirect('/portal');
   if(!canEditMeet(req.user,meet)) return res.status(403).send(pageShell({title:'Forbidden',user:req.user,bodyHtml:`<div class="page-header"><h1>Forbidden</h1></div><div class="card"><div class="danger">Only the meet owner can edit this meet.</div></div>`}));
-  generateConfiguredRacesForMeet(meet); ensureAtLeastOneBlock(meet); ensureCurrentRace(meet); saveDb(req.db);
+  ensureAtLeastOneBlock(meet); ensureCurrentRace(meet); saveDb(req.db);
   const raceById=new Map((meet.races||[]).map(r=>[r.id,r]));
   const assigned=new Set(); for(const block of meet.blocks||[]) for(const rid of block.raceIds||[]) assigned.add(rid);
   const unassigned=(meet.races||[]).filter(r=>!assigned.has(r.id));
@@ -4816,7 +4826,7 @@ app.get('/portal/meet/:meetId/blocks', requireRole('meet_director'), (req, res) 
                 <div><label>Class</label>
                   <select id="classFilter" onchange="applyFilters()">
                     <option value="all">All</option><option value="novice">Novice</option>
-                    <option value="elite">Elite</option><option value="open">Open</option><option value="quad">Quad</option><option value="additional">Additional</option>
+                    <option value="elite">Elite</option><option value="open">Open</option><option value="quad">Quad</option><option value="additional">Additional</option><option value="additional">Additional</option>
                   </select>
                 </div>
                 <div><label>Distance</label>
