@@ -4470,6 +4470,1321 @@ function registrationForm(meet,reg,action,title) {
 
 // ── Registered ────────────────────────────────────────────────────────────────
 
+
+
+// ── Dev Import: Wichita Spring Fling realistic stress-test roster ───────────
+// Super-admin only. This is intentionally server-side so production users never see it.
+const SPRING_FLING_TEST_ROSTER = [
+  {
+    "helmetNumber": 352,
+    "name": "Gabby Burrow",
+    "team": "Midwest Racing",
+    "age": 5,
+    "gender": "girls",
+    "options": [
+      "elite"
+    ]
+  },
+  {
+    "helmetNumber": 281,
+    "name": "Coursan Wu",
+    "team": "Stallions Racing",
+    "age": 7,
+    "gender": "boys",
+    "options": [
+      "elite",
+      "novice",
+      "relay2Person",
+      "relay3Person"
+    ]
+  },
+  {
+    "helmetNumber": 264,
+    "name": "Jaxson Simas",
+    "team": "Stallions Racing",
+    "age": 7,
+    "gender": "boys",
+    "options": [
+      "elite",
+      "novice",
+      "relay2Person",
+      "relay3Person"
+    ]
+  },
+  {
+    "helmetNumber": 232,
+    "name": "Hazel Hale",
+    "team": "Star Skate Speed",
+    "age": 7,
+    "gender": "girls",
+    "options": [
+      "elite",
+      "relay2Person"
+    ]
+  },
+  {
+    "helmetNumber": 234,
+    "name": "Lincoln Hale",
+    "team": "Star Skate Speed",
+    "age": 7,
+    "gender": "girls",
+    "options": [
+      "elite",
+      "relay2Person"
+    ]
+  },
+  {
+    "helmetNumber": 353,
+    "name": "Jordanna Gonser",
+    "team": "Midwest Racing",
+    "age": 7,
+    "gender": "girls",
+    "options": [
+      "elite",
+      "novice",
+      "quad",
+      "relay2Person"
+    ]
+  },
+  {
+    "helmetNumber": 354,
+    "name": "Leeanna Gonser",
+    "team": "Midwest Racing",
+    "age": 7,
+    "gender": "girls",
+    "options": [
+      "elite",
+      "novice",
+      "quad",
+      "relay2Person"
+    ]
+  },
+  {
+    "helmetNumber": 338,
+    "name": "Ellie Doubleday",
+    "team": "Midwest Racing",
+    "age": 7,
+    "gender": "girls",
+    "options": [
+      "elite",
+      "novice",
+      "relay2Person"
+    ]
+  },
+  {
+    "helmetNumber": 266,
+    "name": "Fitz Janelle",
+    "team": "Stallions Racing",
+    "age": 9,
+    "gender": "boys",
+    "options": [
+      "elite",
+      "novice",
+      "open",
+      "relay2Person"
+    ]
+  },
+  {
+    "helmetNumber": 314,
+    "name": "Max Taylor",
+    "team": "Diamond State Racing",
+    "age": 9,
+    "gender": "boys",
+    "options": [
+      "elite",
+      "novice",
+      "quad"
+    ]
+  },
+  {
+    "helmetNumber": 104,
+    "name": "Kempson Jones",
+    "team": "Lone Star Speed Team",
+    "age": 9,
+    "gender": "boys",
+    "options": [
+      "elite",
+      "novice",
+      "relay2Person"
+    ]
+  },
+  {
+    "helmetNumber": 344,
+    "name": "Matthew Towne II",
+    "team": "Midwest Racing",
+    "age": 9,
+    "gender": "boys",
+    "options": [
+      "elite",
+      "quad",
+      "relay2Person"
+    ]
+  },
+  {
+    "helmetNumber": 355,
+    "name": "Wesley Burrow",
+    "team": "Midwest Racing",
+    "age": 9,
+    "gender": "boys",
+    "options": [
+      "elite",
+      "relay2Person"
+    ]
+  },
+  {
+    "helmetNumber": 247,
+    "name": "Austin Marshall",
+    "team": "Midwest Racing",
+    "age": 9,
+    "gender": "boys",
+    "options": [
+      "elite",
+      "relay2Person"
+    ]
+  },
+  {
+    "helmetNumber": 265,
+    "name": "Winter Larghe",
+    "team": "Stallions Racing",
+    "age": 9,
+    "gender": "girls",
+    "options": [
+      "elite",
+      "novice",
+      "relay2Person"
+    ]
+  },
+  {
+    "helmetNumber": 341,
+    "name": "Kenishka Sudakar",
+    "team": "Midwest Racing",
+    "age": 9,
+    "gender": "girls",
+    "options": [
+      "elite",
+      "quad",
+      "relay2Person"
+    ]
+  },
+  {
+    "helmetNumber": 342,
+    "name": "Koralyne Hick",
+    "team": "Midwest Racing",
+    "age": 9,
+    "gender": "girls",
+    "options": [
+      "elite",
+      "quad",
+      "relay2Person"
+    ]
+  },
+  {
+    "helmetNumber": 345,
+    "name": "McKinley Nigh",
+    "team": "Midwest Racing",
+    "age": 9,
+    "gender": "girls",
+    "options": [
+      "elite",
+      "quad",
+      "relay2Person"
+    ]
+  },
+  {
+    "helmetNumber": 196,
+    "name": "Miguel Acosta",
+    "team": "Texas Speed",
+    "age": 11,
+    "gender": "boys",
+    "options": [
+      "elite",
+      "novice",
+      "relay2Person"
+    ]
+  },
+  {
+    "helmetNumber": 395,
+    "name": "Ryker Peck",
+    "team": "Team Velocity",
+    "age": 11,
+    "gender": "boys",
+    "options": [
+      "elite"
+    ]
+  },
+  {
+    "helmetNumber": 312,
+    "name": "Hunter Luneau",
+    "team": "Diamond State Racing",
+    "age": 11,
+    "gender": "boys",
+    "options": [
+      "elite"
+    ]
+  },
+  {
+    "helmetNumber": 233,
+    "name": "Gene Rhea",
+    "team": "Star Skate Speed",
+    "age": 11,
+    "gender": "boys",
+    "options": [
+      "elite",
+      "novice",
+      "relay2Person"
+    ]
+  },
+  {
+    "helmetNumber": 368,
+    "name": "Nash Bird",
+    "team": "Midwest Racing",
+    "age": 11,
+    "gender": "boys",
+    "options": [
+      "elite",
+      "novice",
+      "quad",
+      "relay2Person"
+    ]
+  },
+  {
+    "helmetNumber": 282,
+    "name": "Bonnie Wu",
+    "team": "Stallions Racing",
+    "age": 11,
+    "gender": "girls",
+    "options": [
+      "elite",
+      "novice",
+      "relay2Person"
+    ]
+  },
+  {
+    "helmetNumber": 268,
+    "name": "Isabell Lee",
+    "team": "Stallions Racing",
+    "age": 11,
+    "gender": "girls",
+    "options": [
+      "elite",
+      "novice",
+      "relay2Person"
+    ]
+  },
+  {
+    "helmetNumber": 334,
+    "name": "Carlie Lentz",
+    "team": "Midwest Racing",
+    "age": 11,
+    "gender": "girls",
+    "options": [
+      "elite",
+      "novice",
+      "relay2Person"
+    ]
+  },
+  {
+    "helmetNumber": 358,
+    "name": "Jabree Scott",
+    "team": "Midwest Racing",
+    "age": 11,
+    "gender": "girls",
+    "options": [
+      "elite",
+      "quad",
+      "relay2Person"
+    ]
+  },
+  {
+    "helmetNumber": 357,
+    "name": "Patricia Balirigi",
+    "team": "Midwest Racing",
+    "age": 11,
+    "gender": "girls",
+    "options": [
+      "elite",
+      "novice",
+      "quad",
+      "relay2Person"
+    ]
+  },
+  {
+    "helmetNumber": 349,
+    "name": "Skyler Kirkhart",
+    "team": "Midwest Racing",
+    "age": 11,
+    "gender": "girls",
+    "options": [
+      "elite",
+      "quad",
+      "relay2Person"
+    ]
+  },
+  {
+    "helmetNumber": 267,
+    "name": "Clover Rogers",
+    "team": "Stallions Racing",
+    "age": 11,
+    "gender": "girls",
+    "options": [
+      "elite",
+      "novice",
+      "relay2Person"
+    ]
+  },
+  {
+    "helmetNumber": 311,
+    "name": "Ellie Taylor",
+    "team": "Diamond State Racing",
+    "age": 11,
+    "gender": "girls",
+    "options": [
+      "elite",
+      "novice",
+      "relay2Person"
+    ]
+  },
+  {
+    "helmetNumber": 347,
+    "name": "Rylee Washam",
+    "team": "Midwest Racing",
+    "age": 11,
+    "gender": "girls",
+    "options": [
+      "elite",
+      "novice",
+      "relay2Person"
+    ]
+  },
+  {
+    "helmetNumber": 356,
+    "name": "Maisey Hughes-Reece",
+    "team": "Midwest Racing",
+    "age": 11,
+    "gender": "girls",
+    "options": [
+      "elite",
+      "novice",
+      "quad"
+    ]
+  },
+  {
+    "helmetNumber": 366,
+    "name": "Karlee Meier",
+    "team": "Midwest Racing",
+    "age": 11,
+    "gender": "girls",
+    "options": [
+      "elite",
+      "novice",
+      "relay2Person"
+    ]
+  },
+  {
+    "helmetNumber": 158,
+    "name": "Robert Lafferty",
+    "team": "Inside Edge",
+    "age": 13,
+    "gender": "boys",
+    "options": [
+      "elite",
+      "novice",
+      "open"
+    ]
+  },
+  {
+    "helmetNumber": 359,
+    "name": "Josef Stevens",
+    "team": "Midwest Racing",
+    "age": 13,
+    "gender": "boys",
+    "options": [
+      "elite",
+      "quad"
+    ]
+  },
+  {
+    "helmetNumber": 331,
+    "name": "Brentley Berg-Fudge",
+    "team": "Midwest Racing",
+    "age": 13,
+    "gender": "boys",
+    "options": [
+      "elite",
+      "quad"
+    ]
+  },
+  {
+    "helmetNumber": 159,
+    "name": "Skyler Lopez",
+    "team": "Inside Edge",
+    "age": 13,
+    "gender": "girls",
+    "options": [
+      "elite",
+      "open",
+      "quad"
+    ]
+  },
+  {
+    "helmetNumber": 270,
+    "name": "Lumen Rogers",
+    "team": "Stallions Racing",
+    "age": 13,
+    "gender": "girls",
+    "options": [
+      "elite",
+      "novice",
+      "open"
+    ]
+  },
+  {
+    "helmetNumber": 271,
+    "name": "Jenaya Washington",
+    "team": "Stallions Racing",
+    "age": 13,
+    "gender": "girls",
+    "options": [
+      "elite",
+      "novice",
+      "open"
+    ]
+  },
+  {
+    "helmetNumber": 155,
+    "name": "Marcileen Smith",
+    "team": "Inside Edge",
+    "age": 13,
+    "gender": "girls",
+    "options": [
+      "elite",
+      "novice",
+      "quad"
+    ]
+  },
+  {
+    "helmetNumber": 269,
+    "name": "Coraline Larghe",
+    "team": "Stallions Racing",
+    "age": 13,
+    "gender": "girls",
+    "options": [
+      "elite",
+      "novice"
+    ]
+  },
+  {
+    "helmetNumber": 213,
+    "name": "Journie Warkentin",
+    "team": "Midwest Racing",
+    "age": 13,
+    "gender": "girls",
+    "options": [
+      "elite",
+      "novice",
+      "quad"
+    ]
+  },
+  {
+    "helmetNumber": 177,
+    "name": "Karran Sudhakar",
+    "team": "DFW Speed",
+    "age": 15,
+    "gender": "men",
+    "options": [
+      "elite"
+    ]
+  },
+  {
+    "helmetNumber": 283,
+    "name": "Asher Ellison",
+    "team": "Stallions Racing",
+    "age": 15,
+    "gender": "men",
+    "options": [
+      "elite",
+      "novice"
+    ]
+  },
+  {
+    "helmetNumber": 336,
+    "name": "Dylan Sousa",
+    "team": "Midwest Racing",
+    "age": 15,
+    "gender": "men",
+    "options": [
+      "elite"
+    ]
+  },
+  {
+    "helmetNumber": 236,
+    "name": "Jet Osmani",
+    "team": "Midwest Racing",
+    "age": 15,
+    "gender": "men",
+    "options": [
+      "elite"
+    ]
+  },
+  {
+    "helmetNumber": 176,
+    "name": "Joseph Crozier",
+    "team": "DFW Speed",
+    "age": 15,
+    "gender": "men",
+    "options": [
+      "elite",
+      "novice"
+    ]
+  },
+  {
+    "helmetNumber": 219,
+    "name": "Damion See",
+    "team": "Midwest Racing",
+    "age": 15,
+    "gender": "men",
+    "options": [
+      "elite",
+      "novice"
+    ]
+  },
+  {
+    "helmetNumber": 346,
+    "name": "Richie Cabrera",
+    "team": "Midwest Racing",
+    "age": 15,
+    "gender": "men",
+    "options": [
+      "elite",
+      "novice",
+      "quad"
+    ]
+  },
+  {
+    "helmetNumber": 197,
+    "name": "Milla Pham",
+    "team": "Texas Speed",
+    "age": 15,
+    "gender": "women",
+    "options": [
+      "elite"
+    ]
+  },
+  {
+    "helmetNumber": 397,
+    "name": "Skylor Peck",
+    "team": "Team Velocity",
+    "age": 15,
+    "gender": "women",
+    "options": [
+      "elite",
+      "novice"
+    ]
+  },
+  {
+    "helmetNumber": 390,
+    "name": "Aubreigh Sommers",
+    "team": "Team Velocity",
+    "age": 15,
+    "gender": "women",
+    "options": [
+      "elite",
+      "novice"
+    ]
+  },
+  {
+    "helmetNumber": 272,
+    "name": "Ky Reed",
+    "team": "Stallions Racing",
+    "age": 15,
+    "gender": "women",
+    "options": [
+      "elite"
+    ]
+  },
+  {
+    "helmetNumber": 360,
+    "name": "Laney Stevens",
+    "team": "Midwest Racing",
+    "age": 15,
+    "gender": "women",
+    "options": [
+      "elite",
+      "quad"
+    ]
+  },
+  {
+    "helmetNumber": 350,
+    "name": "Stokley Shrewsbury",
+    "team": "Midwest Racing",
+    "age": 15,
+    "gender": "women",
+    "options": [
+      "elite",
+      "quad"
+    ]
+  },
+  {
+    "helmetNumber": 185,
+    "name": "Camaron Mayo",
+    "team": "DFW Speed",
+    "age": 17,
+    "gender": "men",
+    "options": [
+      "elite",
+      "quad"
+    ]
+  },
+  {
+    "helmetNumber": 173,
+    "name": "Gage Daugherty",
+    "team": "DFW Speed",
+    "age": 17,
+    "gender": "men",
+    "options": [
+      "elite"
+    ]
+  },
+  {
+    "helmetNumber": 220,
+    "name": "Landon Conley",
+    "team": "Midwest Racing",
+    "age": 17,
+    "gender": "men",
+    "options": [
+      "elite",
+      "novice"
+    ]
+  },
+  {
+    "helmetNumber": 221,
+    "name": "Logan See",
+    "team": "Midwest Racing",
+    "age": 17,
+    "gender": "men",
+    "options": [
+      "elite",
+      "novice",
+      "quad"
+    ]
+  },
+  {
+    "helmetNumber": 392,
+    "name": "Brayden Stokes",
+    "team": "Team Velocity",
+    "age": 17,
+    "gender": "men",
+    "options": [
+      "elite",
+      "novice"
+    ]
+  },
+  {
+    "helmetNumber": 339,
+    "name": "Gavin Howe",
+    "team": "Midwest Racing",
+    "age": 17,
+    "gender": "men",
+    "options": [
+      "elite",
+      "novice",
+      "quad"
+    ]
+  },
+  {
+    "helmetNumber": 343,
+    "name": "Mason Shore",
+    "team": "Midwest Racing",
+    "age": 17,
+    "gender": "men",
+    "options": [
+      "elite"
+    ]
+  },
+  {
+    "helmetNumber": 171,
+    "name": "Dhiyana Rajaram",
+    "team": "DFW Speed",
+    "age": 17,
+    "gender": "women",
+    "options": [
+      "elite"
+    ]
+  },
+  {
+    "helmetNumber": 172,
+    "name": "Emerson Study",
+    "team": "DFW Speed",
+    "age": 17,
+    "gender": "women",
+    "options": [
+      "elite",
+      "quad"
+    ]
+  },
+  {
+    "helmetNumber": 348,
+    "name": "Safe Meek",
+    "team": "Midwest Racing",
+    "age": 17,
+    "gender": "women",
+    "options": [
+      "elite"
+    ]
+  },
+  {
+    "helmetNumber": 279,
+    "name": "Zoe Rook",
+    "team": "Stallions Racing",
+    "age": 17,
+    "gender": "women",
+    "options": [
+      "novice"
+    ]
+  },
+  {
+    "helmetNumber": 396,
+    "name": "Shaun Speidel",
+    "team": "Team Velocity",
+    "age": 20,
+    "gender": "men",
+    "options": [
+      "elite",
+      "novice"
+    ]
+  },
+  {
+    "helmetNumber": 223,
+    "name": "Michael Coultis",
+    "team": "Midwest Racing",
+    "age": 20,
+    "gender": "men",
+    "options": [
+      "elite",
+      "quad"
+    ]
+  },
+  {
+    "helmetNumber": 335,
+    "name": "Carlo Balderrama",
+    "team": "Midwest Racing",
+    "age": 20,
+    "gender": "men",
+    "options": [
+      "elite"
+    ]
+  },
+  {
+    "helmetNumber": 231,
+    "name": "Ashton Hale",
+    "team": "Midwest Racing",
+    "age": 20,
+    "gender": "men",
+    "options": [
+      "elite"
+    ]
+  },
+  {
+    "helmetNumber": 333,
+    "name": "Caiden Haynes",
+    "team": "Midwest Racing",
+    "age": 20,
+    "gender": "men",
+    "options": [
+      "elite",
+      "quad"
+    ]
+  },
+  {
+    "helmetNumber": 110,
+    "name": "Clay White",
+    "team": "Champions Inline Racing",
+    "age": 20,
+    "gender": "men",
+    "options": [
+      "elite"
+    ]
+  },
+  {
+    "helmetNumber": 362,
+    "name": "Elyiah Belcher",
+    "team": "Midwest Racing",
+    "age": 20,
+    "gender": "women",
+    "options": [
+      "elite"
+    ]
+  },
+  {
+    "helmetNumber": 222,
+    "name": "Lily Whitton",
+    "team": "Midwest Racing",
+    "age": 20,
+    "gender": "women",
+    "options": [
+      "elite",
+      "quad"
+    ]
+  },
+  {
+    "helmetNumber": 280,
+    "name": "Morgan Cammack",
+    "team": "Stallions Racing",
+    "age": 20,
+    "gender": "women",
+    "options": [
+      "novice"
+    ]
+  },
+  {
+    "helmetNumber": 109,
+    "name": "Hanna Boettner",
+    "team": "Champions Inline Racing",
+    "age": 20,
+    "gender": "women",
+    "options": [
+      "novice",
+      "quad"
+    ]
+  },
+  {
+    "helmetNumber": 166,
+    "name": "Blake James",
+    "team": "DFW Speed",
+    "age": 27,
+    "gender": "men",
+    "options": [
+      "elite"
+    ]
+  },
+  {
+    "helmetNumber": 101,
+    "name": "Josh Fredrickson",
+    "team": "Lone Star Speed Team",
+    "age": 27,
+    "gender": "men",
+    "options": [
+      "elite"
+    ]
+  },
+  {
+    "helmetNumber": 183,
+    "name": "Secret Smith",
+    "team": "DFW Speed",
+    "age": 27,
+    "gender": "women",
+    "options": [
+      "elite"
+    ]
+  },
+  {
+    "helmetNumber": 275,
+    "name": "Kristina Chambers",
+    "team": "Stallions Racing",
+    "age": 27,
+    "gender": "women",
+    "options": [
+      "elite"
+    ]
+  },
+  {
+    "helmetNumber": 365,
+    "name": "Shannon Degenhardt",
+    "team": "Midwest Racing",
+    "age": 27,
+    "gender": "women",
+    "options": [
+      "elite"
+    ]
+  },
+  {
+    "helmetNumber": 199,
+    "name": "Jumbo Acosta",
+    "team": "Texas Speed",
+    "age": 39,
+    "gender": "men",
+    "options": [
+      "elite"
+    ]
+  },
+  {
+    "helmetNumber": 305,
+    "name": "Shawn Hendrickson",
+    "team": "Lorain Speed",
+    "age": 39,
+    "gender": "men",
+    "options": [
+      "elite"
+    ]
+  },
+  {
+    "helmetNumber": 170,
+    "name": "Damon Atherton",
+    "team": "DFW Speed",
+    "age": 39,
+    "gender": "men",
+    "options": [
+      "elite"
+    ]
+  },
+  {
+    "helmetNumber": 277,
+    "name": "Richard Larghe",
+    "team": "Stallions Racing",
+    "age": 39,
+    "gender": "men",
+    "options": [
+      "elite",
+      "novice"
+    ]
+  },
+  {
+    "helmetNumber": 337,
+    "name": "Eddie Clapp",
+    "team": "Midwest Racing",
+    "age": 39,
+    "gender": "men",
+    "options": [
+      "elite"
+    ]
+  },
+  {
+    "helmetNumber": 212,
+    "name": "James Deaton",
+    "team": "Midwest Racing",
+    "age": 39,
+    "gender": "men",
+    "options": [
+      "elite",
+      "novice"
+    ]
+  },
+  {
+    "helmetNumber": 329,
+    "name": "Nick Allee",
+    "team": "Team Velocity",
+    "age": 39,
+    "gender": "men",
+    "options": [
+      "elite"
+    ]
+  },
+  {
+    "helmetNumber": 184,
+    "name": "Stanley Hall",
+    "team": "DFW Speed",
+    "age": 39,
+    "gender": "men",
+    "options": [
+      "elite"
+    ]
+  },
+  {
+    "helmetNumber": 276,
+    "name": "Josh Simas",
+    "team": "Stallions Racing",
+    "age": 39,
+    "gender": "men",
+    "options": [
+      "elite"
+    ]
+  },
+  {
+    "helmetNumber": 370,
+    "name": "Lee Bird",
+    "team": "Midwest Racing",
+    "age": 39,
+    "gender": "men",
+    "options": [
+      "elite",
+      "novice"
+    ]
+  },
+  {
+    "helmetNumber": 369,
+    "name": "Kevin Kmetz",
+    "team": "Midwest Racing",
+    "age": 49,
+    "gender": "men",
+    "options": [
+      "elite"
+    ]
+  },
+  {
+    "helmetNumber": 284,
+    "name": "Brian Heinze",
+    "team": "Stallions Racing",
+    "age": 49,
+    "gender": "men",
+    "options": [
+      "elite",
+      "novice"
+    ]
+  },
+  {
+    "helmetNumber": 371,
+    "name": "Kelly Sumner",
+    "team": "Midwest Racing",
+    "age": 55,
+    "gender": "men",
+    "options": [
+      "elite",
+      "novice",
+      "quad"
+    ]
+  },
+  {
+    "helmetNumber": 393,
+    "name": "Jon Esterline",
+    "team": "Team Velocity",
+    "age": 55,
+    "gender": "men",
+    "options": [
+      "elite"
+    ]
+  },
+  {
+    "helmetNumber": 313,
+    "name": "Linda Hodge",
+    "team": "Diamond State Racing",
+    "age": 55,
+    "gender": "women",
+    "options": [
+      "elite"
+    ]
+  },
+  {
+    "helmetNumber": 340,
+    "name": "Janine Cobb",
+    "team": "Midwest Racing",
+    "age": 55,
+    "gender": "women",
+    "options": [
+      "elite"
+    ]
+  },
+  {
+    "helmetNumber": 128,
+    "name": "Sharon Heckel",
+    "team": "Champions Inline Racing",
+    "age": 55,
+    "gender": "women",
+    "options": [
+      "elite",
+      "novice",
+      "quad"
+    ]
+  },
+  {
+    "helmetNumber": 225,
+    "name": "Tera Bird",
+    "team": "Midwest Racing",
+    "age": 39,
+    "gender": "women",
+    "options": [
+      "novice",
+      "quad"
+    ]
+  },
+  {
+    "helmetNumber": 226,
+    "name": "Danny Clarkson",
+    "team": "Midwest Racing",
+    "age": 39,
+    "gender": "men",
+    "options": [
+      "quad"
+    ]
+  }
+];
+
+function testRosterGenderForAge(row) {
+  const age = Number(row.age || 0);
+  const g = String(row.gender || '').toLowerCase();
+  if (age >= 16) {
+    if (g === 'boys' || g === 'men' || g === 'male') return 'men';
+    if (g === 'girls' || g === 'women' || g === 'female') return 'women';
+  }
+  if (g === 'men' || g === 'boys' || g === 'male') return 'boys';
+  if (g === 'women' || g === 'girls' || g === 'female') return 'girls';
+  return g || 'boys';
+}
+
+function springFlingOptionObject(row, meet) {
+  const opts = new Set((row.options || []).map(x => String(x || '').trim()).filter(Boolean));
+  const firstAdditional = (meet.additionalGroups || meet.additionalRaceGroups || meet.additionalRaces || meet.skateabilityGroups || []).find(g => g && g.enabled);
+  return {
+    challengeUp: false,
+    novice: opts.has('novice'),
+    elite: opts.has('elite'),
+    open: opts.has('open'),
+    quad: opts.has('quad'),
+    timeTrials: opts.has('open') || opts.has('timeTrials'),
+    relay2Person: opts.has('relay2Person'),
+    relay3Person: opts.has('relay3Person'),
+    relay4Person: opts.has('relay4Person'),
+    relays: opts.has('relay2Person') || opts.has('relay3Person') || opts.has('relay4Person'),
+    additional: opts.has('additional'),
+    additionalGroupId: opts.has('additional') && firstAdditional ? String(firstAdditional.id || '') : '',
+    // temporary compatibility aliases for older screens/calculators
+    skateability: opts.has('additional'),
+    skateabilityGroupId: opts.has('additional') && firstAdditional ? String(firstAdditional.id || '') : '',
+  };
+}
+
+function raceImportSignature(race) {
+  return [
+    String(race?.parentRaceKey || ''),
+    String(race?.groupId || ''),
+    String(race?.division || ''),
+    String(race?.dayIndex || ''),
+    String(race?.distanceLabel || ''),
+    String(race?.stage || ''),
+    String(race?.heatNumber || ''),
+  ].join('|');
+}
+
+function restoreBlockAssignmentsBySignature(meet, previousBlocks, previousRaces) {
+  const previousById = new Map((previousRaces || []).map(r => [String(r.id || ''), r]));
+  const currentIds = new Set((meet.races || []).map(r => String(r.id || '')));
+  const currentBySignature = new Map();
+
+  for (const race of meet.races || []) {
+    const sig = raceImportSignature(race);
+    if (!currentBySignature.has(sig)) currentBySignature.set(sig, []);
+    currentBySignature.get(sig).push(String(race.id || ''));
+  }
+
+  meet.blocks = (previousBlocks || []).map(block => {
+    const nextIds = [];
+    for (const oldIdRaw of block.raceIds || []) {
+      const oldId = String(oldIdRaw || '');
+      if (currentIds.has(oldId)) {
+        if (!nextIds.includes(oldId)) nextIds.push(oldId);
+        continue;
+      }
+      const oldRace = previousById.get(oldId);
+      if (!oldRace) continue;
+      const replacements = currentBySignature.get(raceImportSignature(oldRace)) || [];
+      for (const rid of replacements) {
+        if (!nextIds.includes(rid)) nextIds.push(rid);
+      }
+    }
+    return { ...block, raceIds: nextIds };
+  });
+}
+
+function importSpringFlingTestRoster(meet, { replace = true, checkedIn = true, paid = true } = {}) {
+  const previousBlocks = JSON.parse(JSON.stringify(meet.blocks || []));
+  const previousRaces = JSON.parse(JSON.stringify(meet.races || []));
+
+  if (replace) {
+    meet.registrations = [];
+  } else {
+    meet.registrations = (meet.registrations || []).filter(r => r.importSource !== 'spring_fling_2026_test');
+  }
+
+  let nextRegId = nextId(meet.registrations || []);
+  let nextMeetNumber = (meet.registrations || []).reduce((max, r) => Math.max(max, Number(r.meetNumber) || 0), 0) + 1;
+
+  for (const row of SPRING_FLING_TEST_ROSTER) {
+    const gender = testRosterGenderForAge(row);
+    const age = Number(row.age || 0);
+    const baseGroup = findAgeGroup(meet.groups || [], age, gender);
+    const options = springFlingOptionObject(row, meet);
+    const reg = {
+      id: nextRegId++,
+      createdAt: nowIso(),
+      importSource: 'spring_fling_2026_test',
+      name: String(row.name || '').trim(),
+      age,
+      gender,
+      team: String(row.team || 'Independent').trim() || 'Independent',
+      sponsor: '',
+      divisionGroupId: baseGroup?.id || '',
+      divisionGroupLabel: baseGroup?.label || 'Unassigned',
+      originalDivisionGroupId: baseGroup?.id || '',
+      originalDivisionGroupLabel: baseGroup?.label || '',
+      meetNumber: nextMeetNumber++,
+      birthdate: '',
+      email: '',
+      helmetNumber: Number(row.helmetNumber || 0) || '',
+      paid: !!paid,
+      checkedIn: !!checkedIn,
+      totalCost: 0,
+      options,
+    };
+    reg.totalCost = calcRegistrationCost(meet, reg.options);
+    meet.registrations.push(reg);
+  }
+
+  generateConfiguredRacesForMeet(meet);
+  rebuildRaceAssignments(meet);
+  restoreBlockAssignmentsBySignature(meet, previousBlocks, previousRaces);
+  ensureAtLeastOneBlock(meet);
+  ensureCurrentRace(meet);
+  meet.updatedAt = nowIso();
+  return meet.registrations.filter(r => r.importSource === 'spring_fling_2026_test').length;
+}
+
+app.get('/portal/meet/:meetId/dev/import-spring-fling', requireRole('super_admin'), (req, res) => {
+  const meet = getMeetOr404(req.db, req.params.meetId);
+  if (!meet) return res.redirect('/portal');
+  if (!canEditMeet(req.user, meet)) return res.status(403).send('Forbidden');
+  const testCount = (meet.registrations || []).filter(r => r.importSource === 'spring_fling_2026_test').length;
+  res.send(pageShell({ title: 'Dev Import', user: req.user, meet, activeTab: 'registered', bodyHtml: `
+    <div class="page-header"><h1>Dev Import Mode</h1><div class="sub">${esc(meet.meetName)} • Wichita Spring Fling test roster</div></div>
+    <div class="card card-accent">
+      <h2>Load realistic test registrations</h2>
+      <p class="note">Imports ${SPRING_FLING_TEST_ROSTER.length} skaters from the Spring Fling screenshots. This preserves your saved blocks/templates, then rebuilds race lane entries for testing.</p>
+      <div class="stat-grid" style="margin:18px 0">
+        <div class="stat-card navy"><div class="stat-label">Current registrations</div><div class="stat-value">${(meet.registrations || []).length}</div></div>
+        <div class="stat-card sky"><div class="stat-label">Existing test rows</div><div class="stat-value">${testCount}</div></div>
+        <div class="stat-card orange"><div class="stat-label">Import size</div><div class="stat-value">${SPRING_FLING_TEST_ROSTER.length}</div></div>
+      </div>
+      <form method="POST" action="/portal/meet/${meet.id}/dev/import-spring-fling" class="stack" onsubmit="return confirm('Import Spring Fling test roster? This can replace current registrations, but it will preserve your block layout.');">
+        <div class="toggle-group">
+          <div class="toggle-row"><div><div class="toggle-row-label">Replace current registrations</div><div class="toggle-row-desc">Recommended for a clean stress test. Blocks and races are preserved/remapped.</div></div>${toggleSwitch('replace', true)}</div>
+          <div class="toggle-row"><div><div class="toggle-row-label">Mark skaters paid</div></div>${toggleSwitch('paid', true)}</div>
+          <div class="toggle-row"><div><div class="toggle-row-label">Mark skaters checked in</div></div>${toggleSwitch('checkedIn', true)}</div>
+        </div>
+        <div class="action-row">
+          <button class="btn-orange" type="submit" name="action" value="import">Import Test Roster</button>
+          <button class="btn-danger" type="submit" name="action" value="clear" onclick="return confirm('Clear only Spring Fling test registrations?')">Clear Test Rows</button>
+          <a class="btn2" href="/portal/meet/${meet.id}/registered">Back to Registered</a>
+        </div>
+      </form>
+    </div>` }));
+});
+
+app.post('/portal/meet/:meetId/dev/import-spring-fling', requireRole('super_admin'), (req, res) => {
+  const meet = getMeetOr404(req.db, req.params.meetId);
+  if (!meet) return res.redirect('/portal');
+  if (!canEditMeet(req.user, meet)) return res.status(403).send('Forbidden');
+
+  const previousBlocks = JSON.parse(JSON.stringify(meet.blocks || []));
+  const previousRaces = JSON.parse(JSON.stringify(meet.races || []));
+
+  if (String(req.body.action || '') === 'clear') {
+    meet.registrations = (meet.registrations || []).filter(r => r.importSource !== 'spring_fling_2026_test');
+    generateConfiguredRacesForMeet(meet);
+    rebuildRaceAssignments(meet);
+    restoreBlockAssignmentsBySignature(meet, previousBlocks, previousRaces);
+    ensureAtLeastOneBlock(meet);
+    ensureCurrentRace(meet);
+    saveDb(req.db);
+    return res.redirect(`/portal/meet/${meet.id}/registered?devCleared=1`);
+  }
+
+  const count = importSpringFlingTestRoster(meet, {
+    replace: !!req.body.replace,
+    checkedIn: !!req.body.checkedIn,
+    paid: !!req.body.paid,
+  });
+  saveDb(req.db);
+  return res.redirect(`/portal/meet/${meet.id}/registered?devImported=${count}`);
+});
+
 app.get('/portal/meet/:meetId/registered', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
@@ -4520,6 +5835,7 @@ app.get('/portal/meet/:meetId/registered', requireRole('meet_director'), (req, r
         <div class="action-row">
           <form method="POST" action="/portal/meet/${meet.id}/assign-races" onsubmit="return confirm('Rebuild will re-split heats and reassign lanes.\\n\\nYour block structure will be preserved but lane assignments will change.\\n\\nContinue?')"><button class="btn2" type="submit">Rebuild Assignments</button></form>
           <a class="btn-orange" href="/meet/${meet.id}/register" target="_blank">Public Registration</a>
+          ${hasRole(req.user,'super_admin')?`<a class="btn2" href="/portal/meet/${meet.id}/dev/import-spring-fling">Dev Import</a>`:''}
           <a class="btn2" href="/portal/meet/${meet.id}/registered/print-race-list" target="_blank">Print Race List</a>
         </div>
       </div>
