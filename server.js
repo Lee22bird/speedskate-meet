@@ -282,7 +282,7 @@ function makeManualExtraRaceSlots(raw) {
     return {
       id,
       ageGroupId: '',
-      ageGroupLabel: String(match.ageGroupLabel || match.title || '').trim(),
+      ageGroupLabel: (`Additional ${i + 1}`),
       ages: String(match.ages || '').trim(),
       enabled: !!match.enabled,
       distances: Array.isArray(match.distances) ? [0,1,2].map(n => String(match.distances[n] || '').trim()) : ['', '', ''],
@@ -806,7 +806,7 @@ function generateAdditionalRacesForMeet(meet) {
     const raceGroupId = savedId;
 
     const rawTitle = String(sg.ageGroupLabel || sg.title || '').trim();
-    const title = rawTitle && rawTitle.toLowerCase() !== 'additional race' ? rawTitle : `Manual Extra Race ${String(savedId).replace('manual_extra_','')}`;
+    const title = rawTitle && rawTitle.toLowerCase() !== 'additional race' ? rawTitle : `Additional ${String(savedId).replace('manual_extra_','')}`;
 
     const linkedAgeGroup = (meet.groups || []).find(g => String(g.id) === linkedAgeGroupId);
     const ages = String(sg.ages || linkedAgeGroup?.ages || '').trim();
@@ -3364,7 +3364,7 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
       <div class="card" style="margin-top:8px">
         <div class="row between center" style="margin-bottom:14px">
           <div>
-            <h2 style="margin:0">➕ Manual Extra Races</h2>
+            <h2 style="margin:0">➕ Additionals</h2>
             <div class="note">Four fixed manual race slots. Toggle on only the extra race groups you want. These behave like normal configured races in Block Builder.</div>
           </div>
           <span class="chip chip-sky">4 Manual Slots</span>
@@ -3392,7 +3392,7 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
             ${rows.map((sg,si)=>`
               <div class="group-pair-col" style="margin-bottom:12px" id="sk-${si}">
                 <div class="group-pair-header">
-                  <span class="group-pair-name">Manual Extra Race ${si+1}${sg.ageGroupLabel?` — ${esc(sg.ageGroupLabel)}`:''}</span>
+                  <span class="group-pair-name">Additional ${si+1}${sg.ageGroupLabel?` — ${esc(sg.ageGroupLabel)}`:''}</span>
                   ${toggleSwitch('sk_'+si+'_enabled', sg.enabled)}
                 </div>
                 <input type="hidden" name="sk_${si}_id" value="${esc(sg.id)}" />
@@ -3488,7 +3488,7 @@ function saveMeetFields(meet, body, db) {
       nextManual.push({
         id,
         ageGroupId: '',
-        ageGroupLabel,
+        ageGroupLabel: ageGroupLabel || `Additional ${si + 1}`,
         ages,
         enabled: !!body[`sk_${si}_enabled`],
         distances,
