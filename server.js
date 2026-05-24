@@ -299,7 +299,7 @@ function makeAdditionalRaceSlots(raw) {
 }
 
 // Backwards-compatible wrapper for older saved meets/routes.
-// New code should use additionalRaceGroups/additionalRaces language.
+// New code should use additionalGroups/additionalRaces language.
 function makeManualExtraRaceSlots(raw) {
   return makeAdditionalRaceSlots(raw);
 }
@@ -353,7 +353,7 @@ function defaultMeet(ownerUserId) {
     notes:'', scheduleNotes:'', relayNotes:'', isPublic:false, status:'draft', tiebreaker:'d2',
     ...defaultPricingFields(),
     groups:baseGroups(), openGroups:makeOpenGroupsTemplate(), quadGroups:makeQuadGroupsTemplate(),
-    races:[], blocks:[], registrations:[], additionalRaceGroups:makeAdditionalRaceSlots([]), additionalRaces:makeAdditionalRaceSlots([]), skateabilityGroups:makeAdditionalRaceSlots([]),
+    races:[], blocks:[], registrations:[], additionalGroups:makeAdditionalRaceSlots([]), additionalRaceGroups:makeAdditionalRaceSlots([]), additionalRaces:makeAdditionalRaceSlots([]), skateabilityGroups:makeAdditionalRaceSlots([]),
     currentRaceId:'', currentRaceIndex:-1, raceDayPaused:false,
   };
 }
@@ -457,11 +457,12 @@ function migrateMeet(meet,fallbackOwnerId) {
   if(typeof meet.raceDayPaused!=='boolean') meet.raceDayPaused=false;
   normalizeMeetPricingFields(meet);
   if(!Array.isArray(meet.textAlerts)) meet.textAlerts=[];
-  const savedAdditionalGroups = Array.isArray(meet.additionalRaceGroups) ? meet.additionalRaceGroups : (Array.isArray(meet.additionalRaces) ? meet.additionalRaces : meet.skateabilityGroups);
-  meet.additionalRaceGroups = makeAdditionalRaceSlots(savedAdditionalGroups);
-  meet.additionalRaces = meet.additionalRaceGroups.map(g => ({ ...g }));
-  // Compatibility only for older registration/options code. Do not use this name in new UI text.
-  meet.skateabilityGroups = meet.additionalRaceGroups.map(g => ({ ...g }));
+  const savedAdditionalGroups = Array.isArray(meet.additionalGroups) ? meet.additionalGroups : (Array.isArray(meet.additionalRaceGroups) ? meet.additionalRaceGroups : (Array.isArray(meet.additionalRaces) ? meet.additionalRaces : meet.skateabilityGroups));
+  meet.additionalGroups = makeAdditionalRaceSlots(savedAdditionalGroups);
+  meet.additionalRaces = meet.additionalGroups.map(g => ({ ...g }));
+  meet.additionalRaceGroups = meet.additionalGroups.map(g => ({ ...g }));
+  // Backward-compatible read/write alias only. New code uses additionalGroups.
+  meet.skateabilityGroups = meet.additionalGroups.map(g => ({ ...g }));
   meet.races=meet.races.map((r,idx)=>({
     id:r.id||('r'+crypto.randomBytes(6).toString('hex')), orderHint:Number(r.orderHint||idx+1),
     groupId:String(r.groupId||''), groupLabel:String(r.groupLabel||''), ages:String(r.ages||''),
@@ -492,7 +493,7 @@ function migrateMeet(meet,fallbackOwnerId) {
     paid:!!reg.paid, checkedIn:!!reg.checkedIn, totalCost:Number(reg.totalCost||0),
     options:{challengeUp:!!reg.options?.challengeUp, novice:!!reg.options?.novice,
       elite:!!reg.options?.elite, open:!!reg.options?.open, quad:!!reg.options?.quad,
-      timeTrials:!!reg.options?.timeTrials, relays:!!reg.options?.relays, relay2Person:!!reg.options?.relay2Person, relay3Person:!!reg.options?.relay3Person, relay4Person:!!reg.options?.relay4Person, skateability:!!reg.options?.skateability, skateabilityGroupId:String(reg.options?.skateabilityGroupId||'')},
+      timeTrials:!!reg.options?.timeTrials, relays:!!reg.options?.relays, relay2Person:!!reg.options?.relay2Person, relay3Person:!!reg.options?.relay3Person, relay4Person:!!reg.options?.relay4Person, additional:!!(reg.options?.additional || reg.options?.skateability), additionalGroupId:String(reg.options?.additionalGroupId || reg.options?.skateabilityGroupId || ''), skateability:!!(reg.options?.additional || reg.options?.skateability), skateabilityGroupId:String(reg.options?.additionalGroupId || reg.options?.skateabilityGroupId || '')},
   }));
 }
 
@@ -592,9 +593,10 @@ function makeSetupPresetFromMeet(db, meet, name, ownerUserId) {
     groups: JSON.parse(JSON.stringify(meet.groups || [])),
     openGroups: JSON.parse(JSON.stringify(meet.openGroups || [])),
     quadGroups: JSON.parse(JSON.stringify(meet.quadGroups || [])),
-    additionalRaceGroups: JSON.parse(JSON.stringify(meet.additionalRaceGroups || meet.additionalRaces || meet.skateabilityGroups || [])),
-    additionalRaces: JSON.parse(JSON.stringify(meet.additionalRaces || meet.additionalRaceGroups || meet.skateabilityGroups || [])),
-    skateabilityGroups: JSON.parse(JSON.stringify(meet.additionalRaceGroups || meet.additionalRaces || meet.skateabilityGroups || [])),
+    additionalGroups: JSON.parse(JSON.stringify(meet.additionalGroups || meet.additionalRaceGroups || meet.additionalRaces || meet.skateabilityGroups || [])),
+    additionalRaceGroups: JSON.parse(JSON.stringify(meet.additionalGroups || meet.additionalRaceGroups || meet.additionalRaces || meet.skateabilityGroups || [])),
+    additionalRaces: JSON.parse(JSON.stringify(meet.additionalGroups || meet.additionalRaceGroups || meet.additionalRaces || meet.skateabilityGroups || [])),
+    skateabilityGroups: JSON.parse(JSON.stringify(meet.additionalGroups || meet.additionalRaceGroups || meet.additionalRaces || meet.skateabilityGroups || [])),
     blocks: JSON.parse(JSON.stringify(meet.blocks || [])),
     raceOrder: orderedRaces(meet).map(r => ({
       raceId: r.id, groupId: r.groupId, groupLabel: r.groupLabel, division: r.division,
@@ -802,7 +804,7 @@ function buildRaceSetForEntries(baseRace,regs,laneCount) {
 
 
 function generateAdditionalRacesForMeet(meet) {
-  const rawGroups = makeAdditionalRaceSlots(meet.additionalRaceGroups || meet.additionalRaces || meet.skateabilityGroups);
+  const rawGroups = makeAdditionalRaceSlots(meet.additionalGroups || meet.additionalRaceGroups || meet.additionalRaces || meet.skateabilityGroups);
 
   const nonAdditionalRaces = (meet.races || []).filter(r =>
     String(r.division || '') !== 'skateability' &&
@@ -991,7 +993,7 @@ function generateConfiguredRacesForMeet(meet) {
   generateAdditionalRacesForMeet(meet);
 
   // sync additional labels from manual slots so Block Builder never shows stale legacy names
-  const manualLabelById = new Map(makeAdditionalRaceSlots(meet.additionalRaceGroups || meet.additionalRaces || meet.skateabilityGroups).map(g => [String(g.id), String(g.ageGroupLabel || '')]));
+  const manualLabelById = new Map(makeAdditionalRaceSlots(meet.additionalGroups || meet.additionalRaceGroups || meet.additionalRaces || meet.skateabilityGroups).map(g => [String(g.id), String(g.ageGroupLabel || '')]));
   for (const race of meet.races || []) {
     if (race.isAdditionalRace || String(race.division || '') === 'additional') {
       const label = manualLabelById.get(String(race.groupId || ''));
@@ -3205,13 +3207,14 @@ app.post('/portal/rinks/:id/edit', requireRole('meet_director'), (req, res) => {
 app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet) return res.redirect('/portal');
-  // Normalize Additionals from old saved names into the new additionalRaceGroups field.
-  if(!Array.isArray(meet.additionalRaceGroups)) {
-    meet.additionalRaceGroups = Array.isArray(meet.additionalRaces) ? meet.additionalRaces : (Array.isArray(meet.skateabilityGroups) ? meet.skateabilityGroups : []);
+  // Normalize Additionals into the canonical additionalGroups field.
+  if(!Array.isArray(meet.additionalGroups)) {
+    meet.additionalGroups = Array.isArray(meet.additionalRaceGroups) ? meet.additionalRaceGroups : (Array.isArray(meet.additionalRaces) ? meet.additionalRaces : (Array.isArray(meet.skateabilityGroups) ? meet.skateabilityGroups : []));
   }
-  meet.additionalRaceGroups = makeAdditionalRaceSlots(meet.additionalRaceGroups);
-  meet.additionalRaces = meet.additionalRaceGroups.map(g => ({ ...g }));
-  meet.skateabilityGroups = meet.additionalRaceGroups.map(g => ({ ...g }));
+  meet.additionalGroups = makeAdditionalRaceSlots(meet.additionalGroups);
+  meet.additionalRaces = meet.additionalGroups.map(g => ({ ...g }));
+  meet.additionalRaceGroups = meet.additionalGroups.map(g => ({ ...g }));
+  meet.skateabilityGroups = meet.additionalGroups.map(g => ({ ...g }));
   if(!canEditMeet(req.user,meet)) return res.status(403).send(pageShell({title:'Forbidden',user:req.user, bodyHtml:`<div class="page-header"><h1>Forbidden</h1></div><div class="card"><div class="danger">Only the meet owner can edit this meet.</div></div>`}));
   const rinkInputValue = String(meet.customRinkName || '').trim() || (() => { const r = req.db.rinks.find(x => Number(x.id) === Number(meet.rinkId)); return r ? `${r.name} (${r.city || ''}${r.city && r.state ? ', ' : ''}${r.state || ''})` : ''; })();
   const rinkDataList=req.db.rinks.map(r=>`<option value="${esc(r.name)} (${esc(r.city||'')}${r.city&&r.state?', ':''}${esc(r.state||'')})" data-id="${r.id}"></option>`).join('');
@@ -3480,7 +3483,7 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
           <span class="chip chip-sky">4 Manual Slots</span>
         </div>
         ${(()=>{
-          const saved = makeAdditionalRaceSlots(meet.additionalRaceGroups || meet.additionalRaces || meet.skateabilityGroups);
+          const saved = makeAdditionalRaceSlots(meet.additionalGroups || meet.additionalRaceGroups || meet.additionalRaces || meet.skateabilityGroups);
           const defaults = [0,1,2,3].map(i => ({
             id: 'manual_extra_' + (i + 1),
             ageGroupLabel: '',
@@ -3605,9 +3608,10 @@ function saveMeetFields(meet, body, db) {
         distances,
       });
     }
-    meet.additionalRaceGroups = makeAdditionalRaceSlots(nextManual);
-    meet.additionalRaces = meet.additionalRaceGroups.map(g => ({ ...g }));
-    meet.skateabilityGroups = meet.additionalRaceGroups.map(g => ({ ...g }));
+    meet.additionalGroups = makeAdditionalRaceSlots(nextManual);
+    meet.additionalRaces = meet.additionalGroups.map(g => ({ ...g }));
+    meet.additionalRaceGroups = meet.additionalGroups.map(g => ({ ...g }));
+    meet.skateabilityGroups = meet.additionalGroups.map(g => ({ ...g }));
   }
   // Keep existing registration totals in sync when global pricing changes.
   // This does not touch race generation or legacy stored cost fields.
@@ -3642,9 +3646,10 @@ app.post('/portal/meet/:meetId/setup-presets/load', requireRole('meet_director')
   meet.groups = JSON.parse(JSON.stringify(preset.groups || []));
   meet.openGroups = JSON.parse(JSON.stringify(preset.openGroups || []));
   meet.quadGroups = JSON.parse(JSON.stringify(preset.quadGroups || []));
-  meet.additionalRaceGroups = JSON.parse(JSON.stringify(preset.additionalRaceGroups || preset.additionalRaces || preset.skateabilityGroups || []));
-  meet.additionalRaces = meet.additionalRaceGroups.map(g => ({ ...g }));
-  meet.skateabilityGroups = meet.additionalRaceGroups.map(g => ({ ...g }));
+  meet.additionalGroups = JSON.parse(JSON.stringify(preset.additionalGroups || preset.additionalRaceGroups || preset.additionalRaces || preset.skateabilityGroups || []));
+  meet.additionalRaces = meet.additionalGroups.map(g => ({ ...g }));
+  meet.additionalRaceGroups = meet.additionalGroups.map(g => ({ ...g }));
+  meet.skateabilityGroups = meet.additionalGroups.map(g => ({ ...g }));
   meet.tiebreaker = preset.tiebreaker || meet.tiebreaker;
   meet.baseEntryFee = Number(preset.baseEntryFee || 0);
   // Load new global pricing fields with migration from old per-group costs
@@ -3684,10 +3689,11 @@ app.post('/portal/meet/:meetId/setup-presets/load', requireRole('meet_director')
   rebuildRaceAssignments(meet);
   restorePresetBlocksIntoMeet(preset, meet);
 
-  // Mirror Additionals into old field names for compatibility with existing registration data.
-  meet.additionalRaceGroups = makeAdditionalRaceSlots(meet.additionalRaceGroups || meet.additionalRaces || meet.skateabilityGroups);
-  meet.additionalRaces = meet.additionalRaceGroups.map(g => ({ ...g }));
-  meet.skateabilityGroups = meet.additionalRaceGroups.map(g => ({ ...g }));
+  // Mirror Additionals into compatibility aliases for existing saved data.
+  meet.additionalGroups = makeAdditionalRaceSlots(meet.additionalGroups || meet.additionalRaceGroups || meet.additionalRaces || meet.skateabilityGroups);
+  meet.additionalRaces = meet.additionalGroups.map(g => ({ ...g }));
+  meet.additionalRaceGroups = meet.additionalGroups.map(g => ({ ...g }));
+  meet.skateabilityGroups = meet.additionalGroups.map(g => ({ ...g }));
   // Preset pricing can change global fees, so refresh existing registration totals immediately.
   ensureRegistrationTotalsAndNumbers(meet);
   ensureCurrentRace(meet);
@@ -4324,19 +4330,19 @@ app.get('/meet/:meetId/register', (req, res) => {
             ${(meet.quadGroups||[]).some(g=>g.enabled)?`<div class="toggle-row"><div><div class="toggle-row-label">Quad</div></div>${toggleSwitch('quad',false)}</div>`:''}
             ${meet.timeTrialsEnabled?`<div class="toggle-row"><div><div class="toggle-row-label">Time Trials</div></div>${toggleSwitch('timeTrials',false)}</div>`:''}
             ${meet.relayEnabled?`<div class="toggle-row"><div><div class="toggle-row-label">2 Person Relay</div></div>${toggleSwitch('relay2Person',false)}</div><div class="toggle-row"><div><div class="toggle-row-label">3 Person Relay</div></div>${toggleSwitch('relay3Person',false)}</div><div class="toggle-row"><div><div class="toggle-row-label">4 Person Relay</div></div>${toggleSwitch('relay4Person',false)}</div>`:''}
-            ${(meet.additionalRaceGroups||meet.additionalRaces||meet.skateabilityGroups||[]).length?`
-              <div class="toggle-row"><div><div class="toggle-row-label">Additional Races</div><div class="toggle-row-desc">Extra race division — select your group below if enabled</div></div>${toggleSwitch('skateability',false)}</div>
+            ${(meet.additionalGroups||meet.additionalRaceGroups||meet.additionalRaces||meet.skateabilityGroups||[]).length?`
+              <div class="toggle-row"><div><div class="toggle-row-label">Additional Races</div><div class="toggle-row-desc">Extra race division — select your group below if enabled</div></div>${toggleSwitch('additional',false)}</div>
               <div id="skateability-group-row" style="display:none">
                 <div class="toggle-row" style="flex-direction:column;align-items:flex-start;gap:8px">
                   <div class="toggle-row-label">Additional Race Group</div>
-                  <select name="skateabilityGroupId" style="width:100%">
+                  <select name="additionalGroupId" style="width:100%">
                     <option value="">— Select group —</option>
-                    ${(meet.additionalRaceGroups||meet.additionalRaces||meet.skateabilityGroups||[]).map(sg=>`<option value="${esc(sg.id)}">${esc(sg.ageGroupLabel||'Additional Race')}${sg.ages?' ('+esc(sg.ages)+')':''}</option>`).join('')}
+                    ${(meet.additionalGroups||meet.additionalRaceGroups||meet.additionalRaces||meet.skateabilityGroups||[]).map(sg=>`<option value="${esc(sg.id)}">${esc(sg.ageGroupLabel||'Additional Race')}${sg.ages?' ('+esc(sg.ages)+')':''}</option>`).join('')}
                   </select>
                 </div>
               </div>
               <script>
-                var skToggle = document.querySelector('input[name="skateability"]');
+                var skToggle = document.querySelector('input[name="additional"]');
                 if(skToggle) skToggle.addEventListener('change', function() {
                   document.getElementById('skateability-group-row').style.display = this.checked ? '' : 'none';
                 });
@@ -4358,7 +4364,7 @@ app.post('/meet/:meetId/register', (req, res) => {
   const finalGroup=challengeAdjustedGroup(meet,baseGroup,!!req.body.challengeUp);
   const meetNumber=(meet.registrations||[]).reduce((max,r)=>Math.max(max,Number(r.meetNumber)||0),0)+1;
   const regEmail=String(req.body.email||'').trim();
-  const regOpts={challengeUp:!!req.body.challengeUp,novice:!!req.body.novice,elite:!!req.body.elite,open:!!req.body.open,quad:!!req.body.quad,skateability:!!req.body.skateability,skateabilityGroupId:String(req.body.skateabilityGroupId||''),timeTrials:!!req.body.timeTrials,relay2Person:!!req.body.relay2Person,relay3Person:!!req.body.relay3Person,relay4Person:!!req.body.relay4Person,relays:!!(req.body.relay2Person||req.body.relay3Person||req.body.relay4Person)};
+  const regOpts={challengeUp:!!req.body.challengeUp,novice:!!req.body.novice,elite:!!req.body.elite,open:!!req.body.open,quad:!!req.body.quad,additional:!!(req.body.additional||req.body.skateability),additionalGroupId:String(req.body.additionalGroupId||req.body.skateabilityGroupId||''),skateability:!!(req.body.additional||req.body.skateability),skateabilityGroupId:String(req.body.additionalGroupId||req.body.skateabilityGroupId||''),timeTrials:!!req.body.timeTrials,relay2Person:!!req.body.relay2Person,relay3Person:!!req.body.relay3Person,relay4Person:!!req.body.relay4Person,relays:!!(req.body.relay2Person||req.body.relay3Person||req.body.relay4Person)};
   const totalCost=calcRegistrationCost(meet,regOpts);
   meet.registrations.push({
     id:nextId(meet.registrations),createdAt:nowIso(),
@@ -4434,19 +4440,19 @@ function registrationForm(meet,reg,action,title) {
             ${(meet.quadGroups||[]).some(g=>g.enabled)?`<div class="toggle-row"><div><div class="toggle-row-label">Quad</div></div>${toggleSwitch('quad',!!reg.options?.quad)}</div>`:''}
             <div class="toggle-row"><div><div class="toggle-row-label">Time Trials</div></div>${toggleSwitch('timeTrials',!!reg.options?.timeTrials)}</div>
             ${meet.relayEnabled?`<div class="toggle-row"><div><div class="toggle-row-label">2 Person Relay</div></div>${toggleSwitch('relay2Person',!!reg.options?.relay2Person)}</div><div class="toggle-row"><div><div class="toggle-row-label">3 Person Relay</div></div>${toggleSwitch('relay3Person',!!reg.options?.relay3Person)}</div><div class="toggle-row"><div><div class="toggle-row-label">4 Person Relay</div></div>${toggleSwitch('relay4Person',!!reg.options?.relay4Person)}</div>`:''}
-            ${(meet.additionalRaceGroups||meet.additionalRaces||meet.skateabilityGroups||[]).length?`
-              <div class="toggle-row"><div><div class="toggle-row-label">Additional Races</div><div class="toggle-row-desc">Extra race division</div></div>${toggleSwitch('skateability',!!reg.options?.skateability)}</div>
-              <div id="edit-skateability-group-row" style="${reg.options?.skateability?'':'display:none'}">
+            ${(meet.additionalGroups||meet.additionalRaceGroups||meet.additionalRaces||meet.skateabilityGroups||[]).length?`
+              <div class="toggle-row"><div><div class="toggle-row-label">Additional Races</div><div class="toggle-row-desc">Extra race division</div></div>${toggleSwitch('additional',!!(reg.options?.additional||reg.options?.skateability))}</div>
+              <div id="edit-skateability-group-row" style="${(reg.options?.additional||reg.options?.skateability)?'':'display:none'}">
                 <div class="toggle-row" style="flex-direction:column;align-items:flex-start;gap:8px">
                   <div class="toggle-row-label">Additional Race Group</div>
-                  <select name="skateabilityGroupId" style="width:100%">
+                  <select name="additionalGroupId" style="width:100%">
                     <option value="">— Select group —</option>
-                    ${(meet.additionalRaceGroups||meet.additionalRaces||meet.skateabilityGroups||[]).map(sg=>`<option value="${esc(sg.id)}" ${String(reg.options?.skateabilityGroupId||'')===String(sg.id)?'selected':''}>${esc(sg.ageGroupLabel||'Additional Race')}${sg.ages?' ('+esc(sg.ages)+')':''}</option>`).join('')}
+                    ${(meet.additionalGroups||meet.additionalRaceGroups||meet.additionalRaces||meet.skateabilityGroups||[]).map(sg=>`<option value="${esc(sg.id)}" ${String((reg.options?.additionalGroupId||reg.options?.skateabilityGroupId)||'')===String(sg.id)?'selected':''}>${esc(sg.ageGroupLabel||'Additional Race')}${sg.ages?' ('+esc(sg.ages)+')':''}</option>`).join('')}
                   </select>
                 </div>
               </div>
               <script>
-                var editSkToggle = document.querySelector('input[name="skateability"]');
+                var editSkToggle = document.querySelector('input[name="additional"]');
                 if(editSkToggle) editSkToggle.addEventListener('change', function() {
                   document.getElementById('edit-skateability-group-row').style.display = this.checked ? '' : 'none';
                 });
@@ -4477,9 +4483,9 @@ app.get('/portal/meet/:meetId/registered', requireRole('meet_director'), (req, r
   )).sort((a, b) => a.localeCompare(b));
 
   const rows=registrations.map(r=>{
-    const entryLabel = ['challengeUp','novice','elite','open','quad','skateability','timeTrials','relay2Person','relay3Person','relay4Person']
+    const entryLabel = ['challengeUp','novice','elite','open','quad','additional','timeTrials','relay2Person','relay3Person','relay4Person']
       .filter(k=>r.options?.[k])
-      .map(k=>k==='challengeUp'?'CU':(k==='skateability'?'Additional':(k==='relay2Person'?'2 Person Relay':(k==='relay3Person'?'3 Person Relay':(k==='relay4Person'?'4 Person Relay':cap(k))))))
+      .map(k=>k==='challengeUp'?'CU':(k==='additional'?'Additional':(k==='relay2Person'?'2 Person Relay':(k==='relay3Person'?'3 Person Relay':(k==='relay4Person'?'4 Person Relay':cap(k))))))
       .join(', ')||'—';
 
     return `
@@ -4628,7 +4634,7 @@ app.post('/portal/meet/:meetId/registered/:regId/edit', requireRole('meet_direct
   const compAge=usarsAge(birthdate,meet.date)||Number(reg.age||0);
   const baseGroup=findAgeGroup(meet.groups,compAge,gender);
   const finalGroup=challengeAdjustedGroup(meet,baseGroup,!!req.body.challengeUp);
-  const regOpts={challengeUp:!!req.body.challengeUp,novice:!!req.body.novice,elite:!!req.body.elite,open:!!req.body.open,quad:!!req.body.quad,skateability:!!req.body.skateability,skateabilityGroupId:String(req.body.skateabilityGroupId||''),timeTrials:!!req.body.timeTrials,relay2Person:!!req.body.relay2Person,relay3Person:!!req.body.relay3Person,relay4Person:!!req.body.relay4Person,relays:!!(req.body.relay2Person||req.body.relay3Person||req.body.relay4Person)};
+  const regOpts={challengeUp:!!req.body.challengeUp,novice:!!req.body.novice,elite:!!req.body.elite,open:!!req.body.open,quad:!!req.body.quad,additional:!!(req.body.additional||req.body.skateability),additionalGroupId:String(req.body.additionalGroupId||req.body.skateabilityGroupId||''),skateability:!!(req.body.additional||req.body.skateability),skateabilityGroupId:String(req.body.additionalGroupId||req.body.skateabilityGroupId||''),timeTrials:!!req.body.timeTrials,relay2Person:!!req.body.relay2Person,relay3Person:!!req.body.relay3Person,relay4Person:!!req.body.relay4Person,relays:!!(req.body.relay2Person||req.body.relay3Person||req.body.relay4Person)};
   Object.assign(reg,{name:String(req.body.name||'').trim(),birthdate,age:compAge,gender,team:String(req.body.team||'Midwest Racing').trim()||'Midwest Racing',sponsor:String(req.body.sponsor||'').trim(),originalDivisionGroupId:baseGroup?.id||'',originalDivisionGroupLabel:baseGroup?.label||'',divisionGroupId:finalGroup?.id||'',divisionGroupLabel:finalGroup?.label||'Unassigned',options:regOpts,totalCost:calcRegistrationCost(meet,regOpts)});
   generateAdditionalRacesForMeet(meet); rebuildRaceAssignments(meet); saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/registered`);
 });
