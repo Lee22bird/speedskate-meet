@@ -3686,7 +3686,7 @@ app.post('/portal/meet/:meetId/setup-presets/load', requireRole('meet_director')
   generateOpenRacesForMeet(meet);
   generateQuadRacesForMeet(meet);
   generateAdditionalRacesForMeet(meet);
-  rebuildRaceAssignments(meet);
+  rebuildRaceAssignmentsSafe(meet);
   restorePresetBlocksIntoMeet(preset, meet);
 
   // Mirror Additionals into compatibility aliases for existing saved data.
@@ -3737,7 +3737,7 @@ app.post('/portal/meet/:meetId/builder/save', requireRole('meet_director'), (req
   if(!meet) return res.redirect('/portal');
   if(!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
   saveMeetFields(meet, req.body, req.db);
-  generateConfiguredRacesForMeet(meet); rebuildRaceAssignments(meet); ensureAtLeastOneBlock(meet); ensureCurrentRace(meet);
+  generateConfiguredRacesForMeet(meet); rebuildRaceAssignmentsSafe(meet); ensureAtLeastOneBlock(meet); ensureCurrentRace(meet);
   saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/blocks`);
 });
 
@@ -4377,7 +4377,7 @@ app.post('/meet/:meetId/register', (req, res) => {
     paid:false,checkedIn:false,totalCost,
     options:regOpts,
   });
-  generateAdditionalRacesForMeet(meet); rebuildRaceAssignments(meet); ensureCurrentRace(meet); saveDb(db);
+  generateAdditionalRacesForMeet(meet); rebuildRaceAssignmentsSafe(meet); ensureCurrentRace(meet); saveDb(db);
   // Send confirmation email to registrant
   if(regEmail) {
     const rink=db.rinks.find(r=>Number(r.id)===Number(meet.rinkId));
@@ -5674,6 +5674,146 @@ function restoreBlockAssignmentsBySignature(meet, previousBlocks, previousRaces)
   });
 }
 
+
+function raceGenderBucketFromLabelOrGender(value) {
+  const v = String(value || '').toLowerCase();
+  if (['girls','girl','women','woman','female','ladies','lady'].includes(v) || /girls|women|ladies|female/.test(v)) return 'female';
+  if (['boys','boy','men','man','male'].includes(v) || /boys|men|male/.test(v)) return 'male';
+  return '';
+}
+
+function raceMatchesRegAgeGender(race, reg, meet) {
+  const age = ageForReg(reg, meet);
+  if (String(race.ages || '').trim() && !ageMatch(race.ages, age)) return false;
+
+  const raceBucket = raceGenderBucketFromLabelOrGender(race.gender || race.groupLabel || race.groupId || '');
+  const regBucket = raceGenderBucketFromLabelOrGender(reg.gender || '');
+  return !raceBucket || !regBucket || raceBucket === regBucket;
+}
+
+function assignSequentialLaneEntries(regs) {
+  return regs.map((reg, idx) => ({
+    lane: idx + 1,
+    registrationId: reg.id,
+    helmetNumber: reg.helmetNumber || '',
+    skaterName: reg.name || '',
+    team: reg.team || '',
+    place: '',
+    time: '',
+    status: '',
+  }));
+}
+
+function rebuildRaceAssignmentsSafe(meet) {
+  // Safe rebuild that repopulates lane entries while preserving block layout.
+  // The older service rebuild only rebuilt standard races and preserved open/time/relay,
+  // which could leave quads/additionals empty or missing after recent block-flow work.
+  ensureRegistrationTotalsAndNumbers(meet);
+
+  const laneCount = Math.max(1, Number(meet.lanes) || 4);
+  const previousBlocks = JSON.parse(JSON.stringify(meet.blocks || []));
+  const previousRaces = JSON.parse(JSON.stringify(meet.races || []));
+
+  const newRaces = [];
+  const seenBaseKeys = new Set();
+
+  const isSpecialRace = (race) =>
+    race.isOpenRace ||
+    race.isQuadRace ||
+    race.isTimeTrial ||
+    race.isRelayRace ||
+    race.isAdditionalRace ||
+    race.isSkateabilityRace ||
+    String(race.division || '') === 'additional' ||
+    String(race.division || '') === 'skateability';
+
+  const baseKeyFor = (race) => String(race.parentRaceKey || baseRaceKey(race.groupId, race.division, race.dayIndex, race.distanceLabel));
+
+  // Standard novice/elite races. Use one base race per parent key, then re-split heats/finals from registrations.
+  for (const race of meet.races || []) {
+    if (isSpecialRace(race)) continue;
+    if (['heat', 'semi'].includes(String(race.stage || ''))) continue;
+
+    const key = baseKeyFor(race);
+    if (seenBaseKeys.has(key)) continue;
+    seenBaseKeys.add(key);
+
+    const matchingRegs = (meet.registrations || []).filter(reg =>
+      String(reg.divisionGroupId || '') === String(race.groupId || '') &&
+      divisionEnabledForRegistration(reg, race.division)
+    );
+
+    newRaces.push(...buildRaceSetForEntries({ ...race, parentRaceKey: key }, matchingRegs, laneCount));
+  }
+
+  // Quad races. Match registered quad skaters by the quad race age/gender bucket.
+  const quadBaseKeys = new Set();
+  for (const race of meet.races || []) {
+    if (!race.isQuadRace) continue;
+    if (['heat', 'semi'].includes(String(race.stage || ''))) continue;
+    const key = baseKeyFor(race);
+    if (quadBaseKeys.has(key)) continue;
+    quadBaseKeys.add(key);
+
+    const matchingRegs = (meet.registrations || []).filter(reg =>
+      !!reg.options?.quad && raceMatchesRegAgeGender(race, reg, meet)
+    );
+
+    const baseRace = { ...race, parentRaceKey: key, division: 'quad', isQuadRace: true };
+    newRaces.push(...buildRaceSetForEntries(baseRace, matchingRegs, laneCount));
+  }
+
+  // Open races are rolling finals; populate from matching open registrations.
+  for (const race of meet.races || []) {
+    if (!race.isOpenRace || race.isTimeTrial) continue;
+    const matchingRegs = (meet.registrations || []).filter(reg =>
+      !!reg.options?.open && raceMatchesRegAgeGender(race, reg, meet)
+    );
+    newRaces.push({
+      ...race,
+      stage: 'final',
+      heatNumber: 0,
+      isFinal: true,
+      startType: race.startType || 'rolling',
+      countsForOverall: false,
+      laneEntries: assignSequentialLaneEntries(matchingRegs),
+    });
+  }
+
+  // Additionals are placement-only/manual extras; populate from matching additional group selection.
+  for (const race of meet.races || []) {
+    const isAdditional = race.isAdditionalRace || race.isSkateabilityRace || String(race.division || '') === 'additional' || String(race.division || '') === 'skateability';
+    if (!isAdditional) continue;
+    const matchingRegs = (meet.registrations || []).filter(reg => {
+      const selected = !!(reg.options?.additional || reg.options?.skateability);
+      const selectedGroup = String(reg.options?.additionalGroupId || reg.options?.skateabilityGroupId || '');
+      return selected && (!selectedGroup || selectedGroup === String(race.groupId || ''));
+    });
+    newRaces.push({
+      ...race,
+      division: 'additional',
+      isAdditionalRace: true,
+      isSkateabilityRace: false,
+      countsForOverall: false,
+      laneEntries: assignSequentialLaneEntries(matchingRegs),
+    });
+  }
+
+  // Preserve relay races exactly. Relay Builder owns relay lane/team entries.
+  for (const race of meet.races || []) {
+    if (race.isRelayRace) newRaces.push(race);
+  }
+
+  // Rebuild the single time trial session from current registrations, preserving old times when possible.
+  meet.races = newRaces;
+  rebuildTimeTrialRace(meet);
+
+  restoreBlockAssignmentsBySignature(meet, previousBlocks, previousRaces);
+  ensureAtLeastOneBlock(meet);
+  ensureCurrentRace(meet);
+  meet.updatedAt = nowIso();
+}
+
 function importSpringFlingTestRoster(meet, { replace = true, checkedIn = true, paid = true } = {}) {
   const previousBlocks = JSON.parse(JSON.stringify(meet.blocks || []));
   const previousRaces = JSON.parse(JSON.stringify(meet.races || []));
@@ -5719,7 +5859,7 @@ function importSpringFlingTestRoster(meet, { replace = true, checkedIn = true, p
   }
 
   generateConfiguredRacesForMeet(meet);
-  rebuildRaceAssignments(meet);
+  rebuildRaceAssignmentsSafe(meet);
   restoreBlockAssignmentsBySignature(meet, previousBlocks, previousRaces);
   ensureAtLeastOneBlock(meet);
   ensureCurrentRace(meet);
@@ -5768,7 +5908,7 @@ app.post('/portal/meet/:meetId/dev/import-spring-fling', requireRole('super_admi
   if (String(req.body.action || '') === 'clear') {
     meet.registrations = (meet.registrations || []).filter(r => r.importSource !== 'spring_fling_2026_test');
     generateConfiguredRacesForMeet(meet);
-    rebuildRaceAssignments(meet);
+    rebuildRaceAssignmentsSafe(meet);
     restoreBlockAssignmentsBySignature(meet, previousBlocks, previousRaces);
     ensureAtLeastOneBlock(meet);
     ensureCurrentRace(meet);
@@ -5952,7 +6092,7 @@ app.post('/portal/meet/:meetId/registered/:regId/edit', requireRole('meet_direct
   const finalGroup=challengeAdjustedGroup(meet,baseGroup,!!req.body.challengeUp);
   const regOpts={challengeUp:!!req.body.challengeUp,novice:!!req.body.novice,elite:!!req.body.elite,open:!!req.body.open,quad:!!req.body.quad,additional:!!(req.body.additional||req.body.skateability),additionalGroupId:String(req.body.additionalGroupId||req.body.skateabilityGroupId||''),skateability:!!(req.body.additional||req.body.skateability),skateabilityGroupId:String(req.body.additionalGroupId||req.body.skateabilityGroupId||''),timeTrials:!!req.body.timeTrials,relay2Person:!!req.body.relay2Person,relay3Person:!!req.body.relay3Person,relay4Person:!!req.body.relay4Person,relays:!!(req.body.relay2Person||req.body.relay3Person||req.body.relay4Person)};
   Object.assign(reg,{name:String(req.body.name||'').trim(),birthdate,age:compAge,gender,team:String(req.body.team||'Midwest Racing').trim()||'Midwest Racing',sponsor:String(req.body.sponsor||'').trim(),originalDivisionGroupId:baseGroup?.id||'',originalDivisionGroupLabel:baseGroup?.label||'',divisionGroupId:finalGroup?.id||'',divisionGroupLabel:finalGroup?.label||'Unassigned',options:regOpts,totalCost:calcRegistrationCost(meet,regOpts)});
-  generateAdditionalRacesForMeet(meet); rebuildRaceAssignments(meet); saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/registered`);
+  generateAdditionalRacesForMeet(meet); rebuildRaceAssignmentsSafe(meet); saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/registered`);
 });
 
 app.get('/portal/meet/:meetId/registered/:regId/delete', requireRole('meet_director'), (req, res) => {
@@ -5977,13 +6117,13 @@ app.post('/portal/meet/:meetId/registered/:regId/delete', requireRole('meet_dire
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
   meet.registrations=(meet.registrations||[]).filter(r=>Number(r.id)!==Number(req.params.regId));
-  rebuildRaceAssignments(meet); saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/registered`);
+  rebuildRaceAssignmentsSafe(meet); saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/registered`);
 });
 
 app.post('/portal/meet/:meetId/assign-races', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
-  rebuildRaceAssignments(meet);
+  rebuildRaceAssignmentsSafe(meet);
   ensureCurrentRace(meet);
   saveDb(req.db);
 
@@ -6101,14 +6241,14 @@ app.post('/portal/meet/:meetId/checkin/helmet/:regId', requireRole('meet_directo
   if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
   const reg=(meet.registrations||[]).find(r=>Number(r.id)===Number(req.params.regId));
   if(reg) reg.helmetNumber=Number(req.body.helmetNumber||'')||'';
-  rebuildRaceAssignments(meet); saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/checkin`);
+  rebuildRaceAssignmentsSafe(meet); saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/checkin`);
 });
 
 app.post('/portal/meet/:meetId/checkin/reassign-helmets', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
   let n=1; for(const reg of meet.registrations||[]) reg.helmetNumber=n++;
-  rebuildRaceAssignments(meet); saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/checkin`);
+  rebuildRaceAssignmentsSafe(meet); saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/checkin`);
 });
 
 
