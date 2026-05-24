@@ -3361,8 +3361,8 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
                   <datalist id="rinkSuggestions">${rinkDataList}</datalist>
                   <div class="note">Pick a saved rink when available. Typed names become custom for this meet only.</div>
                 </div>
-                <div><label>Track Length (m)</label><input name="trackLength" value="${esc(meet.trackLength)}" /></div>
-                <div><label>Lanes</label><input name="lanes" value="${esc(meet.lanes)}" /></div>
+                <div><label>Track Length (m)</label><input type="number" name="trackLength" value="${esc(meet.trackLength)}" min="1" step="1" /></div>
+                <div><label>Lanes</label><input type="number" name="lanes" value="${esc(meet.lanes)}" min="1" step="1" /></div>
               </div>
             </section>
 
@@ -3534,6 +3534,19 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
     </form>`}));
 });
 
+
+function numberFieldFromBody(body, keys, fallback, minValue) {
+  for (const key of keys) {
+    if (!Object.prototype.hasOwnProperty.call(body || {}, key)) continue;
+    const raw = String(body[key] ?? '').trim();
+    if (raw === '') continue;
+    const n = Number(raw);
+    if (Number.isFinite(n)) return Math.max(minValue, n);
+  }
+  const fb = Number(fallback);
+  return Number.isFinite(fb) ? Math.max(minValue, fb) : minValue;
+}
+
 function saveMeetFields(meet, body, db) {
   meet.meetName=String(body.meetName||'New Meet').trim();
   meet.date=String(body.date||'').trim();
@@ -3557,8 +3570,10 @@ function saveMeetFields(meet, body, db) {
     meet.rinkId = Number(meet.rinkId || 1);
     meet.customRinkName = rinkSearch;
   }
-  meet.trackLength=Number(body.trackLength||100);
-  meet.lanes=Number(body.lanes||4);
+  // Preserve existing values if the browser does not submit these fields, and
+  // accept a couple of alternate names so lane count cannot silently fall back to 4.
+  meet.trackLength = numberFieldFromBody(body, ['trackLength', 'track_length'], meet.trackLength || 100, 1);
+  meet.lanes = numberFieldFromBody(body, ['lanes', 'laneCount', 'lane_count'], meet.lanes || 4, 1);
   meet.timeTrialsEnabled=!!body.timeTrialsEnabled;
   if(Array.isArray(meet.openGroups)) {
     meet.openGroups=normalizeOpenGroups(meet.openGroups).map(g=>({...g,timeTrial:!!meet.timeTrialsEnabled,ttDistance:'100m'}));
@@ -3724,11 +3739,17 @@ app.post('/portal/meet/:meetId/builder/save-meet', requireRole('meet_director'),
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet) return res.redirect('/portal');
   if(!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
+  const oldLaneCount = Number(meet.lanes || 4);
+  const oldTrackLength = Number(meet.trackLength || 100);
   saveMeetFields(meet, req.body, req.db);
+  const laneOrTrackChanged = Number(meet.lanes || 4) !== oldLaneCount || Number(meet.trackLength || 100) !== oldTrackLength;
   generateConfiguredRacesForMeet(meet);
+  // Lane count controls heat splitting and lane rows. If it changed, immediately rebuild
+  // assignments safely so the Block Builder does not keep races built from the old lane count.
+  if (laneOrTrackChanged) rebuildRaceAssignmentsSafe(meet);
   ensureAtLeastOneBlock(meet);
   ensureCurrentRace(meet);
-  saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/builder?saved=1`);
+  saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/builder?saved=1${laneOrTrackChanged?'&lanesSaved=1':''}`);
 });
 
 // Save AND rebuild races — warns user first via confirm dialog in the UI
