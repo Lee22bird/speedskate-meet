@@ -791,7 +791,7 @@ function generateAdditionalRacesForMeet(meet) {
     const raceGroupId = savedId;
 
     const rawTitle = String(sg.ageGroupLabel || sg.title || '').trim();
-    const title = rawTitle && rawTitle.toLowerCase() !== 'additional race' ? rawTitle : 'Additional Race';
+    const title = rawTitle && rawTitle.toLowerCase() !== 'additional race' ? rawTitle : 'Manual Extra Race';
 
     const linkedAgeGroup = (meet.groups || []).find(g => String(g.id) === linkedAgeGroupId);
     const ages = String(sg.ages || linkedAgeGroup?.ages || '').trim();
@@ -844,6 +844,7 @@ function generateAdditionalRacesForMeet(meet) {
         isRelayRace: false,
         isAdditionalRace: true,
         isSkateabilityRace: false,
+        type: 'race',
       });
     });
   }
@@ -3348,83 +3349,53 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
       <div class="card" style="margin-top:8px">
         <div class="row between center" style="margin-bottom:14px">
           <div>
-            <h2 style="margin:0">➕ Additional Races</h2>
-            <div class="note">Add extra race groups for special events — director sets distances manually.</div>
+            <h2 style="margin:0">➕ Manual Extra Races</h2>
+            <div class="note">Four fixed manual race slots. Toggle on only the extra race groups you want. These behave like normal configured races in Block Builder.</div>
           </div>
-          <button type="button" class="btn2 btn-sm" onclick="addSkateability()">+ Add Additional Race</button>
+          <span class="chip chip-sky">4 Manual Slots</span>
         </div>
-        <div id="skateability-list">
-          ${(meet.skateabilityGroups||[]).map((sg,si)=>`
-            <div class="group-pair-col" style="margin-bottom:12px" id="sk-${si}">
-              <div class="group-pair-header">
-                <span class="group-pair-name">${esc(sg.ageGroupLabel||sg.title||'Additional Race')}</span>
-                ${toggleSwitch('sk_'+si+'_enabled', sg.enabled)}
-                <button type="button" class="btn-danger btn-sm" onclick="removeSkateability(${si})">Remove</button>
-              </div>
-              <input type="hidden" name="sk_${si}_id" value="${esc(sg.id||('sk_'+si))}" />
-              <input type="hidden" name="sk_${si}_ageGroupId" value="${esc(sg.ageGroupId||'')}" />
-              <div class="form-grid cols-2" style="margin-top:10px">
-                <div><label>Division Title</label><input name="sk_${si}_ageGroupLabel" value="${esc(sg.ageGroupLabel||sg.title||'Additional Race')}" placeholder="Diaper Dash / Skateability / Extra Open" /></div>
-                <div><label>Age Range</label><input name="sk_${si}_ages" value="${esc(sg.ages||'')}" placeholder="5 & under / 6-9 / 35+" /></div>
-              </div>
-              <div style="display:flex;gap:8px;align-items:flex-end;margin-top:10px">
-                <div style="flex:1"><label>D1</label><input name="sk_${si}_d1" value="${esc(sg.distances?.[0]||'')}" placeholder="100m" /></div>
-                <div style="flex:1"><label>D2</label><input name="sk_${si}_d2" value="${esc(sg.distances?.[1]||'')}" placeholder="200m" /></div>
-                <div style="flex:1"><label>D3</label><input name="sk_${si}_d3" value="${esc(sg.distances?.[2]||'')}" placeholder="300m" /></div>
-              </div>
-            </div>`).join('')}
-        </div>
-        <input type="hidden" name="skateability_count" id="skateability_count" value="${(meet.skateabilityGroups||[]).length}" />
+        ${(()=>{
+          const saved = Array.isArray(meet.skateabilityGroups) ? meet.skateabilityGroups : [];
+          const defaults = [0,1,2,3].map(i => ({
+            id: 'manual_extra_' + (i + 1),
+            ageGroupLabel: '',
+            ages: '',
+            enabled: false,
+            distances: ['', '', ''],
+          }));
+          const rows = defaults.map((def, i) => {
+            const found = saved.find(x => String(x.id || '') === def.id) || saved[i] || {};
+            return {
+              id: def.id,
+              ageGroupLabel: String(found.ageGroupLabel || found.title || def.ageGroupLabel || ''),
+              ages: String(found.ages || def.ages || ''),
+              enabled: !!found.enabled,
+              distances: Array.isArray(found.distances) ? [0,1,2].map(n=>String(found.distances[n]||'')) : ['', '', ''],
+            };
+          });
+          return `<div class="form-grid cols-2">
+            ${rows.map((sg,si)=>`
+              <div class="group-pair-col" style="margin-bottom:12px" id="sk-${si}">
+                <div class="group-pair-header">
+                  <span class="group-pair-name">Manual Extra Race ${si+1}${sg.ageGroupLabel?` — ${esc(sg.ageGroupLabel)}`:''}</span>
+                  ${toggleSwitch('sk_'+si+'_enabled', sg.enabled)}
+                </div>
+                <input type="hidden" name="sk_${si}_id" value="${esc(sg.id)}" />
+                <input type="hidden" name="sk_${si}_ageGroupId" value="" />
+                <div class="form-grid cols-2" style="margin-top:10px">
+                  <div><label>Race Title</label><input name="sk_${si}_ageGroupLabel" value="${esc(sg.ageGroupLabel)}" placeholder="Diaper Dash / Skateability / Extra Open" /></div>
+                  <div><label>Age Range</label><input name="sk_${si}_ages" value="${esc(sg.ages)}" placeholder="5 & under / 6-9 / 35+" /></div>
+                </div>
+                <div style="display:flex;gap:8px;align-items:flex-end;margin-top:10px">
+                  <div style="flex:1"><label>D1</label><input name="sk_${si}_d1" value="${esc(sg.distances?.[0]||'')}" placeholder="100m" /></div>
+                  <div style="flex:1"><label>D2</label><input name="sk_${si}_d2" value="${esc(sg.distances?.[1]||'')}" placeholder="200m" /></div>
+                  <div style="flex:1"><label>D3</label><input name="sk_${si}_d3" value="${esc(sg.distances?.[2]||'')}" placeholder="300m" /></div>
+                </div>
+              </div>`).join('')}
+          </div>`;
+        })()}
+        <input type="hidden" name="skateability_count" id="skateability_count" value="4" />
       </div>
-
-      <script>
-        let skCount = ${(meet.skateabilityGroups||[]).length};
-
-        function addSkateability() {
-          const si = skCount++;
-          const countEl = document.getElementById('skateability_count');
-          if(countEl) countEl.value = skCount;
-          const list = document.getElementById('skateability-list');
-          if(!list) return;
-          const div = document.createElement('div');
-          div.className = 'group-pair-col';
-          div.style.marginBottom = '12px';
-          div.id = 'sk-'+si;
-          const newId = 'sk_custom_' + Date.now() + '_' + si;
-          div.innerHTML =
-            '<div class="group-pair-header">' +
-              '<span class="group-pair-name">Additional Race</span>' +
-              '<label class="toggle-wrap" style="margin-left:8px">' +
-                '<input type="checkbox" name="sk_'+si+'_enabled" value="on" class="toggle-input" checked />' +
-                '<span class="toggle-track"><span class="toggle-thumb"></span></span>' +
-              '</label>' +
-              '<button type="button" class="btn-danger btn-sm" onclick="removeSkateability('+si+')">Remove</button>' +
-            '</div>' +
-            '<input type="hidden" name="sk_'+si+'_id" value="'+newId+'" />' +
-            '<input type="hidden" name="sk_'+si+'_ageGroupId" value="" />' +
-            '<div class="form-grid cols-2" style="margin-top:10px">' +
-              '<div><label>Division Title</label><input name="sk_'+si+'_ageGroupLabel" value="" placeholder="Diaper Dash / Skateability / Extra Open" /></div>' +
-              '<div><label>Age Range</label><input name="sk_'+si+'_ages" value="" placeholder="5 & under / 6-9 / 35+" /></div>' +
-            '</div>' +
-            '<div style="display:flex;gap:8px;align-items:flex-end;margin-top:10px">' +
-              '<div style="flex:1"><label>D1</label><input name="sk_'+si+'_d1" value="" placeholder="100m" /></div>' +
-              '<div style="flex:1"><label>D2</label><input name="sk_'+si+'_d2" value="" placeholder="200m" /></div>' +
-              '<div style="flex:1"><label>D3</label><input name="sk_'+si+'_d3" value="" placeholder="300m" /></div>' +
-            '</div>';
-          list.appendChild(div);
-        }
-
-        function removeSkateability(si) {
-          const el = document.getElementById('sk-'+si);
-          if(el) el.remove();
-          // Re-sync count and hidden field so save reads correct number
-          const list = document.getElementById('skateability-list');
-          const newCount = list ? list.querySelectorAll('.group-pair-col').length : 0;
-          skCount = newCount;
-          const countEl = document.getElementById('skateability_count');
-          if(countEl) countEl.value = skCount;
-        }
-      </script>
 
       <div class="card">
         <div class="row between center">
@@ -3507,7 +3478,7 @@ function saveMeetFields(meet, body, db) {
       meet.skateabilityGroups.push({
         id,
         ageGroupId,
-        ageGroupLabel: ageGroupLabel || 'Additional Race',
+        ageGroupLabel: ageGroupLabel || ('Manual Extra Race ' + (si + 1)),
         ages,
         enabled,
         distances,
