@@ -5042,13 +5042,14 @@ app.post('/api/meet/:meetId/blocks/move-race', requireRole('meet_director'), (re
   const destBlockId=String(req.body.destBlockId||'').trim();
   if(!raceId) return res.status(400).send('Race missing');
 
-  // Make sure generated race IDs are current/stable before saving a block assignment.
-  // This is especially important for Additional Races, which are generated from builder config.
-  generateConfiguredRacesForMeet(meet);
+  // Do NOT rebuild configured races while dragging. Rebuilding here can regenerate/filter
+  // race IDs and wipe an already-scheduled Additional race from a block when another
+  // unassigned race is dropped into that same block. The Block Builder page is already
+  // rendered from the current saved race list, so the dragged raceId should exist as-is.
   ensureAtLeastOneBlock(meet);
 
   const race=(meet.races||[]).find(r=>String(r.id)===raceId);
-  if(!race) return res.status(404).send('Race not found after rebuild');
+  if(!race) return res.status(404).send('Race not found');
 
   for(const block of meet.blocks||[]) {
     block.raceIds=(block.raceIds||[]).map(String).filter(id=>id!==raceId);
