@@ -1,22 +1,57 @@
 function buildCostWidget(base, additionalFee, maxCap = 0) {
+  const safeBase = Number(base || 0);
+  const safeAdditional = Number(additionalFee || 0);
+  const safeMax = Number(maxCap || 0);
+
   const html = [
     '<div class="card" style="background:var(--panel);margin-top:8px">',
     '<div style="display:flex;justify-content:space-between;align-items:center">',
     '<div style="font-weight:750">Registration Total Preview</div>',
-    '<div style="font-size:26px;font-weight:800;color:#EA580C" id="ssm-cost">$'+base+'</div>',
+    '<div style="font-size:26px;font-weight:800;color:#EA580C" id="ssm-cost">$' + safeBase.toFixed(0) + '</div>',
     '</div>',
     '<div style="font-size:12px;color:#64748b;margin-top:4px" id="ssm-breakdown">Base registration includes the first selected event category.</div>',
     '</div>',
     '<script>(function(){',
-    'var B='+base+',A='+additionalFee+',M='+maxCap+';',
+    'var B=' + safeBase + ',A=' + safeAdditional + ',M=' + safeMax + ';',
     'function money(n){return "$"+Number(n||0).toFixed(0);}',
-    'function checked(k){var el=document.querySelector("[name="+k+"]");return !!(el&&((el.type==="checkbox"&&el.checked)||el.value==="on"));}',
+
+    // IMPORTANT:
+    // The old version counted any checkbox with value="on" as selected, even when unchecked.
+    // Toggle checkboxes all use value="on", so unchecked events were being counted.
+    'function checked(k){',
+    '  var els=document.querySelectorAll("[name=\\"" + k + "\\"]");',
+    '  for(var i=0;i<els.length;i++){',
+    '    var el=els[i];',
+    '    if((el.type==="checkbox"||el.type==="radio")&&el.checked)return true;',
+    '    if(el.type!=="checkbox"&&el.type!=="radio"&&String(el.value||"").trim()!==""&&String(el.value||"").trim()!=="off")return true;',
+    '  }',
+    '  return false;',
+    '}',
+
     'function upd(){',
     'var names=[];',
-    '["novice","elite","open","quad","timeTrials","skateability","relay2Person","relay3Person","relay4Person"].forEach(function(k){if(checked(k))names.push(k);});',
+    '[',
+    '  "novice",',
+    '  "elite",',
+    '  "open",',
+    '  "quad",',
+    '  "timeTrials",',
+    '  "skateability",',
+    '  "additional",',
+    '  "additionalRace",',
+    '  "relay2Person",',
+    '  "relay3Person",',
+    '  "relay4Person"',
+    '].forEach(function(k){if(checked(k))names.push(k);});',
+
+    // Do not double-count aliases for the same Additional option.
+    'var hasAdditional=names.indexOf("skateability")>=0||names.indexOf("additional")>=0||names.indexOf("additionalRace")>=0;',
+    'names=names.filter(function(k){return k!=="skateability"&&k!=="additional"&&k!=="additionalRace";});',
+    'if(hasAdditional)names.push("additional");',
+
     'var selected=names.length;',
     'var extra=Math.max(0,selected-1);',
-    'var total=B+(extra*A);',
+    'var total=selected>0 ? B+(extra*A) : B;',
     'var lines=["Base registration: "+money(B)+" (first event included)"];',
     'if(selected>1)lines.push(extra+" additional event"+(extra===1?"":"s")+" × "+money(A));',
     'if(selected===0)lines.push("No event categories selected yet");',
