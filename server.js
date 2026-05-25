@@ -1028,6 +1028,101 @@ function generateConfiguredRacesForMeet(meet) {
   meet.updatedAt = nowIso();
 }
 
+function isAdvancementRace(race) {
+  if (!race) return false;
+  if (race.isOpenRace || race.isRelayRace || race.isTimeTrial || race.isAdditionalRace || race.isSkateabilityRace) return false;
+  const div = String(race.division || '').toLowerCase();
+  if (div === 'open' || div === 'additional' || div === 'skateability') return false;
+  // Standard novice/elite and quad races can split into heats.
+  return true;
+}
+
+function advancementFamilyKey(race) {
+  if (!race) return '';
+  const parent = String(race.parentRaceKey || '').trim();
+  if (parent) return parent;
+  const type = race.isQuadRace ? 'quad' : 'standard';
+  return [
+    type,
+    String(race.groupId || ''),
+    String(race.division || ''),
+    String(race.dayIndex || ''),
+    String(race.distanceLabel || ''),
+  ].join('|');
+}
+
+function numericPlace(value) {
+  const n = Number(String(value || '').trim());
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function tryAdvanceTopThreeFromTwoHeats(meet, changedRace) {
+  if (!isAdvancementRace(changedRace)) return { advanced: false, reason: 'not_advancement_race' };
+  if (String(changedRace.stage || '').toLowerCase() !== 'heat') return { advanced: false, reason: 'not_heat' };
+
+  const familyKey = advancementFamilyKey(changedRace);
+  if (!familyKey) return { advanced: false, reason: 'missing_family' };
+
+  const familyRaces = (meet.races || []).filter(r => isAdvancementRace(r) && advancementFamilyKey(r) === familyKey);
+  const heats = familyRaces
+    .filter(r => String(r.stage || '').toLowerCase() === 'heat')
+    .sort((a, b) => Number(a.heatNumber || 0) - Number(b.heatNumber || 0));
+  const finalRace = familyRaces.find(r => String(r.stage || '').toLowerCase() === 'final' || r.isFinal);
+
+  if (!finalRace) return { advanced: false, reason: 'missing_final' };
+
+  // MVP rule from coach: exactly 2 heats, top 3 by place from each heat.
+  // Larger brackets need manual advancement for now.
+  if (heats.length !== 2) {
+    finalRace.advancementWarning = heats.length > 2
+      ? 'Manual advancement required — more than 2 heats.'
+      : '';
+    return { advanced: false, reason: 'not_two_heats' };
+  }
+
+  if (heats.some(h => String(h.status || '') !== 'closed')) {
+    return { advanced: false, reason: 'heats_not_closed' };
+  }
+
+  const qualifiers = [];
+  for (const heat of heats) {
+    const topThree = (heat.laneEntries || [])
+      .filter(entry => numericPlace(entry.place) !== null && !String(entry.status || '').trim())
+      .sort((a, b) => numericPlace(a.place) - numericPlace(b.place))
+      .slice(0, 3);
+
+    if (topThree.length < 3) {
+      return { advanced: false, reason: 'missing_top_three' };
+    }
+
+    for (const entry of topThree) {
+      qualifiers.push({
+        lane: qualifiers.length + 1,
+        registrationId: entry.registrationId || '',
+        helmetNumber: entry.helmetNumber || '',
+        skaterName: entry.skaterName || '',
+        team: entry.team || '',
+        place: '',
+        time: '',
+        status: '',
+        qualifiedFromHeat: Number(heat.heatNumber || 0),
+        qualifiedPlace: numericPlace(entry.place),
+      });
+    }
+  }
+
+  finalRace.laneEntries = qualifiers.slice(0, 6).map((entry, idx) => ({ ...entry, lane: idx + 1 }));
+  finalRace.resultsMode = finalRace.resultsMode || 'places';
+  finalRace.status = String(finalRace.status || 'open') === 'closed' ? 'closed' : 'open';
+  finalRace.isFinal = true;
+  finalRace.countsForOverall = true;
+  finalRace.advancementWarning = '';
+  finalRace.advancedFromHeatsAt = nowIso();
+  finalRace.notes = String(finalRace.notes || '').replace(/\n?Auto-advanced top 3 from each heat\.?/g, '');
+
+  return { advanced: true, finalRaceId: finalRace.id };
+}
+
 function pricingFieldsFromMeet(meet) {
   return {
     baseEntryFee: Number(meet?.baseEntryFee || 0),
@@ -7216,6 +7311,15 @@ app.post('/portal/meet/:meetId/race-day/judges/save', requireRole('judge','meet_
   race.resultsMode=String(req.body.resultsMode||'places')==='times'?'times':'places';
   race.notes=String(req.body.notes||''); race.status=req.body.action==='close'?'closed':'open';
   race.closedAt=req.body.action==='close'?nowIso():race.closedAt;
+
+  // Heat advancement MVP:
+  // When exactly 2 sibling heats are closed, top 3 by place from each heat
+  // are copied into the matching final. No times / fastest-loser logic.
+  // More than 2 heats stays manual for now.
+  if(req.body.action==='close') {
+    tryAdvanceTopThreeFromTwoHeats(meet, race);
+  }
+
   meet.updatedAt=nowIso();
   if(req.body.action==='close') {
     const info=currentRaceInfo(meet);
