@@ -7225,7 +7225,7 @@ app.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','judg
           }
         </script>`;
       })():`        <div class="card">
-          <form method="POST" action="/portal/meet/${meet.id}/race-day/judges/save">
+          <form id="judgeRaceForm" method="POST" action="/portal/meet/${meet.id}/race-day/judges/save">
             <input type="hidden" name="raceId" value="${esc(current.id)}" />
             <div class="action-row" style="margin-bottom:14px">
               <label class="toggle-wrap"><input type="radio" name="resultsMode" value="places" ${current.resultsMode!=='times'?'checked':''} style="width:auto" /> <span style="font-size:14px;font-weight:600">Places</span></label>
@@ -7255,6 +7255,42 @@ app.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','judg
               <button class="btn-orange" type="submit" name="action" value="close">Close Race</button>
             </div>
           </form>
+          <div id="judgeSaveToast" class="judge-save-toast" role="status" aria-live="polite">✓ Race Saved</div>
+          <style>
+            .judge-save-toast{position:fixed;right:22px;bottom:22px;background:#10b981;color:#fff;font-weight:800;border-radius:999px;padding:12px 18px;box-shadow:0 10px 30px rgba(16,185,129,.35);opacity:0;transform:translateY(12px);pointer-events:none;transition:opacity .18s ease,transform .18s ease;z-index:9999}
+            .judge-save-toast.show{opacity:1;transform:translateY(0)}
+          </style>
+          <script>
+            (function(){
+              var form=document.getElementById('judgeRaceForm');
+              var toast=document.getElementById('judgeSaveToast');
+              if(!form||!toast) return;
+              var clickedAction='';
+              form.querySelectorAll('button[type="submit"][name="action"]').forEach(function(btn){
+                btn.addEventListener('click',function(){ clickedAction=this.value||''; });
+              });
+              function showToast(msg){
+                toast.textContent=msg||'✓ Race Saved';
+                toast.classList.add('show');
+                clearTimeout(window.__judgeSaveToastTimer);
+                window.__judgeSaveToastTimer=setTimeout(function(){toast.classList.remove('show');},2200);
+              }
+              form.addEventListener('submit',function(e){
+                var action=clickedAction || (document.activeElement&&document.activeElement.value) || '';
+                if(action!=='save') return;
+                e.preventDefault();
+                var submitter=form.querySelector('button[name="action"][value="save"]');
+                var fd=new FormData(form);
+                fd.set('action','save');
+                if(submitter) submitter.disabled=true;
+                fetch(form.action,{method:'POST',body:fd,credentials:'same-origin',headers:{'Accept':'application/json'}})
+                  .then(function(r){ if(!r.ok) throw new Error('Save failed'); return r.json(); })
+                  .then(function(){ showToast('✓ Race Saved'); })
+                  .catch(function(){ showToast('⚠ Save failed'); })
+                  .finally(function(){ if(submitter) submitter.disabled=false; clickedAction=''; });
+              });
+            })();
+          </script>
         </div>`):`<div class="card"><div class="muted">No race selected yet.</div></div>`}`;
 
   } else if(mode==='announcer') {
@@ -7279,8 +7315,10 @@ app.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','judg
 app.post('/portal/meet/:meetId/race-day/judges/save', requireRole('judge','meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet) return res.redirect('/portal');
+  const wantsJson = String(req.get('accept') || '').includes('application/json') || String(req.body.ajax || '') === '1';
+  const judgeUrl = `/portal/meet/${meet.id}/race-day/judges`;
   const race=(meet.races||[]).find(r=>r.id===String(req.body.raceId||''));
-  if(!race) return res.redirect(`/portal/meet/${meet.id}/race-day/judges`);
+  if(!race) return wantsJson ? res.status(404).json({ ok:false, error:'Race not found' }) : res.redirect(judgeUrl);
 
   // Time Trials use the dedicated tt-post / tt-remove flow.
   // Never rebuild laneEntries here, or one saved TT result can wipe earlier posted times.
@@ -7298,7 +7336,7 @@ app.post('/portal/meet/:meetId/race-day/judges/save', requireRole('judge','meet_
     }
     meet.updatedAt=nowIso();
     saveDb(req.db);
-    return res.redirect(`/portal/meet/${meet.id}/race-day/judges`);
+    return wantsJson ? res.json({ ok:true, action:req.body.action||'save', raceId:race.id }) : res.redirect(judgeUrl);
   }
 
   const existingLaneEntries = Array.isArray(race.laneEntries) ? [...race.laneEntries] : [];
@@ -7325,7 +7363,8 @@ app.post('/portal/meet/:meetId/race-day/judges/save', requireRole('judge','meet_
     const info=currentRaceInfo(meet);
     if(info.current&&info.current.id===race.id) { const next=info.ordered[info.idx+1]; if(next){meet.currentRaceId=next.id;meet.currentRaceIndex=info.idx+1;} }
   }
-  saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/race-day/judges`);
+  saveDb(req.db);
+  return wantsJson ? res.json({ ok:true, action:req.body.action||'save', raceId:race.id, status:race.status }) : res.redirect(judgeUrl);
 });
 
 app.post('/portal/meet/:meetId/race-day/judges/tt-post', requireRole('judge','meet_director'), (req, res) => {
@@ -7482,11 +7521,11 @@ app.get('/portal/meet/:meetId/results', requireRole('meet_director','judge','coa
         </div>`).join('')}`:``}
     ${quadSections.length?`
       <div class="spacer"></div>
-      <h2 style="color:var(--purple)">🛼 Quad Overall Standings</h2>
+      <h2 style="color:var(--purple)">🛼 Quad Results</h2>
       ${quadSections.map(s=>`
         <div class="card" style="border-left:4px solid var(--purple);margin-bottom:14px">
           <div class="row between" style="margin-bottom:12px">
-            <div><h2 style="margin:0">${esc(s.groupLabel)} — ${esc(s.distanceLabel)}</h2><div class="note">Combined quad points across completed distances</div></div>
+            <div><h2 style="margin:0">${esc(s.groupLabel)} — ${esc(s.distanceLabel)}</h2><div class="note">30 / 20 / 10 / 5 points • Quad Division</div></div>
             ${s.standings[0]?`<div class="chip chip-purple">🛼 ${esc(s.standings[0].skaterName)}</div>`:''}
           </div>
           <table class="table">
@@ -7676,7 +7715,7 @@ app.get('/meet/:meetId/results', (req, res) => {
     </div>
     ${sections.map(resultsSectionHtml).join('<div class="spacer"></div>')||`<div class="card"><div class="muted">No standings yet.</div></div>`}
     ${openSections.length?`<div class="spacer"></div><h2 style="color:var(--orange)">🏁 Open Results</h2>${openSections.map(s=>`<div class="card" style="border-left:4px solid var(--orange);margin-bottom:14px"><h2>${esc(s.race.groupLabel)} — ${esc(s.race.distanceLabel)}</h2><table class="table"><thead><tr><th>Place</th><th>Skater</th><th>Team</th></tr></thead><tbody>${s.rows.map(r=>`<tr><td><strong>${esc(r.place)}</strong></td><td>${esc(r.skaterName||'')}</td><td>${esc(r.team||'')}</td></tr>`).join('')}</tbody></table></div>`).join('')}`:``}
-    ${quadSections.length?`<div class="spacer"></div><h2 style="color:var(--purple)">🛼 Quad Overall Standings</h2>${quadSections.map(s=>`<div class="card" style="border-left:4px solid var(--purple);margin-bottom:14px"><h2>${esc(s.groupLabel)} — ${esc(s.distanceLabel)}</h2><table class="table"><thead><tr><th>Place</th><th>Skater</th><th>Team</th><th>Points</th></tr></thead><tbody>${s.standings.map(r=>`<tr><td><strong>${r.overallPlace}</strong></td><td>${esc(r.skaterName||'')}</td><td>${esc(r.team||'')}</td><td><strong>${Number(r.totalPoints||0)}</strong></td></tr>`).join('')}</tbody></table></div>`).join('')}`:``}`}));
+    ${quadSections.length?`<div class="spacer"></div><h2 style="color:var(--purple)">🛼 Quad Results</h2>${quadSections.map(s=>`<div class="card" style="border-left:4px solid var(--purple);margin-bottom:14px"><h2>${esc(s.groupLabel)} — ${esc(s.distanceLabel)}</h2><table class="table"><thead><tr><th>Place</th><th>Skater</th><th>Team</th><th>Points</th></tr></thead><tbody>${s.standings.map(r=>`<tr><td><strong>${r.overallPlace}</strong></td><td>${esc(r.skaterName||'')}</td><td>${esc(r.team||'')}</td><td><strong>${Number(r.totalPoints||0)}</strong></td></tr>`).join('')}</tbody></table></div>`).join('')}`:``}`}));
 });
 
 app.get('/portal/meet/:meetId/results/print', requireRole('meet_director','judge','coach'), (req, res) => {
@@ -7697,7 +7736,7 @@ app.get('/portal/meet/:meetId/results/print', requireRole('meet_director','judge
       <table><thead><tr><th>Place</th><th>Skater</th><th>Team</th></tr></thead><tbody>
       ${s.rows.map(r=>`<tr><td>${esc(r.place)}</td><td>${esc(r.skaterName||'')}</td><td>${esc(r.team||'')}</td></tr>`).join('')||`<tr><td colspan="3">No results.</td></tr>`}
       </tbody></table></div>`).join('')}`:``}
-    ${quadSections.length?`<h1>Quad Overall Standings</h1>${quadSections.map(s=>`<div class="section"><h2>${esc(s.groupLabel)} — ${esc(s.distanceLabel)}</h2>
+    ${quadSections.length?`<h1>Quad Results</h1>${quadSections.map(s=>`<div class="section"><h2>${esc(s.groupLabel)} — ${esc(s.distanceLabel)}</h2>
       <table><thead><tr><th>Place</th><th>Skater</th><th>Team</th><th>Points</th></tr></thead><tbody>
       ${s.standings.map(r=>`<tr><td>${r.overallPlace}</td><td>${esc(r.skaterName||'')}</td><td>${esc(r.team||'')}</td><td>${Number(r.totalPoints||0)}</td></tr>`).join('')||`<tr><td colspan="4">No standings.</td></tr>`}
       </tbody></table></div>`).join('')}`:``}
