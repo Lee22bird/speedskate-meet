@@ -7556,7 +7556,7 @@ app.get('/meet/:meetId/tv', (req, res) => {
   const info=currentRaceInfo(meet);
   const current=info.current;
   const lanes=current?laneRowsForRace(current,meet):[];
-  const recent=recentClosedRaces(meet,1);
+  const recent=recentClosedRaces(meet,4);
   const lastRace=recent[0];
   const lastResults=lastRace?(lastRace.laneEntries||[]).filter(x=>x.place).sort((a,b)=>Number(a.place||999)-Number(b.place||999)).slice(0,3):[];
   const isTT=!!(current&&current.isTimeTrial);
@@ -7586,6 +7586,30 @@ app.get('/meet/:meetId/tv', (req, res) => {
     (e.time?'<span style="color:#38BDF8;font-weight:700">'+esc(e.time)+'</span>':'') +
     '</div>'
   ).join('');
+
+
+  const recentResultsSidebarHtml = recent.length ?
+    '<div class="tv-sidebar-section tv-recent-results-section">' +
+    '<div class="tv-sidebar-label">Recent Results</div>' +
+    recent.slice(0,3).map(race => {
+      const podium = (race.laneEntries || [])
+        .filter(x => x.place)
+        .sort((a,b) => Number(a.place || 999) - Number(b.place || 999))
+        .slice(0,3);
+      const podiumHtml = podium.map(e =>
+        '<div class="tv-recent-podium-row">' +
+        '<span class="tv-recent-medal">'+(String(e.place)==='1'?'🥇':String(e.place)==='2'?'🥈':String(e.place)==='3'?'🥉':esc(e.place)+'.')+'</span>' +
+        '<span class="tv-recent-name">'+esc(e.skaterName || '')+'</span>' +
+        '</div>'
+      ).join('') || '<div class="tv-recent-empty">No places yet</div>';
+      return '<div class="tv-recent-race">' +
+        '<div class="tv-recent-race-title">'+esc(race.groupLabel || '')+'</div>' +
+        '<div class="tv-recent-race-meta">'+esc(cap(race.division || ''))+' • '+esc(race.distanceLabel || '')+'</div>' +
+        '<div class="tv-recent-podium">'+podiumHtml+'</div>' +
+      '</div>';
+    }).join('') +
+    '</div>'
+    : '';
 
   let ttBoards = { overallFemale: [], overallMale: [], byGroup: [], overall: [] };
   if(isTT) {
@@ -7620,7 +7644,8 @@ app.get('/meet/:meetId/tv', (req, res) => {
     (info.next ? '<div class="tv-sidebar-section"><div class="tv-sidebar-label">In Staging</div><div class="tv-next-name">'+esc(info.next.groupLabel)+'</div><div class="tv-next-meta">'+esc(cap(info.next.division))+' • '+esc(info.next.distanceLabel)+'</div></div>' : '') +
     (info.coming.length ? '<div class="tv-sidebar-section"><div class="tv-sidebar-label">Coming Up</div>' +
       info.coming.slice(0,4).map(r=>'<div class="tv-coming-item">'+esc(r.groupLabel)+' — '+esc(cap(r.division))+' • '+esc(r.distanceLabel)+'</div>').join('') +
-      '</div>' : '');
+      '</div>' : '') +
+    recentResultsSidebarHtml;
 
   const currentLabel = isTT ? '⏱ TIME TRIAL — NOW RUNNING' : '▶ NOW RACING';
   const currentMeta = isTT ? '100m • 1 Lap • Youngest to Oldest' : esc(cap(current&&current.division||''))+' • '+esc(current&&current.distanceLabel||'')+' • '+(current?esc(cap(current.startType)):'')+ ' Start';
@@ -7670,6 +7695,16 @@ app.get('/meet/:meetId/tv', (req, res) => {
     '.tv-next-meta{font-size:14px;color:rgba(255,255,255,.65);margin-top:4px;}' +
     '.tv-coming-item{font-size:15px;color:rgba(255,255,255,.75);padding:4px 0;border-bottom:1px solid rgba(255,255,255,.08);}' +
     '.tv-coming-item:last-child{border:none;}' +
+    '.tv-recent-results-section{flex:1;min-height:0;overflow:hidden;}' +
+    '.tv-recent-race{padding:10px 0;border-bottom:1px solid rgba(255,255,255,.08);}' +
+    '.tv-recent-race:last-child{border-bottom:none;padding-bottom:0;}' +
+    '.tv-recent-race-title{font-family:Barlow Condensed,sans-serif;font-size:24px;font-weight:900;line-height:1.05;color:#fff;}' +
+    '.tv-recent-race-meta{font-size:13px;color:rgba(255,255,255,.58);margin-top:2px;margin-bottom:7px;}' +
+    '.tv-recent-podium{display:flex;flex-direction:column;gap:5px;}' +
+    '.tv-recent-podium-row{display:flex;align-items:center;gap:8px;font-size:17px;}' +
+    '.tv-recent-medal{width:28px;font-size:19px;}' +
+    '.tv-recent-name{font-weight:800;color:rgba(255,255,255,.88);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
+    '.tv-recent-empty{font-size:14px;opacity:.45;}' +
     '.tv-podium{display:flex;flex-direction:column;gap:8px;}' +
     '.tv-podium-row{display:flex;align-items:center;gap:16px;background:rgba(255,255,255,.07);border-radius:10px;padding:12px 16px;}' +
     '.tv-footer{background:#0a1628;border-top:2px solid rgba(255,255,255,.10);padding:10px 32px;display:flex;align-items:center;gap:24px;}' +
