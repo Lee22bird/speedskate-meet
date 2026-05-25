@@ -236,13 +236,15 @@ function computeQuadStandings(meet) {
     if (!race.isFinal || !race.countsForOverall) continue;
     if (String(race.status || '') !== 'closed') continue;
 
-    const bucketKey = `${race.groupId}|${race.distanceLabel}`;
+    // Quad overall is scored by division/group across all completed quad distances.
+    // Example: Quad Freshman Girls 300m + 500m = one overall standings table.
+    const bucketKey = String(race.groupId || race.groupLabel || 'quad');
 
     if (!divisions[bucketKey]) {
       divisions[bucketKey] = {
         groupId: race.groupId,
         groupLabel: race.groupLabel,
-        distanceLabel: race.distanceLabel,
+        division: race.division || 'quad',
         races: [],
       };
     }
@@ -278,6 +280,7 @@ function computeQuadStandings(meet) {
       standings[bucketKey][regKey].raceScores.push({
         raceId: race.id,
         distanceLabel: race.distanceLabel,
+        dayIndex: race.dayIndex,
         place: row.place,
         points: row.points,
       });
@@ -286,12 +289,22 @@ function computeQuadStandings(meet) {
 
   return Object.keys(divisions)
     .map(key => {
+      const divRaces = divisions[key].races.sort(
+        (a, b) => Number(a.dayIndex || 0) - Number(b.dayIndex || 0)
+      );
+
       const rows = Object.values(standings[key] || {})
-        .sort((a, b) =>
-          b.totalPoints !== a.totalPoints
-            ? b.totalPoints - a.totalPoints
-            : String(a.skaterName || '').localeCompare(String(b.skaterName || ''))
-        )
+        .sort((a, b) => {
+          if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
+
+          // Simple quad tie fallback for now: better finish in the later/longer race wins.
+          const lastRace = divRaces[divRaces.length - 1];
+          const aLast = a.raceScores.find(s => s.raceId === lastRace?.id)?.place || 999;
+          const bLast = b.raceScores.find(s => s.raceId === lastRace?.id)?.place || 999;
+          if (aLast !== bLast) return aLast - bLast;
+
+          return String(a.skaterName || '').localeCompare(String(b.skaterName || ''));
+        })
         .map((row, idx) => ({
           ...row,
           overallPlace: idx + 1,
@@ -301,8 +314,9 @@ function computeQuadStandings(meet) {
         key,
         groupId: divisions[key].groupId,
         groupLabel: divisions[key].groupLabel,
-        distanceLabel: divisions[key].distanceLabel,
-        races: divisions[key].races,
+        division: divisions[key].division,
+        distanceLabel: divRaces.map(r => r.distanceLabel).filter(Boolean).join(' + '),
+        races: divRaces,
         standings: rows,
       };
     })
