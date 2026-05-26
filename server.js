@@ -7282,8 +7282,9 @@ app.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','judg
                 var submitter=form.querySelector('button[name="action"][value="save"]');
                 var fd=new FormData(form);
                 fd.set('action','save');
+                var body=new URLSearchParams(fd);
                 if(submitter) submitter.disabled=true;
-                fetch(form.action,{method:'POST',body:fd,credentials:'same-origin',headers:{'Accept':'application/json'}})
+                fetch(form.action,{method:'POST',body:body,credentials:'same-origin',headers:{'Accept':'application/json','Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'}})
                   .then(function(r){ if(!r.ok) throw new Error('Save failed'); return r.json(); })
                   .then(function(){ showToast('✓ Race Saved'); })
                   .catch(function(){ showToast('⚠ Save failed'); })
