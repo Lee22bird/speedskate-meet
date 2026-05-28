@@ -517,12 +517,6 @@ function makeSetupPresetFromMeet(db, meet, name, ownerUserId) {
     sourceMeetId: meet.id,
     tiebreaker: meet.tiebreaker || 'd2',
     baseEntryFee: Number(meet.baseEntryFee || 0),
-    noviceEventFee: Number(meet.noviceEventFee || 0),
-    eliteEventFee: Number(meet.eliteEventFee || 0),
-    openEventFee: Number(meet.openEventFee || 0),
-    quadEventFee: Number(meet.quadEventFee || 0),
-    relayEventFee: Number(meet.relayEventFee || 0),
-    timeTrialEventFee: Number(meet.timeTrialEventFee || 0),
     additionalRaceFee: Number(meet.additionalRaceFee || 0),
     maxRegistrationFee: Number(meet.maxRegistrationFee || 0),
     trackLength: Number(meet.trackLength || 100),
@@ -3718,25 +3712,6 @@ app.post('/portal/meet/:meetId/setup-presets/load', requireRole('meet_director')
   meet.skateabilityGroups = meet.additionalGroups.map(g => ({ ...g }));
   meet.tiebreaker = preset.tiebreaker || meet.tiebreaker;
   meet.baseEntryFee = Number(preset.baseEntryFee || 0);
-  // Load new global pricing fields with migration from old per-group costs
-  if(preset.noviceEventFee !== undefined) {
-    meet.noviceEventFee = Number(preset.noviceEventFee || 0);
-  } else {
-    // Migration: extract from first group with novice cost
-    const oldCost = (preset.groups||[]).reduce((c,g)=>g.divisions?.novice?.cost||c,0);
-    meet.noviceEventFee = Number(oldCost || 0);
-  }
-  if(preset.eliteEventFee !== undefined) {
-    meet.eliteEventFee = Number(preset.eliteEventFee || 0);
-  } else {
-    // Migration: extract from first group with elite cost
-    const oldCost = (preset.groups||[]).reduce((c,g)=>g.divisions?.elite?.cost||c,0);
-    meet.eliteEventFee = Number(oldCost || 0);
-  }
-  meet.openEventFee = Number(preset.openEventFee || 0);
-  meet.quadEventFee = Number(preset.quadEventFee || 0);
-  meet.relayEventFee = Number(preset.relayEventFee || 0);
-  meet.timeTrialEventFee = Number(preset.timeTrialEventFee || 0);
   meet.additionalRaceFee = Number(preset.additionalRaceFee || 0);
   meet.maxRegistrationFee = Number(preset.maxRegistrationFee || 0);
   meet.trackLength = preset.trackLength || meet.trackLength;
