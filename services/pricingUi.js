@@ -37,17 +37,12 @@ function buildCostWidget(base, additionalFee, maxCap = 0) {
     '  "quad",',
     '  "timeTrials",',
     '  "skateability",',
-    '  "additional",',
-    '  "additionalRace",',
     '  "relay2Person",',
     '  "relay3Person",',
     '  "relay4Person"',
     '].forEach(function(k){if(checked(k))names.push(k);});',
 
-    // Do not double-count aliases for the same Additional option.
-    'var hasAdditional=names.indexOf("skateability")>=0||names.indexOf("additional")>=0||names.indexOf("additionalRace")>=0;',
-    'names=names.filter(function(k){return k!=="skateability"&&k!=="additional"&&k!=="additionalRace";});',
-    'if(hasAdditional)names.push("additional");',
+    'document.querySelectorAll("input[name=\"specialRaceIds\"]:checked").forEach(function(){names.push("specialRace");});',
 
     'var selected=names.length;',
     'var extra=Math.max(0,selected-1);',

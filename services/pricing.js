@@ -12,7 +12,8 @@ function countSelectedEventCategories(options = {}) {
   if (opts.open) count += 1;
   if (opts.quad) count += 1;
   if (opts.timeTrials) count += 1;
-  if (opts.skateability || opts.additionalRace) count += 1;
+  if (opts.skateability) count += 1;
+  if (Array.isArray(opts.specialRaceIds)) count += opts.specialRaceIds.length;
 
   if (opts.relay2Person) count += 1;
   if (opts.relay3Person) count += 1;
