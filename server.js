@@ -3844,7 +3844,7 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
             </section>
 
             <section class="setup-section setup-section-wide">
-              <div class="setup-section-title">🎛️ Meet Options</div>
+              <div class="setup-section-title">📝 Meet Notes</div>
               <script>
                 (function(){
                   var rinks = ${rinkLookupScript};
@@ -3863,36 +3863,6 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
                   syncRink();
                 })();
               </script>
-              <div class="meet-options-grid">
-                <div id="time-trials" class="toggle-row" style="grid-column:1/-1;border-left:4px solid var(--sky2);background:linear-gradient(135deg,#f0f9ff 0%,#ffffff 70%);padding:18px 20px">
-                  <div>
-                    <div class="toggle-row-label" style="font-size:20px">⏱ Time Trials</div>
-                    <div class="toggle-row-desc" style="font-size:14px;max-width:760px">
-                      Single <strong>100m / 1 Lap</strong> session. Runs youngest to oldest across all divisions. 
-                      Uses Open division groups for TV/live leaderboards. No points awarded.
-                    </div>
-                    <div class="action-row" style="margin-top:10px">
-                      <span class="chip chip-sky">100m</span>
-                      <span class="chip">1 Lap</span>
-                      <span class="chip">Youngest → Oldest</span>
-                      <span class="chip chip-green">Records Only</span>
-                    </div>
-                  </div>
-                  ${toggleSwitch('timeTrialsEnabled', meet.timeTrialsEnabled, 'Enable Time Trials')}
-                </div>
-                <div class="toggle-row">
-                  <div><div class="toggle-row-label">Relays</div><div class="toggle-row-desc">Controlled by Relay Builder. Saved relay races appear automatically.</div></div>
-                  <span class="chip ${((meet.races||[]).some(r=>r.isRelayRace)||meet.relayEnabled)?'chip-green':''}">${((meet.races||[]).some(r=>r.isRelayRace)||meet.relayEnabled)?'Active':'Use Relay Builder'}</span>
-                </div>
-                <div class="toggle-row">
-                  <div><div class="toggle-row-label">Judges Panel</div><div class="toggle-row-desc">Every meet includes a judges panel.</div></div>
-                  <span class="chip chip-green">Always On</span>
-                </div>
-                <div class="toggle-row">
-                  <div><div class="toggle-row-label">Find a Meet</div><div class="toggle-row-desc">Controlled by meet status. Published meets show publicly; drafts stay hidden.</div></div>
-                  <span class="chip ${String(meet.status||'').toLowerCase()==='published'?'chip-green':''}">${String(meet.status||'').toLowerCase()==='published'?'Published':'Draft/Hidden'}</span>
-                </div>
-              </div>
               <div class="setup-notes-grid">
                 <div><label>Meet Notes</label><textarea name="notes">${esc(meet.notes||'')}</textarea></div>
                 <div><label>Relay Notes</label><textarea name="relayNotes">${esc(meet.relayNotes||'')}</textarea></div>
@@ -3907,32 +3877,50 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
       <div class="card" style="margin-top:8px">
         <div class="row between center" style="margin-bottom:14px">
           <div>
-            <h2 style="margin:0">💚 Skatability</h2>
-            <div class="note">Permanent Skatability setup. No novice/elite divisions and no overall points — just enable it and enter up to 3 distances.</div>
+            <h2 style="margin:0">Special Events</h2>
+            <div class="note">Optional event types that sit outside standard novice/elite/open/quad racing.</div>
           </div>
-          <span class="chip chip-green">Dedicated Event</span>
         </div>
-        ${(()=>{
-          const saved = makeAdditionalRaceSlots(meet.additionalGroups || meet.additionalRaceGroups || meet.additionalRaces || meet.skateabilityGroups);
-          const sg = saved.find(x => String(x.id || '') === 'manual_extra_1') || {};
-          const distances = Array.isArray(sg.distances) ? [0,1,2].map(n=>String(sg.distances[n]||'')) : ['', '', ''];
-          return `
-            <div class="group-pair-col" style="margin-bottom:12px" id="sk-0">
-              <div class="group-pair-header">
-                <span class="group-pair-name">Skatability</span>
-                ${toggleSwitch('sk_0_enabled', !!sg.enabled)}
-              </div>
-              <input type="hidden" name="sk_0_id" value="manual_extra_1" />
-              <input type="hidden" name="sk_0_ageGroupId" value="" />
-              <input type="hidden" name="sk_0_ages" value="" />
-              <input type="hidden" name="sk_0_ageGroupLabel" value="Skatability" />
-              <div style="display:flex;gap:8px;align-items:flex-end;margin-top:10px">
-                <div style="flex:1"><label>Distance 1</label><input name="sk_0_d1" value="${esc(distances[0])}" placeholder="100m" /></div>
-                <div style="flex:1"><label>Distance 2</label><input name="sk_0_d2" value="${esc(distances[1])}" placeholder="200m" /></div>
-                <div style="flex:1"><label>Distance 3</label><input name="sk_0_d3" value="${esc(distances[2])}" placeholder="300m" /></div>
-              </div>
-            </div>`;
-        })()}
+        <div class="form-grid cols-2">
+          <div class="group-pair-col" id="time-trials" style="margin-bottom:12px">
+            <div class="group-pair-header">
+              <span class="group-pair-name">Time Trials</span>
+              ${toggleSwitch('timeTrialsEnabled', meet.timeTrialsEnabled, 'Enable Time Trials')}
+            </div>
+            <div class="note" style="margin-top:8px">
+              Single <strong>100m / 1 Lap</strong> session. Runs youngest to oldest across all divisions. Uses Open division groups for TV/live leaderboards. No points awarded.
+            </div>
+            <div class="action-row" style="margin-top:10px">
+              <span class="chip chip-sky">100m</span>
+              <span class="chip">1 Lap</span>
+              <span class="chip">Youngest → Oldest</span>
+              <span class="chip chip-green">Records Only</span>
+            </div>
+          </div>
+
+          ${(()=>{
+            const saved = makeAdditionalRaceSlots(meet.additionalGroups || meet.additionalRaceGroups || meet.additionalRaces || meet.skateabilityGroups);
+            const sg = saved.find(x => String(x.id || '') === 'manual_extra_1') || {};
+            const distances = Array.isArray(sg.distances) ? [0,1,2].map(n=>String(sg.distances[n]||'')) : ['', '', ''];
+            return `
+              <div class="group-pair-col" style="margin-bottom:12px" id="sk-0">
+                <div class="group-pair-header">
+                  <span class="group-pair-name">Skatability</span>
+                  ${toggleSwitch('sk_0_enabled', !!sg.enabled)}
+                </div>
+                <div class="note" style="margin-top:8px">Permanent Skatability setup. No novice/elite divisions and no overall points — just enable it and enter up to 3 distances.</div>
+                <input type="hidden" name="sk_0_id" value="manual_extra_1" />
+                <input type="hidden" name="sk_0_ageGroupId" value="" />
+                <input type="hidden" name="sk_0_ages" value="" />
+                <input type="hidden" name="sk_0_ageGroupLabel" value="Skatability" />
+                <div style="display:flex;gap:8px;align-items:flex-end;margin-top:10px">
+                  <div style="flex:1"><label>Distance 1</label><input name="sk_0_d1" value="${esc(distances[0])}" placeholder="100m" /></div>
+                  <div style="flex:1"><label>Distance 2</label><input name="sk_0_d2" value="${esc(distances[1])}" placeholder="200m" /></div>
+                  <div style="flex:1"><label>Distance 3</label><input name="sk_0_d3" value="${esc(distances[2])}" placeholder="300m" /></div>
+                </div>
+              </div>`;
+          })()}
+        </div>
         <input type="hidden" name="additional_count" id="additional_count" value="4" />
       </div>
 
