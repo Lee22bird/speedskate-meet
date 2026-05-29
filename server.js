@@ -1164,6 +1164,50 @@ function archivedMeetsForUser(db, user) {
   return [];
 }
 
+function cloneMeetSetup(sourceMeet, newId, ownerUserId) {
+  const clone = JSON.parse(JSON.stringify(sourceMeet || {}));
+
+  clone.id = newId;
+  clone.createdByUserId = ownerUserId;
+  clone.createdAt = nowIso();
+  clone.updatedAt = nowIso();
+  clone.meetName = `Copy of ${String(sourceMeet?.meetName || 'Meet').trim() || 'Meet'}`;
+  clone.date = '';
+  clone.endDate = '';
+  clone.startTime = '';
+  clone.registrationCloseAt = '';
+  clone.status = 'draft';
+  clone.isPublic = false;
+
+  // A clone is a fresh operational meet, not history.
+  clone.archivedAt = '';
+  clone.archivedByUserId = null;
+  clone.previousStatus = '';
+
+  // Do not carry meet-day/live data into the new meet.
+  clone.registrations = [];
+  clone.races = [];
+  clone.textAlerts = [];
+  clone.currentRaceId = '';
+  clone.currentRaceIndex = -1;
+  clone.raceDayPaused = false;
+
+  // Keep block layout names/days/notes, but clear race references because races will be regenerated.
+  clone.blocks = Array.isArray(clone.blocks)
+    ? clone.blocks.map((block, idx) => ({
+        id: String(block.id || ('b' + (idx + 1))),
+        name: String(block.name || `Block ${idx + 1}`),
+        day: String(block.day || 'Day 1'),
+        type: String(block.type || 'race'),
+        notes: String(block.notes || ''),
+        raceIds: [],
+      }))
+    : [];
+  ensureAtLeastOneBlock(clone);
+
+  return clone;
+}
+
 function coachVisibleMeets(db,user) {
   const meets = activeMeets(db.meets);
   if(hasRole(user,'super_admin')) return meets;
@@ -2920,6 +2964,7 @@ app.get('/portal', requireRole('meet_director','judge','coach'), (req, res) => {
             <a class="btn-purple" href="/portal/meet/${meet.id}/quad-builder">🛼 Quad</a>
             <a class="btn2" href="/portal/meet/${meet.id}/race-day/director">Race Day</a>
             <a class="btn2" href="/portal/meet/${meet.id}/results">Results</a>
+            <a class="btn2 btn-sm" href="/portal/meet/${meet.id}/clone-confirm">Clone</a>
             ${meet.status==='complete'?`<a class="btn2 btn-sm" href="/portal/meet/${meet.id}/archive-confirm">Archive</a>`:''}
             <a class="btn-danger btn-sm" href="/portal/meet/${meet.id}/delete-confirm">Delete</a>
           `:`<a class="btn2" href="/portal/meet/${meet.id}/coach">Coach Panel</a>
@@ -3221,6 +3266,7 @@ app.get('/portal/archived-meets', requireRole('meet_director','coach','super_adm
           <a class="btn2" href="/portal/meet/${meet.id}/results">View Results</a>
           <a class="btn2" href="/portal/meet/${meet.id}/registered">View Registrations</a>
           ${canEditMeet(req.user,meet)?`
+            <a class="btn2 btn-sm" href="/portal/meet/${meet.id}/clone-confirm">Clone Setup</a>
             <form method="POST" action="/portal/meet/${meet.id}/unarchive" style="display:inline">
               <button class="btn2 btn-sm" type="submit" onclick="return confirm('Unarchive this meet and return it to the active portal list?')">Unarchive</button>
             </form>`:''}
@@ -3275,6 +3321,38 @@ app.post('/portal/meet/:meetId/unarchive', requireRole('meet_director'), (req, r
   meet.updatedAt = nowIso();
   saveDb(req.db);
   res.redirect('/portal');
+});
+
+// ── Meet Clone ─────────────────────────────────────────────────────────────────
+
+app.get('/portal/meet/:meetId/clone-confirm', requireRole('meet_director'), (req, res) => {
+  const meet=getMeetOr404(req.db,req.params.meetId);
+  if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
+  res.send(pageShell({title:'Clone Meet Setup',user:req.user, bodyHtml:`
+    <div style="max-width:680px;margin:40px auto">
+      <div class="page-header"><h1>Clone Meet Setup</h1><div class="sub">${esc(meet.meetName)}</div></div>
+      <div class="card">
+        <div class="good" style="margin-bottom:12px">This creates a new draft meet using this meet's setup.</div>
+        <div class="muted" style="line-height:1.7;margin-bottom:16px">
+          It copies divisions, distances, pricing, rink setup, Open/Quad setup, Skatability/Special Race setup, and block names.
+          It does not copy registrations, race results, check-ins, paid status, text alerts, or current race-day state.
+        </div>
+        <div class="hr"></div>
+        <form method="POST" action="/portal/meet/${meet.id}/clone" class="action-row">
+          <button class="btn-orange" type="submit">Create Draft Clone</button>
+          <a class="btn2" href="${isArchivedMeet(meet) ? '/portal/archived-meets' : '/portal'}">Cancel</a>
+        </form>
+      </div>
+    </div>`}));
+});
+
+app.post('/portal/meet/:meetId/clone', requireRole('meet_director'), (req, res) => {
+  const source=getMeetOr404(req.db,req.params.meetId);
+  if(!source||!canEditMeet(req.user,source)) return res.redirect('/portal');
+  const clone=cloneMeetSetup(source, nextId(req.db.meets), req.user.id);
+  req.db.meets.push(clone);
+  saveDb(req.db);
+  res.redirect(`/portal/meet/${clone.id}/builder`);
 });
 
 // ── Meet CRUD ─────────────────────────────────────────────────────────────────
@@ -7609,7 +7687,7 @@ app.get('/portal/meet/:meetId/results', requireRole('meet_director','judge','coa
           <span class="chip chip-${meet.status==='complete'?'green':meet.status==='live'?'orange':'sky'}">${esc(meet.status||'draft')}</span>
         </div>
         <div class="action-row">
-          ${hasRole(req.user,'super_admin')||canEditMeet(req.user,meet)?(meet.status==='complete'?`<form method="POST" action="/portal/meet/${meet.id}/reopen"><button class="btn2" type="submit">Reopen Meet</button></form><a class="btn-orange" href="/portal/meet/${meet.id}/archive-confirm">Archive Meet</a>`:meet.status==='archived'?`<form method="POST" action="/portal/meet/${meet.id}/unarchive"><button class="btn2" type="submit">Unarchive Meet</button></form>`:`<form method="POST" action="/portal/meet/${meet.id}/finalize"><button class="btn-orange" type="submit">Finalize Meet</button></form>`):''}
+          ${hasRole(req.user,'super_admin')||canEditMeet(req.user,meet)?(meet.status==='complete'?`<form method="POST" action="/portal/meet/${meet.id}/reopen"><button class="btn2" type="submit">Reopen Meet</button></form><a class="btn2" href="/portal/meet/${meet.id}/clone-confirm">Clone Setup</a><a class="btn-orange" href="/portal/meet/${meet.id}/archive-confirm">Archive Meet</a>`:meet.status==='archived'?`<form method="POST" action="/portal/meet/${meet.id}/unarchive"><button class="btn2" type="submit">Unarchive Meet</button></form>`:`<form method="POST" action="/portal/meet/${meet.id}/finalize"><button class="btn-orange" type="submit">Finalize Meet</button></form>`):''}
           <a class="btn2" href="/portal/meet/${meet.id}/results/print" target="_blank">Print Results</a>
         </div>
       </div>
