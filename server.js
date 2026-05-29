@@ -1145,10 +1145,30 @@ function racingSoonLabel(delta) {
   if(delta===2) return '2 RACES AWAY'; if(delta===3) return '3 RACES AWAY'; return `${delta} RACES AWAY`;
 }
 
+function isArchivedMeet(meet) {
+  return !!(meet && (meet.archivedAt || String(meet.status || '').toLowerCase() === 'archived'));
+}
+
+function activeMeets(meets) {
+  return (meets || []).filter(m => !isArchivedMeet(m));
+}
+
+function archivedMeetsForUser(db, user) {
+  const archived = (db.meets || []).filter(isArchivedMeet);
+  if (hasRole(user, 'super_admin')) return archived;
+  if (hasRole(user, 'meet_director')) return archived.filter(m => Number(m.createdByUserId) === Number(user.id));
+  if (hasRole(user, 'coach')) {
+    const teamKey = String(user.team || '').trim().toLowerCase();
+    return archived.filter(m => (m.registrations || []).some(r => String(r.team || '').trim().toLowerCase() === teamKey));
+  }
+  return [];
+}
+
 function coachVisibleMeets(db,user) {
-  if(hasRole(user,'super_admin')) return db.meets;
-  if(hasRole(user,'meet_director')) return db.meets.filter(m=>Number(m.createdByUserId)===Number(user.id));
-  if(hasRole(user,'coach')) return db.meets.filter(m=>(m.registrations||[]).some(r=>String(r.team||'').trim().toLowerCase()===String(user.team||'').trim().toLowerCase()));
+  const meets = activeMeets(db.meets);
+  if(hasRole(user,'super_admin')) return meets;
+  if(hasRole(user,'meet_director')) return meets.filter(m=>Number(m.createdByUserId)===Number(user.id));
+  if(hasRole(user,'coach')) return meets.filter(m=>(m.registrations||[]).some(r=>String(r.team||'').trim().toLowerCase()===String(user.team||'').trim().toLowerCase()));
   return [];
 }
 
@@ -2382,6 +2402,7 @@ app.get('/help', (req, res) => {
 
 
 function isPublicMeet(meet) {
+  if (isArchivedMeet(meet)) return false;
   return !!(meet && (meet.isPublic || String(meet.status || '').toLowerCase() === 'published'));
 }
 
@@ -2844,7 +2865,7 @@ app.get('/portal/meet-picker', requireRole('judge','announcer','meet_director','
   const role=isJudge?'judge':'announcer';
   const target=isJudge?'judges':'announcer';
   // Show published + live meets only
-  const meets=(db.meets||[]).filter(m=>m.isPublic&&m.status!=='draft'&&m.status!=='complete');
+  const meets=activeMeets(db.meets).filter(m=>m.isPublic&&m.status!=='draft'&&m.status!=='complete');
   const cards=meets.map(meet=>{
     const rink=db.rinks.find(r=>Number(r.id)===Number(meet.rinkId));
     const info=currentRaceInfo(meet);
@@ -2899,6 +2920,7 @@ app.get('/portal', requireRole('meet_director','judge','coach'), (req, res) => {
             <a class="btn-purple" href="/portal/meet/${meet.id}/quad-builder">🛼 Quad</a>
             <a class="btn2" href="/portal/meet/${meet.id}/race-day/director">Race Day</a>
             <a class="btn2" href="/portal/meet/${meet.id}/results">Results</a>
+            ${meet.status==='complete'?`<a class="btn2 btn-sm" href="/portal/meet/${meet.id}/archive-confirm">Archive</a>`:''}
             <a class="btn-danger btn-sm" href="/portal/meet/${meet.id}/delete-confirm">Delete</a>
           `:`<a class="btn2" href="/portal/meet/${meet.id}/coach">Coach Panel</a>
              <a class="btn2" href="/meet/${meet.id}/live">Live</a>`}
@@ -2913,7 +2935,8 @@ app.get('/portal', requireRole('meet_director','judge','coach'), (req, res) => {
     <div class="action-row" style="margin-bottom:20px">
       ${hasRole(req.user,'super_admin')||hasRole(req.user,'meet_director')?`
         <form method="POST" action="/portal/create-meet"><button class="btn-orange" type="submit">+ New Meet</button></form>
-        <a class="btn2" href="/portal/rinks">Manage Rinks</a>`:''}
+        <a class="btn2" href="/portal/rinks">Manage Rinks</a>
+        <a class="btn2" href="/portal/archived-meets">Archived Meets</a>`:''}
       ${hasRole(req.user,'coach')||hasRole(req.user,'super_admin')||hasRole(req.user,'meet_director')?`<a class="btn2" href="/portal/coach">Coach Portal</a>`:''}
       ${hasRole(req.user,'super_admin')?`<a class="btn2" href="/portal/users">Users</a>
         <a class="btn2" href="/portal/pending-rinks" style="position:relative">Pending Rinks${req.db.pendingRinks?.filter(p=>p.status==='pending').length?`<span style="position:absolute;top:-6px;right:-6px;background:var(--red);color:#fff;border-radius:50%;width:18px;height:18px;font-size:11px;display:flex;align-items:center;justify-content:center;font-weight:700">${req.db.pendingRinks.filter(p=>p.status==='pending').length}</span>`:''}
@@ -3165,6 +3188,93 @@ app.get('/portal/meet/:meetId/coach', requireRole('coach','meet_director','super
     ${standings.length?`<h2 style="margin-bottom:12px">📊 Team Standings</h2>${standings.map(section=>resultsSectionHtml(section)).join('<div class="spacer"></div>')}
     `:''}
     <script>setTimeout(()=>location.reload(),8000);</script>`}));
+});
+
+
+// ── Archived Meets ────────────────────────────────────────────────────────────
+
+app.get('/portal/archived-meets', requireRole('meet_director','coach','super_admin'), (req, res) => {
+  const archived = archivedMeetsForUser(req.db, req.user).sort((a, b) => new Date(b.archivedAt || b.updatedAt || 0) - new Date(a.archivedAt || a.updatedAt || 0));
+  const cards = archived.map(meet => {
+    const archivedBy = (req.db.users || []).find(u => Number(u.id) === Number(meet.archivedByUserId));
+    const inlineCount = (meet.races || []).filter(r => !r.isOpenRace && !r.isQuadRace).length;
+    const closedCount = (meet.races || []).filter(r => String(r.status || '') === 'closed').length;
+    return `
+      <div class="card" style="margin-bottom:14px;border-left:4px solid var(--green)">
+        <div class="row between" style="margin-bottom:12px">
+          <div>
+            <h2 style="margin:0">${esc(meet.meetName)}</h2>
+            <div class="muted" style="font-size:13px">
+              ${meetRinkLabel(req.db,meet)?`${esc(meetRinkLabel(req.db,meet))} • `:``}${esc(meetDateLabel(meet)||'Date TBD')}
+              • Archived ${esc(meet.archivedAt ? new Date(meet.archivedAt).toLocaleDateString() : '')}
+              ${archivedBy ? `by ${esc(archivedBy.displayName || archivedBy.username || '')}` : ''}
+            </div>
+          </div>
+          <div class="row">
+            <span class="chip chip-green">Archived</span>
+            <span class="chip">Regs: ${(meet.registrations||[]).length}</span>
+            <span class="chip">Races: ${inlineCount}</span>
+            <span class="chip">Closed: ${closedCount}</span>
+          </div>
+        </div>
+        <div class="action-row">
+          <a class="btn2" href="/portal/meet/${meet.id}/results">View Results</a>
+          <a class="btn2" href="/portal/meet/${meet.id}/registered">View Registrations</a>
+          ${canEditMeet(req.user,meet)?`
+            <form method="POST" action="/portal/meet/${meet.id}/unarchive" style="display:inline">
+              <button class="btn2 btn-sm" type="submit" onclick="return confirm('Unarchive this meet and return it to the active portal list?')">Unarchive</button>
+            </form>`:''}
+        </div>
+      </div>`;
+  }).join('');
+
+  res.send(pageShell({title:'Archived Meets',user:req.user, bodyHtml:`
+    <div class="page-header"><h1>Archived Meets</h1><div class="sub">Frozen completed meets kept for history and future SSL profile linking.</div></div>
+    <div class="action-row" style="margin-bottom:16px"><a class="btn2" href="/portal">← Portal</a></div>
+    ${cards || `<div class="card"><div class="muted">No archived meets yet.</div></div>`}`}));
+});
+
+app.get('/portal/meet/:meetId/archive-confirm', requireRole('meet_director'), (req, res) => {
+  const meet=getMeetOr404(req.db,req.params.meetId);
+  if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
+  res.send(pageShell({title:'Archive Meet',user:req.user, bodyHtml:`
+    <div style="max-width:620px;margin:40px auto">
+      <div class="page-header"><h1>Archive Meet</h1><div class="sub">${esc(meet.meetName)}</div></div>
+      <div class="card">
+        <div class="good" style="margin-bottom:12px">Archiving hides this meet from the active portal list and freezes it as historical meet data.</div>
+        <div class="muted" style="line-height:1.7;margin-bottom:16px">
+          It does not delete registrations, races, results, standings, blocks, or race assignments. You can unarchive it later if you need to fix something.
+        </div>
+        <div class="hr"></div>
+        <form method="POST" action="/portal/meet/${meet.id}/archive" class="action-row">
+          <button class="btn-orange" type="submit">Archive Meet</button>
+          <a class="btn2" href="/portal/meet/${meet.id}/results">Cancel</a>
+        </form>
+      </div>
+    </div>`}));
+});
+
+app.post('/portal/meet/:meetId/archive', requireRole('meet_director'), (req, res) => {
+  const meet=getMeetOr404(req.db,req.params.meetId);
+  if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
+  meet.previousStatus = meet.previousStatus || meet.status || 'complete';
+  meet.status = 'archived';
+  meet.archivedAt = nowIso();
+  meet.archivedByUserId = req.user.id;
+  meet.updatedAt = nowIso();
+  saveDb(req.db);
+  res.redirect('/portal/archived-meets');
+});
+
+app.post('/portal/meet/:meetId/unarchive', requireRole('meet_director'), (req, res) => {
+  const meet=getMeetOr404(req.db,req.params.meetId);
+  if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
+  meet.status = meet.previousStatus && meet.previousStatus !== 'archived' ? meet.previousStatus : 'complete';
+  meet.archivedAt = '';
+  meet.archivedByUserId = null;
+  meet.updatedAt = nowIso();
+  saveDb(req.db);
+  res.redirect('/portal');
 });
 
 // ── Meet CRUD ─────────────────────────────────────────────────────────────────
@@ -7499,7 +7609,7 @@ app.get('/portal/meet/:meetId/results', requireRole('meet_director','judge','coa
           <span class="chip chip-${meet.status==='complete'?'green':meet.status==='live'?'orange':'sky'}">${esc(meet.status||'draft')}</span>
         </div>
         <div class="action-row">
-          ${hasRole(req.user,'super_admin')||canEditMeet(req.user,meet)?(meet.status==='complete'?`<form method="POST" action="/portal/meet/${meet.id}/reopen"><button class="btn2" type="submit">Reopen Meet</button></form>`:`<form method="POST" action="/portal/meet/${meet.id}/finalize"><button class="btn-orange" type="submit">Finalize Meet</button></form>`):''}
+          ${hasRole(req.user,'super_admin')||canEditMeet(req.user,meet)?(meet.status==='complete'?`<form method="POST" action="/portal/meet/${meet.id}/reopen"><button class="btn2" type="submit">Reopen Meet</button></form><a class="btn-orange" href="/portal/meet/${meet.id}/archive-confirm">Archive Meet</a>`:meet.status==='archived'?`<form method="POST" action="/portal/meet/${meet.id}/unarchive"><button class="btn2" type="submit">Unarchive Meet</button></form>`:`<form method="POST" action="/portal/meet/${meet.id}/finalize"><button class="btn-orange" type="submit">Finalize Meet</button></form>`):''}
           <a class="btn2" href="/portal/meet/${meet.id}/results/print" target="_blank">Print Results</a>
         </div>
       </div>
