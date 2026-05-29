@@ -114,7 +114,7 @@ function verifySslSsoToken(token) {
 
 function ssmAllowedRolesFromSsl(payload) {
   const incoming = Array.isArray(payload?.roles) ? payload.roles.map(r => String(r || '').toLowerCase()) : [];
-  const allowed = ['super_admin', 'meet_director', 'judge', 'coach'];
+  const allowed = ['super_admin', 'meet_director', 'judge', 'announcer', 'coach'];
   const roles = incoming.filter(role => allowed.includes(role));
   return Array.from(new Set(roles));
 }
@@ -131,6 +131,7 @@ function createSsmSessionForUser(db, user) {
 }
 
 function ssmRedirectForUser(user) {
+  if (!Array.isArray(user?.roles) || user.roles.length === 0) return '/account/pending';
   if (hasRole(user, 'coach') && !hasRole(user, 'meet_director') && !hasRole(user, 'super_admin')) return '/portal/coach';
   if ((hasRole(user, 'judge') || hasRole(user, 'announcer')) && !hasRole(user, 'meet_director') && !hasRole(user, 'super_admin')) return '/portal/meet-picker';
   return '/portal';
@@ -527,6 +528,29 @@ function getSessionUser(req) {
 function extendSession(db,token) {
   const sess=db.sessions.find(s=>s.token===token);
   if(sess) sess.expiresAt=new Date(Date.now()+SESSION_TTL_MS).toISOString();
+}
+
+function findUserByLogin(db, login) {
+  const value = String(login || '').trim().toLowerCase();
+  if (!value) return null;
+  return (db.users || []).find(u => {
+    const username = String(u.username || '').trim().toLowerCase();
+    const email = String(u.email || '').trim().toLowerCase();
+    return (username && username === value) || (email && email === value);
+  }) || null;
+}
+
+function staffRoleOptions(selectedRoles = []) {
+  const selected = new Set((selectedRoles || []).map(String));
+  const roles = [
+    ['meet_director', 'Meet Director'],
+    ['judge', 'Judge'],
+    ['announcer', 'Announcer'],
+    ['coach', 'Coach'],
+  ];
+  return roles.map(([value, label]) =>
+    `<label class="toggle-wrap"><input type="checkbox" name="roles" value="${value}" class="toggle-input" ${selected.has(value) ? 'checked' : ''}><span class="toggle-track"><span class="toggle-thumb"></span></span><span class="toggle-label">${label}</span></label>`
+  ).join('');
 }
 
 
@@ -2537,9 +2561,22 @@ app.post('/submit-rink', (req, res) => {
 
 // ── Pending Rinks (super admin only) ─────────────────────────────────────────
 app.get('/portal/pending-rinks', requireRole('super_admin'), (req, res) => {
-  const pending=(req.db.pendingRinks||[]).filter(p=>p.status==='pending');
-  const approved=(req.db.pendingRinks||[]).filter(p=>p.status==='approved').slice(-10);
-  const rejected=(req.db.pendingRinks||[]).filter(p=>p.status==='rejected').slice(-10);
+  const db=req.db;
+  const cutoff=Date.now() - (1000*60*60*24*3);
+  // Rejected rink submissions are throwaway moderation junk. Approved submissions
+  // stay visible for 3 days as confirmation, then disappear from this queue.
+  db.pendingRinks=(db.pendingRinks||[]).filter(p=>{
+    const status=String(p.status||'pending');
+    if(status==='rejected') return false;
+    if(status==='approved') {
+      const t=new Date(p.approvedAt||p.createdAt||0).getTime();
+      return Number.isFinite(t) && t>=cutoff;
+    }
+    return true;
+  });
+  saveDb(db);
+  const pending=(db.pendingRinks||[]).filter(p=>p.status==='pending');
+  const approved=(db.pendingRinks||[]).filter(p=>p.status==='approved').slice(-10);
 
   const pendingRows=pending.map(p=>`
     <div class="card" style="margin-bottom:14px;border-left:4px solid var(--orange)">
@@ -2581,8 +2618,6 @@ app.get('/portal/pending-rinks', requireRole('super_admin'), (req, res) => {
     ${pending.length?`<h2 style="margin-bottom:12px">⏳ Awaiting Review (${pending.length})</h2>${pendingRows}`:`<div class="card"><div class="muted">No pending rink submissions. 🎉</div></div>`}
     ${approved.length?`<div class="spacer"></div><h2 style="margin-bottom:12px;color:var(--green)">✅ Recently Approved</h2>
       ${approved.map(p=>`<div class="card" style="margin-bottom:8px;opacity:.7"><div class="row between"><div><strong>${esc(p.name)}</strong> — ${esc(p.city)}, ${esc(p.state)}</div><span class="chip chip-green">Approved</span></div></div>`).join('')}`:''}
-    ${rejected.length?`<div class="spacer"></div><h2 style="margin-bottom:12px;color:var(--muted)">❌ Recently Rejected</h2>
-      ${rejected.map(p=>`<div class="card" style="margin-bottom:8px;opacity:.7"><div class="row between"><div><strong>${esc(p.name)}</strong> — ${esc(p.city)}, ${esc(p.state)}</div><span class="chip">Rejected</span></div></div>`).join('')}`:''}
   `}));
 });
 
@@ -2614,12 +2649,12 @@ app.post('/portal/pending-rinks/approve', requireRole('super_admin'), (req, res)
 
 app.post('/portal/pending-rinks/reject', requireRole('super_admin'), (req, res) => {
   const db=req.db;
-  const p=(db.pendingRinks||[]).find(x=>x.id===String(req.body.id||''));
+  const id=String(req.body.id||'');
+  const p=(db.pendingRinks||[]).find(x=>x.id===id);
   if(!p) return res.redirect('/portal/pending-rinks');
-  p.status='rejected'; p.rejectedAt=nowIso(); p.rejectReason=String(req.body.reason||'').trim();
-  saveDb(db);
+  const rejectReason=String(req.body.reason||'').trim();
   if(p.contactEmail) {
-    const reason=p.rejectReason||'It did not meet our listing requirements at this time.';
+    const reason=rejectReason||'It did not meet our listing requirements at this time.';
     const html=emailHtmlWrap(`
       <h2 style="color:#0F1F3D">Rink Submission Update</h2>
       <p>Hi ${esc(p.contactName)},</p>
@@ -2629,6 +2664,9 @@ app.post('/portal/pending-rinks/reject', requireRole('super_admin'), (req, res) 
     `);
     sendEmail(p.contactEmail, `Rink Submission Update — ${p.name}`, html, `Update regarding your rink submission ${p.name}.`);
   }
+  // Rejected rink submissions are deleted immediately so the moderation queue stays clean.
+  db.pendingRinks=(db.pendingRinks||[]).filter(x=>x.id!==id);
+  saveDb(db);
   res.redirect('/portal/pending-rinks');
 });
 
@@ -2855,43 +2893,116 @@ app.get('/ssl-sso', (req, res) => {
   return res.redirect(ssmRedirectForUser(user));
 });
 
-app.get('/admin/login', (req, res) => {
-  res.send(pageShell({title:'Login',user:null, bodyHtml:`
-    <div style="max-width:400px;margin:40px auto">
-      <div class="page-header"><h1>Login</h1></div>
-      ${req.query.reset?'<div class="card" style="border-left:4px solid var(--green);margin-bottom:12px"><div class="good">✅ Password updated! Sign in with your new password.</div></div>':''}
+app.get('/account/pending', (req, res) => {
+  const data=getSessionUser(req);
+  res.send(pageShell({title:'Account Pending',user:data?.user||null, bodyHtml:`
+    <div style="max-width:620px;margin:40px auto">
+      <div class="page-header"><h1>Account Pending</h1><div class="sub">Your SpeedSkateMeet staff account was created.</div></div>
       <div class="card">
-        <form method="POST" action="/admin/login" class="stack">
-          <div><label>Username</label><input name="username" autocomplete="username" required /></div>
-          <div><label>Password</label><input name="password" type="password" autocomplete="current-password" required /></div>
-          <button class="btn" type="submit" style="width:100%">Sign In</button>
-          <a href="/admin/forgot-password" style="text-align:center;font-size:13px;color:var(--muted);display:block;margin-top:8px">Forgot password?</a>
-        </form>
+        <p style="line-height:1.7;margin-top:0">An admin still needs to assign your SSM role before you can access the portal.</p>
+        <div class="muted">Available roles: Meet Director, Judge, Announcer, Coach.</div>
+        <div class="hr"></div>
+        <a class="btn2" href="/admin/logout">Logout</a>
+      </div>
+    </div>`}));
+});
+
+app.get('/admin/login', (req, res) => {
+  const created=req.query.created;
+  const reset=req.query.reset;
+  res.send(pageShell({title:'Staff Login',user:null, bodyHtml:`
+    <div style="max-width:860px;margin:40px auto">
+      <div class="page-header"><h1>SpeedSkateMeet Staff Access</h1><div class="sub">For Meet Directors, Judges, Announcers, and Coaches.</div></div>
+      ${reset?'<div class="card" style="border-left:4px solid var(--green);margin-bottom:12px"><div class="good">✅ Password updated! Sign in with your new password.</div></div>':''}
+      ${created?'<div class="card" style="border-left:4px solid var(--green);margin-bottom:12px"><div class="good">✅ Account created. Sign in, then an admin can assign your staff role.</div></div>':''}
+      <div class="form-grid cols-2">
+        <div class="card">
+          <h2 style="margin-top:0">Sign In</h2>
+          <form method="POST" action="/admin/login" class="stack">
+            <div><label>Email</label><input type="email" name="email" autocomplete="email" required /></div>
+            <div><label>Password</label><input name="password" type="password" autocomplete="current-password" required /></div>
+            <button class="btn" type="submit" style="width:100%">Sign In</button>
+            <a href="/admin/forgot-password" style="text-align:center;font-size:13px;color:var(--muted);display:block;margin-top:8px">Forgot password?</a>
+          </form>
+        </div>
+        <div class="card">
+          <h2 style="margin-top:0">Create Account</h2>
+          <form method="POST" action="/admin/register" class="stack">
+            <div><label>Full Name</label><input name="displayName" autocomplete="name" required /></div>
+            <div><label>Email</label><input type="email" name="email" autocomplete="email" required /></div>
+            <div><label>Password</label><input name="password" type="password" autocomplete="new-password" minlength="6" required /></div>
+            <div class="form-grid cols-2">
+              <div><label>Birthdate</label><input type="date" name="birthdate" required /></div>
+              <div><label>Gender</label><select name="gender" required><option value="">Select...</option><option value="female">Female</option><option value="male">Male</option><option value="other">Other / Prefer not to say</option></select></div>
+            </div>
+            <button class="btn-orange" type="submit" style="width:100%">Create Account</button>
+            <div class="muted" style="font-size:12px;text-align:center">Staff roles are assigned by an admin after account creation.</div>
+          </form>
+        </div>
       </div>
     </div>`}));
 });
 
 app.post('/admin/login', (req, res) => {
   const db=loadDb();
-  const username=String(req.body.username||'').trim();
+  const email=String(req.body.email||req.body.username||'').trim();
   const password=String(req.body.password||'').trim();
-  const user=db.users.find(u=>u.username===username&&u.password===password&&u.active!==false);
-  if(!user) return res.send(pageShell({title:'Login',user:null, bodyHtml:`
-    <div style="max-width:400px;margin:40px auto">
+  const user=findUserByLogin(db,email);
+  if(!user||String(user.password||'')!==password||user.active===false) return res.send(pageShell({title:'Login',user:null, bodyHtml:`
+    <div style="max-width:420px;margin:40px auto">
       <div class="page-header"><h1>Login</h1></div>
       <div class="card">
-        <div class="danger" style="margin-bottom:14px">Invalid username or password.</div>
+        <div class="danger" style="margin-bottom:14px">Invalid email or password.</div>
         <a class="btn2" href="/admin/login">Try again</a>
       </div>
     </div>`}));
-  const token=crypto.randomBytes(24).toString('hex');
-  db.sessions=db.sessions.filter(s=>s.userId!==user.id);
-  db.sessions.push({token,userId:user.id,createdAt:nowIso(),expiresAt:new Date(Date.now()+SESSION_TTL_MS).toISOString()});
+  const token=createSsmSessionForUser(db,user);
   saveDb(db); setCookie(res,SESSION_COOKIE,token,Math.floor(SESSION_TTL_MS/1000));
-  // Role-based redirect
-  if(hasRole(user,'coach')&&!hasRole(user,'meet_director')&&!hasRole(user,'super_admin')) return res.redirect('/portal/coach');
-  if((hasRole(user,'judge')||hasRole(user,'announcer'))&&!hasRole(user,'meet_director')&&!hasRole(user,'super_admin')) return res.redirect('/portal/meet-picker');
-  res.redirect('/portal');
+  return res.redirect(ssmRedirectForUser(user));
+});
+
+app.post('/admin/register', (req, res) => {
+  const db=loadDb();
+  db.users=db.users||[];
+  const email=String(req.body.email||'').trim().toLowerCase();
+  const displayName=String(req.body.displayName||'').trim();
+  const password=String(req.body.password||'').trim();
+  const birthdate=String(req.body.birthdate||'').trim();
+  const gender=String(req.body.gender||'').trim();
+
+  if(!email||!displayName||password.length<6||!birthdate||!gender) {
+    return res.redirect('/admin/login?err=missing');
+  }
+
+  const existing=findUserByLogin(db,email);
+  if(existing) {
+    return res.send(pageShell({title:'Account Exists',user:null, bodyHtml:`
+      <div style="max-width:420px;margin:40px auto">
+        <div class="page-header"><h1>Account Exists</h1></div>
+        <div class="card">
+          <div class="danger" style="margin-bottom:14px">An account already exists for that email.</div>
+          <a class="btn2" href="/admin/login">Back to Login</a>
+        </div>
+      </div>`}));
+  }
+
+  db.users.push({
+    id:nextUserId(db),
+    username:email,
+    email,
+    password,
+    displayName,
+    birthdate,
+    gender,
+    roles:[],
+    team:'',
+    active:true,
+    authProvider:'local',
+    createdAt:nowIso(),
+    updatedAt:nowIso(),
+  });
+  saveDb(db);
+  res.redirect('/admin/login?created=1');
 });
 
 app.get('/admin/logout', (req, res) => {
@@ -3390,33 +3501,44 @@ app.post('/portal/meet/:meetId/delete', requireRole('meet_director'), (req, res)
 // ── Users ─────────────────────────────────────────────────────────────────────
 
 app.get('/portal/users', requireRole('super_admin'), (req, res) => {
-  const rows=req.db.users.map(u=>`
+  const rows=req.db.users.map(u=>{
+    const roles=(u.roles||[]);
+    const status=u.active===false?'Off':(roles.length?'On':'Pending Role');
+    return `
     <tr>
-      <td>${esc(u.displayName||u.username)}</td><td>${esc(u.username)}</td>
-      <td>${esc((u.roles||[]).join(', '))}</td><td>${esc(u.team||'')}</td>
-      <td>${u.active===false?'Off':'On'}</td>
-    </tr>`).join('');
+      <td><strong>${esc(u.displayName||u.username)}</strong><div class="muted" style="font-size:12px">${esc(u.email||'')}</div></td>
+      <td>${esc(u.username||'')}</td>
+      <td>
+        <form method="POST" action="/portal/users/${u.id}/update" class="stack" style="gap:8px;margin:0">
+          <div class="row" style="gap:10px;flex-wrap:wrap">${staffRoleOptions(roles)}</div>
+          <div class="form-grid cols-2">
+            <div><label style="font-size:11px">Team</label><input name="team" list="teams-users" value="${esc(u.team||'')}" /></div>
+            <div><label style="font-size:11px">Active</label><select name="active"><option value="true" ${u.active!==false?'selected':''}>On</option><option value="false" ${u.active===false?'selected':''}>Off</option></select></div>
+          </div>
+          <button class="btn2 btn-sm" type="submit">Save</button>
+        </form>
+      </td>
+      <td><span class="chip ${roles.length?'chip-green':'chip-orange'}">${esc(status)}</span></td>
+    </tr>`;
+  }).join('');
   res.send(pageShell({title:'Users',user:req.user, bodyHtml:`
-    <div class="page-header"><h1>Users</h1></div>
+    <div class="page-header"><h1>Users</h1><div class="sub">SSM staff accounts only: Meet Directors, Judges, Announcers, and Coaches.</div></div>
     <div class="card">
       <form method="POST" action="/portal/users/new" class="stack">
+        <h2 style="margin-top:0">Add Staff User</h2>
         <div class="form-grid cols-4">
           <div><label>Name</label><input name="displayName" required /></div>
-          <div><label>Username</label><input name="username" required /></div>
+          <div><label>Email</label><input type="email" name="email" required /></div>
           <div><label>Password / PIN</label><input name="password" required /></div>
           <div><label>Team</label><input name="team" list="teams-users" value="Midwest Racing" /></div>
         </div>
         <datalist id="teams-users">${TEAM_LIST.map(t=>`<option value="${esc(t)}"></option>`).join('')}</datalist>
-        <div class="row">
-          <label class="toggle-wrap"><input type="checkbox" name="roles" value="meet_director" class="toggle-input"><span class="toggle-track"><span class="toggle-thumb"></span></span><span class="toggle-label">Meet Director</span></label>
-          <label class="toggle-wrap"><input type="checkbox" name="roles" value="judge" class="toggle-input"><span class="toggle-track"><span class="toggle-thumb"></span></span><span class="toggle-label">Judge</span></label>
-          <label class="toggle-wrap"><input type="checkbox" name="roles" value="coach" class="toggle-input"><span class="toggle-track"><span class="toggle-thumb"></span></span><span class="toggle-label">Coach</span></label>
-        </div>
+        <div class="row">${staffRoleOptions([])}</div>
         <div><button class="btn" type="submit">Add User</button></div>
       </form>
       <div class="hr"></div>
       <table class="table">
-        <thead><tr><th>Name</th><th>Username</th><th>Roles</th><th>Team</th><th>Active</th></tr></thead>
+        <thead><tr><th>Name / Email</th><th>Login</th><th>Roles / Team</th><th>Status</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>`}));
@@ -3424,7 +3546,31 @@ app.get('/portal/users', requireRole('super_admin'), (req, res) => {
 
 app.post('/portal/users/new', requireRole('super_admin'), (req, res) => {
   const rolesRaw=req.body.roles; const roles=Array.isArray(rolesRaw)?rolesRaw:(rolesRaw?[rolesRaw]:[]);
-  req.db.users.push({id:nextId(req.db.users),displayName:String(req.body.displayName||'').trim(),username:String(req.body.username||'').trim(),password:String(req.body.password||'').trim(),team:String(req.body.team||'Midwest Racing').trim(),roles,active:true,createdAt:nowIso()});
+  const email=String(req.body.email||req.body.username||'').trim().toLowerCase();
+  req.db.users.push({
+    id:nextUserId(req.db),
+    displayName:String(req.body.displayName||'').trim(),
+    username:email,
+    email,
+    password:String(req.body.password||'').trim(),
+    team:String(req.body.team||'Midwest Racing').trim(),
+    roles,
+    active:true,
+    authProvider:'local',
+    createdAt:nowIso(),
+    updatedAt:nowIso(),
+  });
+  saveDb(req.db); res.redirect('/portal/users');
+});
+
+app.post('/portal/users/:userId/update', requireRole('super_admin'), (req, res) => {
+  const user=(req.db.users||[]).find(u=>Number(u.id)===Number(req.params.userId));
+  if(!user) return res.redirect('/portal/users');
+  const rolesRaw=req.body.roles; const roles=Array.isArray(rolesRaw)?rolesRaw:(rolesRaw?[rolesRaw]:[]);
+  user.roles=roles;
+  user.team=String(req.body.team||'').trim();
+  user.active=String(req.body.active||'true')==='true';
+  user.updatedAt=nowIso();
   saveDb(req.db); res.redirect('/portal/users');
 });
 
@@ -3735,16 +3881,16 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
                   ${toggleSwitch('timeTrialsEnabled', meet.timeTrialsEnabled, 'Enable Time Trials')}
                 </div>
                 <div class="toggle-row">
-                  <div><div class="toggle-row-label">Relays</div><div class="toggle-row-desc">Enable relay entries</div></div>
-                  ${toggleSwitch('relayEnabled', meet.relayEnabled)}
+                  <div><div class="toggle-row-label">Relays</div><div class="toggle-row-desc">Controlled by Relay Builder. Saved relay races appear automatically.</div></div>
+                  <span class="chip ${((meet.races||[]).some(r=>r.isRelayRace)||meet.relayEnabled)?'chip-green':''}">${((meet.races||[]).some(r=>r.isRelayRace)||meet.relayEnabled)?'Active':'Use Relay Builder'}</span>
                 </div>
                 <div class="toggle-row">
-                  <div><div class="toggle-row-label">Judges Panel</div><div class="toggle-row-desc">Require judge panel</div></div>
-                  ${toggleSwitch('judgesPanelRequired', meet.judgesPanelRequired)}
+                  <div><div class="toggle-row-label">Judges Panel</div><div class="toggle-row-desc">Every meet includes a judges panel.</div></div>
+                  <span class="chip chip-green">Always On</span>
                 </div>
                 <div class="toggle-row">
-                  <div><div class="toggle-row-label">Find a Meet</div><div class="toggle-row-desc">Public registration</div></div>
-                  ${toggleSwitch('isPublic', meet.isPublic)}
+                  <div><div class="toggle-row-label">Find a Meet</div><div class="toggle-row-desc">Controlled by meet status. Published meets show publicly; drafts stay hidden.</div></div>
+                  <span class="chip ${String(meet.status||'').toLowerCase()==='published'?'chip-green':''}">${String(meet.status||'').toLowerCase()==='published'?'Published':'Draft/Hidden'}</span>
                 </div>
               </div>
               <div class="setup-notes-grid">
@@ -3761,52 +3907,78 @@ app.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res)
       <div class="card" style="margin-top:8px">
         <div class="row between center" style="margin-bottom:14px">
           <div>
-            <h2 style="margin:0">➕ Additionals</h2>
-            <div class="note">Four fixed manual race slots. Toggle on only the extra race groups you want. These behave like normal configured races in Block Builder.</div>
+            <h2 style="margin:0">💚 Skatability</h2>
+            <div class="note">Permanent Skatability setup. No novice/elite divisions and no overall points — just enable it and enter up to 3 distances.</div>
           </div>
-          <span class="chip chip-sky">4 Manual Slots</span>
+          <span class="chip chip-green">Dedicated Event</span>
         </div>
         ${(()=>{
           const saved = makeAdditionalRaceSlots(meet.additionalGroups || meet.additionalRaceGroups || meet.additionalRaces || meet.skateabilityGroups);
-          const defaults = [0,1,2,3].map(i => ({
-            id: 'manual_extra_' + (i + 1),
-            ageGroupLabel: '',
-            ages: '',
-            enabled: false,
-            distances: ['', '', ''],
-          }));
-          const rows = defaults.map((def, i) => {
-            const found = saved.find(x => String(x.id || '') === def.id) || {};
+          const sg = saved.find(x => String(x.id || '') === 'manual_extra_1') || {};
+          const distances = Array.isArray(sg.distances) ? [0,1,2].map(n=>String(sg.distances[n]||'')) : ['', '', ''];
+          return `
+            <div class="group-pair-col" style="margin-bottom:12px" id="sk-0">
+              <div class="group-pair-header">
+                <span class="group-pair-name">Skatability</span>
+                ${toggleSwitch('sk_0_enabled', !!sg.enabled)}
+              </div>
+              <input type="hidden" name="sk_0_id" value="manual_extra_1" />
+              <input type="hidden" name="sk_0_ageGroupId" value="" />
+              <input type="hidden" name="sk_0_ages" value="" />
+              <input type="hidden" name="sk_0_ageGroupLabel" value="Skatability" />
+              <div style="display:flex;gap:8px;align-items:flex-end;margin-top:10px">
+                <div style="flex:1"><label>Distance 1</label><input name="sk_0_d1" value="${esc(distances[0])}" placeholder="100m" /></div>
+                <div style="flex:1"><label>Distance 2</label><input name="sk_0_d2" value="${esc(distances[1])}" placeholder="200m" /></div>
+                <div style="flex:1"><label>Distance 3</label><input name="sk_0_d3" value="${esc(distances[2])}" placeholder="300m" /></div>
+              </div>
+            </div>`;
+        })()}
+        <input type="hidden" name="additional_count" id="additional_count" value="4" />
+      </div>
+
+      <div class="card" style="margin-top:8px">
+        <div class="row between center" style="margin-bottom:14px">
+          <div>
+            <h2 style="margin:0">🏁 Special Races</h2>
+            <div class="note">Flexible exhibition races like Race of Champions, Parents Race, Coach Race, or Dash for Cash.</div>
+          </div>
+          <span class="chip chip-sky">3 Slots</span>
+        </div>
+        ${(()=>{
+          const saved = makeAdditionalRaceSlots(meet.additionalGroups || meet.additionalRaceGroups || meet.additionalRaces || meet.skateabilityGroups);
+          const rows = [1,2,3].map(si => {
+            const id = 'manual_extra_' + (si + 1);
+            const found = saved.find(x => String(x.id || '') === id) || {};
             return {
-              id: def.id,
-              ageGroupLabel: String(found.ageGroupLabel || found.title || def.ageGroupLabel || ''),
-              ages: String(found.ages || def.ages || ''),
+              idx: si,
+              id,
+              ageGroupLabel: String(found.ageGroupLabel || found.title || ''),
+              ages: String(found.ages || ''),
               enabled: !!found.enabled,
               distances: Array.isArray(found.distances) ? [0,1,2].map(n=>String(found.distances[n]||'')) : ['', '', ''],
             };
           });
           return `<div class="form-grid cols-2">
-            ${rows.map((sg,si)=>`
-              <div class="group-pair-col" style="margin-bottom:12px" id="sk-${si}">
+            ${rows.map((sg,ri)=>`
+              <div class="group-pair-col" style="margin-bottom:12px" id="sk-${sg.idx}">
                 <div class="group-pair-header">
-                  <span class="group-pair-name">Additional ${si+1}</span>
-                  ${toggleSwitch('sk_'+si+'_enabled', sg.enabled)}
+                  <span class="group-pair-name">Special Race ${ri+1}</span>
+                  ${toggleSwitch('sk_'+sg.idx+'_enabled', sg.enabled)}
                 </div>
-                <input type="hidden" name="sk_${si}_id" value="${esc(sg.id)}" />
-                <input type="hidden" name="sk_${si}_ageGroupId" value="" />
+                <input type="hidden" name="sk_${sg.idx}_id" value="${esc(sg.id)}" />
+                <input type="hidden" name="sk_${sg.idx}_ageGroupId" value="" />
                 <div class="form-grid cols-2" style="margin-top:10px">
-                  <div><label>Race Title</label><input name="sk_${si}_ageGroupLabel" value="${esc(sg.ageGroupLabel)}" placeholder="Diaper Dash / Skateability / Extra Open" /></div>
-                  <div><label>Age Range</label><input name="sk_${si}_ages" value="${esc(sg.ages)}" placeholder="5 & under / 6-9 / 35+" /></div>
+                  <div><label>Race Title</label><input name="sk_${sg.idx}_ageGroupLabel" value="${esc(sg.ageGroupLabel)}" placeholder="Race of Champions / Parents Race" /></div>
+                  <div><label>Age/Eligibility</label><input name="sk_${sg.idx}_ages" value="${esc(sg.ages)}" placeholder="Open / Champions / 35+" /></div>
                 </div>
                 <div style="display:flex;gap:8px;align-items:flex-end;margin-top:10px">
-                  <div style="flex:1"><label>D1</label><input name="sk_${si}_d1" value="${esc(sg.distances?.[0]||'')}" placeholder="100m" /></div>
-                  <div style="flex:1"><label>D2</label><input name="sk_${si}_d2" value="${esc(sg.distances?.[1]||'')}" placeholder="200m" /></div>
-                  <div style="flex:1"><label>D3</label><input name="sk_${si}_d3" value="${esc(sg.distances?.[2]||'')}" placeholder="300m" /></div>
+                  <div style="flex:1"><label>D1</label><input name="sk_${sg.idx}_d1" value="${esc(sg.distances?.[0]||'')}" placeholder="500m" /></div>
+                  <div style="flex:1"><label>D2</label><input name="sk_${sg.idx}_d2" value="${esc(sg.distances?.[1]||'')}" placeholder="" /></div>
+                  <div style="flex:1"><label>D3</label><input name="sk_${sg.idx}_d3" value="${esc(sg.distances?.[2]||'')}" placeholder="" /></div>
                 </div>
               </div>`).join('')}
           </div>`;
         })()}
-        <input type="hidden" name="additional_count" id="additional_count" value="4" />
       </div>
 
       <div class="card">
@@ -3862,10 +4034,13 @@ function saveMeetFields(meet, body, db) {
   if(Array.isArray(meet.openGroups)) {
     meet.openGroups=normalizeOpenGroups(meet.openGroups).map(g=>({...g,timeTrial:!!meet.timeTrialsEnabled,ttDistance:'100m'}));
   }
-  meet.relayEnabled=!!body.relayEnabled;
-  meet.judgesPanelRequired=!!body.judgesPanelRequired;
+  // Relay Builder controls relays. If relay races/templates exist, the meet has relays.
+  meet.relayEnabled=!!((meet.races||[]).some(r=>r.isRelayRace) || (meet.relayTemplates||[]).length);
+  // Every meet gets a judges panel. No director toggle needed.
+  meet.judgesPanelRequired=true;
   meet.status=String(body.status||'draft');
-  meet.isPublic=!!body.isPublic || String(meet.status||'').toLowerCase()==='published';
+  // Find a Meet visibility is controlled by status. Published shows publicly; draft stays hidden.
+  meet.isPublic=String(meet.status||'').toLowerCase()==='published';
   meet.notes=String(body.notes||'');
   meet.scheduleNotes=String(body.scheduleNotes||'');
   meet.relayNotes=String(body.relayNotes||'');
@@ -3891,7 +4066,8 @@ function saveMeetFields(meet, body, db) {
     for(let si=0; si<4; si++) {
       const id = 'manual_extra_' + (si + 1);
       let ageGroupLabel = String(body[`sk_${si}_ageGroupLabel`]||'').trim();
-      if(!ageGroupLabel) ageGroupLabel = `Additional ${si + 1}`;
+      if(si===0) ageGroupLabel = 'Skatability';
+      if(!ageGroupLabel) ageGroupLabel = `Special Race ${si}`;
       const ages = String(body[`sk_${si}_ages`]||'').trim();
       const distances = [
         String(body[`sk_${si}_d1`]||'').trim(),
