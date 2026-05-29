@@ -7051,6 +7051,11 @@ app.get('/portal/meet/:meetId/blocks', requireRole('meet_director'), (req, res) 
   const raceById=new Map((meet.races||[]).map(r=>[r.id,r]));
   const assigned=new Set(); for(const block of meet.blocks||[]) for(const rid of block.raceIds||[]) assigned.add(rid);
   const unassigned=(meet.races||[]).filter(r=>!assigned.has(r.id));
+  const inlineRaceCount=(meet.races||[]).filter(r=>!r.isOpenRace&&!r.isQuadRace&&!r.isTimeTrial&&!r.isRelayRace).length;
+  const openRaceCount=(meet.races||[]).filter(r=>r.isOpenRace).length;
+  const quadRaceCount=(meet.races||[]).filter(r=>r.isQuadRace).length;
+  const timeTrialRaceCount=(meet.races||[]).filter(r=>r.isTimeTrial).length;
+  const relayRaceCount=(meet.races||[]).filter(r=>r.isRelayRace).length;
   const breakTypes=['break','lunch','awards','practice'];
   const breakIcons={break:'☕',lunch:'🍽️',awards:'🏆',practice:'⛸️'};
 
@@ -7129,39 +7134,48 @@ app.get('/portal/meet/:meetId/blocks', requireRole('meet_director'), (req, res) 
   }).join('');
 
   res.send(pageShell({title:'Block Builder',user:req.user,meet,activeTab:'blocks', bodyHtml:`
-    <div class="page-header"><h1>Block Builder</h1><div class="sub">${esc(meet.meetName)} • Drag races into blocks</div></div>
-    <div class="card" style="margin-bottom:16px">
-      <div class="row between">
-        <div class="action-row">
-          <span class="chip">Inline: ${(meet.races||[]).filter(r=>!r.isOpenRace&&!r.isQuadRace).length}</span>
-          <span class="chip chip-orange">🏁 Open: ${(meet.races||[]).filter(r=>r.isOpenRace).length}</span>
-          <span class="chip chip-purple">🛼 Quad: ${(meet.races||[]).filter(r=>r.isQuadRace).length}</span>
-          <span class="chip chip-sky">⏱ TT: ${(meet.races||[]).filter(r=>r.isTimeTrial).length}</span>
-          <span class="chip" style="border-color:#93c5fd;color:#1d4ed8">🔄 Relays: ${(meet.races||[]).filter(r=>r.isRelayRace).length}</span>
-          <span class="chip" id="unassignedChip">Unassigned: ${unassigned.length}</span>
-        </div>
-        <div class="action-row">
-          <button class="btn2" onclick="addBlock()">+ Add Race Block</button>
-          <div class="divider-add-group">
-            <span class="note" style="white-space:nowrap">+ Add:</span>
-            <button class="btn2 btn-sm" onclick="addDivider('break','☕ Break')">☕ Break</button>
-            <button class="btn2 btn-sm" onclick="addDivider('lunch','🍽️ Lunch')">🍽️ Lunch</button>
-            <button class="btn2 btn-sm" onclick="addDivider('awards','🏆 Awards')">🏆 Awards</button>
-            <button class="btn2 btn-sm" onclick="addDivider('practice','⛸️ Practice')">⛸️ Practice</button>
-          </div>
-          <form method="POST" action="/portal/meet/${meet.id}/assign-races?returnTo=blocks" onsubmit="return confirm('Rebuild recalculates heats, finals, race assignments, and lanes.\n\nYour manual block schedule is preserved.\n\nUse this after late registrations, scratches, division changes, challenge-up changes, or lane count changes.\n\nContinue?')"><button class="btn2" type="submit">Rebuild</button></form>
-          <form method="POST" action="/portal/meet/${meet.id}/blocks/auto-flow" onsubmit="return confirm('Auto Flow only reorders races already assigned inside each block.\n\nIt does NOT rebuild races, delete races, or move races between blocks.\n\nOrder used: heats first, straight finals next, heated finals last.\n\nContinue?')"><button class="btn-good" type="submit">Auto Flow</button></form>
-          <a class="btn-orange" href="/portal/meet/${meet.id}/registered/print-race-list" target="_blank">Print Race List</a>
-        </div>
+    <div class="page-header">
+      <h1>Block Builder</h1>
+      <div class="sub">${esc(meet.meetName)} • ${esc(cap(meet.status||'draft'))} • ${inlineRaceCount} Inline • ${openRaceCount} Open • ${quadRaceCount} Quad</div>
+    </div>
 
-        <div class="card card-sky" style="margin-top:16px;padding:16px 18px;background:#f8fafc">
-          <h3 style="margin-bottom:6px">🔄 Rebuild Races</h3>
-          <p class="note" style="margin-bottom:8px">
-            Use Rebuild after late registrations, scratches, division changes, challenge-up changes, or lane count changes.
-          </p>
-          <p style="margin:0;color:var(--text)">
-            Rebuild recalculates heats, finals, race assignments, and lanes while preserving your manual Block Builder schedule.
-          </p>
+    <div class="form-grid cols-3" style="align-items:stretch;margin-bottom:16px">
+      <div class="card" style="margin:0">
+        <h3 style="margin-bottom:12px">Race Summary</h3>
+        <div style="display:grid;grid-template-columns:1fr auto;gap:8px 18px;font-size:14px">
+          <span class="note">Inline</span><strong>${inlineRaceCount}</strong>
+          <span class="note">Open</span><strong>${openRaceCount}</strong>
+          <span class="note">Quad</span><strong>${quadRaceCount}</strong>
+          <span class="note">Time Trials</span><strong>${timeTrialRaceCount}</strong>
+          <span class="note">Relays</span><strong>${relayRaceCount}</strong>
+          <span class="note">Unassigned</span><strong id="unassignedChip">${unassigned.length}</strong>
+        </div>
+      </div>
+
+      <div class="card" style="margin:0">
+        <h3 style="margin-bottom:10px">Block Tools</h3>
+        <p class="note" style="margin-bottom:12px">Build the race-day schedule structure, then drag races into each block.</p>
+        <div class="action-row">
+          <button class="btn2" onclick="addBlock()">+ Race Block</button>
+          <button class="btn2 btn-sm" onclick="addDivider('break','☕ Break')">☕ Break</button>
+          <button class="btn2 btn-sm" onclick="addDivider('lunch','🍽️ Lunch')">🍽️ Lunch</button>
+          <button class="btn2 btn-sm" onclick="addDivider('awards','🏆 Awards')">🏆 Awards</button>
+          <button class="btn2 btn-sm" onclick="addDivider('practice','⛸️ Practice')">⛸️ Practice</button>
+        </div>
+      </div>
+
+      <div class="card" style="margin:0">
+        <h3 style="margin-bottom:10px">Race Actions</h3>
+        <div style="display:grid;gap:12px">
+          <div>
+            <form method="POST" action="/portal/meet/${meet.id}/assign-races?returnTo=blocks" onsubmit="return confirm('Rebuild recalculates heats, finals, race assignments, and lanes.\n\nYour manual block schedule is preserved.\n\nUse this after late registrations, scratches, division changes, challenge-up changes, or lane count changes.\n\nContinue?')"><button class="btn2" type="submit">🔄 Rebuild Races</button></form>
+            <div class="note" style="margin-top:6px">Use after registrations, scratches, division changes, or lane updates.</div>
+          </div>
+          <div>
+            <form method="POST" action="/portal/meet/${meet.id}/blocks/auto-flow" onsubmit="return confirm('Optimize Race Flow only reorders races already assigned inside each block.\n\nIt does NOT rebuild races, delete races, or move races between blocks.\n\nMoves heats earlier and finals later while balancing races within their assigned blocks.\n\nContinue?')"><button class="btn-good" type="submit">Optimize Race Flow</button></form>
+            <div class="note" style="margin-top:6px">Moves heats earlier and finals later while balancing races within their assigned blocks.</div>
+          </div>
+          <a class="btn-orange" href="/portal/meet/${meet.id}/registered/print-race-list" target="_blank">Print Race List</a>
         </div>
       </div>
     </div>
