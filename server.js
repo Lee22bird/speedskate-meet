@@ -115,7 +115,7 @@ function verifySslSsoToken(token) {
 
 function ssmAllowedRolesFromSsl(payload) {
   const incoming = Array.isArray(payload?.roles) ? payload.roles.map(r => String(r || '').toLowerCase()) : [];
-  const allowed = ['super_admin', 'meet_director', 'judge', 'coach'];
+  const allowed = ['super_admin', 'meet_director', 'judge', 'announcer', 'coach'];
   const roles = incoming.filter(role => allowed.includes(role));
   return Array.from(new Set(roles));
 }
@@ -132,6 +132,7 @@ function createSsmSessionForUser(db, user) {
 }
 
 function ssmRedirectForUser(user) {
+  if (!Array.isArray(user?.roles) || user.roles.length === 0) return '/account/pending';
   if (hasRole(user, 'coach') && !hasRole(user, 'meet_director') && !hasRole(user, 'super_admin')) return '/portal/coach';
   if ((hasRole(user, 'judge') || hasRole(user, 'announcer')) && !hasRole(user, 'meet_director') && !hasRole(user, 'super_admin')) return '/portal/meet-picker';
   return '/portal';
@@ -491,6 +492,29 @@ function getSessionUser(req) {
 function extendSession(db,token) {
   const sess=db.sessions.find(s=>s.token===token);
   if(sess) sess.expiresAt=new Date(Date.now()+SESSION_TTL_MS).toISOString();
+}
+
+function findUserByLogin(db, login) {
+  const value = String(login || '').trim().toLowerCase();
+  if (!value) return null;
+  return (db.users || []).find(u => {
+    const username = String(u.username || '').trim().toLowerCase();
+    const email = String(u.email || '').trim().toLowerCase();
+    return (username && username === value) || (email && email === value);
+  }) || null;
+}
+
+function staffRoleOptions(selectedRoles = []) {
+  const selected = new Set((selectedRoles || []).map(String));
+  const roles = [
+    ['meet_director', 'Meet Director'],
+    ['judge', 'Judge'],
+    ['announcer', 'Announcer'],
+    ['coach', 'Coach'],
+  ];
+  return roles.map(([value, label]) =>
+    `<label class="toggle-wrap"><input type="checkbox" name="roles" value="${value}" class="toggle-input" ${selected.has(value) ? 'checked' : ''}><span class="toggle-track"><span class="toggle-thumb"></span></span><span class="toggle-label">${label}</span></label>`
+  ).join('');
 }
 
 
@@ -2754,43 +2778,116 @@ app.get('/ssl-sso', (req, res) => {
   return res.redirect(ssmRedirectForUser(user));
 });
 
-app.get('/admin/login', (req, res) => {
-  res.send(pageShell({title:'Login',user:null, bodyHtml:`
-    <div style="max-width:400px;margin:40px auto">
-      <div class="page-header"><h1>Login</h1></div>
-      ${req.query.reset?'<div class="card" style="border-left:4px solid var(--green);margin-bottom:12px"><div class="good">✅ Password updated! Sign in with your new password.</div></div>':''}
+app.get('/account/pending', (req, res) => {
+  const data=getSessionUser(req);
+  res.send(pageShell({title:'Account Pending',user:data?.user||null, bodyHtml:`
+    <div style="max-width:620px;margin:40px auto">
+      <div class="page-header"><h1>Account Pending</h1><div class="sub">Your SpeedSkateMeet staff account was created.</div></div>
       <div class="card">
-        <form method="POST" action="/admin/login" class="stack">
-          <div><label>Username</label><input name="username" autocomplete="username" required /></div>
-          <div><label>Password</label><input name="password" type="password" autocomplete="current-password" required /></div>
-          <button class="btn" type="submit" style="width:100%">Sign In</button>
-          <a href="/admin/forgot-password" style="text-align:center;font-size:13px;color:var(--muted);display:block;margin-top:8px">Forgot password?</a>
-        </form>
+        <p style="line-height:1.7;margin-top:0">An admin still needs to assign your SSM role before you can access the portal.</p>
+        <div class="muted">Available roles: Meet Director, Judge, Announcer, Coach.</div>
+        <div class="hr"></div>
+        <a class="btn2" href="/admin/logout">Logout</a>
+      </div>
+    </div>`}));
+});
+
+app.get('/admin/login', (req, res) => {
+  const created=req.query.created;
+  const reset=req.query.reset;
+  res.send(pageShell({title:'Staff Login',user:null, bodyHtml:`
+    <div style="max-width:860px;margin:40px auto">
+      <div class="page-header"><h1>SpeedSkateMeet Staff Access</h1><div class="sub">For Meet Directors, Judges, Announcers, and Coaches.</div></div>
+      ${reset?'<div class="card" style="border-left:4px solid var(--green);margin-bottom:12px"><div class="good">✅ Password updated! Sign in with your new password.</div></div>':''}
+      ${created?'<div class="card" style="border-left:4px solid var(--green);margin-bottom:12px"><div class="good">✅ Account created. Sign in, then an admin can assign your staff role.</div></div>':''}
+      <div class="form-grid cols-2">
+        <div class="card">
+          <h2 style="margin-top:0">Sign In</h2>
+          <form method="POST" action="/admin/login" class="stack">
+            <div><label>Email</label><input type="email" name="email" autocomplete="email" required /></div>
+            <div><label>Password</label><input name="password" type="password" autocomplete="current-password" required /></div>
+            <button class="btn" type="submit" style="width:100%">Sign In</button>
+            <a href="/admin/forgot-password" style="text-align:center;font-size:13px;color:var(--muted);display:block;margin-top:8px">Forgot password?</a>
+          </form>
+        </div>
+        <div class="card">
+          <h2 style="margin-top:0">Create Account</h2>
+          <form method="POST" action="/admin/register" class="stack">
+            <div><label>Full Name</label><input name="displayName" autocomplete="name" required /></div>
+            <div><label>Email</label><input type="email" name="email" autocomplete="email" required /></div>
+            <div><label>Password</label><input name="password" type="password" autocomplete="new-password" minlength="6" required /></div>
+            <div class="form-grid cols-2">
+              <div><label>Birthdate</label><input type="date" name="birthdate" required /></div>
+              <div><label>Gender</label><select name="gender" required><option value="">Select...</option><option value="female">Female</option><option value="male">Male</option><option value="other">Other / Prefer not to say</option></select></div>
+            </div>
+            <button class="btn-orange" type="submit" style="width:100%">Create Account</button>
+            <div class="muted" style="font-size:12px;text-align:center">Staff roles are assigned by an admin after account creation.</div>
+          </form>
+        </div>
       </div>
     </div>`}));
 });
 
 app.post('/admin/login', (req, res) => {
   const db=loadDb();
-  const username=String(req.body.username||'').trim();
+  const email=String(req.body.email||req.body.username||'').trim();
   const password=String(req.body.password||'').trim();
-  const user=db.users.find(u=>u.username===username&&u.password===password&&u.active!==false);
-  if(!user) return res.send(pageShell({title:'Login',user:null, bodyHtml:`
-    <div style="max-width:400px;margin:40px auto">
+  const user=findUserByLogin(db,email);
+  if(!user||String(user.password||'')!==password||user.active===false) return res.send(pageShell({title:'Login',user:null, bodyHtml:`
+    <div style="max-width:420px;margin:40px auto">
       <div class="page-header"><h1>Login</h1></div>
       <div class="card">
-        <div class="danger" style="margin-bottom:14px">Invalid username or password.</div>
+        <div class="danger" style="margin-bottom:14px">Invalid email or password.</div>
         <a class="btn2" href="/admin/login">Try again</a>
       </div>
     </div>`}));
-  const token=crypto.randomBytes(24).toString('hex');
-  db.sessions=db.sessions.filter(s=>s.userId!==user.id);
-  db.sessions.push({token,userId:user.id,createdAt:nowIso(),expiresAt:new Date(Date.now()+SESSION_TTL_MS).toISOString()});
+  const token=createSsmSessionForUser(db,user);
   saveDb(db); setCookie(res,SESSION_COOKIE,token,Math.floor(SESSION_TTL_MS/1000));
-  // Role-based redirect
-  if(hasRole(user,'coach')&&!hasRole(user,'meet_director')&&!hasRole(user,'super_admin')) return res.redirect('/portal/coach');
-  if((hasRole(user,'judge')||hasRole(user,'announcer'))&&!hasRole(user,'meet_director')&&!hasRole(user,'super_admin')) return res.redirect('/portal/meet-picker');
-  res.redirect('/portal');
+  return res.redirect(ssmRedirectForUser(user));
+});
+
+app.post('/admin/register', (req, res) => {
+  const db=loadDb();
+  db.users=db.users||[];
+  const email=String(req.body.email||'').trim().toLowerCase();
+  const displayName=String(req.body.displayName||'').trim();
+  const password=String(req.body.password||'').trim();
+  const birthdate=String(req.body.birthdate||'').trim();
+  const gender=String(req.body.gender||'').trim();
+
+  if(!email||!displayName||password.length<6||!birthdate||!gender) {
+    return res.redirect('/admin/login?err=missing');
+  }
+
+  const existing=findUserByLogin(db,email);
+  if(existing) {
+    return res.send(pageShell({title:'Account Exists',user:null, bodyHtml:`
+      <div style="max-width:420px;margin:40px auto">
+        <div class="page-header"><h1>Account Exists</h1></div>
+        <div class="card">
+          <div class="danger" style="margin-bottom:14px">An account already exists for that email.</div>
+          <a class="btn2" href="/admin/login">Back to Login</a>
+        </div>
+      </div>`}));
+  }
+
+  db.users.push({
+    id:nextUserId(db),
+    username:email,
+    email,
+    password,
+    displayName,
+    birthdate,
+    gender,
+    roles:[],
+    team:'',
+    active:true,
+    authProvider:'local',
+    createdAt:nowIso(),
+    updatedAt:nowIso(),
+  });
+  saveDb(db);
+  res.redirect('/admin/login?created=1');
 });
 
 app.get('/admin/logout', (req, res) => {
@@ -3167,33 +3264,44 @@ app.post('/portal/meet/:meetId/delete', requireRole('meet_director'), (req, res)
 // ── Users ─────────────────────────────────────────────────────────────────────
 
 app.get('/portal/users', requireRole('super_admin'), (req, res) => {
-  const rows=req.db.users.map(u=>`
+  const rows=req.db.users.map(u=>{
+    const roles=(u.roles||[]);
+    const status=u.active===false?'Off':(roles.length?'On':'Pending Role');
+    return `
     <tr>
-      <td>${esc(u.displayName||u.username)}</td><td>${esc(u.username)}</td>
-      <td>${esc((u.roles||[]).join(', '))}</td><td>${esc(u.team||'')}</td>
-      <td>${u.active===false?'Off':'On'}</td>
-    </tr>`).join('');
+      <td><strong>${esc(u.displayName||u.username)}</strong><div class="muted" style="font-size:12px">${esc(u.email||'')}</div></td>
+      <td>${esc(u.username||'')}</td>
+      <td>
+        <form method="POST" action="/portal/users/${u.id}/update" class="stack" style="gap:8px;margin:0">
+          <div class="row" style="gap:10px;flex-wrap:wrap">${staffRoleOptions(roles)}</div>
+          <div class="form-grid cols-2">
+            <div><label style="font-size:11px">Team</label><input name="team" list="teams-users" value="${esc(u.team||'')}" /></div>
+            <div><label style="font-size:11px">Active</label><select name="active"><option value="true" ${u.active!==false?'selected':''}>On</option><option value="false" ${u.active===false?'selected':''}>Off</option></select></div>
+          </div>
+          <button class="btn2 btn-sm" type="submit">Save</button>
+        </form>
+      </td>
+      <td><span class="chip ${roles.length?'chip-green':'chip-orange'}">${esc(status)}</span></td>
+    </tr>`;
+  }).join('');
   res.send(pageShell({title:'Users',user:req.user, bodyHtml:`
-    <div class="page-header"><h1>Users</h1></div>
+    <div class="page-header"><h1>Users</h1><div class="sub">SSM staff accounts only: Meet Directors, Judges, Announcers, and Coaches.</div></div>
     <div class="card">
       <form method="POST" action="/portal/users/new" class="stack">
+        <h2 style="margin-top:0">Add Staff User</h2>
         <div class="form-grid cols-4">
           <div><label>Name</label><input name="displayName" required /></div>
-          <div><label>Username</label><input name="username" required /></div>
+          <div><label>Email</label><input type="email" name="email" required /></div>
           <div><label>Password / PIN</label><input name="password" required /></div>
           <div><label>Team</label><input name="team" list="teams-users" value="Midwest Racing" /></div>
         </div>
         <datalist id="teams-users">${TEAM_LIST.map(t=>`<option value="${esc(t)}"></option>`).join('')}</datalist>
-        <div class="row">
-          <label class="toggle-wrap"><input type="checkbox" name="roles" value="meet_director" class="toggle-input"><span class="toggle-track"><span class="toggle-thumb"></span></span><span class="toggle-label">Meet Director</span></label>
-          <label class="toggle-wrap"><input type="checkbox" name="roles" value="judge" class="toggle-input"><span class="toggle-track"><span class="toggle-thumb"></span></span><span class="toggle-label">Judge</span></label>
-          <label class="toggle-wrap"><input type="checkbox" name="roles" value="coach" class="toggle-input"><span class="toggle-track"><span class="toggle-thumb"></span></span><span class="toggle-label">Coach</span></label>
-        </div>
+        <div class="row">${staffRoleOptions([])}</div>
         <div><button class="btn" type="submit">Add User</button></div>
       </form>
       <div class="hr"></div>
       <table class="table">
-        <thead><tr><th>Name</th><th>Username</th><th>Roles</th><th>Team</th><th>Active</th></tr></thead>
+        <thead><tr><th>Name / Email</th><th>Login</th><th>Roles / Team</th><th>Status</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>`}));
@@ -3201,7 +3309,31 @@ app.get('/portal/users', requireRole('super_admin'), (req, res) => {
 
 app.post('/portal/users/new', requireRole('super_admin'), (req, res) => {
   const rolesRaw=req.body.roles; const roles=Array.isArray(rolesRaw)?rolesRaw:(rolesRaw?[rolesRaw]:[]);
-  req.db.users.push({id:nextId(req.db.users),displayName:String(req.body.displayName||'').trim(),username:String(req.body.username||'').trim(),password:String(req.body.password||'').trim(),team:String(req.body.team||'Midwest Racing').trim(),roles,active:true,createdAt:nowIso()});
+  const email=String(req.body.email||req.body.username||'').trim().toLowerCase();
+  req.db.users.push({
+    id:nextUserId(req.db),
+    displayName:String(req.body.displayName||'').trim(),
+    username:email,
+    email,
+    password:String(req.body.password||'').trim(),
+    team:String(req.body.team||'Midwest Racing').trim(),
+    roles,
+    active:true,
+    authProvider:'local',
+    createdAt:nowIso(),
+    updatedAt:nowIso(),
+  });
+  saveDb(req.db); res.redirect('/portal/users');
+});
+
+app.post('/portal/users/:userId/update', requireRole('super_admin'), (req, res) => {
+  const user=(req.db.users||[]).find(u=>Number(u.id)===Number(req.params.userId));
+  if(!user) return res.redirect('/portal/users');
+  const rolesRaw=req.body.roles; const roles=Array.isArray(rolesRaw)?rolesRaw:(rolesRaw?[rolesRaw]:[]);
+  user.roles=roles;
+  user.team=String(req.body.team||'').trim();
+  user.active=String(req.body.active||'true')==='true';
+  user.updatedAt=nowIso();
   saveDb(req.db); res.redirect('/portal/users');
 });
 
