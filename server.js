@@ -3068,19 +3068,34 @@ app.get('/portal', requireRole('meet_director','judge','coach'), (req, res) => {
             <span class="chip">Regs: ${(meet.registrations||[]).length}</span>
           </div>
         </div>
-        <div class="action-row">
-          ${canEditMeet(req.user,meet)?`
-            <a class="btn" href="/portal/meet/${meet.id}/builder">Meet Builder</a>
-            <a class="btn-orange" href="/portal/meet/${meet.id}/open-builder">🏁 Open</a>
-            <a class="btn-purple" href="/portal/meet/${meet.id}/quad-builder">🛼 Quad</a>
-            <a class="btn2" href="/portal/meet/${meet.id}/race-day/director">Race Day</a>
-            <a class="btn2" href="/portal/meet/${meet.id}/results">Results</a>
-            <a class="btn2 btn-sm" href="/portal/meet/${meet.id}/clone-confirm">Clone</a>
-            ${meet.status==='complete'?`<a class="btn2 btn-sm" href="/portal/meet/${meet.id}/archive-confirm">Archive</a>`:''}
-            <a class="btn-danger btn-sm" href="/portal/meet/${meet.id}/delete-confirm">Delete</a>
-          `:`<a class="btn2" href="/portal/meet/${meet.id}/coach">Coach Panel</a>
-             <a class="btn2" href="/meet/${meet.id}/live">Live</a>`}
-        </div>
+        ${canEditMeet(req.user,meet)?`
+          <div class="meet-action-groups" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:14px">
+            <div class="mini-card" style="padding:12px;border:1px solid var(--border);border-radius:14px;background:#f8fafc">
+              <div class="muted" style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Setup</div>
+              <div class="action-row">
+                <a class="btn" href="/portal/meet/${meet.id}/builder">Meet Builder</a>
+                <a class="btn-orange" href="/portal/meet/${meet.id}/open-builder">🏁 Open</a>
+                <a class="btn-purple" href="/portal/meet/${meet.id}/quad-builder">🛼 Quad</a>
+              </div>
+            </div>
+            <div class="mini-card" style="padding:12px;border:1px solid var(--border);border-radius:14px;background:#f8fafc">
+              <div class="muted" style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Race Ops</div>
+              <div class="action-row">
+                <a class="btn2" href="/portal/meet/${meet.id}/race-day/director">Race Day</a>
+                <a class="btn2" href="/portal/meet/${meet.id}/results">Results</a>
+              </div>
+            </div>
+            <div class="mini-card" style="padding:12px;border:1px solid var(--border);border-radius:14px;background:#f8fafc">
+              <div class="muted" style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Manage</div>
+              <div class="action-row">
+                <a class="btn2 btn-sm" href="/portal/meet/${meet.id}/clone-confirm">Clone</a>
+                ${meet.status==='complete'?`<a class="btn2 btn-sm" href="/portal/meet/${meet.id}/archive-confirm">📦 Archive</a>`:''}
+                <a class="btn-danger btn-sm" href="/portal/meet/${meet.id}/delete-confirm">Delete</a>
+              </div>
+            </div>
+          </div>
+        `:`<div class="action-row"><a class="btn2" href="/portal/meet/${meet.id}/coach">Coach Panel</a>
+             <a class="btn2" href="/meet/${meet.id}/live">Live</a></div>`}
       </div>`;
   }).join('');
   res.send(pageShell({title:'Portal',user:req.user, bodyHtml:`
