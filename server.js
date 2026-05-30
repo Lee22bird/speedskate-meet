@@ -62,6 +62,7 @@ const { renderPendingMeetsView } = require('./views/pendingMeetsView');
 const { renderArchivedMeetsView } = require('./views/archivedMeetsView');
 const { renderCoachRosterView } = require('./views/coachRosterView');
 const { renderStaffAccountsView } = require('./views/staffAccountsView');
+const { renderCoachPortalView } = require('./views/coachPortalView');
 
 const publicRoutes = require('./routes/publicRoutes');
 
@@ -3049,39 +3050,18 @@ app.post('/portal/coach/roster/delete', requireRole('coach','meet_director','sup
 });
 
 app.get('/portal/coach', requireRole('coach','meet_director','super_admin'), (req, res) => {
-  const meets=coachVisibleMeets(req.db,req.user);
-  const cards=meets.map(meet=>{
-    const upcoming=coachUpcomingForMeet(meet,req.user.team);
-    const regs=coachTeamRegistrations(meet,req.user.team);
-    return `
-      <div class="card" style="margin-bottom:14px">
-        <div class="row between" style="margin-bottom:12px">
-          <div>
-            <h2 style="margin:0">${esc(meet.meetName)}</h2>
-            <div class="muted">${esc(req.user.team||'')} • ${esc(meet.date||'')}</div>
-          </div>
-          <div class="row"><span class="chip">Skaters: ${regs.length}</span><span class="chip chip-orange">Racing Soon: ${upcoming.length}</span></div>
-        </div>
-        <div class="action-row" style="margin-bottom:${upcoming.length?'12px':'0'}">
-          <a class="btn" href="/portal/meet/${meet.id}/coach">Coach Panel</a>
-          <a class="btn2" href="/meet/${meet.id}/live">Live</a>
-          <a class="btn2" href="/meet/${meet.id}/results">Results</a>
-        </div>
-        ${upcoming.length?`<div class="hr"></div><h3>Racing Soon</h3><div class="stack">${upcoming.slice(0,2).map(item=>`
-          <div class="group-card">
-            <div class="bold">${item.skaters.map(s=>esc(s.skaterName)).join(', ')}</div>
-            <div class="muted">${esc(item.race.groupLabel)} • ${esc(cap(item.race.division))} • ${esc(item.race.distanceLabel)}</div>
-            <div class="good">${esc(racingSoonLabel(item.delta))}</div>
-          </div>`).join('')}</div>`:''}
-      </div>`;
-  }).join('');
-  res.send(pageShell({title:'Coach Portal',user:req.user, bodyHtml:`
-    <div class="page-header"><h1>Coach Portal</h1><div class="sub">${esc(req.user.team||'Your Team')}</div></div>
-    <div class="action-row" style="margin-bottom:16px">
-      <a class="btn-orange" href="/portal/coach/roster">👥 Team Roster</a>
-      <a class="btn2" href="/admin/logout">Logout</a>
-    </div>
-    ${cards||`<div class="card"><div class="muted">No meets found for ${esc(req.user.team||'your team')}.</div></div>`}`}));
+  const meets = coachVisibleMeets(req.db, req.user);
+  const meetCards = meets.map(meet => ({
+    meet,
+    upcoming: coachUpcomingForMeet(meet, req.user.team),
+    regs: coachTeamRegistrations(meet, req.user.team),
+  }));
+
+  res.send(pageShell({
+    title: 'Coach Portal',
+    user: req.user,
+    bodyHtml: renderCoachPortalView({ user: req.user, meetCards }),
+  }));
 });
 
 app.get('/portal/meet/:meetId/coach', requireRole('coach','meet_director','super_admin'), (req, res) => {
