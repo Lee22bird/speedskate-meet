@@ -236,13 +236,25 @@ const TEAM_LIST = [
   "Weber's Racing","Weber's Skateway",'West Michigan Wolverines Speed Team',
 ].sort((a, b) => a.localeCompare(b));
 
-// USARS SR150.1: age is birth year subtracted from Jan 1 of competition year
+// USARS SR150.1: ages are reckoned as of January 1 of the competitive year.
 function usarsAge(birthdate, meetDate) {
   const refYear = meetDate ? new Date(meetDate).getFullYear() : new Date().getFullYear();
   if (!birthdate) return null;
+
   const bd = new Date(birthdate);
   if (isNaN(bd.getTime())) return null;
-  return refYear - bd.getFullYear();
+
+  const jan1 = new Date(refYear, 0, 1);
+  let age = jan1.getFullYear() - bd.getFullYear();
+
+  if (
+    jan1.getMonth() < bd.getMonth() ||
+    (jan1.getMonth() === bd.getMonth() && jan1.getDate() < bd.getDate())
+  ) {
+    age--;
+  }
+
+  return age;
 }
 
 function ageForReg(reg, meet) {
