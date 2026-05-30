@@ -1,0 +1,369 @@
+const { esc } = require('../utils/html');
+
+function toggleSwitch(name, checked, label='', value='on') {
+  return `
+    <label class="toggle-wrap">
+      <input type="checkbox" name="${esc(name)}" value="${esc(value)}" class="toggle-input" ${checked?'checked':''} />
+      <span class="toggle-track"><span class="toggle-thumb"></span></span>
+      ${label?`<span class="toggle-label">${esc(label)}</span>`:''}
+    </label>`;
+}
+
+function makeAdditionalRaceSlots(raw) {
+  const saved = Array.isArray(raw) ? raw : [];
+  return [0,1,2,3].map(i => {
+    const id = 'manual_extra_' + (i + 1);
+    const match = saved.find(x => String(x.id || '') === id) || {};
+    let label = String(match.ageGroupLabel || match.title || '').trim();
+
+    if (!label || /^manual extra race/i.test(label)) {
+      label = `Additional ${i + 1}`;
+    }
+
+    return {
+      id,
+      ageGroupId: '',
+      ageGroupLabel: label,
+      ages: String(match.ages || '').trim(),
+      enabled: !!match.enabled,
+      distances: Array.isArray(match.distances) ? [0,1,2].map(n => String(match.distances[n] || '').trim()) : ['', '', ''],
+    };
+  });
+}
+
+function renderMeetBuilderView({ db, meet, query = {} }) {
+  const rinkInputValue = String(meet.customRinkName || '').trim() || (() => { const r = db.rinks.find(x => Number(x.id) === Number(meet.rinkId)); return r ? `${r.name} (${r.city || ''}${r.city && r.state ? ', ' : ''}${r.state || ''})` : ''; })();
+  const rinkDataList=db.rinks.map(r=>`<option value="${esc(r.name)} (${esc(r.city||'')}${r.city&&r.state?', ':''}${esc(r.state||'')})" data-id="${r.id}"></option>`).join('');
+  const rinkLookupScript=JSON.stringify((db.rinks||[]).map(r=>({id:r.id,label:`${r.name} (${r.city||''}${r.city&&r.state?', ':''}${r.state||''})`,name:r.name})));
+  const openEnabledCount=(meet.openGroups||[]).filter(g=>g.enabled).length;
+  const quadEnabledCount=(meet.quadGroups||[]).filter(g=>g.enabled).length;
+  const savedFlash=query.saved?'<div class="card" style="border-left:4px solid var(--green);margin-bottom:12px"><div class="good">✅ Meet saved successfully.</div></div>':'';
+  const presetSavedFlash=query.presetSaved?'<div class="card" style="border-left:4px solid var(--green);margin-bottom:12px"><div class="good">✅ Meet setup preset saved for future use.</div></div>':'';
+  const presetLoadedFlash=query.presetLoaded?'<div class="card" style="border-left:4px solid var(--green);margin-bottom:12px"><div class="good">✅ Meet setup preset loaded into this meet.</div></div>':'';
+  const presetDeletedFlash=query.presetDeleted?'<div class="card" style="border-left:4px solid var(--green);margin-bottom:12px"><div class="good">✅ Meet setup preset deleted.</div></div>':'';
+  const setupPresetOptions = (db.setupPresets||[]).map(p=>`<option value="${esc(p.id)}">${esc(p.name||p.presetName||'Preset')}</option>`).join('');
+  const presetSelectHtml = `${query.clearPreset?'<option value="" selected>Choose a preset</option>':''}${setupPresetOptions||'<option value="">(no presets)</option>'}`;
+
+  function divCardHtml(group, gi, divKey) {
+    const div=group.divisions[divKey];
+    const colors={novice:'var(--sky2)',elite:'var(--navy)'};
+    const ageRange = String(div.ages||'').trim() || String(group.ages||'').trim();
+    return '<div class="group-div-card">' +
+      '<div class="row between center" style="margin-bottom:10px">' +
+        '<div style="font-weight:700;font-size:14px;color:'+colors[divKey]+'">'+divKey.toUpperCase()+'</div>' +
+        toggleSwitch('g_'+gi+'_'+divKey+'_enabled', div.enabled) +
+      '</div>' +
+      '<div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:10px">' +
+        '<div style="flex:1"><label>Age Range</label><input name="g_'+gi+'_'+divKey+'_ages" value="'+esc(ageRange)+'" placeholder="10-11" /></div>' +
+      '</div>' +
+      '<div style="display:flex;gap:8px;align-items:flex-end">' +
+        '<div style="flex:1"><label>D1</label><input name="g_'+gi+'_'+divKey+'_d1" value="'+esc(div.distances[0]||'')+'" placeholder="200m" /></div>' +
+        '<div style="flex:1"><label>D2</label><input name="g_'+gi+'_'+divKey+'_d2" value="'+esc(div.distances[1]||'')+'" placeholder="500m" /></div>' +
+        '<div style="flex:1"><label>D3</label><input name="g_'+gi+'_'+divKey+'_d3" value="'+esc(div.distances[2]||'')+'" placeholder="1000m" /></div>' +
+        '<input type="hidden" name="g_'+gi+'_'+divKey+'_d4" value="'+esc(div.distances[3]||'')+'" />' +
+      '</div>' +
+    '</div>';
+  }
+  const groupsRows=[];
+  for(let i=0;i<meet.groups.length;i+=2) {
+    const L=meet.groups[i]; const R=meet.groups[i+1];
+    const Lcards=['novice','elite'].map(d=>divCardHtml(L,i,d)).join('');
+    const Rcards=R?['novice','elite'].map(d=>divCardHtml(R,i+1,d)).join(''):'';
+    groupsRows.push(
+      '<div class="group-pair-row">' +
+        '<div class="group-pair-col">' +
+          '<div class="group-pair-header"><span class="group-pair-name">'+esc(L.label)+'</span></div>' +
+          Lcards +
+        '</div>' +
+        (R?'<div class="group-pair-col">' +
+          '<div class="group-pair-header"><span class="group-pair-name">'+esc(R.label)+'</span></div>' +
+          Rcards +
+        '</div>':'') +
+      '</div>'
+    );
+  }
+  const groupsHtml=groupsRows.join('');
+
+  return `
+    <div class="page-header"><h1>Meet Builder</h1><div class="sub">${esc(meet.meetName)}</div></div>
+    ${savedFlash}
+    ${presetSavedFlash}
+    ${presetLoadedFlash}
+    ${presetDeletedFlash}
+    <div class="grid-2" style="margin-bottom:16px">
+      <div class="card card-accent" style="border-left-color:var(--orange)">
+        <div class="row between center">
+          <div>
+            <div class="bold">🏁 Open Builder ${openEnabledCount>0?`<span class="chip chip-orange">${openEnabledCount} active</span>`:''}</div>
+            <div class="note">Rolling-start Open races, separate results.</div>
+          </div>
+          <a class="btn-orange btn-sm" href="/portal/meet/${meet.id}/open-builder">Configure →</a>
+        </div>
+      </div>
+      <div class="card card-accent" style="border-left-color:var(--purple)">
+        <div class="row between center">
+          <div>
+            <div class="bold">🛼 Quad Builder ${quadEnabledCount>0?`<span class="chip chip-purple">${quadEnabledCount} active</span>`:''}</div>
+            <div class="note">Quad divisions, own standings bucket.</div>
+          </div>
+          <a class="btn-purple btn-sm" href="/portal/meet/${meet.id}/quad-builder">Configure →</a>
+        </div>
+      </div>
+    </div>
+    <form id="meetBuilderForm" method="POST" action="/portal/meet/${meet.id}/builder/save" class="stack">
+      <div class="card setup-card">
+        <div class="setup-head">
+          <div>
+            <h2 class="setup-title">Meet Setup</h2>
+            <div class="setup-sub">Core meet details, venue, rules, and reusable presets.</div>
+          </div>
+          <button class="btn2" type="submit" form="meetBuilderForm" formaction="/portal/meet/${meet.id}/builder/save-meet">Save Meet</button>
+        </div>
+        <div class="setup-body">
+          <div class="setup-sections">
+            <section class="setup-section">
+              <div class="setup-section-title">📋 Meet Details</div>
+              <div class="setup-fields">
+                <div class="setup-field-full"><label>Meet Name</label><input name="meetName" value="${esc(meet.meetName)}" required /></div>
+                <div><label>Start Date</label><input type="date" name="date" value="${esc(meet.date)}" /></div>
+                <div>
+                  <label>Optional End Date</label>
+                  <div class="date-clear-row">
+                    <input type="date" id="endDateInput" name="endDate" value="${esc(meet.endDate||'')}" />
+                    <button class="date-clear-btn" type="button" onclick="document.getElementById('endDateInput').value=''">Clear</button>
+                  </div>
+                  <div class="note">Leave blank for a single-day meet.</div>
+                </div>
+                <div class="setup-field-full"><label>Start Time</label><input type="time" name="startTime" value="${esc(meet.startTime)}" /></div>
+                <div class="setup-field-full">
+                  <label>Multi-Day Schedule Notes</label>
+                  <textarea name="scheduleNotes" rows="5" placeholder="Friday: Doors open 5:00 PM, racing 6:00 PM&#10;Saturday: Warmups 7:30 AM, racing 8:30 AM&#10;Sunday: Finals and awards schedule...">${esc(meet.scheduleNotes||'')}</textarea>
+                  <div class="note">Use this for day-by-day start times, warmups, doors-open times, awards, or schedule changes.</div>
+                </div>
+              </div>
+            </section>
+
+            <section class="setup-section">
+              <div class="setup-section-title">📝 Registration</div>
+              <div class="setup-fields">
+                <div><label>Close Date</label><input type="date" name="registrationCloseDate" value="${esc(meet.registrationCloseAt?meet.registrationCloseAt.slice(0,10):'')}" /></div>
+                <div><label>Close Time</label><input type="time" name="registrationCloseTime" value="${esc(meet.registrationCloseAt?meet.registrationCloseAt.slice(11,16):'')}" /></div>
+              </div>
+              <div style="margin-bottom:20px"><h3 style="margin:12px 0 12px 0;font-size:14px;font-weight:600">Base & Event Fees</h3></div>
+              <div class="setup-fields" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px">
+                <div><label>Base Registration</label><input type="number" name="baseEntryFee" value="${esc(String(meet.baseEntryFee||0))}" min="0" /><div class="note">Covers the first selected event category.</div></div>
+                <div><label>Additional Event Fee</label><input type="number" name="additionalRaceFee" value="${esc(String(meet.additionalRaceFee||0))}" min="0" /><div class="note">Charged once for each selected event category after the first.</div></div>
+                <div><label>Max Registration Cap</label><input type="number" name="maxRegistrationFee" value="${esc(String(meet.maxRegistrationFee||0))}" min="0" /><div class="note">0 = no cap</div></div>
+              </div>
+              <div style="margin-top:12px"><div class="note" style="margin:0">Total cost = base fee + selected event fees. Max cap applies when greater than 0.</div></div>
+              <div class="setup-fields" style="margin-top:20px">
+                <div><label>Status</label>
+                  <select name="status">
+                    <option value="draft"     ${meet.status==='draft'    ?'selected':''}>Draft</option>
+                    <option value="published" ${meet.status==='published'?'selected':''}>Published</option>
+                    <option value="live"      ${meet.status==='live'     ?'selected':''}>Live</option>
+                    <option value="complete"  ${meet.status==='complete' ?'selected':''}>Complete</option>
+                  </select>
+                </div>
+              </div>
+            </section>
+
+            <section class="setup-section">
+              <div class="setup-section-title">📍 Venue <small>Saved rink or one-time custom rink</small></div>
+              <div class="setup-fields">
+                <div class="setup-field-full"><label>Rink</label>
+                  <input name="rinkSearch" id="rinkSearch" list="rinkSuggestions" value="${esc(rinkInputValue)}" placeholder="Start typing rink name..." autocomplete="off" />
+                  <input type="hidden" name="rinkId" id="rinkId" value="${esc(String(meet.rinkId||''))}" />
+                  <datalist id="rinkSuggestions">${rinkDataList}</datalist>
+                  <div class="note">Pick a saved rink when available. Typed names become custom for this meet only.</div>
+                </div>
+                <div><label>Track Length (m)</label><input type="number" name="trackLength" value="${esc(meet.trackLength)}" min="1" step="1" /></div>
+                <div><label>Lanes</label><input type="number" name="lanes" value="${esc(meet.lanes)}" min="1" step="1" /></div>
+              </div>
+            </section>
+
+            <section class="setup-section">
+              <div class="setup-section-title">⚙️ Rules & Presets</div>
+              <div class="setup-fields cols-1">
+                <div><label>Tiebreaker Rule</label>
+                  <select name="tiebreaker">
+                    <option value="d2"    ${(meet.tiebreaker||'d2')==='d2'   ?'selected':''}>D2 Middle Race (local standard)</option>
+                    <option value="sr832" ${meet.tiebreaker==='sr832'?'selected':''}>USARS SR832 Formula (regionals/nationals)</option>
+                  </select>
+                  <div class="note">D2 = most common locally. SR832 = official weighted formula.</div>
+                </div>
+                <div><label>Save Setup For Future Use</label>
+                  <div class="preset-row">
+                    <input name="presetName" value="${esc(meet.presetName||'')}" placeholder="Mid South Speed League" />
+                    <button class="btn2 btn-sm" type="submit" formaction="/portal/meet/${meet.id}/builder/save-preset">Save Setup</button>
+                  </div>
+                  <div class="note">Saves divisions, distances, fees, tiebreaker, blocks, and race order.</div>
+                </div>
+                <div>
+                  <label>Load Setup</label>
+                  <div style="display:flex;gap:8px;align-items:center;margin-top:6px">
+                    <select id="presetSelect" name="presetId" style="min-width:220px;padding:6px">${presetSelectHtml}</select>
+                      <button id="loadPresetBtn" class="btn2 btn-sm" type="submit" form="meetBuilderForm" formaction="/portal/meet/${meet.id}/setup-presets/load" onclick="return confirm('Load setup will overwrite current divisions, blocks, and race structure. Continue?')">Load Setup</button>
+                      <input type="hidden" name="deletePresetId" id="deletePresetId" value="" />
+                      <button id="deletePresetBtn" class="btn-danger btn-sm" type="submit" form="meetBuilderForm" formaction="/portal/meet/${meet.id}/setup-presets/delete" onclick="return confirm('Delete selected setup preset? This cannot be undone.')">Delete</button>
+                  </div>
+                  <script>
+                    (function(){
+                      var sel = document.getElementById('presetSelect');
+                      var loadBtn = document.getElementById('loadPresetBtn');
+                      var deleteBtn = document.getElementById('deletePresetBtn');
+                      var deleteInput = document.getElementById('deletePresetId');
+                      if(!sel || !loadBtn || !deleteBtn || !deleteInput) return;
+                      function update(){
+                        var selected = sel.value;
+                        loadBtn.disabled = !selected;
+                        deleteBtn.disabled = !selected;
+                        deleteInput.value = selected || '';
+                      }
+                      sel.addEventListener('change', update);
+                      update();
+                    })();
+                  </script>
+                  <div class="note">Loads divisions, fees, blocks, and race structure into this meet.</div>
+                </div>
+              </div>
+            </section>
+
+            <section class="setup-section setup-section-wide">
+              <div class="setup-section-title">📝 Meet Notes</div>
+              <script>
+                (function(){
+                  var rinks = ${rinkLookupScript};
+                  var input = document.getElementById('rinkSearch');
+                  var hidden = document.getElementById('rinkId');
+                  if(!input || !hidden) return;
+                  function syncRink(){
+                    var value = (input.value || '').trim().toLowerCase();
+                    var match = rinks.find(function(r){
+                      return String(r.label || '').trim().toLowerCase() === value || String(r.name || '').trim().toLowerCase() === value;
+                    });
+                    hidden.value = match ? String(match.id) : '';
+                  }
+                  input.addEventListener('input', syncRink);
+                  input.addEventListener('change', syncRink);
+                  syncRink();
+                })();
+              </script>
+              <div class="setup-notes-grid">
+                <div><label>Meet Notes</label><textarea name="notes">${esc(meet.notes||'')}</textarea></div>
+                <div><label>Relay Notes</label><textarea name="relayNotes">${esc(meet.relayNotes||'')}</textarea></div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+      <div class="page-header"><h2>Division Groups</h2><div class="sub">Enable classes and set distances for each age group.</div></div>
+      ${groupsHtml}
+
+      <div class="card" style="margin-top:8px">
+        <div class="row between center" style="margin-bottom:14px">
+          <div>
+            <h2 style="margin:0">Special Events</h2>
+            <div class="note">Optional event types that sit outside standard novice/elite/open/quad racing.</div>
+          </div>
+        </div>
+        <div class="form-grid cols-2">
+          <div class="group-pair-col" id="time-trials" style="margin-bottom:12px">
+            <div class="group-pair-header">
+              <span class="group-pair-name">Time Trials</span>
+              ${toggleSwitch('timeTrialsEnabled', meet.timeTrialsEnabled, 'Enable Time Trials')}
+            </div>
+            <div class="note" style="margin-top:8px">
+              Single <strong>100m / 1 Lap</strong> session. Runs youngest to oldest across all divisions. Uses Open division groups for TV/live leaderboards. No points awarded.
+            </div>
+            <div class="action-row" style="margin-top:10px">
+              <span class="chip chip-sky">100m</span>
+              <span class="chip">1 Lap</span>
+              <span class="chip">Youngest → Oldest</span>
+              <span class="chip chip-green">Records Only</span>
+            </div>
+          </div>
+
+          ${(()=>{
+            const saved = makeAdditionalRaceSlots(meet.additionalGroups || meet.additionalRaceGroups || meet.additionalRaces || meet.skateabilityGroups);
+            const sg = saved.find(x => String(x.id || '') === 'manual_extra_1') || {};
+            const distances = Array.isArray(sg.distances) ? [0,1,2].map(n=>String(sg.distances[n]||'')) : ['', '', ''];
+            return `
+              <div class="group-pair-col" style="margin-bottom:12px" id="sk-0">
+                <div class="group-pair-header">
+                  <span class="group-pair-name">Skatability</span>
+                  ${toggleSwitch('sk_0_enabled', !!sg.enabled)}
+                </div>
+                <div class="note" style="margin-top:8px">Permanent Skatability setup. No novice/elite divisions and no overall points — just enable it and enter up to 3 distances.</div>
+                <input type="hidden" name="sk_0_id" value="manual_extra_1" />
+                <input type="hidden" name="sk_0_ageGroupId" value="" />
+                <input type="hidden" name="sk_0_ages" value="" />
+                <input type="hidden" name="sk_0_ageGroupLabel" value="Skatability" />
+                <div style="display:flex;gap:8px;align-items:flex-end;margin-top:10px">
+                  <div style="flex:1"><label>Distance 1</label><input name="sk_0_d1" value="${esc(distances[0])}" placeholder="100m" /></div>
+                  <div style="flex:1"><label>Distance 2</label><input name="sk_0_d2" value="${esc(distances[1])}" placeholder="200m" /></div>
+                  <div style="flex:1"><label>Distance 3</label><input name="sk_0_d3" value="${esc(distances[2])}" placeholder="300m" /></div>
+                </div>
+              </div>`;
+          })()}
+        </div>
+        <input type="hidden" name="additional_count" id="additional_count" value="4" />
+      </div>
+
+      <div class="card" style="margin-top:8px">
+        <div class="row between center" style="margin-bottom:14px">
+          <div>
+            <h2 style="margin:0">🏁 Special Races</h2>
+            <div class="note">Flexible exhibition races like Race of Champions, Parents Race, Coach Race, or Dash for Cash.</div>
+          </div>
+          <span class="chip chip-sky">3 Slots</span>
+        </div>
+        ${(()=>{
+          const saved = makeAdditionalRaceSlots(meet.additionalGroups || meet.additionalRaceGroups || meet.additionalRaces || meet.skateabilityGroups);
+          const rows = [1,2,3].map(si => {
+            const id = 'manual_extra_' + (si + 1);
+            const found = saved.find(x => String(x.id || '') === id) || {};
+            return {
+              idx: si,
+              id,
+              ageGroupLabel: String(found.ageGroupLabel || found.title || ''),
+              ages: String(found.ages || ''),
+              enabled: !!found.enabled,
+              distances: Array.isArray(found.distances) ? [0,1,2].map(n=>String(found.distances[n]||'')) : ['', '', ''],
+            };
+          });
+          return `<div class="form-grid cols-2">
+            ${rows.map((sg,ri)=>`
+              <div class="group-pair-col" style="margin-bottom:12px" id="sk-${sg.idx}">
+                <div class="group-pair-header">
+                  <span class="group-pair-name">Special Race ${ri+1}</span>
+                  ${toggleSwitch('sk_'+sg.idx+'_enabled', sg.enabled)}
+                </div>
+                <input type="hidden" name="sk_${sg.idx}_id" value="${esc(sg.id)}" />
+                <input type="hidden" name="sk_${sg.idx}_ageGroupId" value="" />
+                <div class="form-grid cols-2" style="margin-top:10px">
+                  <div><label>Race Title</label><input name="sk_${sg.idx}_ageGroupLabel" value="${esc(sg.ageGroupLabel)}" placeholder="Race of Champions / Parents Race" /></div>
+                  <div><label>Age/Eligibility</label><input name="sk_${sg.idx}_ages" value="${esc(sg.ages)}" placeholder="Open / Champions / 35+" /></div>
+                </div>
+                <div style="display:flex;gap:8px;align-items:flex-end;margin-top:10px">
+                  <div style="flex:1"><label>D1</label><input name="sk_${sg.idx}_d1" value="${esc(sg.distances?.[0]||'')}" placeholder="500m" /></div>
+                  <div style="flex:1"><label>D2</label><input name="sk_${sg.idx}_d2" value="${esc(sg.distances?.[1]||'')}" placeholder="" /></div>
+                  <div style="flex:1"><label>D3</label><input name="sk_${sg.idx}_d3" value="${esc(sg.distances?.[2]||'')}" placeholder="" /></div>
+                </div>
+              </div>`).join('')}
+          </div>`;
+        })()}
+      </div>
+
+      <div class="card">
+        <div class="row between center">
+          <div class="muted">Save Meet saves all settings and updates configured race titles while preserving block assignments.</div>
+          <button class="btn2" type="submit" form="meetBuilderForm" formaction="/portal/meet/${meet.id}/builder/save-meet">Save Meet</button>
+        </div>
+      </div>
+    </form>`;
+}
+
+module.exports = {
+  renderMeetBuilderView,
+};
