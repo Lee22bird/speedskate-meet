@@ -58,7 +58,7 @@ function renderPortalMeetCard({ db, user, meet }) {
             <div class="muted" style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Manage</div>
             <div class="action-row">
               <a class="btn2 btn-sm" href="/portal/meet/${meet.id}/clone-confirm">Clone</a>
-              ${meet.status === 'complete' ? `<a class="btn2 btn-sm" href="/portal/meet/${meet.id}/archive-confirm">📦 Archive</a>` : ''}
+              <a class="btn2 btn-sm" href="/portal/meet/${meet.id}/archive-confirm">📦 Archive</a>
               <a class="btn-danger btn-sm" href="/portal/meet/${meet.id}/delete-confirm">Delete</a>
             </div>
           </div>
