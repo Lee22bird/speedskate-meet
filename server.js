@@ -61,6 +61,7 @@ const { renderPendingRinksView } = require('./views/pendingRinksView');
 const { renderPendingMeetsView } = require('./views/pendingMeetsView');
 const { renderArchivedMeetsView } = require('./views/archivedMeetsView');
 const { renderCoachRosterView } = require('./views/coachRosterView');
+const { renderStaffAccountsView } = require('./views/staffAccountsView');
 
 const publicRoutes = require('./routes/publicRoutes');
 
@@ -3318,47 +3319,14 @@ app.post('/portal/meet/:meetId/delete', requireRole('meet_director'), (req, res)
 // ── Users ─────────────────────────────────────────────────────────────────────
 
 app.get('/portal/users', requireRole('super_admin'), (req, res) => {
-  const rows=req.db.users.map(u=>{
-    const roles=(u.roles||[]);
-    const status=u.active===false?'Off':(roles.length?'On':'Pending Role');
-    return `
-    <tr>
-      <td><strong>${esc(u.displayName||u.username)}</strong><div class="muted" style="font-size:12px">${esc(u.email||'')}</div></td>
-      <td>${esc(u.username||'')}</td>
-      <td>
-        <form method="POST" action="/portal/users/${u.id}/update" class="stack" style="gap:8px;margin:0">
-          <div class="row" style="gap:10px;flex-wrap:wrap">${staffRoleOptions(roles)}</div>
-          <div class="form-grid cols-2">
-            <div><label style="font-size:11px">Team</label><input name="team" list="teams-users" value="${esc(u.team||'')}" /></div>
-            <div><label style="font-size:11px">Active</label><select name="active"><option value="true" ${u.active!==false?'selected':''}>On</option><option value="false" ${u.active===false?'selected':''}>Off</option></select></div>
-          </div>
-          <button class="btn2 btn-sm" type="submit">Save</button>
-        </form>
-      </td>
-      <td><span class="chip ${roles.length?'chip-green':'chip-orange'}">${esc(status)}</span></td>
-    </tr>`;
-  }).join('');
-  res.send(pageShell({title:'Users',user:req.user, bodyHtml:`
-    <div class="page-header"><h1>Users</h1><div class="sub">SSM staff accounts only: Meet Directors, Judges, Announcers, and Coaches.</div></div>
-    <div class="card">
-      <form method="POST" action="/portal/users/new" class="stack">
-        <h2 style="margin-top:0">Add Staff User</h2>
-        <div class="form-grid cols-4">
-          <div><label>Name</label><input name="displayName" required /></div>
-          <div><label>Email</label><input type="email" name="email" required /></div>
-          <div><label>Password / PIN</label><input name="password" required /></div>
-          <div><label>Team</label><input name="team" list="teams-users" value="Midwest Racing" /></div>
-        </div>
-        <datalist id="teams-users">${TEAM_LIST.map(t=>`<option value="${esc(t)}"></option>`).join('')}</datalist>
-        <div class="row">${staffRoleOptions([])}</div>
-        <div><button class="btn" type="submit">Add User</button></div>
-      </form>
-      <div class="hr"></div>
-      <table class="table">
-        <thead><tr><th>Name / Email</th><th>Login</th><th>Roles / Team</th><th>Status</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>`}));
+  res.send(pageShell({
+    title: 'Users',
+    user: req.user,
+    bodyHtml: renderStaffAccountsView({
+      users: req.db.users || [],
+      teamList: TEAM_LIST,
+    }),
+  }));
 });
 
 app.post('/portal/users/new', requireRole('super_admin'), (req, res) => {
