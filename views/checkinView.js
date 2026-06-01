@@ -1,5 +1,4 @@
-const { esc } = require('../utils/html');
-const { entryLabelForRegistration } = require('./registeredView');
+const { esc, cap } = require('../utils/html');
 
 function sponsorLineHtml(sponsor) {
   const s = String(sponsor || '').trim();
@@ -12,6 +11,33 @@ function money(value) {
   return Number.isFinite(n) ? n.toFixed(0) : '0';
 }
 
+function entryLabelForRegistration(reg) {
+  const opts = reg?.options || {};
+  return [
+    'challengeUp',
+    'novice',
+    'elite',
+    'open',
+    'quad',
+    'additional',
+    'timeTrials',
+    'relay2Person',
+    'relay3Person',
+    'relay4Person',
+  ]
+    .filter(k => opts[k])
+    .map(k => {
+      if (k === 'challengeUp') return 'CU';
+      if (k === 'additional') return 'Additional';
+      if (k === 'timeTrials') return 'Time Trials';
+      if (k === 'relay2Person') return '2 Person Relay';
+      if (k === 'relay3Person') return '3 Person Relay';
+      if (k === 'relay4Person') return '4 Person Relay';
+      return cap(k);
+    })
+    .join(', ') || '—';
+}
+
 function renderCheckinView({ meet, query = {} }) {
   const registrations = meet.registrations || [];
   const totalOwed = registrations.reduce((sum, r) => sum + Number(r.totalCost || 0), 0);
@@ -22,7 +48,6 @@ function renderCheckinView({ meet, query = {} }) {
     query.checkedIn ? `✅ Checked in ${decodeURIComponent(query.checkedIn)} skater(s).` : '',
     query.paid ? `✅ Marked ${decodeURIComponent(query.paid)} skater(s) paid.` : '',
     query.helmetUpdated ? '✅ Helmet number updated.' : '',
-    query.helmetsAssigned ? `✅ Helmet numbers assigned starting at ${esc(decodeURIComponent(query.helmetsAssigned))}.` : '',
   ].filter(Boolean).map(msg => `
     <div class="card" style="border-left:4px solid var(--green);margin-bottom:12px">
       <div class="good">${msg}</div>
