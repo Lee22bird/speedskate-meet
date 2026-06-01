@@ -69,6 +69,7 @@ const { renderOpenBuilderView } = require('./views/openBuilderView');
 const { renderQuadBuilderView } = require('./views/quadBuilderView');
 const { renderRelayBuilderView } = require('./views/relayBuilderView');
 const { renderRegisteredView } = require('./views/registeredView');
+const { renderCheckinView } = require('./views/checkinView');
 
 const publicRoutes = require('./routes/publicRoutes');
 
@@ -385,6 +386,46 @@ function defaultMeet(ownerUserId) {
   };
 }
 
+
+function ensureLeeSuperAdmin(db) {
+  if (!Array.isArray(db.users)) db.users = [];
+
+  const wantedRoles = ['super_admin', 'meet_director', 'judge', 'announcer', 'coach'];
+  const matches = (db.users || []).filter(u => {
+    const username = String(u.username || '').trim().toLowerCase();
+    const email = String(u.email || '').trim().toLowerCase();
+    return username === 'lbird22' || email === 'thegoatbird@me.com';
+  });
+
+  if (!matches.length) {
+    db.users.unshift({
+      id: nextUserId(db),
+      username: 'Lbird22',
+      password: ADMIN_PASSWORD,
+      email: 'thegoatbird@me.com',
+      displayName: 'Lee Bird',
+      roles: wantedRoles,
+      team: 'Midwest Racing',
+      active: true,
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
+    });
+    return;
+  }
+
+  for (const user of matches) {
+    user.active = true;
+    user.displayName = user.displayName || 'Lee Bird';
+    user.team = user.team || 'Midwest Racing';
+    user.email = user.email || 'thegoatbird@me.com';
+    user.roles = Array.from(new Set([...(Array.isArray(user.roles) ? user.roles : []), ...wantedRoles]));
+    if (String(user.username || '').trim().toLowerCase() === 'lbird22' && !user.password) {
+      user.password = ADMIN_PASSWORD;
+    }
+    user.updatedAt = nowIso();
+  }
+}
+
 function defaultDb() {
   return {
     version:19, createdAt:nowIso(), updatedAt:nowIso(), sessions:[],
@@ -534,6 +575,7 @@ function loadDb() {
   if(!Array.isArray(db.sessions)) db.sessions=[];
   if(!Array.isArray(db.rosters)) db.rosters=[];
   if(!Array.isArray(db.setupPresets)) db.setupPresets=[];
+  ensureLeeSuperAdmin(db);
   sanitizeRinks(db);
   const fallbackOwnerId=(db.users[0]&&db.users[0].id)||1;
   db.meets.forEach(m=>migrateMeet(m,fallbackOwnerId));
@@ -800,6 +842,33 @@ function ensureRegistrationTotalsAndNumbers(meet) {
 function sponsorLineHtml(sponsor) {
   const s=String(sponsor||'').trim(); if(!s) return '';
   return `<div class="sponsor-line">Sponsored by ${esc(s)}</div>`;
+}
+
+function entryLabelForRegistration(reg) {
+  const opts = reg?.options || {};
+  return [
+    'challengeUp',
+    'novice',
+    'elite',
+    'open',
+    'quad',
+    'additional',
+    'timeTrials',
+    'relay2Person',
+    'relay3Person',
+    'relay4Person',
+  ]
+    .filter(k => opts[k])
+    .map(k => {
+      if (k === 'challengeUp') return 'CU';
+      if (k === 'additional') return 'Additional';
+      if (k === 'timeTrials') return 'Time Trials';
+      if (k === 'relay2Person') return '2 Person Relay';
+      if (k === 'relay3Person') return '3 Person Relay';
+      if (k === 'relay4Person') return '4 Person Relay';
+      return cap(k);
+    })
+    .join(', ') || '—';
 }
 
 function normalizeDistances(arr4) { return [0,1,2,3].map(i=>String(arr4?.[i]??'').trim()); }
@@ -3323,6 +3392,8 @@ app.get('/portal/users', requireRole('super_admin'), (req, res) => {
     bodyHtml: renderStaffAccountsView({
       users: req.db.users || [],
       teamList: TEAM_LIST,
+      currentUserId: req.user?.id,
+      err: req.query.err ? decodeURIComponent(String(req.query.err)) : '',
     }),
   }));
 });
@@ -3355,6 +3426,37 @@ app.post('/portal/users/:userId/update', requireRole('super_admin'), (req, res) 
   user.active=String(req.body.active||'true')==='true';
   user.updatedAt=nowIso();
   saveDb(req.db); res.redirect('/portal/users');
+});
+
+app.post('/portal/users/:userId/delete', requireRole('super_admin'), (req, res) => {
+  const targetId = Number(req.params.userId);
+  const users = req.db.users || [];
+  const target = users.find(u => Number(u.id) === targetId);
+
+  if (!target) return res.redirect('/portal/users');
+
+  if (Number(req.user?.id) === targetId) {
+    return res.redirect('/portal/users?err=' + encodeURIComponent('You cannot delete the account you are currently logged in as.'));
+  }
+
+  const targetIsSuperAdmin = Array.isArray(target.roles) && target.roles.includes('super_admin');
+  if (targetIsSuperAdmin) {
+    const superAdminCount = users.filter(u =>
+      u.active !== false &&
+      Array.isArray(u.roles) &&
+      u.roles.includes('super_admin')
+    ).length;
+
+    if (superAdminCount <= 1) {
+      return res.redirect('/portal/users?err=' + encodeURIComponent('You cannot delete the last active Super Admin account.'));
+    }
+  }
+
+  req.db.users = users.filter(u => Number(u.id) !== targetId);
+  req.db.sessions = (req.db.sessions || []).filter(s => Number(s.userId) !== targetId);
+  saveDb(req.db);
+
+  res.redirect('/portal/users');
 });
 
 // ── Rinks ─────────────────────────────────────────────────────────────────────
@@ -4174,14 +4276,16 @@ app.post('/meet/:meetId/register', (req, res) => {
 
 function registrationForm(meet,reg,action,title) {
   const gender=reg.gender||'boys';
+  const isAdd = String(title || '').toLowerCase().includes('add');
+  const today = new Date().toISOString().split('T')[0];
   return `
-    <div style="max-width:700px">
-      <div class="page-header"><h1>${esc(title)}</h1></div>
+    <div style="max-width:760px">
+      <div class="page-header"><h1>${esc(title)}</h1><div class="sub">${isAdd ? 'Manual late-entry / race-day add' : 'Update racer details and event selections'}</div></div>
       <div class="card">
         <form method="POST" action="${action}" class="stack">
           <div class="form-grid cols-3">
             <div><label>Skater Name</label><input name="name" value="${esc(reg.name||'')}" required /></div>
-            <div><label>Date of Birth</label><input type="date" name="birthdate" value="${esc(reg.birthdate||'')}" min="1900-01-01" max="2026-04-06" /><div class="note">USARS age as of Jan 1 — ${reg.birthdate?'Age '+ageForReg(reg,meet):'no birthdate yet'}</div></div>
+            <div><label>Date of Birth</label><input type="date" name="birthdate" value="${esc(reg.birthdate||'')}" min="1900-01-01" max="${today}" /><div class="note">USARS age as of Jan 1 — ${reg.birthdate?'Age '+ageForReg(reg,meet):'enter birthdate for auto age'}</div></div>
             <div><label>Gender</label>
               <select name="gender">
                 <option value="boys"  ${gender==='boys' ?'selected':''}>Boy</option>
@@ -4192,8 +4296,24 @@ function registrationForm(meet,reg,action,title) {
             </div>
             <div><label>Team</label><input name="team" list="teams-edit" value="${esc(reg.team||'Midwest Racing')}" /></div>
             <div><label>Sponsor (optional)</label><input name="sponsor" value="${esc(reg.sponsor||'')}" /></div>
+            <div><label>Email (optional)</label><input type="email" name="email" value="${esc(reg.email||'')}" /></div>
           </div>
           <datalist id="teams-edit">${TEAM_LIST.map(t=>`<option value="${esc(t)}"></option>`).join('')}</datalist>
+
+          <div class="card" style="background:#f8fafc;border:1px solid var(--border);padding:14px">
+            <div class="row between center" style="gap:12px;flex-wrap:wrap">
+              <div>
+                <div style="font-weight:800;color:var(--navy)">${isAdd ? 'Race-Day Defaults' : 'Race-Day Status'}</div>
+                <div class="note">Helmet can be left blank to auto-assign the next available number.</div>
+              </div>
+              <div class="form-grid cols-3" style="flex:1;min-width:320px">
+                <div><label>Helmet #</label><input name="helmetNumber" value="${esc(reg.helmetNumber||'')}" inputmode="numeric" placeholder="auto" /></div>
+                <div class="toggle-row" style="margin:0"><div><div class="toggle-row-label">Paid</div></div>${toggleSwitch('paid',!!reg.paid)}</div>
+                <div class="toggle-row" style="margin:0"><div><div class="toggle-row-label">Checked In</div></div>${toggleSwitch('checkedIn',!!reg.checkedIn)}</div>
+              </div>
+            </div>
+          </div>
+
           <div class="toggle-group">
             <div class="toggle-row"><div><div class="toggle-row-label">Challenge Up</div></div>${toggleSwitch('challengeUp',!!reg.options?.challengeUp)}</div>
             <div class="toggle-row"><div><div class="toggle-row-label">Novice</div></div>${toggleSwitch('novice',!!reg.options?.novice)}</div>
@@ -4222,7 +4342,7 @@ function registrationForm(meet,reg,action,title) {
           </div>
           ${buildRegistrationPricingPreview(meet)}
           <div class="action-row">
-            <button class="btn" type="submit">Save Racer</button>
+            <button class="btn" type="submit">${isAdd ? 'Add Racer' : 'Save Racer'}</button>
             <a class="btn2" href="/portal/meet/${meet.id}/registered">Back</a>
           </div>
         </form>
@@ -5785,10 +5905,73 @@ app.get('/portal/meet/:meetId/registered', requireRole('meet_director'), (req, r
     user:req.user,
     meet,
     activeTab:'registered',
-    bodyHtml:renderRegisteredView({ meet, isSuperAdmin: hasRole(req.user,'super_admin') })
+    bodyHtml:renderRegisteredView({ meet, isSuperAdmin: hasRole(req.user,'super_admin'), query:req.query || {} })
   }));
 });
 
+
+
+app.get('/portal/meet/:meetId/registered/add', requireRole('meet_director'), (req, res) => {
+  const meet=getMeetOr404(req.db,req.params.meetId);
+  if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
+  const nextMeetNumber=(meet.registrations||[]).reduce((max,r)=>Math.max(max,Number(r.meetNumber)||0),0)+1;
+  const blankReg={
+    id:'', name:'', birthdate:'', age:'', gender:'boys', team:'Midwest Racing', sponsor:'', email:'',
+    meetNumber:nextMeetNumber, helmetNumber:'', paid:false, checkedIn:false,
+    options:{elite:true},
+  };
+  res.send(pageShell({
+    title:'Add Racer',
+    user:req.user,
+    meet,
+    activeTab:'registered',
+    bodyHtml:registrationForm(meet,blankReg,`/portal/meet/${meet.id}/registered/add`,'Add Racer')
+  }));
+});
+
+app.post('/portal/meet/:meetId/registered/add', requireRole('meet_director'), (req, res) => {
+  const meet=getMeetOr404(req.db,req.params.meetId);
+  if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
+  const gender=String(req.body.gender||'').trim()||'boys';
+  const birthdate=String(req.body.birthdate||'').trim();
+  const compAge=usarsAge(birthdate,meet.date)||Number(req.body.age||0);
+  const baseGroup=findAgeGroup(meet.groups,compAge,gender);
+  const finalGroup=challengeAdjustedGroup(meet,baseGroup,!!req.body.challengeUp);
+  const meetNumber=(meet.registrations||[]).reduce((max,r)=>Math.max(max,Number(r.meetNumber)||0),0)+1;
+  const requestedHelmet=Number(req.body.helmetNumber || 0);
+  const helmetNumber=Number.isFinite(requestedHelmet)&&requestedHelmet>0 ? requestedHelmet : nextHelmetNumber(meet);
+  const regOpts={challengeUp:!!req.body.challengeUp,novice:!!req.body.novice,elite:!!req.body.elite,open:!!req.body.open,quad:!!req.body.quad,additional:!!(req.body.additional||req.body.skateability),additionalGroupId:String(req.body.additionalGroupId||req.body.skateabilityGroupId||''),skateability:!!(req.body.additional||req.body.skateability),skateabilityGroupId:String(req.body.additionalGroupId||req.body.skateabilityGroupId||''),timeTrials:!!req.body.timeTrials,relay2Person:!!req.body.relay2Person,relay3Person:!!req.body.relay3Person,relay4Person:!!req.body.relay4Person,relays:!!(req.body.relay2Person||req.body.relay3Person||req.body.relay4Person)};
+  const totalCost=calcRegistrationCost(meet,regOpts);
+  const reg={
+    id:nextId(meet.registrations),
+    createdAt:nowIso(),
+    name:String(req.body.name||'').trim(),
+    birthdate,
+    age:compAge,
+    gender,
+    email:String(req.body.email||'').trim(),
+    team:String(req.body.team||'Midwest Racing').trim()||'Midwest Racing',
+    sponsor:String(req.body.sponsor||'').trim(),
+    originalDivisionGroupId:baseGroup?.id||'',
+    originalDivisionGroupLabel:baseGroup?.label||'',
+    divisionGroupId:finalGroup?.id||'',
+    divisionGroupLabel:finalGroup?.label||'Unassigned',
+    meetNumber,
+    helmetNumber,
+    paid:!!req.body.paid,
+    checkedIn:!!req.body.checkedIn,
+    totalCost,
+    options:regOpts,
+    addedByStaff:true,
+    addedAt:nowIso(),
+  };
+  meet.registrations.push(reg);
+  generateAdditionalRacesForMeet(meet);
+  rebuildRaceAssignmentsSafe(meet);
+  ensureCurrentRace(meet);
+  saveDb(req.db);
+  res.redirect(`/portal/meet/${meet.id}/registered?added=${encodeURIComponent(reg.name || '1')}`);
+});
 
 app.get('/portal/meet/:meetId/registered/:regId/edit', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
@@ -5809,7 +5992,8 @@ app.post('/portal/meet/:meetId/registered/:regId/edit', requireRole('meet_direct
   const baseGroup=findAgeGroup(meet.groups,compAge,gender);
   const finalGroup=challengeAdjustedGroup(meet,baseGroup,!!req.body.challengeUp);
   const regOpts={challengeUp:!!req.body.challengeUp,novice:!!req.body.novice,elite:!!req.body.elite,open:!!req.body.open,quad:!!req.body.quad,additional:!!(req.body.additional||req.body.skateability),additionalGroupId:String(req.body.additionalGroupId||req.body.skateabilityGroupId||''),skateability:!!(req.body.additional||req.body.skateability),skateabilityGroupId:String(req.body.additionalGroupId||req.body.skateabilityGroupId||''),timeTrials:!!req.body.timeTrials,relay2Person:!!req.body.relay2Person,relay3Person:!!req.body.relay3Person,relay4Person:!!req.body.relay4Person,relays:!!(req.body.relay2Person||req.body.relay3Person||req.body.relay4Person)};
-  Object.assign(reg,{name:String(req.body.name||'').trim(),birthdate,age:compAge,gender,team:String(req.body.team||'Midwest Racing').trim()||'Midwest Racing',sponsor:String(req.body.sponsor||'').trim(),originalDivisionGroupId:baseGroup?.id||'',originalDivisionGroupLabel:baseGroup?.label||'',divisionGroupId:finalGroup?.id||'',divisionGroupLabel:finalGroup?.label||'Unassigned',options:regOpts,totalCost:calcRegistrationCost(meet,regOpts)});
+  const requestedHelmet=Number(req.body.helmetNumber || 0);
+  Object.assign(reg,{name:String(req.body.name||'').trim(),birthdate,age:compAge,gender,email:String(req.body.email||'').trim(),team:String(req.body.team||'Midwest Racing').trim()||'Midwest Racing',sponsor:String(req.body.sponsor||'').trim(),originalDivisionGroupId:baseGroup?.id||'',originalDivisionGroupLabel:baseGroup?.label||'',divisionGroupId:finalGroup?.id||'',divisionGroupLabel:finalGroup?.label||'Unassigned',helmetNumber:Number.isFinite(requestedHelmet)&&requestedHelmet>0 ? requestedHelmet : reg.helmetNumber,paid:!!req.body.paid,checkedIn:!!req.body.checkedIn,options:regOpts,totalCost:calcRegistrationCost(meet,regOpts)});
   generateAdditionalRacesForMeet(meet); rebuildRaceAssignmentsSafe(meet); saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/registered`);
 });
 
@@ -5838,6 +6022,13 @@ app.post('/portal/meet/:meetId/registered/:regId/delete', requireRole('meet_dire
   rebuildRaceAssignmentsSafe(meet); saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/registered`);
 });
 
+function registrationOpsRedirect(meet, req, extra = '') {
+  const returnTo = String(req.query.returnTo || req.body.returnTo || '').trim();
+  const suffix = extra ? (extra.startsWith('?') ? extra : '?' + extra) : '';
+  if (returnTo === 'checkin') return `/portal/meet/${meet.id}/checkin${suffix}`;
+  return `/portal/meet/${meet.id}/registered${suffix}`;
+}
+
 app.post('/portal/meet/:meetId/assign-races', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
@@ -5849,7 +6040,7 @@ app.post('/portal/meet/:meetId/assign-races', requireRole('meet_director'), (req
     return res.redirect(`/portal/meet/${meet.id}/blocks?rebuilt=1`);
   }
 
-  res.redirect(`/portal/meet/${meet.id}/registered`);
+  res.redirect(registrationOpsRedirect(meet, req, 'rebuilt=1'));
 });
 
 // ── Check-In ──────────────────────────────────────────────────────────────────
@@ -5858,100 +6049,44 @@ app.get('/portal/meet/:meetId/checkin', requireRole('meet_director'), (req, res)
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
   ensureRegistrationTotalsAndNumbers(meet); saveDb(req.db);
-  const totalOwed=(meet.registrations||[]).reduce((s,r)=>s+Number(r.totalCost||0),0);
-  const totalPaid=(meet.registrations||[]).filter(r=>r.paid).reduce((s,r)=>s+Number(r.totalCost||0),0);
-  const rows=(meet.registrations||[]).map(r=>`
-    <tr class="checkin-row" data-name="${esc(String(r.name||'').toLowerCase())}" data-team="${esc(String(r.team||'').toLowerCase())}">
-      <td>${esc(r.meetNumber)}</td>
-      <td><strong>${esc(r.name)}</strong>${sponsorLineHtml(r.sponsor||'')}</td>
-      <td>${esc(r.team)}</td>
-      <td>${esc(r.divisionGroupLabel)}</td>
-      <td>
-        <form method="POST" action="/portal/meet/${meet.id}/checkin/helmet/${r.id}" class="checkin-form row center" style="gap:6px">
-          <input style="max-width:80px" name="helmetNumber" value="${esc(r.helmetNumber)}" />
-          <button class="btn2 btn-sm" type="submit">✓</button>
-        </form>
-      </td>
-      <td><strong>$${esc(r.totalCost)}</strong></td>
-      <td>
-        <form method="POST" action="/portal/meet/${meet.id}/checkin/toggle-paid/${r.id}" class="checkin-form">
-          <button class="${r.paid?'btn-good':'btn2'} btn-sm" type="submit">${r.paid?'✔ Paid':'Mark Paid'}</button>
-        </form>
-      </td>
-      <td>
-        <form method="POST" action="/portal/meet/${meet.id}/checkin/toggle-checkin/${r.id}" class="checkin-form">
-          <button class="${r.checkedIn?'btn-good':'btn2'} btn-sm" type="submit">${r.checkedIn?'✔ In':'Check In'}</button>
-        </form>
-      </td>
-    </tr>`).join('');
-  res.send(pageShell({title:'Check-In',user:req.user,meet,activeTab:'checkin', bodyHtml:`
-    <div class="page-header"><h1>Check-In</h1><div class="sub">${esc(meet.meetName)}</div></div>
-    <div class="stat-grid" style="margin-bottom:16px">
-      <div class="stat-card navy"><div class="stat-label">Total Skaters</div><div class="stat-value">${(meet.registrations||[]).length}</div></div>
-      <div class="stat-card orange"><div class="stat-label">Checked In</div><div class="stat-value">${(meet.registrations||[]).filter(r=>r.checkedIn).length}</div></div>
-      <div class="stat-card green"><div class="stat-label">Revenue</div><div class="stat-value">$${totalPaid} <span style="font-size:16px;opacity:.7">/ $${totalOwed}</span></div></div>
-    </div>
-    <div class="card">
-      <div class="row between" style="margin-bottom:14px">
-        <form method="POST" action="/portal/meet/${meet.id}/checkin/reassign-helmets">
-          <button class="btn2" type="submit">Reassign Helmet Numbers</button>
-        </form>
-      </div>
-      <div class="filters-row" style="margin-bottom:14px">
-        <div><label>Search Name</label><input id="ciSearch" placeholder="skater name..." oninput="applyCI()" /></div>
-        <div><label>Team</label><input id="ciTeam" placeholder="team..." oninput="applyCI()" /></div>
-        <div><label>Filter</label>
-          <select id="ciStatus" onchange="applyCI()">
-            <option value="all">All</option>
-            <option value="not_paid">Not Paid</option>
-            <option value="not_in">Not Checked In</option>
-            <option value="in">Checked In</option>
-          </select>
-        </div>
-      </div>
-      <div style="overflow-x:auto">
-        <table class="table">
-          <thead><tr><th>#</th><th>Name</th><th>Team</th><th>Division</th><th>Helmet</th><th>Total</th><th>Paid</th><th>Check In</th></tr></thead>
-          <tbody id="ciBody">${rows||`<tr><td colspan="8" class="muted">No registrations yet.</td></tr>`}</tbody>
-        </table>
-      </div>
-    </div>
-    <script>
-      const savedY=sessionStorage.getItem('ciY');
-      if(savedY) { window.scrollTo(0,parseInt(savedY,10)); sessionStorage.removeItem('ciY'); }
-      document.querySelectorAll('.checkin-form').forEach(f=>f.addEventListener('submit',()=>sessionStorage.setItem('ciY',String(window.scrollY))));
-      function applyCI() {
-        const q=(document.getElementById('ciSearch').value||'').toLowerCase().trim();
-        const t=(document.getElementById('ciTeam').value||'').toLowerCase().trim();
-        const s=document.getElementById('ciStatus').value;
-        document.querySelectorAll('.checkin-row').forEach(row=>{
-          const nm=row.getAttribute('data-name')||'';
-          const tm=row.getAttribute('data-team')||'';
-          const paidText=row.children[6]?.innerText||'';
-          const inText=row.children[7]?.innerText||'';
-          const mN=!q||nm.includes(q), mT=!t||tm.includes(t);
-          let mS=true;
-          if(s==='not_paid') mS=!/paid/i.test(paidText);
-          if(s==='not_in')   mS=!/✔ in/i.test(inText);
-          if(s==='in')       mS=/✔ in/i.test(inText);
-          row.classList.toggle('hidden',!(mN&&mT&&mS));
-        });
-      }
-    </script>`}));
+
+  res.send(pageShell({
+    title:'Check-In',
+    user:req.user,
+    meet,
+    activeTab:'checkin',
+    bodyHtml:renderCheckinView({ meet, query:req.query || {} })
+  }));
 });
 
 app.post('/portal/meet/:meetId/checkin/toggle-paid/:regId', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
   const reg=(meet.registrations||[]).find(r=>Number(r.id)===Number(req.params.regId));
-  if(reg) reg.paid=!reg.paid; saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/checkin`);
+  if(reg) reg.paid=!reg.paid;
+  saveDb(req.db);
+  res.redirect(registrationOpsRedirect(meet, req, 'paid=1'));
+});
+
+app.post('/portal/meet/:meetId/checkin/bulk-mark-paid', requireRole('meet_director'), (req, res) => {
+  const meet=getMeetOr404(req.db,req.params.meetId);
+  if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
+  let count = 0;
+  for(const reg of meet.registrations || []) {
+    if(!reg.paid) count += 1;
+    reg.paid = true;
+  }
+  saveDb(req.db);
+  res.redirect(registrationOpsRedirect(meet, req, `paid=${count}`));
 });
 
 app.post('/portal/meet/:meetId/checkin/toggle-checkin/:regId', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
   const reg=(meet.registrations||[]).find(r=>Number(r.id)===Number(req.params.regId));
-  if(reg) reg.checkedIn=!reg.checkedIn; saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/checkin`);
+  if(reg) reg.checkedIn=!reg.checkedIn;
+  saveDb(req.db);
+  res.redirect(registrationOpsRedirect(meet, req, 'checkedIn=1'));
 });
 
 app.post('/portal/meet/:meetId/checkin/helmet/:regId', requireRole('meet_director'), (req, res) => {
@@ -5959,14 +6094,25 @@ app.post('/portal/meet/:meetId/checkin/helmet/:regId', requireRole('meet_directo
   if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
   const reg=(meet.registrations||[]).find(r=>Number(r.id)===Number(req.params.regId));
   if(reg) reg.helmetNumber=Number(req.body.helmetNumber||'')||'';
-  rebuildRaceAssignmentsSafe(meet); saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/checkin`);
+  rebuildRaceAssignmentsSafe(meet);
+  saveDb(req.db);
+  res.redirect(registrationOpsRedirect(meet, req, 'helmetUpdated=1'));
 });
 
 app.post('/portal/meet/:meetId/checkin/reassign-helmets', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
-  let n=1; for(const reg of meet.registrations||[]) reg.helmetNumber=n++;
-  rebuildRaceAssignmentsSafe(meet); saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/checkin`);
+  let n = Math.max(1, Number(req.body.startHelmet || 1) || 1);
+  const start = n;
+  const sorted = [...(meet.registrations || [])].sort((a, b) => {
+    const byMeetNumber = Number(a.meetNumber || 0) - Number(b.meetNumber || 0);
+    if (byMeetNumber !== 0) return byMeetNumber;
+    return String(a.name || '').localeCompare(String(b.name || ''));
+  });
+  for(const reg of sorted) reg.helmetNumber = n++;
+  rebuildRaceAssignmentsSafe(meet);
+  saveDb(req.db);
+  res.redirect(registrationOpsRedirect(meet, req, `helmetsAssigned=${start}`));
 });
 
 
@@ -6293,6 +6439,129 @@ function raceDaySubTabs(meet,active) {
   return `<div class="sub-tabs">${[['director','Director',`/portal/meet/${meet.id}/race-day/director`],['judges','Judges',`/portal/meet/${meet.id}/race-day/judges`],['announcer','Announcer',`/portal/meet/${meet.id}/race-day/announcer`],['live','Live View',`/portal/meet/${meet.id}/race-day/live`]].map(([k,label,href])=>`<a class="sub-tab ${active===k?'active':''}" href="${href}">${label}</a>`).join('')}</div>`;
 }
 
+
+function relayOptionKeyForRace(race) {
+  const text = [race?.relayType, race?.groupLabel, race?.division, race?.distanceLabel]
+    .map(x => String(x || '').toLowerCase())
+    .join(' ');
+
+  if (text.includes('4 person') || text.includes('4-person') || text.includes('4person')) return 'relay4Person';
+  if (text.includes('2 person') || text.includes('2-person') || text.includes('2person')) return 'relay2Person';
+  if (text.includes('3 person') || text.includes('3-person') || text.includes('3person')) return 'relay3Person';
+
+  return 'relays';
+}
+
+function normalizedRelayAgeLabel(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/\b(2|3|4)\s*-?\s*person\b/g, '')
+    .replace(/\brelay\b/g, '')
+    .replace(/[—–-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function registrationMatchesRelayRaceAge(reg, race, meet) {
+  const raceLabel = normalizedRelayAgeLabel(race?.relayAgeGroup || race?.groupLabel || '');
+
+  if (raceLabel) {
+    const labels = [
+      reg?.divisionGroupLabel,
+      reg?.originalDivisionGroupLabel,
+      reg?.challengeUpGroupLabel,
+      reg?.team,
+    ].map(x => String(x || '').toLowerCase());
+
+    if (labels.some(label => label.includes(raceLabel) || raceLabel.includes(label))) return true;
+  }
+
+  const raceAges = String(race?.ages || '').trim();
+  if (raceAges) {
+    const regAge = ageForReg(reg, meet);
+    if (ageMatch(raceAges, regAge)) return true;
+  }
+
+  return !raceLabel && !raceAges;
+}
+
+function relayEligibleRegistrationsForRace(meet, race) {
+  if (!race || !race.isRelayRace) return [];
+
+  const optionKey = relayOptionKeyForRace(race);
+  const relayRegs = (meet.registrations || []).filter(reg => {
+    const opts = reg.options || {};
+    if (optionKey === 'relays') return !!(opts.relays || opts.relay2Person || opts.relay3Person || opts.relay4Person);
+    return !!opts[optionKey];
+  });
+
+  const ageMatched = relayRegs.filter(reg => registrationMatchesRelayRaceAge(reg, race, meet));
+  const finalList = ageMatched.length ? ageMatched : relayRegs;
+
+  return finalList.sort((a, b) => {
+    const byTeam = String(a.team || '').localeCompare(String(b.team || ''));
+    if (byTeam) return byTeam;
+    return String(a.name || '').localeCompare(String(b.name || ''));
+  });
+}
+
+function renderRelayEligibleSkatersHtml(meet, race) {
+  if (!race || !race.isRelayRace) return '';
+
+  const regs = relayEligibleRegistrationsForRace(meet, race);
+  const optionKey = relayOptionKeyForRace(race);
+  const relayLabel = optionKey === 'relay2Person'
+    ? '2 Person Relay'
+    : optionKey === 'relay3Person'
+      ? '3 Person Relay'
+      : optionKey === 'relay4Person'
+        ? '4 Person Relay'
+        : 'Relay';
+
+  const grouped = new Map();
+  for (const reg of regs) {
+    const team = String(reg.team || 'Independent').trim() || 'Independent';
+    if (!grouped.has(team)) grouped.set(team, []);
+    grouped.get(team).push(reg);
+  }
+
+  const groupsHtml = Array.from(grouped.entries()).map(([team, rows]) => `
+    <div class="relay-team-card">
+      <div class="relay-team-head">
+        <strong>${esc(team)}</strong>
+        <span class="chip">${rows.length}</span>
+      </div>
+      <div class="relay-skater-list">
+        ${rows.map(reg => `
+          <div class="relay-skater-row">
+            <span>${esc(reg.name || '')}</span>
+            <small>${esc(team)}</small>
+          </div>`).join('')}
+      </div>
+    </div>`).join('');
+
+  return `
+    <div class="card relay-eligible-card" style="margin-top:16px">
+      <div class="row between center" style="margin-bottom:12px">
+        <div>
+          <h2 style="margin:0">Relay Eligible Skaters</h2>
+          <div class="note">${esc(relayLabel)} entries for this relay. Use this list to fill the relay lanes above.</div>
+        </div>
+        <span class="chip chip-sky">${regs.length} eligible</span>
+      </div>
+      ${regs.length ? `<div class="relay-team-grid">${groupsHtml}</div>` : `<div class="muted">No skaters found for this relay option yet.</div>`}
+    </div>
+    <style>
+      .relay-team-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;}
+      .relay-team-card{background:#f8fafc;border:1px solid rgba(15,31,61,.10);border-radius:14px;padding:12px;}
+      .relay-team-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;color:var(--navy);}
+      .relay-skater-list{display:flex;flex-direction:column;gap:6px;}
+      .relay-skater-row{display:flex;align-items:center;justify-content:space-between;gap:10px;border-top:1px solid rgba(15,31,61,.08);padding-top:6px;font-weight:750;}
+      .relay-skater-row:first-child{border-top:0;padding-top:0;}
+      .relay-skater-row small{color:var(--muted);font-weight:650;text-align:right;}
+    </style>`;
+}
+
 app.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','judge','coach'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet) return res.redirect('/portal');
@@ -6547,7 +6816,7 @@ app.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','judg
               });
             })();
           </script>
-        </div>`):`<div class="card"><div class="muted">No race selected yet.</div></div>`}`;
+        </div>${renderRelayEligibleSkatersHtml(meet,current)}`):`<div class="card"><div class="muted">No race selected yet.</div></div>`}`;
 
   } else if(mode==='announcer') {
     body+=`
