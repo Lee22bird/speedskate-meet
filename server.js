@@ -3946,6 +3946,11 @@ function timeTrialLeaderboards(meet, race) {
 
 
 
+function normalizeRelayEligibleGroupIds(value) {
+  if (!Array.isArray(value)) return [];
+  return Array.from(new Set(value.map(v => String(v || '').trim()).filter(Boolean)));
+}
+
 function normalizeRelayTemplates(saved){
   const existing = Array.isArray(saved) ? saved : [];
   return RELAY_TEMPLATE_ROWS.map((def, idx) => {
@@ -3956,26 +3961,27 @@ function normalizeRelayTemplates(saved){
       age: String(row.age || def.age),
       distance: String(row.distance || def.distance),
       notes: String(row.notes || def.notes),
+      eligibleGroupIds: normalizeRelayEligibleGroupIds(row.eligibleGroupIds || row.eligibleGroups || def.eligibleGroupIds),
     };
   });
 }
 
 const RELAY_TEMPLATE_ROWS = [
-  { type: '3 Person', age: 'Juvenile', distance: '900m', notes: '1 lap × 3 times each' },
-  { type: '3 Person', age: 'Freshman', distance: '900m', notes: '1 lap × 3 times each' },
-  { type: '3 Person', age: 'Senior', distance: '900m', notes: '1 lap × 3 times each' },
-  { type: '3 Person', age: 'Master', distance: '900m', notes: '1 lap × 3 times each' },
-  { type: '2 Person', age: 'Juvenile', distance: '1200m', notes: '2 laps × 3 times each' },
-  { type: '2 Person', age: 'Freshman', distance: '1200m', notes: '2 laps × 3 times each' },
-  { type: '2 Person', age: 'Senior', distance: '1200m', notes: '2 laps × 3 times each' },
-  { type: '2 Person', age: 'Master', distance: '1200m', notes: '2 laps × 3 times each' },
-  { type: '4 Person', age: 'Juvenile', distance: '1200m', notes: '3 laps × 1 time each' },
-  { type: '4 Person', age: 'Freshman', distance: '2000m', notes: '5 laps × 1 time each' },
-  { type: '4 Person', age: 'Senior', distance: '2000m', notes: '5 laps × 1 time each' },
-  { type: '4 Person', age: 'Master', distance: '2000m', notes: '5 laps × 1 time each' },
+  { type: '3 Person', age: 'Juvenile', distance: '900m', notes: '1 lap × 3 times each', eligibleGroupIds: [] },
+  { type: '3 Person', age: 'Freshman', distance: '900m', notes: '1 lap × 3 times each', eligibleGroupIds: [] },
+  { type: '3 Person', age: 'Senior', distance: '900m', notes: '1 lap × 3 times each', eligibleGroupIds: [] },
+  { type: '3 Person', age: 'Master', distance: '900m', notes: '1 lap × 3 times each', eligibleGroupIds: [] },
+  { type: '2 Person', age: 'Juvenile', distance: '1200m', notes: '2 laps × 3 times each', eligibleGroupIds: [] },
+  { type: '2 Person', age: 'Freshman', distance: '1200m', notes: '2 laps × 3 times each', eligibleGroupIds: [] },
+  { type: '2 Person', age: 'Senior', distance: '1200m', notes: '2 laps × 3 times each', eligibleGroupIds: [] },
+  { type: '2 Person', age: 'Master', distance: '1200m', notes: '2 laps × 3 times each', eligibleGroupIds: [] },
+  { type: '4 Person', age: 'Juvenile', distance: '1200m', notes: '3 laps × 1 time each', eligibleGroupIds: [] },
+  { type: '4 Person', age: 'Freshman', distance: '2000m', notes: '5 laps × 1 time each', eligibleGroupIds: [] },
+  { type: '4 Person', age: 'Senior', distance: '2000m', notes: '5 laps × 1 time each', eligibleGroupIds: [] },
+  { type: '4 Person', age: 'Master', distance: '2000m', notes: '5 laps × 1 time each', eligibleGroupIds: [] },
 ];
 
-function makeRelayRace({ name, distance, notes, relayType='', ageGroup='' }) {
+function makeRelayRace({ name, distance, notes, relayType='', ageGroup='', eligibleGroupIds=[] }) {
   const raceToken = crypto.randomBytes(6).toString('hex');
   return {
     id:'r'+raceToken,
@@ -4004,6 +4010,7 @@ function makeRelayRace({ name, distance, notes, relayType='', ageGroup='' }) {
     isRelayRace:true,
     relayType:String(relayType||'').trim(),
     relayAgeGroup:String(ageGroup||'').trim(),
+    eligibleGroupIds: normalizeRelayEligibleGroupIds(eligibleGroupIds),
   };
 }
 
@@ -4045,11 +4052,23 @@ app.post('/portal/meet/:meetId/relay-builder/add-template', requireRole('meet_di
     const ageGroup=String(req.body[`ageGroup_${idx}`]||base.age).trim();
     const distance=String(req.body[`distance_${idx}`]||base.distance).trim();
     const notes=String(req.body[`notes_${idx}`]||base.notes).trim();
+    const eligibleGroupIds = normalizeRelayEligibleGroupIds(req.body[`eligibleGroupIds_${idx}`]);
 
     if(enabled){
       const name=[ageGroup, relayType, 'Relay'].filter(Boolean).join(' ');
-      if(name && distance && !relayRaceExists(meet, name, distance)){
-        const race=makeRelayRace({ name, distance, notes, relayType, ageGroup });
+      let race=(meet.races||[]).find(r =>
+        r.isRelayRace &&
+        String(r.groupLabel||'').trim().toLowerCase() === String(name||'').trim().toLowerCase() &&
+        String(r.distanceLabel||'').trim().toLowerCase() === String(distance||'').trim().toLowerCase()
+      );
+
+      if(race) {
+        race.relayType = relayType;
+        race.relayAgeGroup = ageGroup;
+        race.eligibleGroupIds = eligibleGroupIds;
+        race.notes = notes;
+      } else if(name && distance){
+        race=makeRelayRace({ name, distance, notes, relayType, ageGroup, eligibleGroupIds });
         race.orderHint=9800+(meet.races||[]).filter(r=>r.isRelayRace).length+added;
         meet.races.push(race);
         added+=1;
@@ -4062,6 +4081,7 @@ app.post('/portal/meet/:meetId/relay-builder/add-template', requireRole('meet_di
       age: ageGroup,
       distance,
       notes,
+      eligibleGroupIds,
     };
   });
 
@@ -4082,7 +4102,7 @@ app.post('/portal/meet/:meetId/relay-builder/delete', requireRole('meet_director
       const sameAge=String(t.age||'')===String(race.relayAgeGroup||'');
       const sameType=String(t.type||'')===String(race.relayType||'');
       const sameDistance=String(t.distance||'')===String(race.distanceLabel||'');
-      return (sameAge&&sameType&&sameDistance)?{...t,enabled:false}:t;
+      return (sameAge&&sameType&&sameDistance)?{...t,enabled:false, eligibleGroupIds:normalizeRelayEligibleGroupIds(t.eligibleGroupIds)}:t;
     });
   }
   meet.updatedAt=nowIso(); saveDb(req.db);
@@ -6462,43 +6482,50 @@ function normalizedRelayAgeLabel(value) {
     .trim();
 }
 
-function registrationMatchesRelayRaceAge(reg, race, meet) {
-  const raceLabel = normalizedRelayAgeLabel(race?.relayAgeGroup || race?.groupLabel || '');
+function relayEligibleGroupIdsForRace(meet, race) {
+  const raceIds = normalizeRelayEligibleGroupIds(race?.eligibleGroupIds || []);
+  if (raceIds.length) return raceIds;
 
-  if (raceLabel) {
-    const labels = [
-      reg?.divisionGroupLabel,
-      reg?.originalDivisionGroupLabel,
-      reg?.challengeUpGroupLabel,
-      reg?.team,
-    ].map(x => String(x || '').toLowerCase());
+  const templates = normalizeRelayTemplates(meet?.relayTemplates || []);
+  const match = templates.find(t =>
+    String(t.type || '').trim().toLowerCase() === String(race?.relayType || '').trim().toLowerCase() &&
+    String(t.age || '').trim().toLowerCase() === String(race?.relayAgeGroup || '').trim().toLowerCase() &&
+    String(t.distance || '').trim().toLowerCase() === String(race?.distanceLabel || '').trim().toLowerCase()
+  );
 
-    if (labels.some(label => label.includes(raceLabel) || raceLabel.includes(label))) return true;
-  }
+  return normalizeRelayEligibleGroupIds(match?.eligibleGroupIds || []);
+}
 
-  const raceAges = String(race?.ages || '').trim();
-  if (raceAges) {
-    const regAge = ageForReg(reg, meet);
-    if (ageMatch(raceAges, regAge)) return true;
-  }
+function registrationMatchesRelayManualGroups(reg, eligibleGroupIds) {
+  const ids = normalizeRelayEligibleGroupIds(eligibleGroupIds);
+  if (!ids.length) return true;
 
-  return !raceLabel && !raceAges;
+  const regIds = [
+    reg?.divisionGroupId,
+    reg?.originalDivisionGroupId,
+    reg?.challengeUpGroupId,
+  ].map(x => String(x || '').trim()).filter(Boolean);
+
+  return regIds.some(id => ids.includes(id));
 }
 
 function relayEligibleRegistrationsForRace(meet, race) {
   if (!race || !race.isRelayRace) return [];
 
   const optionKey = relayOptionKeyForRace(race);
+  const eligibleGroupIds = relayEligibleGroupIdsForRace(meet, race);
+
   const relayRegs = (meet.registrations || []).filter(reg => {
     const opts = reg.options || {};
-    if (optionKey === 'relays') return !!(opts.relays || opts.relay2Person || opts.relay3Person || opts.relay4Person);
-    return !!opts[optionKey];
+    const relayOptionOk = optionKey === 'relays'
+      ? !!(opts.relays || opts.relay2Person || opts.relay3Person || opts.relay4Person)
+      : !!opts[optionKey];
+
+    if (!relayOptionOk) return false;
+    return registrationMatchesRelayManualGroups(reg, eligibleGroupIds);
   });
 
-  const ageMatched = relayRegs.filter(reg => registrationMatchesRelayRaceAge(reg, race, meet));
-  const finalList = ageMatched.length ? ageMatched : relayRegs;
-
-  return finalList.sort((a, b) => {
+  return relayRegs.sort((a, b) => {
     const byTeam = String(a.team || '').localeCompare(String(b.team || ''));
     if (byTeam) return byTeam;
     return String(a.name || '').localeCompare(String(b.name || ''));
@@ -6545,7 +6572,7 @@ function renderRelayEligibleSkatersHtml(meet, race) {
       <div class="row between center" style="margin-bottom:12px">
         <div>
           <h2 style="margin:0">Relay Eligible Skaters</h2>
-          <div class="note">${esc(relayLabel)} entries for this relay. Use this list to fill the relay lanes above.</div>
+          <div class="note">${esc(relayLabel)} entries that match this relay's manually selected eligible groups. Use this list to fill the relay lanes above.</div>
         </div>
         <span class="chip chip-sky">${regs.length} eligible</span>
       </div>
