@@ -6439,6 +6439,129 @@ function raceDaySubTabs(meet,active) {
   return `<div class="sub-tabs">${[['director','Director',`/portal/meet/${meet.id}/race-day/director`],['judges','Judges',`/portal/meet/${meet.id}/race-day/judges`],['announcer','Announcer',`/portal/meet/${meet.id}/race-day/announcer`],['live','Live View',`/portal/meet/${meet.id}/race-day/live`]].map(([k,label,href])=>`<a class="sub-tab ${active===k?'active':''}" href="${href}">${label}</a>`).join('')}</div>`;
 }
 
+
+function relayOptionKeyForRace(race) {
+  const text = [race?.relayType, race?.groupLabel, race?.division, race?.distanceLabel]
+    .map(x => String(x || '').toLowerCase())
+    .join(' ');
+
+  if (text.includes('4 person') || text.includes('4-person') || text.includes('4person')) return 'relay4Person';
+  if (text.includes('2 person') || text.includes('2-person') || text.includes('2person')) return 'relay2Person';
+  if (text.includes('3 person') || text.includes('3-person') || text.includes('3person')) return 'relay3Person';
+
+  return 'relays';
+}
+
+function normalizedRelayAgeLabel(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/\b(2|3|4)\s*-?\s*person\b/g, '')
+    .replace(/\brelay\b/g, '')
+    .replace(/[—–-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function registrationMatchesRelayRaceAge(reg, race, meet) {
+  const raceLabel = normalizedRelayAgeLabel(race?.relayAgeGroup || race?.groupLabel || '');
+
+  if (raceLabel) {
+    const labels = [
+      reg?.divisionGroupLabel,
+      reg?.originalDivisionGroupLabel,
+      reg?.challengeUpGroupLabel,
+      reg?.team,
+    ].map(x => String(x || '').toLowerCase());
+
+    if (labels.some(label => label.includes(raceLabel) || raceLabel.includes(label))) return true;
+  }
+
+  const raceAges = String(race?.ages || '').trim();
+  if (raceAges) {
+    const regAge = ageForReg(reg, meet);
+    if (ageMatch(raceAges, regAge)) return true;
+  }
+
+  return !raceLabel && !raceAges;
+}
+
+function relayEligibleRegistrationsForRace(meet, race) {
+  if (!race || !race.isRelayRace) return [];
+
+  const optionKey = relayOptionKeyForRace(race);
+  const relayRegs = (meet.registrations || []).filter(reg => {
+    const opts = reg.options || {};
+    if (optionKey === 'relays') return !!(opts.relays || opts.relay2Person || opts.relay3Person || opts.relay4Person);
+    return !!opts[optionKey];
+  });
+
+  const ageMatched = relayRegs.filter(reg => registrationMatchesRelayRaceAge(reg, race, meet));
+  const finalList = ageMatched.length ? ageMatched : relayRegs;
+
+  return finalList.sort((a, b) => {
+    const byTeam = String(a.team || '').localeCompare(String(b.team || ''));
+    if (byTeam) return byTeam;
+    return String(a.name || '').localeCompare(String(b.name || ''));
+  });
+}
+
+function renderRelayEligibleSkatersHtml(meet, race) {
+  if (!race || !race.isRelayRace) return '';
+
+  const regs = relayEligibleRegistrationsForRace(meet, race);
+  const optionKey = relayOptionKeyForRace(race);
+  const relayLabel = optionKey === 'relay2Person'
+    ? '2 Person Relay'
+    : optionKey === 'relay3Person'
+      ? '3 Person Relay'
+      : optionKey === 'relay4Person'
+        ? '4 Person Relay'
+        : 'Relay';
+
+  const grouped = new Map();
+  for (const reg of regs) {
+    const team = String(reg.team || 'Independent').trim() || 'Independent';
+    if (!grouped.has(team)) grouped.set(team, []);
+    grouped.get(team).push(reg);
+  }
+
+  const groupsHtml = Array.from(grouped.entries()).map(([team, rows]) => `
+    <div class="relay-team-card">
+      <div class="relay-team-head">
+        <strong>${esc(team)}</strong>
+        <span class="chip">${rows.length}</span>
+      </div>
+      <div class="relay-skater-list">
+        ${rows.map(reg => `
+          <div class="relay-skater-row">
+            <span>${esc(reg.name || '')}</span>
+            <small>${esc(team)}</small>
+          </div>`).join('')}
+      </div>
+    </div>`).join('');
+
+  return `
+    <div class="card relay-eligible-card" style="margin-top:16px">
+      <div class="row between center" style="margin-bottom:12px">
+        <div>
+          <h2 style="margin:0">Relay Eligible Skaters</h2>
+          <div class="note">${esc(relayLabel)} entries for this relay. Use this list to fill the relay lanes above.</div>
+        </div>
+        <span class="chip chip-sky">${regs.length} eligible</span>
+      </div>
+      ${regs.length ? `<div class="relay-team-grid">${groupsHtml}</div>` : `<div class="muted">No skaters found for this relay option yet.</div>`}
+    </div>
+    <style>
+      .relay-team-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;}
+      .relay-team-card{background:#f8fafc;border:1px solid rgba(15,31,61,.10);border-radius:14px;padding:12px;}
+      .relay-team-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;color:var(--navy);}
+      .relay-skater-list{display:flex;flex-direction:column;gap:6px;}
+      .relay-skater-row{display:flex;align-items:center;justify-content:space-between;gap:10px;border-top:1px solid rgba(15,31,61,.08);padding-top:6px;font-weight:750;}
+      .relay-skater-row:first-child{border-top:0;padding-top:0;}
+      .relay-skater-row small{color:var(--muted);font-weight:650;text-align:right;}
+    </style>`;
+}
+
 app.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','judge','coach'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet) return res.redirect('/portal');
@@ -6693,7 +6816,7 @@ app.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','judg
               });
             })();
           </script>
-        </div>`):`<div class="card"><div class="muted">No race selected yet.</div></div>`}`;
+        </div>${renderRelayEligibleSkatersHtml(meet,current)}`):`<div class="card"><div class="muted">No race selected yet.</div></div>`}`;
 
   } else if(mode==='announcer') {
     body+=`
