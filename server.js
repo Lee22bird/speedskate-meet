@@ -46,6 +46,7 @@ const {
 
 const { esc, cap } = require('./utils/html');
 const {
+  pageShell,
   sponsorLineHtml,
   toggleSwitch,
   announcerBoxHtml,
@@ -87,7 +88,7 @@ const {
   pricingFieldsFromMeet, buildRegistrationPricingPreview, racingSoonLabel,
   isArchivedMeet, activeMeets, archivedMeetsForUser, cloneMeetSetup,
   coachVisibleMeets, coachTeamRegistrations, coachUpcomingForMeet,
-  coachRecentResultsForMeet, coachStandingsForMeet, isPublicMeet,
+  coachRecentResultsForMeet, coachStandingsForMeet, isPublicMeet, resultsSectionHtml,
 } = require('./services/meetHelpers');
 
 const {
@@ -130,35 +131,6 @@ const app = express();
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json({ limit: '1mb' }));
 app.use('/public', express.static(path.join(__dirname, 'public')));
-app.use('/', createPublicRoutes({ getSessionUser, pageShell, hasRole }));
-
-// ── Extracted route modules ────────────────────────────────────────────────────
-const routeDeps = {
-  requireRole, pageShell, saveDb, loadDb, TEAM_LIST, ADMIN_PHONE,
-  // views
-  renderArchivedMeetsView, renderPendingMeetsView, renderPendingRinksView,
-  renderStaffAccountsView, renderMeetBuilderView, renderOpenBuilderView,
-  renderQuadBuilderView, renderRelayBuilderView, renderRegisteredView,
-  renderCheckinView, renderBlockBuilderView,
-  // shared render helpers (still in server.js for now)
-  resultsSectionHtml, announcerBoxHtml, meetTabs, raceDaySubTabs,
-  // meet-lifecycle helpers used by routes
-  archivedMeetsForUser, rinkForm, numberFieldFromBody, saveMeetFields,
-  // registration helpers
-  rebuildRaceAssignmentsSafe, restoreBlockAssignmentsBySignature,
-  testRosterGenderForAge, springFlingOptionObject,
-  raceImportSignature, raceFamilySignature, raceStageRankForRestore,
-  addRaceIdsUnique, raceGenderBucketFromLabelOrGender,
-  raceMatchesRegAgeGender, assignSequentialLaneEntries,
-  importSpringFlingTestRoster, registrationOpsRedirect,
-  registrationForm, timeTrialRaceForMeet, timeTrialEntriesForMeet,
-  rebuildTimeTrialRace, timeTrialLeaderboards,
-  genderBucket, openGroupForTimeTrialReg,
-};
-app.use('/', createAdminRoutes(routeDeps));
-app.use('/', createBuilderRoutes(routeDeps));
-app.use('/', createRegistrationRoutes(routeDeps));
-app.use('/', createRaceDayRoutes(routeDeps));
 
 const PORT = process.env.PORT || 10000;
 const HOST = '0.0.0.0';
@@ -1481,6 +1453,27 @@ app.get('/portal/meet/:meetId/registered/print-race-list', requireRole('meet_dir
     ${daySections||'<div>No blocks yet.</div>'}
   </body></html>`);
 });
+
+
+app.use('/', createPublicRoutes({ getSessionUser, pageShell, hasRole }));
+
+// ── Extracted route modules ────────────────────────────────────────────────────
+const routeDeps = {
+  requireRole, pageShell, saveDb, loadDb, getSessionUser, TEAM_LIST, toggleSwitch, ADMIN_PHONE,
+  // views
+  renderArchivedMeetsView, renderPendingMeetsView, renderPendingRinksView,
+  renderStaffAccountsView, renderMeetBuilderView, renderOpenBuilderView,
+  renderQuadBuilderView, renderRelayBuilderView, renderRegisteredView,
+  renderCheckinView, renderBlockBuilderView,
+  // shared render helpers
+  resultsSectionHtml, announcerBoxHtml, meetTabs, raceDaySubTabs,
+  // meet-lifecycle helpers
+  archivedMeetsForUser, nextSetupPresetId,
+};
+app.use('/', createAdminRoutes(routeDeps));
+app.use('/', createBuilderRoutes(routeDeps));
+app.use('/', createRegistrationRoutes(routeDeps));
+app.use('/', createRaceDayRoutes(routeDeps));
 
 // ── Start server ──────────────────────────────────────────────────────────────
 

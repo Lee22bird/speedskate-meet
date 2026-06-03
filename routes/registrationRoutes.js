@@ -21,14 +21,8 @@ const SPRING_FLING_TEST_ROSTER = require('../data/springFlingRoster.json');
 
 module.exports = function createRegistrationRoutes(deps = {}) {
   const router = express.Router();
-  const { requireRole, pageShell, saveDb, loadDb, TEAM_LIST,
-          rebuildRaceAssignmentsSafe, restoreBlockAssignmentsBySignature,
-          testRosterGenderForAge, springFlingOptionObject,
-          raceImportSignature, raceFamilySignature, raceStageRankForRestore,
-          addRaceIdsUnique, raceGenderBucketFromLabelOrGender,
-          raceMatchesRegAgeGender, assignSequentialLaneEntries,
-          importSpringFlingTestRoster, registrationOpsRedirect,
-          registrationForm, timeTrialRaceForMeet, timeTrialEntriesForMeet,
+  const { requireRole, pageShell, saveDb, loadDb, getSessionUser, TEAM_LIST, toggleSwitch,
+          timeTrialRaceForMeet, timeTrialEntriesForMeet,
           rebuildTimeTrialRace, timeTrialLeaderboards,
           genderBucket, openGroupForTimeTrialReg,
           renderCheckinView, renderRegisteredView } = deps;
@@ -230,8 +224,6 @@ function registrationForm(meet,reg,action,title) {
 
 // ── Dev Import: Wichita Spring Fling realistic stress-test roster ───────────
 // Super-admin only. This is intentionally server-side so production users never see it.
-const SPRING_FLING_TEST_ROSTER = require('./data/springFlingRoster.json');
-
 function testRosterGenderForAge(row) {
   const age = Number(row.age || 0);
   const g = String(row.gender || '').toLowerCase();

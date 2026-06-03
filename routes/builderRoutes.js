@@ -22,7 +22,6 @@ module.exports = function createBuilderRoutes(deps = {}) {
   const { requireRole, pageShell, saveDb,
           renderMeetBuilderView, renderOpenBuilderView,
           renderQuadBuilderView, renderRelayBuilderView,
-          numberFieldFromBody, saveMeetFields,
           rebuildRaceAssignmentsSafe } = deps;
 
 router.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res) => {
