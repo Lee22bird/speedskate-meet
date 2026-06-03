@@ -617,10 +617,16 @@ function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
     .setup-sub { color: var(--muted); font-size: 13px; margin-top: 4px; }
     .setup-body { padding: 22px 24px 24px; }
     .setup-sections { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; }
-    .setup-section { border: 1.5px solid var(--border); border-radius: var(--radius); background: #fff; padding: 16px; box-shadow: 0 1px 0 rgba(15,31,61,.03); }
+    .setup-section { border: 1.5px solid var(--border); border-radius: var(--radius-lg); background: #fff; padding: 18px; box-shadow: 0 1px 0 rgba(15,31,61,.03); }
     .setup-section-wide { grid-column: 1 / -1; }
-    .setup-section-title { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-family: 'Barlow Condensed',sans-serif; font-size: 24px; font-weight: 900; color: var(--navy); }
+    .setup-section-title { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-family: 'Barlow Condensed',sans-serif; font-size: 26px; font-weight: 900; color: var(--navy); }
     .setup-section-title small { font-family: inherit; font-size: 13px; font-weight: 700; color: var(--muted); letter-spacing: 0; }
+    .setup-section-intro { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 0 0 14px; max-width: 720px; }
+    .setup-mini-card { border: 1.5px solid var(--border); border-radius: var(--radius); background: var(--off); padding: 14px; margin-top: 12px; }
+    .setup-mini-card:first-of-type { margin-top: 0; }
+    .setup-mini-card-primary { background: #fff; border-color: var(--border2); }
+    .setup-mini-title { margin: 0 0 10px; color: var(--navy); font-size: 14px; font-weight: 900; letter-spacing: .02em; }
+    .setup-help-note { margin-top: 10px; color: var(--muted); font-size: 13px; line-height: 1.45; }
     .setup-fields { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
     .setup-fields.cols-3 { grid-template-columns: repeat(3,minmax(0,1fr)); }
     .setup-fields.cols-1 { grid-template-columns: 1fr; }

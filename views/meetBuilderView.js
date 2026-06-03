@@ -138,52 +138,75 @@ function renderMeetBuilderView({ db, meet, query = {} }) {
         </div>
         <div class="setup-body">
           <div class="setup-sections">
-            <section class="setup-section">
-              <div class="setup-section-title">📋 Meet Details</div>
-              <div class="setup-fields">
-                <div class="setup-field-full"><label>Meet Name</label><input name="meetName" value="${esc(meet.meetName)}" required /></div>
-                <div><label>Start Date</label><input type="date" name="date" value="${esc(meet.date)}" /></div>
-                <div>
-                  <label>Optional End Date</label>
-                  <div class="date-clear-row">
-                    <input type="date" id="endDateInput" name="endDate" value="${esc(meet.endDate||'')}" />
-                    <button class="date-clear-btn" type="button" onclick="document.getElementById('endDateInput').value=''">Clear</button>
-                  </div>
-                  <div class="note">Leave blank for a single-day meet.</div>
+            <section class="setup-section setup-section-event">
+              <div class="setup-section-title">📋 Event Information</div>
+              <div class="setup-section-intro">Name the meet, set the race schedule, and add any director notes for multi-day timing.</div>
+              <div class="setup-mini-card setup-mini-card-primary">
+                <div class="setup-mini-title">Meet Identity</div>
+                <div class="setup-fields">
+                  <div class="setup-field-full"><label>Meet Name</label><input name="meetName" value="${esc(meet.meetName)}" required /></div>
                 </div>
-                <div class="setup-field-full"><label>Start Time</label><input type="time" name="startTime" value="${esc(meet.startTime)}" /></div>
-                <div class="setup-field-full">
-                  <label>Multi-Day Schedule Notes</label>
-                  <textarea name="scheduleNotes" rows="5" placeholder="Friday: Doors open 5:00 PM, racing 6:00 PM&#10;Saturday: Warmups 7:30 AM, racing 8:30 AM&#10;Sunday: Finals and awards schedule...">${esc(meet.scheduleNotes||'')}</textarea>
-                  <div class="note">Use this for day-by-day start times, warmups, doors-open times, awards, or schedule changes.</div>
+              </div>
+              <div class="setup-mini-card">
+                <div class="setup-mini-title">Event Schedule</div>
+                <div class="setup-fields">
+                  <div><label>Start Date</label><input type="date" name="date" value="${esc(meet.date)}" /></div>
+                  <div>
+                    <label>Optional End Date</label>
+                    <div class="date-clear-row">
+                      <input type="date" id="endDateInput" name="endDate" value="${esc(meet.endDate||'')}" />
+                      <button class="date-clear-btn" type="button" onclick="document.getElementById('endDateInput').value=''">Clear</button>
+                    </div>
+                    <div class="note">Leave blank for a single-day meet.</div>
+                  </div>
+                  <div class="setup-field-full"><label>Start Time</label><input type="time" name="startTime" value="${esc(meet.startTime)}" /></div>
+                </div>
+              </div>
+              <div class="setup-mini-card">
+                <div class="setup-mini-title">Schedule Notes</div>
+                <div class="setup-fields">
+                  <div class="setup-field-full">
+                    <label>Multi-Day Schedule Notes</label>
+                    <textarea name="scheduleNotes" rows="5" placeholder="Friday: Doors open 5:00 PM, racing 6:00 PM&#10;Saturday: Warmups 7:30 AM, racing 8:30 AM&#10;Sunday: Finals and awards schedule...">${esc(meet.scheduleNotes||'')}</textarea>
+                    <div class="note">Use this for day-by-day start times, warmups, doors-open times, awards, or schedule changes.</div>
+                  </div>
                 </div>
               </div>
             </section>
 
-            <section class="setup-section">
-              <div class="setup-section-title">📝 Registration</div>
-              <div class="setup-fields">
-                <div><label>Close Date</label><input type="date" name="registrationCloseDate" value="${esc(meet.registrationCloseAt?meet.registrationCloseAt.slice(0,10):'')}" /></div>
-                <div><label>Close Time</label><input type="time" name="registrationCloseTime" value="${esc(meet.registrationCloseAt?meet.registrationCloseAt.slice(11,16):'')}" /></div>
-              </div>
-              <div style="margin-bottom:20px"><h3 style="margin:12px 0 12px 0;font-size:14px;font-weight:600">Base & Event Fees</h3></div>
-              <div class="setup-fields" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px">
-                <div><label>Base Registration</label><input type="number" name="baseEntryFee" value="${esc(String(meet.baseEntryFee||0))}" min="0" /><div class="note">Covers the first selected event category.</div></div>
-                <div><label>Additional Event Fee</label><input type="number" name="additionalRaceFee" value="${esc(String(meet.additionalRaceFee||0))}" min="0" /><div class="note">Charged once for each selected event category after the first.</div></div>
-                <div><label>Max Registration Cap</label><input type="number" name="maxRegistrationFee" value="${esc(String(meet.maxRegistrationFee||0))}" min="0" /><div class="note">0 = no cap</div></div>
-              </div>
-              <div style="margin-top:12px"><div class="note" style="margin:0">Total cost = base fee + selected event fees. Max cap applies when greater than 0.</div></div>
-              <div class="builder-publish-card" style="margin-top:20px">
-                <input type="hidden" id="meetStatusInput" name="status" value="${esc(meetStatus || 'draft')}" />
-                <div>
-                  <div class="builder-publish-title">Published Meet</div>
-                  <div class="builder-publish-desc">Show this meet publicly on Find a Meet and allow public registration when registration is open.</div>
+            <section class="setup-section setup-section-registration">
+              <div class="setup-section-title">🎟 Registration Settings</div>
+              <div class="setup-section-intro">Control when entries close, what skaters pay, and whether the meet is visible to the public.</div>
+              <div class="setup-mini-card">
+                <div class="setup-mini-title">Registration Window</div>
+                <div class="setup-fields">
+                  <div><label>Close Date</label><input type="date" name="registrationCloseDate" value="${esc(meet.registrationCloseAt?meet.registrationCloseAt.slice(0,10):'')}" /></div>
+                  <div><label>Close Time</label><input type="time" name="registrationCloseTime" value="${esc(meet.registrationCloseAt?meet.registrationCloseAt.slice(11,16):'')}" /></div>
                 </div>
-                <label class="toggle-wrap builder-publish-toggle">
-                  <input type="checkbox" id="publishedToggle" value="published" class="toggle-input" ${isPublished?'checked':''} />
-                  <span class="toggle-track"><span class="toggle-thumb"></span></span>
-                  <span id="publishedToggleText" class="toggle-label">${isPublished?'Published':'Draft'}</span>
-                </label>
+              </div>
+              <div class="setup-mini-card">
+                <div class="setup-mini-title">Pricing</div>
+                <div class="setup-fields cols-3">
+                  <div><label>Base Registration</label><input type="number" name="baseEntryFee" value="${esc(String(meet.baseEntryFee||0))}" min="0" /><div class="note">Covers the first selected event category.</div></div>
+                  <div><label>Additional Event Fee</label><input type="number" name="additionalRaceFee" value="${esc(String(meet.additionalRaceFee||0))}" min="0" /><div class="note">Charged once for each selected event category after the first.</div></div>
+                  <div><label>Max Registration Cap</label><input type="number" name="maxRegistrationFee" value="${esc(String(meet.maxRegistrationFee||0))}" min="0" /><div class="note">0 = no cap</div></div>
+                </div>
+                <div class="setup-help-note">Total cost = base fee + selected event fees. Max cap applies when greater than 0.</div>
+              </div>
+              <div class="setup-mini-card setup-mini-card-primary">
+                <div class="setup-mini-title">Publication</div>
+                <div class="builder-publish-card">
+                  <input type="hidden" id="meetStatusInput" name="status" value="${esc(meetStatus || 'draft')}" />
+                  <div>
+                    <div class="builder-publish-title">Published Meet</div>
+                    <div class="builder-publish-desc">Show this meet publicly on Find a Meet and allow public registration when registration is open.</div>
+                  </div>
+                  <label class="toggle-wrap builder-publish-toggle">
+                    <input type="checkbox" id="publishedToggle" value="published" class="toggle-input" ${isPublished?'checked':''} />
+                    <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                    <span id="publishedToggleText" class="toggle-label">${isPublished?'Published':'Draft'}</span>
+                  </label>
+                </div>
               </div>
               <script>
                 (function(){
@@ -206,17 +229,27 @@ function renderMeetBuilderView({ db, meet, query = {} }) {
               </script>
             </section>
 
-            <section class="setup-section">
-              <div class="setup-section-title">📍 Venue <small>Saved rink or one-time custom rink</small></div>
-              <div class="setup-fields">
-                <div class="setup-field-full"><label>Rink</label>
-                  <input name="rinkSearch" id="rinkSearch" list="rinkSuggestions" value="${esc(rinkInputValue)}" placeholder="Start typing rink name..." autocomplete="off" />
-                  <input type="hidden" name="rinkId" id="rinkId" value="${esc(String(meet.rinkId||''))}" />
-                  <datalist id="rinkSuggestions">${rinkDataList}</datalist>
-                  <div class="note">Pick a saved rink when available. Typed names become custom for this meet only.</div>
+            <section class="setup-section setup-section-venue">
+              <div class="setup-section-title">📍 Venue</div>
+              <div class="setup-section-intro">Choose a saved rink when available, or type a one-time custom rink for this meet.</div>
+              <div class="setup-mini-card setup-mini-card-primary">
+                <div class="setup-mini-title">Rink Selection</div>
+                <div class="setup-fields">
+                  <div class="setup-field-full"><label>Rink</label>
+                    <input name="rinkSearch" id="rinkSearch" list="rinkSuggestions" value="${esc(rinkInputValue)}" placeholder="Start typing rink name..." autocomplete="off" />
+                    <input type="hidden" name="rinkId" id="rinkId" value="${esc(String(meet.rinkId||''))}" />
+                    <datalist id="rinkSuggestions">${rinkDataList}</datalist>
+                    <div class="note">Pick a saved rink when available. Typed names become custom for this meet only.</div>
+                  </div>
                 </div>
-                <div><label>Track Length (m)</label><input type="number" name="trackLength" value="${esc(meet.trackLength)}" min="1" step="1" /></div>
-                <div><label>Lanes</label><input type="number" name="lanes" value="${esc(meet.lanes)}" min="1" step="1" /></div>
+              </div>
+              <div class="setup-mini-card">
+                <div class="setup-mini-title">Track Configuration</div>
+                <div class="setup-fields">
+                  <div><label>Track Length (m)</label><input type="number" name="trackLength" value="${esc(meet.trackLength)}" min="1" step="1" /></div>
+                  <div><label>Lanes</label><input type="number" name="lanes" value="${esc(meet.lanes)}" min="1" step="1" /></div>
+                </div>
+                <div class="setup-help-note">Changing lanes or track length may require rebuilding race assignments.</div>
               </div>
             </section>
 
