@@ -131,10 +131,6 @@ function renderMeetBuilderView({ db, meet, query = {} }) {
             <h2 class="setup-title">Meet Setup</h2>
             <div class="setup-sub">Core meet details, venue, rules, and reusable presets.</div>
           </div>
-          <div class="builder-head-actions">
-            <span class="builder-status-badge ${statusBadgeClass}">${statusLabel}</span>
-            <button class="btn2" type="submit" form="meetBuilderForm" formaction="/portal/meet/${meet.id}/builder/save-meet">Save Meet</button>
-          </div>
         </div>
         <div class="setup-body">
           <div class="setup-sections">
@@ -253,50 +249,59 @@ function renderMeetBuilderView({ db, meet, query = {} }) {
               </div>
             </section>
 
-            <section class="setup-section">
+            <section class="setup-section setup-section-rules">
               <div class="setup-section-title">⚙️ Rules & Presets</div>
-              <div class="setup-fields cols-1">
-                <div><label>Tiebreaker Rule</label>
-                  <select name="tiebreaker">
-                    <option value="d2"    ${(meet.tiebreaker||'d2')==='d2'   ?'selected':''}>D2 Middle Race (local standard)</option>
-                    <option value="sr832" ${meet.tiebreaker==='sr832'?'selected':''}>USARS SR832 Formula (regionals/nationals)</option>
-                  </select>
-                  <div class="note">D2 = most common locally. SR832 = official weighted formula.</div>
-                </div>
-                <div><label>Save Setup For Future Use</label>
-                  <div class="preset-row">
-                    <input name="presetName" value="${esc(meet.presetName||'')}" placeholder="Mid South Speed League" />
-                    <button class="btn2 btn-sm" type="submit" formaction="/portal/meet/${meet.id}/builder/save-preset">Save Setup</button>
+              <div class="setup-section-intro">Choose how ties are handled and reuse proven meet setups without rebuilding every distance by hand.</div>
+
+              <div class="setup-mini-card setup-mini-card-primary">
+                <div class="setup-mini-title">Scoring Method</div>
+                <div class="setup-fields cols-1">
+                  <div>
+                    <label>Tiebreaker Rule</label>
+                    <select name="tiebreaker">
+                      <option value="d2"    ${(meet.tiebreaker||'d2')==='d2'   ?'selected':''}>D2 Middle Race (local standard)</option>
+                      <option value="sr832" ${meet.tiebreaker==='sr832'?'selected':''}>USARS SR832 Formula (regionals/nationals)</option>
+                    </select>
+                    <div class="setup-help-note">D2 is the most common local setup. SR832 uses the official weighted formula for regionals/nationals.</div>
                   </div>
-                  <div class="note">Saves divisions, distances, fees, tiebreaker, blocks, and race order.</div>
                 </div>
-                <div>
-                  <label>Load Setup</label>
-                  <div style="display:flex;gap:8px;align-items:center;margin-top:6px">
-                    <select id="presetSelect" name="presetId" style="min-width:220px;padding:6px">${presetSelectHtml}</select>
-                      <button id="loadPresetBtn" class="btn2 btn-sm" type="submit" form="meetBuilderForm" formaction="/portal/meet/${meet.id}/setup-presets/load" onclick="return confirm('Load setup will overwrite current divisions, blocks, and race structure. Continue?')">Load Setup</button>
-                      <input type="hidden" name="deletePresetId" id="deletePresetId" value="" />
-                      <button id="deletePresetBtn" class="btn-danger btn-sm" type="submit" form="meetBuilderForm" formaction="/portal/meet/${meet.id}/setup-presets/delete" onclick="return confirm('Delete selected setup preset? This cannot be undone.')">Delete</button>
-                  </div>
-                  <script>
-                    (function(){
-                      var sel = document.getElementById('presetSelect');
-                      var loadBtn = document.getElementById('loadPresetBtn');
-                      var deleteBtn = document.getElementById('deletePresetBtn');
-                      var deleteInput = document.getElementById('deletePresetId');
-                      if(!sel || !loadBtn || !deleteBtn || !deleteInput) return;
-                      function update(){
-                        var selected = sel.value;
-                        loadBtn.disabled = !selected;
-                        deleteBtn.disabled = !selected;
-                        deleteInput.value = selected || '';
-                      }
-                      sel.addEventListener('change', update);
-                      update();
-                    })();
-                  </script>
-                  <div class="note">Loads divisions, fees, blocks, and race structure into this meet.</div>
+              </div>
+
+              <div class="setup-mini-card">
+                <div class="setup-mini-title">Save Current Setup</div>
+                <div class="preset-row">
+                  <input name="presetName" value="${esc(meet.presetName||'')}" placeholder="Mid South Speed League" />
+                  <button class="btn2 btn-sm" type="submit" formaction="/portal/meet/${meet.id}/builder/save-preset">Save Setup</button>
                 </div>
+                <div class="setup-help-note">Saves divisions, distances, fees, tiebreaker, blocks, and race order so this setup can be reused later.</div>
+              </div>
+
+              <div class="setup-mini-card">
+                <div class="setup-mini-title">Load or Delete Preset</div>
+                <div class="preset-manage-row">
+                  <select id="presetSelect" name="presetId">${presetSelectHtml}</select>
+                  <button id="loadPresetBtn" class="btn2 btn-sm" type="submit" form="meetBuilderForm" formaction="/portal/meet/${meet.id}/setup-presets/load" onclick="return confirm('Load setup will overwrite current divisions, blocks, and race structure. Continue?')">Load</button>
+                  <input type="hidden" name="deletePresetId" id="deletePresetId" value="" />
+                  <button id="deletePresetBtn" class="btn-danger btn-sm" type="submit" form="meetBuilderForm" formaction="/portal/meet/${meet.id}/setup-presets/delete" onclick="return confirm('Delete selected setup preset? This cannot be undone.')">Delete</button>
+                </div>
+                <div class="setup-warning-note">Loading a preset can overwrite divisions, fees, blocks, and race structure. Save this meet first if you may need to come back to the current setup.</div>
+                <script>
+                  (function(){
+                    var sel = document.getElementById('presetSelect');
+                    var loadBtn = document.getElementById('loadPresetBtn');
+                    var deleteBtn = document.getElementById('deletePresetBtn');
+                    var deleteInput = document.getElementById('deletePresetId');
+                    if(!sel || !loadBtn || !deleteBtn || !deleteInput) return;
+                    function update(){
+                      var selected = sel.value;
+                      loadBtn.disabled = !selected;
+                      deleteBtn.disabled = !selected;
+                      deleteInput.value = selected || '';
+                    }
+                    sel.addEventListener('change', update);
+                    update();
+                  })();
+                </script>
               </div>
             </section>
 
