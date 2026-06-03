@@ -7,7 +7,7 @@ const {
   getMeetOr404, meetRinkLabel, meetDateLabel, nextId,
   isArchivedMeet, orderedRaces: _ord, ensureAtLeastOneBlock,
   tryAdvanceTopThreeFromTwoHeats, isAdvancementRace,
-  numericPlace, computeMeetStandings: _cms,
+  numericPlace, computeMeetStandings: _cms, sponsorLineHtml,
 } = require('../services/meetHelpers');
 const {
   orderedRaces, currentRaceInfo, ensureCurrentRace,

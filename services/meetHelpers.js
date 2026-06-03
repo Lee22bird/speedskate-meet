@@ -1009,6 +1009,12 @@ function coachStandingsForMeet(meet,coachTeam) {
 
 // ── Shared render helpers ─────────────────────────────────────────────────────
 
+function sponsorLineHtml(sponsor) {
+  const s = String(sponsor || '').trim();
+  if (!s) return '';
+  return `<div class="sponsor-line">Sponsored by ${esc(s)}</div>`;
+}
+
 function resultsSectionHtml(section) {
   const tbMode = section.tbMode || 'd2';
   const tbLabel = tbMode==='sr832' ? 'SR832 Formula' : 'D2 Middle Race';
@@ -1123,6 +1129,7 @@ module.exports = {
   coachRecentResultsForMeet,
   coachStandingsForMeet,
   isPublicMeet,
+  sponsorLineHtml,
   resultsSectionHtml,
   OPEN_GROUP_DEFAULTS,
   QUAD_GROUP_DEFAULTS,
