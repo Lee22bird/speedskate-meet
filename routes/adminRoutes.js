@@ -13,8 +13,12 @@ module.exports = function createAdminRoutes(deps = {}) {
   const { requireRole, pageShell, saveDb,
           renderArchivedMeetsView, renderPendingMeetsView,
           renderPendingRinksView, renderStaffAccountsView,
-          ADMIN_PHONE, nextSetupPresetId,
-          archivedMeetsForUser } = deps;
+          ADMIN_PHONE, TEAM_LIST = [], nextSetupPresetId,
+          archivedMeetsForUser, sanitizeRinks } = deps;
+
+  function nextUserId(db) {
+    return (db.users || []).reduce((max, user) => Math.max(max, Number(user.id) || 0), 0) + 1;
+  }
 
 router.get('/portal/archived-meets', requireRole('meet_director','coach','super_admin'), (req, res) => {
   const archived = archivedMeetsForUser(req.db, req.user)

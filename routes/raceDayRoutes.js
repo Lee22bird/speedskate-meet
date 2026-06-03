@@ -1,7 +1,8 @@
 const express = require('express');
 const { esc, cap } = require('../utils/html');
 const { nowIso } = require('../utils/date');
-const { canEditMeet } = require('../utils/auth');
+const { canEditMeet, hasRole } = require('../utils/auth');
+const { raceDaySubTabs, meetTabs: _mt, announcerBoxHtml: _abh } = require('../utils/pageShell');
 const {
   getMeetOr404, meetRinkLabel, meetDateLabel, nextId,
   isArchivedMeet, orderedRaces: _ord, ensureAtLeastOneBlock,
@@ -19,15 +20,17 @@ const {
 const {
   relayOptionKeyForRace, renderRelayEligibleSkatersHtml,
 } = require('../services/relayHelpers');
+const {
+  genderBucket, openGroupForTimeTrialReg, timeTrialRaceForMeet,
+  timeTrialEntriesForMeet, rebuildTimeTrialRace, timeTrialLeaderboards,
+  rebuildRaceAssignmentsSafe,
+} = require('../services/ttHelpers');
 
 module.exports = function createRaceDayRoutes(deps = {}) {
   const router = express.Router();
   const { requireRole, pageShell, saveDb,
           renderBlockBuilderView, resultsSectionHtml,
-          raceDaySubTabs: _rdt, announcerBoxHtml, meetTabs,
-          rebuildRaceAssignmentsSafe, timeTrialRaceForMeet,
-          timeTrialEntriesForMeet, rebuildTimeTrialRace,
-          timeTrialLeaderboards, genderBucket, openGroupForTimeTrialReg } = deps;
+          announcerBoxHtml, meetTabs } = deps;
 
 // ── Block race-flow auto-arranger ────────────────────────────────────────────
 // Real meet flow for blocks with heats, including standard and quad races:

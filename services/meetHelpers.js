@@ -1124,4 +1124,6 @@ module.exports = {
   coachStandingsForMeet,
   isPublicMeet,
   resultsSectionHtml,
+  OPEN_GROUP_DEFAULTS,
+  QUAD_GROUP_DEFAULTS,
 };

@@ -1698,7 +1698,7 @@ const routeDeps = {
   // shared render helpers
   resultsSectionHtml, announcerBoxHtml, meetTabs, raceDaySubTabs,
   // meet-lifecycle helpers
-  archivedMeetsForUser, nextSetupPresetId,
+  archivedMeetsForUser, nextSetupPresetId, sanitizeRinks,
 };
 app.use('/', createAdminRoutes(routeDeps));
 app.use('/', createBuilderRoutes(routeDeps));

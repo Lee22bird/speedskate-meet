@@ -8,21 +8,27 @@ const {
   normalizeDistances, makeAdditionalRaceSlots, makeManualExtraRaceSlots,
   makeSetupPresetFromMeet, restorePresetBlocksIntoMeet, nextSetupPresetId,
   generateConfiguredRacesForMeet, ensureAtLeastOneBlock,
-  ensureRegistrationTotalsAndNumbers, rebuildRaceAssignmentsSafe: _rebuild,
+  ensureRegistrationTotalsAndNumbers,
   restoreBlockAssignmentsAfterRaceSync,
+  OPEN_GROUP_DEFAULTS, QUAD_GROUP_DEFAULTS,
 } = require('../services/meetHelpers');
 const {
   normalizeRelayEligibleGroupIds, normalizeRelayAgeRange,
   normalizeRelayTemplates, makeRelayRace, relayRaceExists,
   renderRelayEligibleSkatersHtml,
 } = require('../services/relayHelpers');
+const {
+  genderBucket, openGroupForTimeTrialReg, timeTrialRaceForMeet,
+  timeTrialEntriesForMeet, rebuildTimeTrialRace, timeTrialLeaderboards,
+  rebuildRaceAssignmentsSafe,
+} = require('../services/ttHelpers');
+const { raceDisplayStage } = require('../services/raceDay');
 
 module.exports = function createBuilderRoutes(deps = {}) {
   const router = express.Router();
   const { requireRole, pageShell, saveDb,
           renderMeetBuilderView, renderOpenBuilderView,
-          renderQuadBuilderView, renderRelayBuilderView,
-          rebuildRaceAssignmentsSafe } = deps;
+          renderQuadBuilderView, renderRelayBuilderView } = deps;
 
 router.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
@@ -312,142 +318,6 @@ router.post('/portal/meet/:meetId/builder/save', requireRole('meet_director'), (
 // ── Relay Builder ─────────────────────────────────────────────────────────────
 
 
-function genderBucket(value) {
-  const v=String(value||'').trim().toLowerCase();
-  if(['girls','girl','women','woman','female','ladies','lady'].includes(v)) return 'female';
-  if(['boys','boy','men','man','male'].includes(v)) return 'male';
-  return '';
-}
-
-function openGroupForTimeTrialReg(meet, reg) {
-  const age = ageForReg(reg, meet);
-  const regBucket = genderBucket(reg.gender);
-  const enabledGroups = (meet.openGroups || []).filter(g => g.timeTrial);
-  return enabledGroups.find(g => ageMatch(g.ages, age) && (!regBucket || !genderBucket(g.gender) || genderBucket(g.gender) === regBucket))
-    || enabledGroups.find(g => ageMatch(g.ages, age))
-    || null;
-}
-
-function timeTrialRaceForMeet(meet) {
-  return (meet.races || []).find(r => r.isTimeTrial && String(r.parentRaceKey || '') === 'time_trials_100m')
-    || (meet.races || []).find(r => r.isTimeTrial);
-}
-
-function timeTrialEntriesForMeet(meet) {
-  const race = timeTrialRaceForMeet(meet);
-  const existingByReg = new Map((race?.laneEntries || []).map(e => [String(e.registrationId || ''), e]));
-  return (meet.registrations || [])
-    .filter(reg => reg.options?.timeTrials)
-    .map(reg => {
-      const og = openGroupForTimeTrialReg(meet, reg);
-      const previous = existingByReg.get(String(reg.id)) || {};
-      const age = ageForReg(reg, meet);
-      return {
-        lane: Number(previous.lane || 0),
-        registrationId: reg.id,
-        helmetNumber: reg.helmetNumber || '',
-        skaterName: reg.name || '',
-        team: reg.team || '',
-        age,
-        gender: reg.gender || '',
-        groupId: og?.id || '',
-        groupLabel: og?.label || reg.divisionGroupLabel || 'Time Trial',
-        groupAges: og?.ages || '',
-        place: previous.place || '',
-        time: previous.time || '',
-        status: previous.status || '',
-      };
-    })
-    .sort((a,b)=>
-      Number(a.age || 999) - Number(b.age || 999) ||
-      String(a.gender || '').localeCompare(String(b.gender || '')) ||
-      String(a.skaterName || '').localeCompare(String(b.skaterName || ''))
-    )
-    .map((entry, idx) => ({...entry, lane: idx + 1}));
-}
-
-function rebuildTimeTrialRace(meet) {
-  const oldTTRaces = (meet.races || []).filter(r => r.isTimeTrial);
-  const previousEntries = oldTTRaces.flatMap(r => Array.isArray(r.laneEntries) ? r.laneEntries : []);
-  const previousByReg = new Map(previousEntries.map(e => [String(e.registrationId || ''), e]));
-
-  meet.races = (meet.races || []).filter(r => !r.isTimeTrial);
-  const enabled = !!meet.timeTrialsEnabled || (meet.openGroups || []).some(g => g.timeTrial);
-  if (!enabled) return null;
-
-  const race = {
-    id: oldTTRaces[0]?.id || ('r' + crypto.randomBytes(6).toString('hex')),
-    orderHint: 7600,
-    groupId: 'time_trials',
-    groupLabel: 'Time Trial Session',
-    ages: '0-100',
-    division: 'time-trial',
-    distanceLabel: '100m',
-    dayIndex: 1,
-    cost: 0,
-    stage: 'final',
-    heatNumber: 0,
-    parentRaceKey: 'time_trials_100m',
-    startType: 'individual',
-    countsForOverall: false,
-    laneEntries: [],
-    resultsMode: 'times',
-    status: oldTTRaces.some(r=>r.status==='closed') ? 'closed' : 'open',
-    notes: '100m / 1 lap • one rolling queue • youngest to oldest',
-    isFinal: true,
-    closedAt: oldTTRaces.find(r=>r.closedAt)?.closedAt || '',
-    isOpenRace: false,
-    isQuadRace: false,
-    isTimeTrial: true,
-    isRelayRace: false,
-    isAdditionalRace: false,
-    isSkateabilityRace: false,
-  };
-
-  race.laneEntries = timeTrialEntriesForMeet({...meet, races:[...(meet.races || []), { ...race, laneEntries: previousEntries }]})
-    .map(entry => {
-      const prev = previousByReg.get(String(entry.registrationId || '')) || {};
-      return {
-        ...entry,
-        time: prev.time || entry.time || '',
-        place: prev.place || '',
-        status: prev.status || '',
-      };
-    });
-
-  const timed = race.laneEntries.filter(e => String(e.time || '').trim());
-  const sorted = [...timed].sort((a,b)=>parseFloat(a.time||'999')-parseFloat(b.time||'999'));
-  sorted.forEach((e,i)=>{
-    const orig = race.laneEntries.find(x=>String(x.registrationId||'')===String(e.registrationId||''));
-    if(orig) orig.place = String(i+1);
-  });
-
-  meet.races.push(race);
-  return race;
-}
-
-function timeTrialLeaderboards(meet, race) {
-  const entries = (race?.laneEntries || []).filter(e => String(e.time || '').trim());
-  const sorted = [...entries].sort((a,b)=>parseFloat(a.time||'999')-parseFloat(b.time||'999'));
-  const regMap = new Map((meet.registrations || []).map(r => [String(r.id), r]));
-  const withMeta = sorted.map(e => {
-    const reg = regMap.get(String(e.registrationId || ''));
-    const og = reg ? openGroupForTimeTrialReg(meet, reg) : null;
-    return {...e, genderBucket: genderBucket(reg?.gender || e.gender), groupId: og?.id || e.groupId || '', groupLabel: og?.label || e.groupLabel || 'Time Trial'};
-  });
-
-  const byGroup = (meet.openGroups || []).filter(g => g.timeTrial).map(g => ({
-    group: g,
-    rows: withMeta.filter(e => String(e.groupId || '') === String(g.id)).slice(0,3),
-  })).filter(x => x.rows.length);
-
-  return {
-    overallFemale: withMeta.filter(e => e.genderBucket === 'female').slice(0,3),
-    overallMale: withMeta.filter(e => e.genderBucket === 'male').slice(0,3),
-    byGroup,
-    overall: withMeta.slice(0,3),
-  };
-}
 
 
 

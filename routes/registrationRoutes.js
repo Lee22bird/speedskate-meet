@@ -1,7 +1,7 @@
 const express = require('express');
 const { nowIso } = require('../utils/date');
 const { esc, cap } = require('../utils/html');
-const { canEditMeet } = require('../utils/auth');
+const { canEditMeet, hasRole } = require('../utils/auth');
 const { sendEmail, emailHtmlWrap } = require('../services/email');
 const {
   getMeetOr404, meetRinkLabel, meetDateLabel,
@@ -18,13 +18,17 @@ const {
   makeRelayRace,
 } = require('../services/relayHelpers');
 const SPRING_FLING_TEST_ROSTER = require('../data/springFlingRoster.json');
+const {
+  rebuildRaceAssignmentsSafe, restoreBlockAssignmentsBySignature,
+  raceImportSignature, raceFamilySignature, raceStageRankForRestore,
+  addRaceIdsUnique, raceGenderBucketFromLabelOrGender,
+  raceMatchesRegAgeGender, assignSequentialLaneEntries,
+  rebuildTimeTrialRace,
+} = require('../services/ttHelpers');
 
 module.exports = function createRegistrationRoutes(deps = {}) {
   const router = express.Router();
   const { requireRole, pageShell, saveDb, loadDb, getSessionUser, TEAM_LIST, toggleSwitch,
-          timeTrialRaceForMeet, timeTrialEntriesForMeet,
-          rebuildTimeTrialRace, timeTrialLeaderboards,
-          genderBucket, openGroupForTimeTrialReg,
           renderCheckinView, renderRegisteredView } = deps;
 
 router.get('/meet/:meetId/register', (req, res) => {
@@ -258,275 +262,6 @@ function springFlingOptionObject(row, meet) {
   };
 }
 
-function raceImportSignature(race) {
-  return [
-    String(race?.parentRaceKey || ''),
-    String(race?.groupId || ''),
-    String(race?.division || ''),
-    String(race?.dayIndex || ''),
-    String(race?.distanceLabel || ''),
-    String(race?.stage || ''),
-    String(race?.heatNumber || ''),
-  ].join('|');
-}
-
-function raceFamilySignature(race) {
-  const type = race?.isQuadRace || String(race?.division || '').toLowerCase() === 'quad' ? 'quad'
-    : race?.isOpenRace || String(race?.division || '').toLowerCase() === 'open' ? 'open'
-    : race?.isRelayRace || String(race?.division || '').toLowerCase() === 'relay' ? 'relay'
-    : race?.isAdditionalRace || race?.isSkateabilityRace || ['additional','skateability'].includes(String(race?.division || '').toLowerCase()) ? 'additional'
-    : race?.isTimeTrial ? 'time_trial'
-    : 'standard';
-
-  return [
-    type,
-    String(race?.parentRaceKey || ''),
-    String(race?.groupId || ''),
-    String(race?.division || ''),
-    String(race?.dayIndex || ''),
-    String(race?.distanceLabel || ''),
-  ].join('|');
-}
-
-function raceStageRankForRestore(race) {
-  const stage = String(race?.stage || '').toLowerCase();
-  if (stage === 'heat') return 10 + Number(race?.heatNumber || 0);
-  if (stage === 'semi') return 50 + Number(race?.heatNumber || 0);
-  if (stage === 'final') return 100;
-  return 90;
-}
-
-function addRaceIdsUnique(target, ids) {
-  for (const id of ids || []) {
-    const sid = String(id || '');
-    if (sid && !target.includes(sid)) target.push(sid);
-  }
-}
-
-function restoreBlockAssignmentsBySignature(meet, previousBlocks, previousRaces) {
-  const previousById = new Map((previousRaces || []).map(r => [String(r.id || ''), r]));
-  const currentIds = new Set((meet.races || []).map(r => String(r.id || '')));
-  const currentBySignature = new Map();
-  const currentByFamily = new Map();
-
-  for (const race of meet.races || []) {
-    const id = String(race.id || '');
-    const sig = raceImportSignature(race);
-    if (!currentBySignature.has(sig)) currentBySignature.set(sig, []);
-    currentBySignature.get(sig).push(id);
-
-    const family = raceFamilySignature(race);
-    if (!currentByFamily.has(family)) currentByFamily.set(family, []);
-    currentByFamily.get(family).push(race);
-  }
-
-  for (const races of currentByFamily.values()) {
-    races.sort((a, b) => {
-      const byStage = raceStageRankForRestore(a) - raceStageRankForRestore(b);
-      if (byStage !== 0) return byStage;
-      return Number(a.orderHint || 0) - Number(b.orderHint || 0);
-    });
-  }
-
-  meet.blocks = (previousBlocks || []).map(block => {
-    const nextIds = [];
-
-    const oldRacesInBlock = (block.raceIds || [])
-      .map(id => previousById.get(String(id || '')))
-      .filter(Boolean);
-
-    const oldFamilyStageCounts = new Map();
-    for (const oldRace of oldRacesInBlock) {
-      const family = raceFamilySignature(oldRace);
-      if (!oldFamilyStageCounts.has(family)) oldFamilyStageCounts.set(family, new Set());
-      oldFamilyStageCounts.get(family).add(String(oldRace.stage || '').toLowerCase() || 'race');
-    }
-
-    for (const oldIdRaw of block.raceIds || []) {
-      const oldId = String(oldIdRaw || '');
-      const oldRace = previousById.get(oldId);
-
-      if (!oldRace) {
-        if (currentIds.has(oldId)) addRaceIdsUnique(nextIds, [oldId]);
-        continue;
-      }
-
-      const family = raceFamilySignature(oldRace);
-      const familyRaces = currentByFamily.get(family) || [];
-      const familyStages = oldFamilyStageCounts.get(family) || new Set();
-      const oldStage = String(oldRace.stage || '').toLowerCase();
-      const isFinalish = oldStage === 'final' || oldStage === 'race' || oldRace.isFinal;
-      const oldBlockAlreadyHadHeatForFamily = familyStages.has('heat') || familyStages.has('semi');
-      const currentFamilyHasHeats = familyRaces.some(r => ['heat','semi'].includes(String(r.stage || '').toLowerCase()));
-
-      // Important for new/test meets and presets:
-      // A preset often stores only the final race shell because no skaters/heats existed yet.
-      // After importing skaters and rebuilding assignments, that same division may split into
-      // Heat 1 / Heat 2 / Final. If we only restore the old final ID/signature, the new heats
-      // get kicked into Unassigned. When an old block had only the final/race shell for a family,
-      // expand it to the full rebuilt family and keep those heats in the same block.
-      if (isFinalish && !oldBlockAlreadyHadHeatForFamily && currentFamilyHasHeats) {
-        addRaceIdsUnique(nextIds, familyRaces.map(r => String(r.id || '')));
-        continue;
-      }
-
-      if (currentIds.has(oldId)) {
-        addRaceIdsUnique(nextIds, [oldId]);
-        continue;
-      }
-
-      const exactReplacements = currentBySignature.get(raceImportSignature(oldRace)) || [];
-      if (exactReplacements.length) {
-        addRaceIdsUnique(nextIds, exactReplacements);
-        continue;
-      }
-
-      addRaceIdsUnique(nextIds, familyRaces.map(r => String(r.id || '')));
-    }
-
-    return { ...block, raceIds: nextIds };
-  });
-}
-
-
-function raceGenderBucketFromLabelOrGender(value) {
-  const v = String(value || '').toLowerCase();
-  if (['girls','girl','women','woman','female','ladies','lady'].includes(v) || /girls|women|ladies|female/.test(v)) return 'female';
-  if (['boys','boy','men','man','male'].includes(v) || /boys|men|male/.test(v)) return 'male';
-  return '';
-}
-
-function raceMatchesRegAgeGender(race, reg, meet) {
-  const age = ageForReg(reg, meet);
-  if (String(race.ages || '').trim() && !ageMatch(race.ages, age)) return false;
-
-  const raceBucket = raceGenderBucketFromLabelOrGender(race.gender || race.groupLabel || race.groupId || '');
-  const regBucket = raceGenderBucketFromLabelOrGender(reg.gender || '');
-  return !raceBucket || !regBucket || raceBucket === regBucket;
-}
-
-function assignSequentialLaneEntries(regs) {
-  return regs.map((reg, idx) => ({
-    lane: idx + 1,
-    registrationId: reg.id,
-    helmetNumber: reg.helmetNumber || '',
-    skaterName: reg.name || '',
-    team: reg.team || '',
-    place: '',
-    time: '',
-    status: '',
-  }));
-}
-
-function rebuildRaceAssignmentsSafe(meet) {
-  // Safe rebuild that repopulates lane entries while preserving block layout.
-  // The older service rebuild only rebuilt standard races and preserved open/time/relay,
-  // which could leave quads/additionals empty or missing after recent block-flow work.
-  ensureRegistrationTotalsAndNumbers(meet);
-
-  const laneCount = Math.max(1, Number(meet.lanes) || 4);
-  const previousBlocks = JSON.parse(JSON.stringify(meet.blocks || []));
-  const previousRaces = JSON.parse(JSON.stringify(meet.races || []));
-
-  const newRaces = [];
-  const seenBaseKeys = new Set();
-
-  const isSpecialRace = (race) =>
-    race.isOpenRace ||
-    race.isQuadRace ||
-    race.isTimeTrial ||
-    race.isRelayRace ||
-    race.isAdditionalRace ||
-    race.isSkateabilityRace ||
-    String(race.division || '') === 'additional' ||
-    String(race.division || '') === 'skateability';
-
-  const baseKeyFor = (race) => String(race.parentRaceKey || baseRaceKey(race.groupId, race.division, race.dayIndex, race.distanceLabel));
-
-  // Standard novice/elite races. Use one base race per parent key, then re-split heats/finals from registrations.
-  for (const race of meet.races || []) {
-    if (isSpecialRace(race)) continue;
-    if (['heat', 'semi'].includes(String(race.stage || ''))) continue;
-
-    const key = baseKeyFor(race);
-    if (seenBaseKeys.has(key)) continue;
-    seenBaseKeys.add(key);
-
-    const matchingRegs = (meet.registrations || []).filter(reg =>
-      String(reg.divisionGroupId || '') === String(race.groupId || '') &&
-      divisionEnabledForRegistration(reg, race.division)
-    );
-
-    newRaces.push(...buildRaceSetForEntries({ ...race, parentRaceKey: key }, matchingRegs, laneCount));
-  }
-
-  // Quad races. Match registered quad skaters by the quad race age/gender bucket.
-  const quadBaseKeys = new Set();
-  for (const race of meet.races || []) {
-    if (!race.isQuadRace) continue;
-    if (['heat', 'semi'].includes(String(race.stage || ''))) continue;
-    const key = baseKeyFor(race);
-    if (quadBaseKeys.has(key)) continue;
-    quadBaseKeys.add(key);
-
-    const matchingRegs = (meet.registrations || []).filter(reg =>
-      !!reg.options?.quad && raceMatchesRegAgeGender(race, reg, meet)
-    );
-
-    const baseRace = { ...race, parentRaceKey: key, division: 'quad', isQuadRace: true };
-    newRaces.push(...buildRaceSetForEntries(baseRace, matchingRegs, laneCount));
-  }
-
-  // Open races are rolling finals; populate from matching open registrations.
-  for (const race of meet.races || []) {
-    if (!race.isOpenRace || race.isTimeTrial) continue;
-    const matchingRegs = (meet.registrations || []).filter(reg =>
-      !!reg.options?.open && raceMatchesRegAgeGender(race, reg, meet)
-    );
-    newRaces.push({
-      ...race,
-      stage: 'final',
-      heatNumber: 0,
-      isFinal: true,
-      startType: race.startType || 'rolling',
-      countsForOverall: false,
-      laneEntries: assignSequentialLaneEntries(matchingRegs),
-    });
-  }
-
-  // Additionals are placement-only/manual extras; populate from matching additional group selection.
-  for (const race of meet.races || []) {
-    const isAdditional = race.isAdditionalRace || race.isSkateabilityRace || String(race.division || '') === 'additional' || String(race.division || '') === 'skateability';
-    if (!isAdditional) continue;
-    const matchingRegs = (meet.registrations || []).filter(reg => {
-      const selected = !!(reg.options?.additional || reg.options?.skateability);
-      const selectedGroup = String(reg.options?.additionalGroupId || reg.options?.skateabilityGroupId || '');
-      return selected && (!selectedGroup || selectedGroup === String(race.groupId || ''));
-    });
-    newRaces.push({
-      ...race,
-      division: 'additional',
-      isAdditionalRace: true,
-      isSkateabilityRace: false,
-      countsForOverall: false,
-      laneEntries: assignSequentialLaneEntries(matchingRegs),
-    });
-  }
-
-  // Preserve relay races exactly. Relay Builder owns relay lane/team entries.
-  for (const race of meet.races || []) {
-    if (race.isRelayRace) newRaces.push(race);
-  }
-
-  // Rebuild the single time trial session from current registrations, preserving old times when possible.
-  meet.races = newRaces;
-  rebuildTimeTrialRace(meet);
-
-  restoreBlockAssignmentsBySignature(meet, previousBlocks, previousRaces);
-  ensureAtLeastOneBlock(meet);
-  ensureCurrentRace(meet);
-  meet.updatedAt = nowIso();
-}
 
 function importSpringFlingTestRoster(meet, { replace = true, checkedIn = true, paid = true } = {}) {
   const previousBlocks = JSON.parse(JSON.stringify(meet.blocks || []));

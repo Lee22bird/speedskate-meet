@@ -1,8 +1,15 @@
 {
   "version": 19,
   "createdAt": "2026-06-03T11:22:13.071Z",
-  "updatedAt": "2026-06-03T11:22:13.071Z",
-  "sessions": [],
+  "updatedAt": "2026-06-03T12:14:10.916Z",
+  "sessions": [
+    {
+      "token": "8e397c6f0be60b954600a28472ba81430783fd0ae3511850",
+      "userId": 1,
+      "createdAt": "2026-06-03T12:14:10.728Z",
+      "expiresAt": "2026-06-17T12:14:10.916Z"
+    }
+  ],
   "users": [
     {
       "id": 1,
@@ -13,11 +20,14 @@
         "super_admin",
         "meet_director",
         "judge",
-        "coach"
+        "coach",
+        "announcer"
       ],
       "team": "Midwest Racing",
       "active": true,
-      "createdAt": "2026-06-03T11:22:13.071Z"
+      "createdAt": "2026-06-03T11:22:13.071Z",
+      "email": "thegoatbird@me.com",
+      "updatedAt": "2026-06-03T12:14:10.915Z"
     }
   ],
   "rinks": [
@@ -33,7 +43,1423 @@
       "notes": ""
     }
   ],
-  "meets": [],
+  "meets": [
+    {
+      "id": 1,
+      "createdByUserId": 1,
+      "createdAt": "2026-06-03T12:01:40.402Z",
+      "updatedAt": "2026-06-03T12:01:40.402Z",
+      "meetName": "New Meet",
+      "date": "",
+      "endDate": "",
+      "startTime": "",
+      "registrationCloseAt": "",
+      "rinkId": 1,
+      "customRinkName": "",
+      "trackLength": 100,
+      "lanes": 4,
+      "timeTrialsEnabled": false,
+      "relayEnabled": false,
+      "judgesPanelRequired": true,
+      "notes": "",
+      "scheduleNotes": "",
+      "relayNotes": "",
+      "isPublic": false,
+      "status": "draft",
+      "tiebreaker": "d2",
+      "baseEntryFee": 0,
+      "additionalRaceFee": 0,
+      "maxRegistrationFee": 0,
+      "groups": [
+        {
+          "id": "tiny_tot_girls",
+          "label": "Tiny Tot Girls",
+          "ages": "5 & under",
+          "gender": "girls",
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ],
+              "ages": ""
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ],
+              "ages": ""
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "tiny_tot_boys",
+          "label": "Tiny Tot Boys",
+          "ages": "5 & under",
+          "gender": "boys",
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ],
+              "ages": ""
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ],
+              "ages": ""
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "primary_girls",
+          "label": "Primary Girls",
+          "ages": "6-7",
+          "gender": "girls",
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ],
+              "ages": ""
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ],
+              "ages": ""
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "primary_boys",
+          "label": "Primary Boys",
+          "ages": "6-7",
+          "gender": "boys",
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ],
+              "ages": ""
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ],
+              "ages": ""
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "juvenile_girls",
+          "label": "Juvenile Girls",
+          "ages": "8-9",
+          "gender": "girls",
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ],
+              "ages": ""
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ],
+              "ages": ""
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "juvenile_boys",
+          "label": "Juvenile Boys",
+          "ages": "8-9",
+          "gender": "boys",
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ],
+              "ages": ""
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ],
+              "ages": ""
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "elementary_girls",
+          "label": "Elementary Girls",
+          "ages": "10-11",
+          "gender": "girls",
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ],
+              "ages": ""
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ],
+              "ages": ""
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "elementary_boys",
+          "label": "Elementary Boys",
+          "ages": "10-11",
+          "gender": "boys",
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ],
+              "ages": ""
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ],
+              "ages": ""
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "freshman_girls",
+          "label": "Freshman Girls",
+          "ages": "12-13",
+          "gender": "girls",
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ],
+              "ages": ""
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ],
+              "ages": ""
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "freshman_boys",
+          "label": "Freshman Boys",
+          "ages": "12-13",
+          "gender": "boys",
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ],
+              "ages": ""
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ],
+              "ages": ""
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "sophomore_girls",
+          "label": "Sophomore Girls",
+          "ages": "14-15",
+          "gender": "girls",
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ],
+              "ages": ""
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ],
+              "ages": ""
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "sophomore_boys",
+          "label": "Sophomore Boys",
+          "ages": "14-15",
+          "gender": "boys",
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ],
+              "ages": ""
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ],
+              "ages": ""
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "junior_women",
+          "label": "Junior Women",
+          "ages": "16-17",
+          "gender": "women",
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ],
+              "ages": ""
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ],
+              "ages": ""
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "junior_men",
+          "label": "Junior Men",
+          "ages": "16-17",
+          "gender": "men",
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ],
+              "ages": ""
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ],
+              "ages": ""
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "senior_women",
+          "label": "Senior Women",
+          "ages": "18-24",
+          "gender": "women",
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ],
+              "ages": ""
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ],
+              "ages": ""
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "senior_men",
+          "label": "Senior Men",
+          "ages": "18-24",
+          "gender": "men",
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ],
+              "ages": ""
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ],
+              "ages": ""
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "classic_women",
+          "label": "Classic Women",
+          "ages": "25-34",
+          "gender": "women",
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ],
+              "ages": ""
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ],
+              "ages": ""
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "classic_men",
+          "label": "Classic Men",
+          "ages": "25-34",
+          "gender": "men",
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ],
+              "ages": ""
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ],
+              "ages": ""
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "master_women",
+          "label": "Master Women",
+          "ages": "35-44",
+          "gender": "women",
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ],
+              "ages": ""
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ],
+              "ages": ""
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "master_men",
+          "label": "Master Men",
+          "ages": "35-44",
+          "gender": "men",
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ],
+              "ages": ""
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ],
+              "ages": ""
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "veteran_women",
+          "label": "Veteran Women",
+          "ages": "45-54",
+          "gender": "women",
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ],
+              "ages": ""
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ],
+              "ages": ""
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "veteran_men",
+          "label": "Veteran Men",
+          "ages": "45-54",
+          "gender": "men",
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ],
+              "ages": ""
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ],
+              "ages": ""
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "esquire_women",
+          "label": "Esquire Women",
+          "ages": "55+",
+          "gender": "women",
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ],
+              "ages": ""
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ],
+              "ages": ""
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "id": "esquire_men",
+          "label": "Esquire Men",
+          "ages": "55+",
+          "gender": "men",
+          "divisions": {
+            "novice": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ],
+              "ages": ""
+            },
+            "elite": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ],
+              "ages": ""
+            },
+            "open": {
+              "enabled": false,
+              "cost": 0,
+              "distances": [
+                "",
+                "",
+                "",
+                ""
+              ]
+            }
+          }
+        }
+      ],
+      "openGroups": [
+        {
+          "id": "open_juv_girls",
+          "label": "Juvenile Girls",
+          "ages": "9 & Under",
+          "gender": "girls",
+          "enabled": false,
+          "distance": "1500m",
+          "cost": 0,
+          "timeTrial": false,
+          "ttDistance": "100m"
+        },
+        {
+          "id": "open_juv_boys",
+          "label": "Juvenile Boys",
+          "ages": "9 & Under",
+          "gender": "boys",
+          "enabled": false,
+          "distance": "1500m",
+          "cost": 0,
+          "timeTrial": false,
+          "ttDistance": "100m"
+        },
+        {
+          "id": "open_fresh_girls",
+          "label": "Freshman Girls",
+          "ages": "10-13",
+          "gender": "girls",
+          "enabled": false,
+          "distance": "2000m",
+          "cost": 0,
+          "timeTrial": false,
+          "ttDistance": "100m"
+        },
+        {
+          "id": "open_fresh_boys",
+          "label": "Freshman Boys",
+          "ages": "10-13",
+          "gender": "boys",
+          "enabled": false,
+          "distance": "2000m",
+          "cost": 0,
+          "timeTrial": false,
+          "ttDistance": "100m"
+        },
+        {
+          "id": "open_soph_girls",
+          "label": "Sophomore Girls",
+          "ages": "14-17",
+          "gender": "girls",
+          "enabled": false,
+          "distance": "2000m",
+          "cost": 0,
+          "timeTrial": false,
+          "ttDistance": "100m"
+        },
+        {
+          "id": "open_soph_boys",
+          "label": "Sophomore Boys",
+          "ages": "14-17",
+          "gender": "boys",
+          "enabled": false,
+          "distance": "2000m",
+          "cost": 0,
+          "timeTrial": false,
+          "ttDistance": "100m"
+        },
+        {
+          "id": "open_sr_ladies",
+          "label": "Senior Ladies",
+          "ages": "14 & Older",
+          "gender": "women",
+          "enabled": false,
+          "distance": "3000m",
+          "cost": 0,
+          "timeTrial": false,
+          "ttDistance": "100m"
+        },
+        {
+          "id": "open_sr_men",
+          "label": "Senior Men",
+          "ages": "14 & Older",
+          "gender": "men",
+          "enabled": false,
+          "distance": "5000m",
+          "cost": 0,
+          "timeTrial": false,
+          "ttDistance": "100m"
+        },
+        {
+          "id": "open_mast_ladies",
+          "label": "Masters Ladies",
+          "ages": "35 & Older",
+          "gender": "women",
+          "enabled": false,
+          "distance": "1500m",
+          "cost": 0,
+          "timeTrial": false,
+          "ttDistance": "100m"
+        },
+        {
+          "id": "open_mast_men",
+          "label": "Masters Men",
+          "ages": "35 & Older",
+          "gender": "men",
+          "enabled": false,
+          "distance": "2000m",
+          "cost": 0,
+          "timeTrial": false,
+          "ttDistance": "100m"
+        }
+      ],
+      "quadGroups": [
+        {
+          "id": "quad_juv_girls",
+          "label": "Quad Juvenile Girls",
+          "ages": "9 & Under",
+          "gender": "girls",
+          "enabled": false,
+          "distances": [
+            "200m",
+            "500m"
+          ],
+          "cost": 0
+        },
+        {
+          "id": "quad_juv_boys",
+          "label": "Quad Juvenile Boys",
+          "ages": "9 & Under",
+          "gender": "boys",
+          "enabled": false,
+          "distances": [
+            "200m",
+            "500m"
+          ],
+          "cost": 0
+        },
+        {
+          "id": "quad_fresh_girls",
+          "label": "Quad Freshman Girls",
+          "ages": "10-13",
+          "gender": "girls",
+          "enabled": false,
+          "distances": [
+            "300m",
+            "700m"
+          ],
+          "cost": 0
+        },
+        {
+          "id": "quad_fresh_boys",
+          "label": "Quad Freshman Boys",
+          "ages": "10-13",
+          "gender": "boys",
+          "enabled": false,
+          "distances": [
+            "300m",
+            "700m"
+          ],
+          "cost": 0
+        },
+        {
+          "id": "quad_sr_ladies",
+          "label": "Quad Senior Ladies",
+          "ages": "14 & Older",
+          "gender": "women",
+          "enabled": false,
+          "distances": [
+            "300m",
+            "1000m"
+          ],
+          "cost": 0
+        },
+        {
+          "id": "quad_sr_men",
+          "label": "Quad Senior Men",
+          "ages": "14 & Older",
+          "gender": "men",
+          "enabled": false,
+          "distances": [
+            "300m",
+            "1000m"
+          ],
+          "cost": 0
+        },
+        {
+          "id": "quad_mast_ladies",
+          "label": "Quad Masters Ladies",
+          "ages": "35 & Older",
+          "gender": "women",
+          "enabled": false,
+          "distances": [
+            "300m",
+            "1000m"
+          ],
+          "cost": 0
+        },
+        {
+          "id": "quad_mast_men",
+          "label": "Quad Masters Men",
+          "ages": "35 & Older",
+          "gender": "men",
+          "enabled": false,
+          "distances": [
+            "300m",
+            "1000m"
+          ],
+          "cost": 0
+        }
+      ],
+      "races": [],
+      "blocks": [
+        {
+          "id": "b1",
+          "name": "Block 1",
+          "day": "Day 1",
+          "type": "race",
+          "notes": "",
+          "raceIds": []
+        }
+      ],
+      "registrations": [],
+      "additionalGroups": [
+        {
+          "id": "manual_extra_1",
+          "ageGroupId": "",
+          "ageGroupLabel": "Additional 1",
+          "ages": "",
+          "enabled": false,
+          "distances": [
+            "",
+            "",
+            ""
+          ]
+        },
+        {
+          "id": "manual_extra_2",
+          "ageGroupId": "",
+          "ageGroupLabel": "Additional 2",
+          "ages": "",
+          "enabled": false,
+          "distances": [
+            "",
+            "",
+            ""
+          ]
+        },
+        {
+          "id": "manual_extra_3",
+          "ageGroupId": "",
+          "ageGroupLabel": "Additional 3",
+          "ages": "",
+          "enabled": false,
+          "distances": [
+            "",
+            "",
+            ""
+          ]
+        },
+        {
+          "id": "manual_extra_4",
+          "ageGroupId": "",
+          "ageGroupLabel": "Additional 4",
+          "ages": "",
+          "enabled": false,
+          "distances": [
+            "",
+            "",
+            ""
+          ]
+        }
+      ],
+      "additionalRaceGroups": [
+        {
+          "id": "manual_extra_1",
+          "ageGroupId": "",
+          "ageGroupLabel": "Additional 1",
+          "ages": "",
+          "enabled": false,
+          "distances": [
+            "",
+            "",
+            ""
+          ]
+        },
+        {
+          "id": "manual_extra_2",
+          "ageGroupId": "",
+          "ageGroupLabel": "Additional 2",
+          "ages": "",
+          "enabled": false,
+          "distances": [
+            "",
+            "",
+            ""
+          ]
+        },
+        {
+          "id": "manual_extra_3",
+          "ageGroupId": "",
+          "ageGroupLabel": "Additional 3",
+          "ages": "",
+          "enabled": false,
+          "distances": [
+            "",
+            "",
+            ""
+          ]
+        },
+        {
+          "id": "manual_extra_4",
+          "ageGroupId": "",
+          "ageGroupLabel": "Additional 4",
+          "ages": "",
+          "enabled": false,
+          "distances": [
+            "",
+            "",
+            ""
+          ]
+        }
+      ],
+      "additionalRaces": [
+        {
+          "id": "manual_extra_1",
+          "ageGroupId": "",
+          "ageGroupLabel": "Additional 1",
+          "ages": "",
+          "enabled": false,
+          "distances": [
+            "",
+            "",
+            ""
+          ]
+        },
+        {
+          "id": "manual_extra_2",
+          "ageGroupId": "",
+          "ageGroupLabel": "Additional 2",
+          "ages": "",
+          "enabled": false,
+          "distances": [
+            "",
+            "",
+            ""
+          ]
+        },
+        {
+          "id": "manual_extra_3",
+          "ageGroupId": "",
+          "ageGroupLabel": "Additional 3",
+          "ages": "",
+          "enabled": false,
+          "distances": [
+            "",
+            "",
+            ""
+          ]
+        },
+        {
+          "id": "manual_extra_4",
+          "ageGroupId": "",
+          "ageGroupLabel": "Additional 4",
+          "ages": "",
+          "enabled": false,
+          "distances": [
+            "",
+            "",
+            ""
+          ]
+        }
+      ],
+      "skateabilityGroups": [
+        {
+          "id": "manual_extra_1",
+          "ageGroupId": "",
+          "ageGroupLabel": "Additional 1",
+          "ages": "",
+          "enabled": false,
+          "distances": [
+            "",
+            "",
+            ""
+          ]
+        },
+        {
+          "id": "manual_extra_2",
+          "ageGroupId": "",
+          "ageGroupLabel": "Additional 2",
+          "ages": "",
+          "enabled": false,
+          "distances": [
+            "",
+            "",
+            ""
+          ]
+        },
+        {
+          "id": "manual_extra_3",
+          "ageGroupId": "",
+          "ageGroupLabel": "Additional 3",
+          "ages": "",
+          "enabled": false,
+          "distances": [
+            "",
+            "",
+            ""
+          ]
+        },
+        {
+          "id": "manual_extra_4",
+          "ageGroupId": "",
+          "ageGroupLabel": "Additional 4",
+          "ages": "",
+          "enabled": false,
+          "distances": [
+            "",
+            "",
+            ""
+          ]
+        }
+      ],
+      "currentRaceId": "",
+      "currentRaceIndex": -1,
+      "raceDayPaused": false,
+      "textAlerts": []
+    }
+  ],
   "rosters": [],
   "setupPresets": []
 }
