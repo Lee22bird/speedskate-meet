@@ -1,13 +1,13 @@
 {
   "version": 19,
   "createdAt": "2026-06-03T11:22:13.071Z",
-  "updatedAt": "2026-06-03T12:14:10.916Z",
+  "updatedAt": "2026-06-03T13:42:42.865Z",
   "sessions": [
     {
-      "token": "8e397c6f0be60b954600a28472ba81430783fd0ae3511850",
+      "token": "2786227df055e8d5513dee18347cea904211c37c77ab0feb",
       "userId": 1,
-      "createdAt": "2026-06-03T12:14:10.728Z",
-      "expiresAt": "2026-06-17T12:14:10.916Z"
+      "createdAt": "2026-06-03T13:41:01.638Z",
+      "expiresAt": "2026-06-17T13:42:42.865Z"
     }
   ],
   "users": [
@@ -27,7 +27,7 @@
       "active": true,
       "createdAt": "2026-06-03T11:22:13.071Z",
       "email": "thegoatbird@me.com",
-      "updatedAt": "2026-06-03T12:14:10.915Z"
+      "updatedAt": "2026-06-03T13:42:42.865Z"
     }
   ],
   "rinks": [

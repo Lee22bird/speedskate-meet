@@ -770,7 +770,13 @@ function generateConfiguredRacesForMeet(meet) {
     if (!existingIds.has(String(relay.id))) meet.races.push(relay);
   }
 
-  rebuildTimeTrialRace(meet);
+  // Lazy-load ttHelpers here to avoid a circular require at module load time.
+  // ttHelpers imports meetHelpers, so requiring it at the top of this file can
+  // leave rebuildTimeTrialRace undefined during route/module initialization.
+  const { rebuildTimeTrialRace } = require('./ttHelpers');
+  if (typeof rebuildTimeTrialRace === 'function') {
+    rebuildTimeTrialRace(meet);
+  }
 
   const validIds = new Set((meet.races || []).map(r => String(r.id)));
 
