@@ -367,14 +367,14 @@ function renderMeetBuilderView({ db, meet, query = {} }) {
             return `
               <div class="group-pair-col" style="margin-bottom:12px" id="sk-0">
                 <div class="group-pair-header">
-                  <span class="group-pair-name">Additional Race 1</span>
+                  <span class="group-pair-name">Skateability</span>
                   ${toggleSwitch('sk_0_enabled', !!sg.enabled)}
                 </div>
-                <div class="note" style="margin-top:8px">Additional Race 1 setup. No novice/elite divisions and no overall points — just enable it and enter up to 3 distances.</div>
+                <div class="note" style="margin-top:8px">Skateability setup. No novice/elite divisions and no overall points — just enable it and enter up to 3 distances.</div>
                 <input type="hidden" name="sk_0_id" value="manual_extra_1" />
                 <input type="hidden" name="sk_0_ageGroupId" value="" />
                 <input type="hidden" name="sk_0_ages" value="" />
-                <input type="hidden" name="sk_0_ageGroupLabel" value="Additional Race 1" />
+                <input type="hidden" name="sk_0_ageGroupLabel" value="Skateability" />
                 <div style="display:flex;gap:8px;align-items:flex-end;margin-top:10px">
                   <div style="flex:1"><label>Distance 1</label><input name="sk_0_d1" value="${esc(distances[0])}" placeholder="100m" /></div>
                   <div style="flex:1"><label>Distance 2</label><input name="sk_0_d2" value="${esc(distances[1])}" placeholder="200m" /></div>

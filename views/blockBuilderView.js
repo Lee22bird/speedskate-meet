@@ -14,6 +14,7 @@ function renderBlockBuilderView({ meet }) {
   const quadRaceCount = (meet.races || []).filter(r => r.isQuadRace).length;
   const timeTrialRaceCount = (meet.races || []).filter(r => r.isTimeTrial).length;
   const relayRaceCount = (meet.races || []).filter(r => r.isRelayRace).length;
+  const additionalRaceCount = (meet.races || []).filter(r => r.isAdditionalRace || String(r.division || '').toLowerCase() === 'additional').length;
   const breakTypes = ['break', 'lunch', 'awards', 'practice'];
   const breakIcons = { break: '☕', lunch: '🍽️', awards: '🏆', practice: '⛸️' };
 
@@ -97,51 +98,95 @@ function renderBlockBuilderView({ meet }) {
   }).join('');
 
   return `
-    <div class="page-header">
-      <h1>Block Builder</h1>
-      <div class="sub">${esc(meet.meetName)} • ${esc(cap(meet.status || 'draft'))} • ${inlineRaceCount} Inline • ${openRaceCount} Open • ${quadRaceCount} Quad</div>
-    </div>
-
-    <div class="form-grid cols-3" style="align-items:stretch;margin-bottom:16px">
-      <div class="card" style="margin:0">
-        <h3 style="margin-bottom:12px">Race Summary</h3>
-        <div style="display:grid;grid-template-columns:1fr auto;gap:8px 18px;font-size:14px">
-          <span class="note">Inline</span><strong>${inlineRaceCount}</strong>
-          <span class="note">Open</span><strong>${openRaceCount}</strong>
-          <span class="note">Quad</span><strong>${quadRaceCount}</strong>
-          <span class="note">Time Trials</span><strong>${timeTrialRaceCount}</strong>
-          <span class="note">Relays</span><strong>${relayRaceCount}</strong>
-          <span class="note">Unassigned</span><strong id="unassignedChip">${unassigned.length}</strong>
-        </div>
+    <div class="page-header block-builder-hero">
+      <div>
+        <div class="builder-sticky-label">Block Builder</div>
+        <h1>Race Day Schedule</h1>
+        <div class="sub">${esc(meet.meetName)} • ${esc(cap(meet.status || 'draft'))} • ${inlineRaceCount} Inline • ${openRaceCount} Open • ${quadRaceCount} Quad</div>
       </div>
-
-      <div class="card" style="margin:0">
-        <h3 style="margin-bottom:10px">Block Tools</h3>
-        <p class="note" style="margin-bottom:12px">Build the race-day schedule structure, then drag races into each block.</p>
-        <div class="action-row">
-          <button class="btn2" onclick="addBlock()">+ Race Block</button>
-          <button class="btn2 btn-sm" onclick="addDivider('break','☕ Break')">☕ Break</button>
-          <button class="btn2 btn-sm" onclick="addDivider('lunch','🍽️ Lunch')">🍽️ Lunch</button>
-          <button class="btn2 btn-sm" onclick="addDivider('awards','🏆 Awards')">🏆 Awards</button>
-          <button class="btn2 btn-sm" onclick="addDivider('practice','⛸️ Practice')">⛸️ Practice</button>
-        </div>
-      </div>
-
-      <div class="card" style="margin:0">
-        <h3 style="margin-bottom:10px">Race Actions</h3>
-        <div style="display:grid;gap:12px">
-          <div>
-            <form method="POST" action="/portal/meet/${meet.id}/assign-races?returnTo=blocks" onsubmit="return confirm('Rebuild recalculates heats, finals, race assignments, and lanes.\n\nYour manual block schedule is preserved.\n\nUse this after late registrations, scratches, division changes, challenge-up changes, or lane count changes.\n\nContinue?')"><button class="btn2" type="submit">🔄 Rebuild Races</button></form>
-            <div class="note" style="margin-top:6px">Use after registrations, scratches, division changes, or lane updates.</div>
-          </div>
-          <div>
-            <form method="POST" action="/portal/meet/${meet.id}/blocks/auto-flow" onsubmit="return confirm('Optimize Race Flow only reorders races already assigned inside each block.\n\nIt does NOT rebuild races, delete races, or move races between blocks.\n\nMoves heats earlier and finals later while balancing races within their assigned blocks.\n\nContinue?')"><button class="btn-good" type="submit">Optimize Race Flow</button></form>
-            <div class="note" style="margin-top:6px">Moves heats earlier and finals later while balancing races within their assigned blocks.</div>
-          </div>
-          <a class="btn-orange" href="/portal/meet/${meet.id}/registered/print-race-list" target="_blank">Print Race List</a>
-        </div>
+      <div class="action-row">
+        <a class="btn2" href="/portal/meet/${meet.id}/registered/print-race-list" target="_blank">Print Race List</a>
       </div>
     </div>
+
+    <div class="card block-builder-control-card" style="margin-bottom:18px">
+      <div class="block-control-head">
+        <div>
+          <h2 style="margin:0">Schedule Control Center</h2>
+          <div class="note">Build blocks, add breaks, rebuild race assignments, and keep race day flowing.</div>
+        </div>
+        <span class="chip chip-orange">Unassigned: <strong id="unassignedChip">${unassigned.length}</strong></span>
+      </div>
+
+      <div class="block-control-grid">
+        <section class="setup-mini-card block-control-mini">
+          <div class="setup-mini-title">Race Summary</div>
+          <div class="block-summary-grid">
+            <div><span>Inline</span><strong>${inlineRaceCount}</strong></div>
+            <div><span>Open</span><strong>${openRaceCount}</strong></div>
+            <div><span>Quad</span><strong>${quadRaceCount}</strong></div>
+            <div><span>Time Trials</span><strong>${timeTrialRaceCount}</strong></div>
+            <div><span>Relays</span><strong>${relayRaceCount}</strong></div>
+            <div><span>Additional</span><strong>${additionalRaceCount}</strong></div>
+          </div>
+        </section>
+
+        <section class="setup-mini-card block-control-mini">
+          <div class="setup-mini-title">Block Tools</div>
+          <p class="note" style="margin-bottom:12px">Add race blocks or divider blocks, then drag races into the schedule.</p>
+          <div class="block-tool-buttons">
+            <button class="btn2" onclick="addBlock()">+ Race Block</button>
+            <button class="btn2 btn-sm" onclick="addDivider('break','☕ Break')">☕ Break</button>
+            <button class="btn2 btn-sm" onclick="addDivider('lunch','🍽️ Lunch')">🍽️ Lunch</button>
+            <button class="btn2 btn-sm" onclick="addDivider('awards','🏆 Awards')">🏆 Awards</button>
+            <button class="btn2 btn-sm" onclick="addDivider('practice','⛸️ Practice')">⛸️ Practice</button>
+          </div>
+        </section>
+
+        <section class="setup-mini-card block-control-mini block-danger-zone">
+          <div class="setup-mini-title">Race Actions</div>
+          <div class="block-action-stack">
+            <form method="POST" action="/portal/meet/${meet.id}/assign-races?returnTo=blocks" onsubmit="return confirm('Rebuild recalculates heats, finals, race assignments, and lanes.
+
+Your manual block schedule is preserved.
+
+Use this after late registrations, scratches, division changes, challenge-up changes, or lane count changes.
+
+Continue?')">
+              <button class="btn2" type="submit">🔄 Rebuild Races</button>
+            </form>
+            <div class="note">Use after registrations, scratches, division changes, or lane updates.</div>
+            <form method="POST" action="/portal/meet/${meet.id}/blocks/auto-flow" onsubmit="return confirm('Optimize Race Flow only reorders races already assigned inside each block.
+
+It does NOT rebuild races, delete races, or move races between blocks.
+
+Moves heats earlier and finals later while balancing races within their assigned blocks.
+
+Continue?')">
+              <button class="btn-good" type="submit">Optimize Race Flow</button>
+            </form>
+            <div class="note">Moves heats earlier and finals later while balancing races inside their assigned blocks.</div>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <style>
+      .block-builder-hero{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;}
+      .block-builder-control-card{padding:28px;border-radius:22px;}
+      .block-control-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid var(--border);}
+      .block-control-grid{display:grid;grid-template-columns:1fr 1.1fr 1fr;gap:16px;align-items:stretch;}
+      .block-control-mini{margin:0;min-height:100%;}
+      .block-summary-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+      .block-summary-grid div{background:#fff;border:1px solid var(--border);border-radius:14px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:12px;}
+      .block-summary-grid span{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);}
+      .block-summary-grid strong{font-size:20px;color:var(--navy);}
+      .block-tool-buttons{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+      .block-action-stack{display:grid;gap:8px;}
+      .block-danger-zone{border-color:rgba(249,115,22,.22);background:linear-gradient(180deg,#fff,#fff7ed);}
+      @media(max-width:1000px){.block-control-grid{grid-template-columns:1fr}.block-builder-hero{align-items:flex-start}.block-builder-control-card{padding:18px}.block-control-head{flex-direction:column}.block-summary-grid{grid-template-columns:1fr 1fr}}
+      @media(max-width:640px){.block-summary-grid{grid-template-columns:1fr}.block-tool-buttons .btn2,.block-tool-buttons .btn-sm,.block-action-stack .btn2,.block-action-stack .btn-good{width:100%;justify-content:center}}
+    </style>
     <div class="bb-grid">
       <div class="bb-left">${blocksHtml}</div>
       <div class="bb-right">
@@ -256,7 +301,7 @@ function renderBlockBuilderView({ meet }) {
           const mD=dist==='all'||item.getAttribute('data-day-index')===dist;
           const show=mS&&mC&&mD; item.classList.toggle('hidden',!show); if(show) v++;
         }
-        document.getElementById('unassignedChip').textContent='Unassigned: '+v;
+        document.getElementById('unassignedChip').textContent=String(v);
       }
       restoreFilters(); restoreBuilderScroll(); attachDnD(); applyFilters();
     </script>`;
