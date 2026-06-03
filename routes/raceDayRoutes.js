@@ -20,11 +20,19 @@ const {
 const {
   relayOptionKeyForRace, renderRelayEligibleSkatersHtml,
 } = require('../services/relayHelpers');
+const ttHelpers = require('../services/ttHelpers');
 const {
   genderBucket, openGroupForTimeTrialReg, timeTrialRaceForMeet,
-  timeTrialEntriesForMeet, rebuildTimeTrialRace, timeTrialLeaderboards,
+  timeTrialEntriesForMeet, timeTrialLeaderboards,
   rebuildRaceAssignmentsSafe,
-} = require('../services/ttHelpers');
+} = ttHelpers;
+
+function rebuildTimeTrialRaceSafe(meet) {
+  const freshTtHelpers = require('../services/ttHelpers');
+  const fn = freshTtHelpers && freshTtHelpers.rebuildTimeTrialRace;
+  if (typeof fn !== 'function') return null;
+  return fn(meet);
+}
 
 module.exports = function createRaceDayRoutes(deps = {}) {
   const router = express.Router();
@@ -332,7 +340,7 @@ router.post('/portal/meet/:meetId/blocks/generate', requireRole('meet_director')
 router.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','judge','coach'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet) return res.redirect('/portal');
-  rebuildTimeTrialRace(meet); saveDb(req.db);
+  rebuildTimeTrialRaceSafe(meet); saveDb(req.db);
   const mode=String(req.params.mode||'director');
   const info=currentRaceInfo(meet); const current=info.current;
   const currentLanes=current?laneRowsForRace(current,meet):[];
@@ -663,7 +671,7 @@ router.post('/portal/meet/:meetId/race-day/judges/tt-post', requireRole('judge',
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet) return res.redirect('/portal');
   let race=(meet.races||[]).find(r=>r.id===String(req.body.raceId||'')&&r.isTimeTrial) || timeTrialRaceForMeet(meet);
-  if(!race) race = rebuildTimeTrialRace(meet);
+  if(!race) race = rebuildTimeTrialRaceSafe(meet);
   if(!race) return res.redirect(`/portal/meet/${req.params.meetId}/race-day/judges`);
 
   const time=String(req.body.time||'').trim();
