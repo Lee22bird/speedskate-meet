@@ -36,7 +36,7 @@ function buildCostWidget(base, additionalFee, maxCap = 0) {
     '  "open",',
     '  "quad",',
     '  "timeTrials",',
-    '  "skateability",',
+    '  "additional",',
     '  "relay2Person",',
     '  "relay3Person",',
     '  "relay4Person"',

@@ -87,7 +87,7 @@ function makeAdditionalRaceSlots(raw) {
     let label = String(match.ageGroupLabel || match.title || '').trim();
 
     // Only replace blank/old generic placeholders.
-    // Do NOT wipe a custom title like “Skatability” if the meet director typed it.
+    // Do NOT wipe a custom title like “Skatability” or “Additional Race” if the meet director typed it.
     if (!label || /^manual extra race/i.test(label)) {
       label = `Additional ${i + 1}`;
     }

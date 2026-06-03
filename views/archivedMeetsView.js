@@ -19,12 +19,12 @@ function meetDateLabel(meet) {
 function countArchivedRaceTypes(meet) {
   const races = meet.races || [];
   return {
-    inline: races.filter(r => !r.isOpenRace && !r.isQuadRace && !r.isTimeTrial && !r.isRelayRace && !r.isSkateabilityRace && !r.isSpecialRace).length,
+    inline: races.filter(r => !r.isOpenRace && !r.isQuadRace && !r.isTimeTrial && !r.isRelayRace && !r.isAdditionalRace && !r.isSkateabilityRace && !r.isSpecialRace).length,
     open: races.filter(r => r.isOpenRace).length,
     quad: races.filter(r => r.isQuadRace).length,
     timeTrials: races.filter(r => r.isTimeTrial).length,
     relays: races.filter(r => r.isRelayRace).length,
-    skateability: races.filter(r => r.isSkateabilityRace).length,
+    additional: races.filter(r => r.isAdditionalRace || r.isSkateabilityRace).length,
     special: races.filter(r => r.isSpecialRace).length,
     closed: races.filter(r => String(r.status || '') === 'closed').length,
     total: races.length,
@@ -65,7 +65,7 @@ function renderArchivedMeetsView({ db, user, archived = [] }) {
               <span class="chip chip-purple">Quad: ${counts.quad}</span>
               ${counts.timeTrials ? `<span class="chip">TT: ${counts.timeTrials}</span>` : ''}
               ${counts.relays ? `<span class="chip">Relays: ${counts.relays}</span>` : ''}
-              ${counts.skateability ? `<span class="chip">Skatability: ${counts.skateability}</span>` : ''}
+              ${counts.additional ? `<span class="chip">Additional: ${counts.additional}</span>` : ''}
               ${counts.special ? `<span class="chip">Special: ${counts.special}</span>` : ''}
             </div>
           </div>

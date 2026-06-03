@@ -67,7 +67,7 @@ router.get('/meet/:meetId/register', (req, res) => {
             ${meet.relayEnabled?`<div class="toggle-row"><div><div class="toggle-row-label">2 Person Relay</div></div>${toggleSwitch('relay2Person',false)}</div><div class="toggle-row"><div><div class="toggle-row-label">3 Person Relay</div></div>${toggleSwitch('relay3Person',false)}</div><div class="toggle-row"><div><div class="toggle-row-label">4 Person Relay</div></div>${toggleSwitch('relay4Person',false)}</div>`:''}
             ${(meet.additionalGroups||meet.additionalRaceGroups||meet.additionalRaces||meet.skateabilityGroups||[]).length?`
               <div class="toggle-row"><div><div class="toggle-row-label">Additional Races</div><div class="toggle-row-desc">Extra race division — select your group below if enabled</div></div>${toggleSwitch('additional',false)}</div>
-              <div id="skateability-group-row" style="display:none">
+              <div id="additional-group-row" style="display:none">
                 <div class="toggle-row" style="flex-direction:column;align-items:flex-start;gap:8px">
                   <div class="toggle-row-label">Additional Race Group</div>
                   <select name="additionalGroupId" style="width:100%">
@@ -79,7 +79,7 @@ router.get('/meet/:meetId/register', (req, res) => {
               <script>
                 var skToggle = document.querySelector('input[name="additional"]');
                 if(skToggle) skToggle.addEventListener('change', function() {
-                  document.getElementById('skateability-group-row').style.display = this.checked ? '' : 'none';
+                  document.getElementById('additional-group-row').style.display = this.checked ? '' : 'none';
                 });
               </script>`:''}
           </div>
@@ -195,7 +195,7 @@ function registrationForm(meet,reg,action,title) {
             ${meet.relayEnabled?`<div class="toggle-row"><div><div class="toggle-row-label">2 Person Relay</div></div>${toggleSwitch('relay2Person',!!reg.options?.relay2Person)}</div><div class="toggle-row"><div><div class="toggle-row-label">3 Person Relay</div></div>${toggleSwitch('relay3Person',!!reg.options?.relay3Person)}</div><div class="toggle-row"><div><div class="toggle-row-label">4 Person Relay</div></div>${toggleSwitch('relay4Person',!!reg.options?.relay4Person)}</div>`:''}
             ${(meet.additionalGroups||meet.additionalRaceGroups||meet.additionalRaces||meet.skateabilityGroups||[]).length?`
               <div class="toggle-row"><div><div class="toggle-row-label">Additional Races</div><div class="toggle-row-desc">Extra race division</div></div>${toggleSwitch('additional',!!(reg.options?.additional||reg.options?.skateability))}</div>
-              <div id="edit-skateability-group-row" style="${(reg.options?.additional||reg.options?.skateability)?'':'display:none'}">
+              <div id="edit-additional-group-row" style="${(reg.options?.additional||reg.options?.skateability)?'':'display:none'}">
                 <div class="toggle-row" style="flex-direction:column;align-items:flex-start;gap:8px">
                   <div class="toggle-row-label">Additional Race Group</div>
                   <select name="additionalGroupId" style="width:100%">
@@ -207,7 +207,7 @@ function registrationForm(meet,reg,action,title) {
               <script>
                 var editSkToggle = document.querySelector('input[name="additional"]');
                 if(editSkToggle) editSkToggle.addEventListener('change', function() {
-                  document.getElementById('edit-skateability-group-row').style.display = this.checked ? '' : 'none';
+                  document.getElementById('edit-additional-group-row').style.display = this.checked ? '' : 'none';
                 });
               </script>`:''}
           </div>

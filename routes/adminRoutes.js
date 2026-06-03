@@ -85,7 +85,7 @@ router.get('/portal/meet/:meetId/clone-confirm', requireRole('meet_director'), (
       <div class="card">
         <div class="good" style="margin-bottom:12px">This creates a new draft meet using this meet's setup.</div>
         <div class="muted" style="line-height:1.7;margin-bottom:16px">
-          It copies divisions, distances, pricing, rink setup, Open/Quad setup, Skatability/Special Race setup, and block names.
+          It copies divisions, distances, pricing, rink setup, Open/Quad setup, Additional Race setup, and block names.
           It does not copy registrations, race results, check-ins, paid status, text alerts, or current race-day state.
         </div>
         <div class="hr"></div>

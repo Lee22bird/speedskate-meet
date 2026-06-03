@@ -128,8 +128,7 @@ function saveMeetFields(meet, body, db) {
     for(let si=0; si<4; si++) {
       const id = 'manual_extra_' + (si + 1);
       let ageGroupLabel = String(body[`sk_${si}_ageGroupLabel`]||'').trim();
-      if(si===0) ageGroupLabel = 'Skatability';
-      if(!ageGroupLabel) ageGroupLabel = `Special Race ${si}`;
+      if(!ageGroupLabel) ageGroupLabel = `Additional Race ${si + 1}`;
       const ages = String(body[`sk_${si}_ages`]||'').trim();
       const distances = [
         String(body[`sk_${si}_d1`]||'').trim(),
