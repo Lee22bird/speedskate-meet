@@ -209,6 +209,41 @@ const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 14;
 const ADMIN_USERNAME = 'Lbird22';
 const ADMIN_PASSWORD = 'Redline22';
 
+function ensureLeeSuperAdmin(db) {
+  if (!Array.isArray(db.users)) db.users = [];
+  const wantedRoles = ['super_admin', 'meet_director', 'judge', 'announcer', 'coach'];
+  const matches = (db.users || []).filter(u => {
+    const username = String(u.username || '').trim().toLowerCase();
+    const email = String(u.email || '').trim().toLowerCase();
+    return username === 'lbird22' || email === 'thegoatbird@me.com';
+  });
+  if (!matches.length) {
+    db.users.unshift({ id: nextUserId(db), username: 'Lbird22', password: ADMIN_PASSWORD, email: 'thegoatbird@me.com', displayName: 'Lee Bird', roles: wantedRoles, team: 'Midwest Racing', active: true, createdAt: nowIso(), updatedAt: nowIso() });
+    return;
+  }
+  for (const user of matches) {
+    user.active = true; user.displayName = user.displayName || 'Lee Bird'; user.team = user.team || 'Midwest Racing'; user.email = user.email || 'thegoatbird@me.com';
+    user.roles = Array.from(new Set([...(Array.isArray(user.roles) ? user.roles : []), ...wantedRoles]));
+    if (String(user.username || '').trim().toLowerCase() === 'lbird22' && !user.password) user.password = ADMIN_PASSWORD;
+    user.updatedAt = nowIso();
+  }
+}
+
+function defaultDb() {
+  return { version:19, createdAt:nowIso(), updatedAt:nowIso(), sessions:[],
+    users:[{ id:1, username:ADMIN_USERNAME, password:ADMIN_PASSWORD, displayName:'Lee Bird', roles:['super_admin','meet_director','judge','coach'], team:'Midwest Racing', active:true, createdAt:nowIso() }],
+    rinks:[{ id:1, name:'Roller City', city:'Wichita', state:'KS', team:'', address:'3234 S. Meridian Ave, Wichita, KS 67217', phone:'316-942-4555', website:'rollercitywichitaks.com', notes:'' }],
+    meets:[], rosters:[], setupPresets:[],
+  };
+}
+
+function sanitizeRinks(db) {
+  db.rinks=(db.rinks||[]).filter(r=>String(r.name||'').trim().toLowerCase()!=='wichita skate center');
+  const rc=(db.rinks||[]).find(r=>String(r.name||'').trim().toLowerCase()==='roller city');
+  if(!rc) { db.rinks.unshift(defaultDb().rinks[0]); }
+  else { rc.city='Wichita';rc.state='KS';rc.address='3234 S. Meridian Ave, Wichita, KS 67217';rc.phone='316-942-4555';rc.website='rollercitywichitaks.com'; }
+}
+
 const TEAM_LIST = [
   'Independent','Aurora Speed Club','Ashland Speedskating of Virginia','Badger State Racing',
   "Bell's Speed Skating Team",'Capital City Racing','Carolina Gold Rush','CC Speed','CCN Inline',
@@ -296,6 +331,201 @@ function requireRole(...roles) {
       bodyHtml:`<div class="page-header"><h1>Forbidden</h1></div><div class="card"><div class="danger">You do not have access to this page.</div></div>`}));
   };
 }
+
+
+// ── Public routes ─────────────────────────────────────────────────────────────
+
+app.get('/', (req, res) => {
+  const data = getSessionUser(req);
+  const portalLink = data ? '/portal' : '/admin/login';
+
+  res.send(pageShell({
+    title: 'Home',
+    description: 'SpeedSkateMeet is the all-in-one platform for inline speed skating meets. Registration, race building, block scheduling, live scoring, and race-day operations.',
+    user: data?.user || null,
+    bodyHtml: `
+    <section class="home-hero">
+      <img class="home-hero-bg" src="/public/images/home/hero-banner.jpg" alt="" />
+      <div class="home-hero-wash"></div>
+
+      <div class="home-hero-inner">
+        <img src="/public/images/branding/ssm-logo.png" alt="SpeedSkateMeet.com" class="home-hero-logo" />
+
+        <div class="home-hero-kicker">Inline speed skating meet software</div>
+        <h1 class="home-hero-title">Run meets. Build races. Go live.</h1>
+        <p class="home-hero-copy">
+          Registration, race builders, manual block scheduling, live results, check-in,
+          standings, and race-day tools built specifically for inline speed skating.
+        </p>
+
+        <div class="home-hero-actions">
+          <a class="btn-orange home-hero-primary" href="/meets">Find a Meet</a>
+          <a class="btn2 btn-white" href="/live">Live Race Day</a>
+          <a class="btn2 btn-white" href="${portalLink}">${data ? 'Open Portal' : 'Login'}</a>
+        </div>
+
+        <div class="home-hero-pills">
+          <span>Meet Builder</span>
+          <span>Race Day</span>
+          <span>Live Results</span>
+          <span>Text Alerts</span>
+        </div>
+      </div>
+    </section>
+
+    <div class="feature-grid">
+      <a class="feature-card feature-card-link" href="/live">
+        <img class="feature-card-bg" src="/public/images/home/feature-card-dark.jpg" alt="" />
+        <div class="feature-card-overlay"></div>
+        <div class="feature-card-content">
+          <div class="feature-icon-emoji">🏆</div>
+          <div class="feature-title">Live Results</div>
+          <div class="feature-desc">Follow along in real time. Race-by-race results and standings updated the moment a race closes.</div>
+          <div class="feature-cta">Watch Live →</div>
+        </div>
+      </a>
+      <a class="feature-card feature-card-link" href="${portalLink}">
+        <img class="feature-card-bg" src="/public/images/home/feature-card-gold.jpg" alt="" />
+        <div class="feature-card-overlay"></div>
+        <div class="feature-card-content">
+          <div class="feature-icon-emoji">📋</div>
+          <div class="feature-title">Meet Management</div>
+          <div class="feature-desc">Build meets from scratch with registration, race builders, manual block scheduling, check-in, and standings.</div>
+          <div class="feature-cta">Go to Portal →</div>
+        </div>
+      </a>
+      <a class="feature-card feature-card-link" href="/rinks">
+        <img class="feature-card-bg" src="/public/images/home/feature-card-light.jpg" alt="" />
+        <div class="feature-card-overlay"></div>
+        <div class="feature-card-content">
+          <div class="feature-icon-emoji">📍</div>
+          <div class="feature-title">Find a Rink</div>
+          <div class="feature-desc">Discover inline speed skating venues and upcoming meets near you. Addresses, contact info, and schedules all in one place.</div>
+          <div class="feature-cta">Browse Rinks →</div>
+        </div>
+      </a>
+    </div>`
+  }));
+});
+
+// ── Submit a Meet (public) ────────────────────────────────────────────────────
+app.get('/submit-meet', (req, res) => {
+  const data=getSessionUser(req);
+  const ok=req.query.ok;
+  res.send(pageShell({title:'Submit Your Meet', description:'List your inline speed skating meet on SpeedSkateMeet.com for free. No account required. Reach skaters and families across the country.', user:data?.user||null, bodyHtml:`
+    <div class="page-header"><h1>Submit Your Meet</h1><div class="sub">List your inline speed skating meet on SpeedSkateMeet.com — free, no account required.</div></div>
+    ${ok?`<div class="card" style="border-left:4px solid var(--green);margin-bottom:16px"><div class="good">✅ Your meet has been submitted! Lee will review it and reach out to you shortly.</div></div>`:`
+    <div class="card">
+      <form method="POST" action="/submit-meet" class="stack">
+        <div class="form-grid cols-2">
+          <div><label>Meet Name *</label><input name="meetName" required placeholder="Wichita Spring Classic" /></div>
+          <div><label>Date *</label><input type="date" name="date" required /></div>
+          <div><label>City *</label><input name="city" required placeholder="Wichita" /></div>
+          <div><label>State *</label><input name="state" required placeholder="KS" maxlength="2" /></div>
+          <div><label>Your Name *</label><input name="contactName" required placeholder="Bob Jones" /></div>
+          <div><label>Your Email *</label><input type="email" name="contactEmail" required placeholder="bob@team.com" /></div>
+          <div><label>Your Phone</label><input type="tel" name="contactPhone" placeholder="(316) 555-1234" /></div>
+          <div><label>External Registration URL</label><input name="registrationUrl" placeholder="https://forms.google.com/..." /></div>
+        </div>
+        <div><label>Description</label><textarea name="description" placeholder="Tell skaters about your meet — venue, format, divisions, etc." rows="4"></textarea></div>
+        <div><button class="btn-orange" type="submit">Submit My Meet →</button></div>
+      </form>
+    </div>`}`}));
+});
+
+app.post('/submit-meet', (req, res) => {
+  const db=loadDb();
+  const pending={
+    id:'pm'+crypto.randomBytes(6).toString('hex'),
+    meetName:String(req.body.meetName||'').trim(),
+    date:String(req.body.date||'').trim(),
+    city:String(req.body.city||'').trim(),
+    state:String(req.body.state||'').trim(),
+    contactName:String(req.body.contactName||'').trim(),
+    contactEmail:String(req.body.contactEmail||'').trim(),
+    contactPhone:String(req.body.contactPhone||'').trim(),
+    registrationUrl:String(req.body.registrationUrl||'').trim(),
+    description:String(req.body.description||'').trim(),
+    submittedAt:nowIso(), status:'pending',
+  };
+  if(!pending.meetName||!pending.date||!pending.city||!pending.contactName||!pending.contactEmail)
+    return res.redirect('/submit-meet');
+  if(!Array.isArray(db.pendingMeets)) db.pendingMeets=[];
+  if(!Array.isArray(db.pendingRinks)) db.pendingRinks=[];
+  db.pendingMeets.push(pending);
+  saveDb(db);
+  // Text Lee
+  sendSms(ADMIN_PHONE, `🏁 New meet submission!\n${pending.meetName}\n${pending.city}, ${pending.state} • ${pending.date}\n${pending.contactName} • ${pending.contactEmail}\nReview: speedskatemeet.com/portal/pending-meets`);
+  res.redirect('/submit-meet?ok=1');
+});
+
+// ── Pending Meets (super admin only) ──────────────────────────────────────────
+app.get('/portal/pending-meets', requireRole('super_admin'), (req, res) => {
+  const pending = (req.db.pendingMeets || []).filter(p => p.status === 'pending');
+  const approved = (req.db.pendingMeets || []).filter(p => p.status === 'approved').slice(-10);
+  const rejected = (req.db.pendingMeets || []).filter(p => p.status === 'rejected').slice(-10);
+
+  res.send(pageShell({
+    title: 'Pending Meets',
+    user: req.user,
+    bodyHtml: renderPendingMeetsView({ pending, approved, rejected }),
+  }));
+});
+
+app.post('/portal/pending-meets/approve', requireRole('super_admin'), (req, res) => {
+  const db=req.db;
+  const p=(db.pendingMeets||[]).find(x=>x.id===String(req.body.id||''));
+  if(!p) return res.redirect('/portal/pending-meets');
+  p.status='approved'; p.approvedAt=nowIso();
+  // Create a lite meet in the meets array
+  const rink=db.rinks.find(r=>String(r.city||'').toLowerCase()===p.city.toLowerCase())||db.rinks[0];
+  const liteMeet={
+    id:nextId(db.meets), meetName:p.meetName, date:p.date, isPublic:true,
+    status:'published', isLiteMeet:true,
+    city:p.city, state:p.state,
+    rinkId:rink?rink.id:1,
+    registrationUrl:p.registrationUrl||'',
+    description:p.description||'',
+    contactName:p.contactName, contactEmail:p.contactEmail,
+    createdByUserId:1, createdAt:nowIso(), updatedAt:nowIso(),
+    races:[], blocks:[], registrations:[], groups:[], textAlerts:[],
+  };
+  db.meets.push(liteMeet);
+  saveDb(db);
+  // Email submitter
+  if(p.contactEmail) {
+    const html=emailHtmlWrap(`
+      <h2 style="color:#0F1F3D">Your Meet is Live! 🏁</h2>
+      <p>Hi ${esc(p.contactName)},</p>
+      <p>Your meet <strong>${esc(p.meetName)}</strong> has been approved and is now listed on SpeedSkateMeet.com!</p>
+      <p><a href="https://speedskatemeet.com/meets" style="background:#F97316;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;display:inline-block;margin-top:8px">View on SpeedSkateMeet →</a></p>
+      <p style="margin-top:16px">Interested in full race management — heat assignments, live scoring, text alerts, TV display? Reply to this email and we'll get you set up.</p>
+    `);
+    sendEmail(p.contactEmail, `Your Meet is Live — ${p.meetName}`, html, `Your meet ${p.meetName} is now live on SpeedSkateMeet.com!`);
+  }
+  res.redirect('/portal/pending-meets');
+});
+
+app.post('/portal/pending-meets/reject', requireRole('super_admin'), (req, res) => {
+  const db=req.db;
+  const p=(db.pendingMeets||[]).find(x=>x.id===String(req.body.id||''));
+  if(!p) return res.redirect('/portal/pending-meets');
+  p.status='rejected'; p.rejectedAt=nowIso(); p.rejectReason=String(req.body.reason||'').trim();
+  saveDb(db);
+  if(p.contactEmail) {
+    const reason=p.rejectReason||'It did not meet our listing requirements at this time.';
+    const html=emailHtmlWrap(`
+      <h2 style="color:#0F1F3D">Meet Submission Update</h2>
+      <p>Hi ${esc(p.contactName)},</p>
+      <p>Thank you for submitting <strong>${esc(p.meetName)}</strong> to SpeedSkateMeet.com.</p>
+      <p>Unfortunately we were unable to approve this listing at this time: <em>${esc(reason)}</em></p>
+      <p>If you have questions, reply to this email.</p>
+    `);
+    sendEmail(p.contactEmail, `Meet Submission Update — ${p.meetName}`, html, `Update regarding your meet submission ${p.meetName}.`);
+  }
+  res.redirect('/portal/pending-meets');
+});
+
 
 
 app.get('/meets', (req, res) => {

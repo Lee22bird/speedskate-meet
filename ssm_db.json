@@ -1,0 +1,39 @@
+{
+  "version": 19,
+  "createdAt": "2026-06-03T11:22:13.071Z",
+  "updatedAt": "2026-06-03T11:22:13.071Z",
+  "sessions": [],
+  "users": [
+    {
+      "id": 1,
+      "username": "Lbird22",
+      "password": "Redline22",
+      "displayName": "Lee Bird",
+      "roles": [
+        "super_admin",
+        "meet_director",
+        "judge",
+        "coach"
+      ],
+      "team": "Midwest Racing",
+      "active": true,
+      "createdAt": "2026-06-03T11:22:13.071Z"
+    }
+  ],
+  "rinks": [
+    {
+      "id": 1,
+      "name": "Roller City",
+      "city": "Wichita",
+      "state": "KS",
+      "team": "",
+      "address": "3234 S. Meridian Ave, Wichita, KS 67217",
+      "phone": "316-942-4555",
+      "website": "rollercitywichitaks.com",
+      "notes": ""
+    }
+  ],
+  "meets": [],
+  "rosters": [],
+  "setupPresets": []
+}
