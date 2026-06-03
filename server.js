@@ -126,6 +126,11 @@ const createBuilderRoutes = require('./routes/builderRoutes');
 const createRegistrationRoutes = require('./routes/registrationRoutes');
 const createRaceDayRoutes = require('./routes/raceDayRoutes');
 
+function rebuildTimeTrialRace(meet) {
+  const ttHelpers = require('./services/ttHelpers');
+  if (!ttHelpers || typeof ttHelpers.rebuildTimeTrialRace !== 'function') return null;
+  return ttHelpers.rebuildTimeTrialRace(meet);
+}
 
 const app = express();
 app.use(express.urlencoded({ extended: true }));
