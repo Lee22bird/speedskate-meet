@@ -43,6 +43,10 @@ function renderMeetBuilderView({ db, meet, query = {} }) {
   const presetDeletedFlash=query.presetDeleted?'<div class="card" style="border-left:4px solid var(--green);margin-bottom:12px"><div class="good">✅ Meet setup preset deleted.</div></div>':'';
   const setupPresetOptions = (db.setupPresets||[]).map(p=>`<option value="${esc(p.id)}">${esc(p.name||p.presetName||'Preset')}</option>`).join('');
   const presetSelectHtml = `${query.clearPreset?'<option value="" selected>Choose a preset</option>':''}${setupPresetOptions||'<option value="">(no presets)</option>'}`;
+  const meetStatus = String(meet.status || 'draft').toLowerCase();
+  const isPublished = meetStatus === 'published' || meetStatus === 'live' || meetStatus === 'complete' || meet.isPublic === true;
+  const statusLabel = isPublished ? 'Published' : 'Draft';
+  const statusBadgeClass = isPublished ? 'published' : 'draft';
 
   function divCardHtml(group, gi, divKey) {
     const div=group.divisions[divKey];
@@ -86,6 +90,16 @@ function renderMeetBuilderView({ db, meet, query = {} }) {
 
   return `
     <div class="page-header"><h1>Meet Builder</h1><div class="sub">${esc(meet.meetName)}</div></div>
+    <div class="builder-sticky-save">
+      <div class="builder-sticky-info">
+        <div class="builder-sticky-label">Meet Builder</div>
+        <div class="builder-sticky-title">${esc(meet.meetName || 'Untitled Meet')}</div>
+      </div>
+      <div class="builder-sticky-actions">
+        <span id="builderStatusBadge" class="builder-status-badge ${statusBadgeClass}">${statusLabel}</span>
+        <button class="btn-orange" type="submit" form="meetBuilderForm" formaction="/portal/meet/${meet.id}/builder/save-meet">Save Meet</button>
+      </div>
+    </div>
     ${savedFlash}
     ${presetSavedFlash}
     ${presetLoadedFlash}
@@ -117,7 +131,10 @@ function renderMeetBuilderView({ db, meet, query = {} }) {
             <h2 class="setup-title">Meet Setup</h2>
             <div class="setup-sub">Core meet details, venue, rules, and reusable presets.</div>
           </div>
-          <button class="btn2" type="submit" form="meetBuilderForm" formaction="/portal/meet/${meet.id}/builder/save-meet">Save Meet</button>
+          <div class="builder-head-actions">
+            <span class="builder-status-badge ${statusBadgeClass}">${statusLabel}</span>
+            <button class="btn2" type="submit" form="meetBuilderForm" formaction="/portal/meet/${meet.id}/builder/save-meet">Save Meet</button>
+          </div>
         </div>
         <div class="setup-body">
           <div class="setup-sections">
@@ -156,16 +173,37 @@ function renderMeetBuilderView({ db, meet, query = {} }) {
                 <div><label>Max Registration Cap</label><input type="number" name="maxRegistrationFee" value="${esc(String(meet.maxRegistrationFee||0))}" min="0" /><div class="note">0 = no cap</div></div>
               </div>
               <div style="margin-top:12px"><div class="note" style="margin:0">Total cost = base fee + selected event fees. Max cap applies when greater than 0.</div></div>
-              <div class="setup-fields" style="margin-top:20px">
-                <div><label>Status</label>
-                  <select name="status">
-                    <option value="draft"     ${meet.status==='draft'    ?'selected':''}>Draft</option>
-                    <option value="published" ${meet.status==='published'?'selected':''}>Published</option>
-                    <option value="live"      ${meet.status==='live'     ?'selected':''}>Live</option>
-                    <option value="complete"  ${meet.status==='complete' ?'selected':''}>Complete</option>
-                  </select>
+              <div class="builder-publish-card" style="margin-top:20px">
+                <input type="hidden" id="meetStatusInput" name="status" value="${esc(meetStatus || 'draft')}" />
+                <div>
+                  <div class="builder-publish-title">Published Meet</div>
+                  <div class="builder-publish-desc">Show this meet publicly on Find a Meet and allow public registration when registration is open.</div>
                 </div>
+                <label class="toggle-wrap builder-publish-toggle">
+                  <input type="checkbox" id="publishedToggle" value="published" class="toggle-input" ${isPublished?'checked':''} />
+                  <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                  <span id="publishedToggleText" class="toggle-label">${isPublished?'Published':'Draft'}</span>
+                </label>
               </div>
+              <script>
+                (function(){
+                  var toggle = document.getElementById('publishedToggle');
+                  var statusInput = document.getElementById('meetStatusInput');
+                  var toggleText = document.getElementById('publishedToggleText');
+                  var stickyBadge = document.getElementById('builderStatusBadge');
+                  if(!toggle || !statusInput) return;
+                  function syncStatus(){
+                    var published = !!toggle.checked;
+                    statusInput.value = published ? 'published' : 'draft';
+                    if(toggleText) toggleText.textContent = published ? 'Published' : 'Draft';
+                    if(stickyBadge){
+                      stickyBadge.textContent = published ? 'Published' : 'Draft';
+                      stickyBadge.className = 'builder-status-badge ' + (published ? 'published' : 'draft');
+                    }
+                  }
+                  toggle.addEventListener('change', syncStatus);
+                })();
+              </script>
             </section>
 
             <section class="setup-section">
