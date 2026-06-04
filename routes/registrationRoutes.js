@@ -25,6 +25,7 @@ const {
   raceMatchesRegAgeGender, assignSequentialLaneEntries,
   rebuildTimeTrialRace,
 } = require('../services/ttHelpers');
+const { ensureCurrentRace } = require('../services/raceDay');
 
 module.exports = function createRegistrationRoutes(deps = {}) {
   const router = express.Router();
