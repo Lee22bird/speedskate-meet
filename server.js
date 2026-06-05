@@ -125,6 +125,7 @@ const createAdminRoutes = require('./routes/adminRoutes');
 const createBuilderRoutes = require('./routes/builderRoutes');
 const createRegistrationRoutes = require('./routes/registrationRoutes');
 const createRaceDayRoutes = require('./routes/raceDayRoutes');
+const createSslImportRoutes = require('./routes/sslImportRoutes');
 
 function rebuildTimeTrialRace(meet) {
   const ttHelpers = require('./services/ttHelpers');
@@ -1709,6 +1710,7 @@ app.use('/', createAdminRoutes(routeDeps));
 app.use('/', createBuilderRoutes(routeDeps));
 app.use('/', createRegistrationRoutes(routeDeps));
 app.use('/', createRaceDayRoutes(routeDeps));
+app.use('/', createSslImportRoutes(routeDeps));
 
 // ── Start server ──────────────────────────────────────────────────────────────
 
