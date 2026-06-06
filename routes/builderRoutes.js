@@ -10,10 +10,6 @@ const {
   generateConfiguredRacesForMeet, ensureAtLeastOneBlock,
   ensureRegistrationTotalsAndNumbers,
   restoreBlockAssignmentsAfterRaceSync,
-  generateBaseRacesForMeet,
-  generateOpenRacesForMeet,
-  generateQuadRacesForMeet,
-  generateAdditionalRacesForMeet,
   OPEN_GROUP_DEFAULTS, QUAD_GROUP_DEFAULTS,
 } = require('../services/meetHelpers');
 const {
@@ -250,12 +246,9 @@ router.post('/portal/meet/:meetId/setup-presets/load', requireRole('meet_directo
   }
 
   // Presets should restore the director's block layout, not erase it.
-  // First rebuild the race structure from the preset settings, then map saved block raceIds
-  // onto the current meet's race IDs wherever possible.
-  generateBaseRacesForMeet(meet);
-  generateOpenRacesForMeet(meet);
-  generateQuadRacesForMeet(meet);
-  generateAdditionalRacesForMeet(meet);
+  // Rebuild race structure from the preset settings using the configured generator,
+  // then map saved block raceIds onto the current meet's race IDs wherever possible.
+  generateConfiguredRacesForMeet(meet);
   rebuildRaceAssignmentsSafe(meet);
   restorePresetBlocksIntoMeet(preset, meet);
 
