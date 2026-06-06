@@ -1,6 +1,6 @@
 const express = require('express');
 const { esc, cap } = require('../utils/html');
-const { nowIso, combineDateTime } = require('../utils/date');
+const { nowIso } = require('../utils/date');
 const { canEditMeet } = require('../utils/auth');
 const {
   getMeetOr404, meetRinkLabel, meetDateLabel, nextId,
@@ -10,6 +10,7 @@ const {
   generateConfiguredRacesForMeet, ensureAtLeastOneBlock,
   ensureRegistrationTotalsAndNumbers,
   restoreBlockAssignmentsAfterRaceSync,
+  combineDateTime,
   OPEN_GROUP_DEFAULTS, QUAD_GROUP_DEFAULTS,
 } = require('../services/meetHelpers');
 const {
