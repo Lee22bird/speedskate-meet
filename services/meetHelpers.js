@@ -3,6 +3,7 @@ const { nowIso } = require('../utils/date');
 const { esc, cap } = require('../utils/html');
 const { hasRole } = require('../utils/auth');
 const { calculateRegistrationTotal } = require('./pricing');
+const { buildCostWidget } = require('./pricingUi');
 const { computeMeetStandings } = require('./standings');
 const {
   generateBaseRacesForMeet,
