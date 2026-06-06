@@ -1,6 +1,6 @@
 const express = require('express');
 const { esc, cap } = require('../utils/html');
-const { nowIso } = require('../utils/date');
+const { nowIso, combineDateTime } = require('../utils/date');
 const { canEditMeet } = require('../utils/auth');
 const {
   getMeetOr404, meetRinkLabel, meetDateLabel, nextId,
@@ -10,19 +10,23 @@ const {
   generateConfiguredRacesForMeet, ensureAtLeastOneBlock,
   ensureRegistrationTotalsAndNumbers,
   restoreBlockAssignmentsAfterRaceSync,
+  generateBaseRacesForMeet,
+  generateOpenRacesForMeet,
+  generateQuadRacesForMeet,
+  generateAdditionalRacesForMeet,
   OPEN_GROUP_DEFAULTS, QUAD_GROUP_DEFAULTS,
 } = require('../services/meetHelpers');
 const {
   normalizeRelayEligibleGroupIds, normalizeRelayAgeRange,
   normalizeRelayTemplates, makeRelayRace, relayRaceExists,
-  renderRelayEligibleSkatersHtml,
+  renderRelayEligibleSkatersHtml, RELAY_TEMPLATE_ROWS,
 } = require('../services/relayHelpers');
 const {
   genderBucket, openGroupForTimeTrialReg, timeTrialRaceForMeet,
   timeTrialEntriesForMeet, rebuildTimeTrialRace, timeTrialLeaderboards,
   rebuildRaceAssignmentsSafe,
 } = require('../services/ttHelpers');
-const { raceDisplayStage } = require('../services/raceDay');
+const { raceDisplayStage, ensureCurrentRace } = require('../services/raceDay');
 
 module.exports = function createBuilderRoutes(deps = {}) {
   const router = express.Router();
