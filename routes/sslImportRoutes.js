@@ -685,7 +685,13 @@ function renderSslPackagePage({ db, user, selectedId, error, ok }) {
 
 module.exports = function createSslImportRoutes(deps = {}) {
   const router = express.Router();
-  const { requireRole, pageShell, saveDb } = deps;
+  const { requireRole, pageShell, saveDb, loadDb } = deps;
+
+  function routeDb(req) {
+    if (req && req.db) return req.db;
+    if (typeof loadDb === 'function') return loadDb();
+    throw new Error('SSM database loader is not available for this route.');
+  }
 
 
   router.get('/api/ssl/meets', (req, res) => {
@@ -693,7 +699,8 @@ module.exports = function createSslImportRoutes(deps = {}) {
       const today = String(req.query.from || new Date().toISOString().slice(0, 10)).slice(0, 10);
       const league = compactId(req.query.league || '');
       const includeIndependent = String(req.query.includeIndependent || req.query.include_independent || 'true').toLowerCase() !== 'false';
-      const meets = (req.db.meets || [])
+      const db = routeDb(req);
+      const meets = (db.meets || [])
         .filter(isPublishedMeet)
         .filter(meet => !meet.date || String(meet.date).slice(0, 10) >= today)
         .filter(meet => {
@@ -702,7 +709,7 @@ module.exports = function createSslImportRoutes(deps = {}) {
           return meetLeague === league || (includeIndependent && !meetLeague);
         })
         .sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')) || String(a.meetName || '').localeCompare(String(b.meetName || '')))
-        .map(meet => publicMeetPayload(req, req.db, meet));
+        .map(meet => publicMeetPayload(req, db, meet));
 
       return res.json({ schemaVersion: 1, source: 'SpeedSkateMeet', generated_at: nowIso(), meets });
     } catch (err) {
@@ -714,9 +721,10 @@ module.exports = function createSslImportRoutes(deps = {}) {
   router.get('/api/ssl/results/:meetId', (req, res) => {
     try {
       verifySslPackageApiKey(req);
-      const meet = (req.db.meets || []).find(m => String(m.id) === String(req.params.meetId));
+      const db = routeDb(req);
+      const meet = (db.meets || []).find(m => String(m.id) === String(req.params.meetId));
       if (!meet) return res.status(404).json({ ok: false, error: 'Meet not found.' });
-      const payload = buildSsmResultsPackage(req, req.db, meet);
+      const payload = buildSsmResultsPackage(req, db, meet);
       return res.json(payload);
     } catch (err) {
       return res.status(err.statusCode || 400).json({ ok: false, error: err.message });
@@ -757,13 +765,14 @@ module.exports = function createSslImportRoutes(deps = {}) {
     try {
       verifySslPackageApiKey(req);
       const payload = parseDirectPackageBody(req.body || {});
+      const db = routeDb(req);
       const result = upsertImportedPackage({
-        db: req.db,
+        db,
         payload,
         user: null,
         source: { via: 'api', name: 'SpeedSkateLeague Direct Submit' },
       });
-      saveDb(req.db);
+      saveDb(db);
       return res.json({
         ok: true,
         created: result.created,
