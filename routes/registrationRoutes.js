@@ -5,7 +5,7 @@ const { canEditMeet, hasRole } = require('../utils/auth');
 const { sendEmail, emailHtmlWrap } = require('../services/email');
 const {
   getMeetOr404, meetRinkLabel, meetDateLabel,
-  usarsAge, ageForReg, findAgeGroup, challengeAdjustedGroup, findChallengeUpGroup,
+  usarsAge, ageForReg, normalizeSkaterGender, displayGenderLabel, findAgeGroup, challengeAdjustedGroup, findChallengeUpGroup,
   nextId, nextHelmetNumber, ensureRegistrationTotalsAndNumbers,
   isRegistrationClosed, isPublicMeet,
   generateAdditionalRacesForMeet, ensureAtLeastOneBlock,
@@ -37,6 +37,7 @@ router.get('/meet/:meetId/register', (req, res) => {
   if(!isPublicMeet(meet)) return res.redirect('/meets');
   const closed=isRegistrationClosed(meet);
   const costWidget=buildRegistrationPricingPreview(meet);
+  const today = new Date().toISOString().split('T')[0];
   res.send(pageShell({title:'Register',user:data?.user||null, bodyHtml:`
     <div class="page-header"><h1>Register</h1><div class="sub">${esc(meet.meetName)}${meet.date?` • ${esc(meet.date)}`:''}</div></div>
     <div class="card">
@@ -44,14 +45,15 @@ router.get('/meet/:meetId/register', (req, res) => {
         <form method="POST" action="/meet/${meet.id}/register" class="stack">
           <div class="form-grid cols-3">
             <div><label>Skater Name</label><input name="name" required /></div>
-            <div><label>Date of Birth</label><input type="date" name="birthdate" min="1900-01-01" max="2026-04-06" required /><div class="note">Used for USARS division placement (age as of Jan 1)</div></div>
+            <div><label>Date of Birth</label><input type="date" name="birthdate" min="1900-01-01" max="${today}" required /><div class="note">Used for USARS division placement (age as of Jan 1)</div></div>
             <div>
               <label>Gender</label>
-              <select name="gender">
-                <option value="boys">Boy</option><option value="girls">Girl</option>
-                <option value="men">Men</option><option value="women">Women</option>
+              <select name="gender" required>
+                <option value="">Select...</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
               </select>
-              <div class="note">Ages 16+ are Men/Women divisions.</div>
+              <div class="note">SSM will place the skater into the correct USARS boy/girl/men/women division from birthdate.</div>
             </div>
             <div><label>Team</label><input name="team" list="teams-reg" value="Midwest Racing" /></div>
             <div><label>Email (for confirmation)</label><input type="email" name="email" placeholder="parent@email.com" /></div>
@@ -93,7 +95,7 @@ router.get('/meet/:meetId/register', (req, res) => {
 router.post('/meet/:meetId/register', (req, res) => {
   const db=loadDb(); const meet=getMeetOr404(db,req.params.meetId);
   if(!isPublicMeet(meet)||isRegistrationClosed(meet)) return res.redirect(`/meet/${req.params.meetId}/register`);
-  const gender=String(req.body.gender||'').trim()||'boys';
+  const gender=normalizeSkaterGender(req.body.gender)||'male';
   const birthdate=String(req.body.birthdate||'').trim();
   const compAge=usarsAge(birthdate,meet.date)||Number(req.body.age||0);
   const baseGroup=findAgeGroup(meet.groups,compAge,gender);
@@ -147,7 +149,7 @@ router.post('/meet/:meetId/register', (req, res) => {
 });
 
 function registrationForm(meet,reg,action,title) {
-  const gender=reg.gender||'boys';
+  const gender=normalizeSkaterGender(reg.gender)||'male';
   const isAdd = String(title || '').toLowerCase().includes('add');
   const today = new Date().toISOString().split('T')[0];
   return `
@@ -159,12 +161,11 @@ function registrationForm(meet,reg,action,title) {
             <div><label>Skater Name</label><input name="name" value="${esc(reg.name||'')}" required /></div>
             <div><label>Date of Birth</label><input type="date" name="birthdate" value="${esc(reg.birthdate||'')}" min="1900-01-01" max="${today}" /><div class="note">USARS age as of Jan 1 — ${reg.birthdate?'Age '+ageForReg(reg,meet):'enter birthdate for auto age'}</div></div>
             <div><label>Gender</label>
-              <select name="gender">
-                <option value="boys"  ${gender==='boys' ?'selected':''}>Boy</option>
-                <option value="girls" ${gender==='girls'?'selected':''}>Girl</option>
-                <option value="men"   ${gender==='men'  ?'selected':''}>Men</option>
-                <option value="women" ${gender==='women'?'selected':''}>Women</option>
+              <select name="gender" required>
+                <option value="male" ${gender==='male'?'selected':''}>Male</option>
+                <option value="female" ${gender==='female'?'selected':''}>Female</option>
               </select>
+              <div class="note">Division is auto-calculated from birthdate and gender.</div>
             </div>
             <div><label>Team</label><input name="team" list="teams-edit" value="${esc(reg.team||'Midwest Racing')}" /></div>
             <div><label>Sponsor (optional)</label><input name="sponsor" value="${esc(reg.sponsor||'')}" /></div>
@@ -396,7 +397,7 @@ router.get('/portal/meet/:meetId/registered/add', requireRole('meet_director'), 
   if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
   const nextMeetNumber=(meet.registrations||[]).reduce((max,r)=>Math.max(max,Number(r.meetNumber)||0),0)+1;
   const blankReg={
-    id:'', name:'', birthdate:'', age:'', gender:'boys', team:'Midwest Racing', sponsor:'', email:'',
+    id:'', name:'', birthdate:'', age:'', gender:'male', team:'Midwest Racing', sponsor:'', email:'',
     meetNumber:nextMeetNumber, helmetNumber:'', paid:false, checkedIn:false,
     options:{elite:true},
   };
@@ -412,7 +413,7 @@ router.get('/portal/meet/:meetId/registered/add', requireRole('meet_director'), 
 router.post('/portal/meet/:meetId/registered/add', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
-  const gender=String(req.body.gender||'').trim()||'boys';
+  const gender=normalizeSkaterGender(req.body.gender)||'male';
   const birthdate=String(req.body.birthdate||'').trim();
   const compAge=usarsAge(birthdate,meet.date)||Number(req.body.age||0);
   const baseGroup=findAgeGroup(meet.groups,compAge,gender);
@@ -466,7 +467,7 @@ router.post('/portal/meet/:meetId/registered/:regId/edit', requireRole('meet_dir
   if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
   const reg=(meet.registrations||[]).find(r=>Number(r.id)===Number(req.params.regId));
   if(!reg) return res.redirect(`/portal/meet/${meet.id}/registered`);
-  const gender=String(req.body.gender||'').trim()||'boys';
+  const gender=normalizeSkaterGender(req.body.gender)||'male';
   const birthdate=String(req.body.birthdate||'').trim()||reg.birthdate||'';
   const compAge=usarsAge(birthdate,meet.date)||Number(reg.age||0);
   const baseGroup=findAgeGroup(meet.groups,compAge,gender);

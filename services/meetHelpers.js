@@ -264,7 +264,7 @@ function migrateMeet(meet,fallbackOwnerId) {
   }));
   meet.registrations=meet.registrations.map((reg,idx)=>({
     id:Number(reg.id||idx+1), createdAt:String(reg.createdAt||nowIso()),
-    name:String(reg.name||''), age:Number(reg.age||0), gender:String(reg.gender||'boys'),
+    name:String(reg.name||''), age:Number(reg.age||0), gender:normalizeSkaterGender(reg.gender)||String(reg.gender||'male'),
     team:String(reg.team||'Independent'), sponsor:String(reg.sponsor||''),
     divisionGroupId:String(reg.divisionGroupId||''), divisionGroupLabel:String(reg.divisionGroupLabel||''),
     originalDivisionGroupId:String(reg.originalDivisionGroupId||reg.divisionGroupId||''),
@@ -452,11 +452,33 @@ function groupAgeMatch(group,age) {
   return ageMatch(ages,n);
 }
 
+function normalizeSkaterGender(value) {
+  const v = String(value || '').trim().toLowerCase();
+  if (['male', 'm', 'man', 'men', 'boy', 'boys'].includes(v)) return 'male';
+  if (['female', 'f', 'woman', 'women', 'girl', 'girls', 'lady', 'ladies'].includes(v)) return 'female';
+  return '';
+}
+
+function displayGenderLabel(value) {
+  const normalized = normalizeSkaterGender(value);
+  if (normalized === 'male') return 'Male';
+  if (normalized === 'female') return 'Female';
+  return '';
+}
+
+function genderAliasesForDivisionMatch(value) {
+  const normalized = normalizeSkaterGender(value);
+  if (normalized === 'male') return ['male', 'boys', 'boy', 'men', 'man'];
+  if (normalized === 'female') return ['female', 'girls', 'girl', 'women', 'woman', 'ladies', 'lady'];
+  const raw = String(value || '').trim().toLowerCase();
+  return raw ? [raw] : [];
+}
+
 function findAgeGroup(groups,age,genderGuess) {
   const n=Number(age); if(!Number.isFinite(n)) return null;
-  const normalizedGender=String(genderGuess||'').toLowerCase();
   const candidates=groups.filter(g=>groupAgeMatch(g,n)); if(!candidates.length) return null;
-  return candidates.find(g=>g.gender===normalizedGender)||candidates[0];
+  const genderAliases = genderAliasesForDivisionMatch(genderGuess);
+  return candidates.find(g=>genderAliases.includes(String(g.gender||'').toLowerCase()))||candidates[0];
 }
 
 function findChallengeUpGroup(groups,currentGroupId) {
@@ -1100,6 +1122,9 @@ module.exports = {
   isRegistrationClosed,
   ageMatch,
   groupAgeMatch,
+  normalizeSkaterGender,
+  displayGenderLabel,
+  genderAliasesForDivisionMatch,
   findAgeGroup,
   findChallengeUpGroup,
   challengeAdjustedGroup,

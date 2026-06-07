@@ -78,7 +78,7 @@ const {
   getMeetOr404, getMeetRink, meetRinkLabel, meetDateLabel, meetDayCount,
   nextSetupPresetId, makeSetupPresetFromMeet, presetRaceSignature, restorePresetBlocksIntoMeet,
   ensureAtLeastOneBlock, combineDateTime, isRegistrationClosed,
-  ageMatch, groupAgeMatch, findAgeGroup, findChallengeUpGroup, challengeAdjustedGroup,
+  ageMatch, groupAgeMatch, normalizeSkaterGender, findAgeGroup, findChallengeUpGroup, challengeAdjustedGroup,
   divisionEnabledForRegistration, nextHelmetNumber, ensureRegistrationTotalsAndNumbers,
   entryLabelForRegistration, normalizeDistances, baseRaceKey, isOpenDivision,
   registrationSortKey, distributeByTeam, buildHeatRaceShell, shouldSplitIntoHeats,
@@ -1111,7 +1111,7 @@ app.post('/portal/coach/roster/add', requireRole('coach','meet_director','super_
   const db=loadDb();
   const name=String(req.body.name||'').trim();
   const birthdate=String(req.body.birthdate||'').trim();
-  const gender=String(req.body.gender||'girls').trim();
+  const gender=normalizeSkaterGender(req.body.gender)||'female';
   if(!name||!birthdate) return res.redirect('/portal/coach/roster?err='+encodeURIComponent('Name and birthdate required'));
   if(!Array.isArray(db.rosters)) db.rosters=[];
   db.rosters.push({

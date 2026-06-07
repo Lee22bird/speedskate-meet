@@ -1,4 +1,5 @@
-const { esc, cap } = require('../utils/html');
+const { esc } = require('../utils/html');
+const { displayGenderLabel } = require('../services/meetHelpers');
 
 function renderCoachRosterView({ user, roster = [], ok = '', err = '' }) {
   const sortedRoster = [...roster].sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
@@ -7,7 +8,7 @@ function renderCoachRosterView({ user, roster = [], ok = '', err = '' }) {
     <tr>
       <td><strong>${esc(s.name)}</strong></td>
       <td>${esc(s.birthdate || '—')}</td>
-      <td>${esc(cap(s.gender || ''))}</td>
+      <td>${esc(displayGenderLabel(s.gender) || '—')}</td>
       <td>${esc(s.team || '')}</td>
       <td>
         <form method="POST" action="/portal/coach/roster/delete" style="display:inline">
@@ -31,12 +32,11 @@ function renderCoachRosterView({ user, roster = [], ok = '', err = '' }) {
             <div><label>Skater Name</label><input name="name" required placeholder="Jane Smith" /></div>
             <div><label>Date of Birth</label><input type="date" name="birthdate" min="1900-01-01" max="${today}" required /></div>
             <div><label>Gender</label>
-              <select name="gender">
-                <option value="girls">Girl</option>
-                <option value="boys">Boy</option>
-                <option value="women">Women</option>
-                <option value="men">Men</option>
+              <select name="gender" required>
+                <option value="female">Female</option>
+                <option value="male">Male</option>
               </select>
+              <div class="note">USARS division labels are calculated from birthdate.</div>
             </div>
           </div>
           <div><button class="btn-orange" type="submit">+ Add to Roster</button></div>
