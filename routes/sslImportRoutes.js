@@ -397,6 +397,54 @@ function upsertImportedPackage({ db, payload, user, source }) {
   return { pkg: row, created: true };
 }
 
+
+function publicBaseUrl(req) {
+  const configured = String(process.env.SSM_PUBLIC_BASE_URL || process.env.SSM_BASE_URL || process.env.PUBLIC_BASE_URL || '').trim().replace(/\/+$/, '');
+  if (configured) return configured;
+  const proto = String(req.get('x-forwarded-proto') || req.protocol || 'https').split(',')[0].trim();
+  return `${proto}://${req.get('host')}`.replace(/\/+$/, '');
+}
+
+function isPublishedMeet(meet) {
+  return !!meet && !meet.archivedAt && !!meet.isPublic && String(meet.status || '').toLowerCase() === 'published';
+}
+
+function meetLocationLabel(db, meet) {
+  const rink = (db.rinks || []).find(r => String(r.id) === String(meet.rinkId));
+  if (meet.customRinkName) return meet.customRinkName;
+  if (rink) return [rink.name, rink.city, rink.state].filter(Boolean).join(' · ');
+  return [meet.city, meet.state].filter(Boolean).join(', ');
+}
+
+function publicMeetPayload(req, db, meet) {
+  const base = publicBaseUrl(req);
+  const league = compactId(meet.leagueAssociation || meet.league || '');
+  const registerPath = `/meet/${encodeURIComponent(meet.id)}/register`;
+  return {
+    source: 'SpeedSkateMeet',
+    meet_id: `ssm-${meet.id}`,
+    ssm_meet_id: String(meet.id),
+    title: meet.meetName || 'Meet',
+    meet_title: meet.meetName || 'Meet',
+    date: meet.date || '',
+    event_date: meet.date || '',
+    meet_date: meet.date || '',
+    end_date: meet.endDate || '',
+    start_time: meet.startTime || '',
+    location: meetLocationLabel(db, meet),
+    venue: meetLocationLabel(db, meet),
+    meet_location: meetLocationLabel(db, meet),
+    league,
+    leagueAssociation: league,
+    status: meet.status || '',
+    registration_close_at: meet.registrationCloseAt || '',
+    registration_url: `${base}${registerPath}`,
+    ssm_url: `${base}${registerPath}`,
+    results_url: `${base}/meet/${encodeURIComponent(meet.id)}/results`,
+    updated_at: meet.updatedAt || meet.createdAt || '',
+  };
+}
+
 function renderPackageCard(pkg, selectedId) {
   const payload = pkg.payload || {};
   const meet = payload.meet || {};
@@ -547,6 +595,29 @@ function renderSslPackagePage({ db, user, selectedId, error, ok }) {
 module.exports = function createSslImportRoutes(deps = {}) {
   const router = express.Router();
   const { requireRole, pageShell, saveDb } = deps;
+
+
+  router.get('/api/ssl/meets', (req, res) => {
+    try {
+      const today = String(req.query.from || new Date().toISOString().slice(0, 10)).slice(0, 10);
+      const league = compactId(req.query.league || '');
+      const includeIndependent = String(req.query.includeIndependent || req.query.include_independent || 'true').toLowerCase() !== 'false';
+      const meets = (req.db.meets || [])
+        .filter(isPublishedMeet)
+        .filter(meet => !meet.date || String(meet.date).slice(0, 10) >= today)
+        .filter(meet => {
+          const meetLeague = compactId(meet.leagueAssociation || meet.league || '');
+          if (!league) return true;
+          return meetLeague === league || (includeIndependent && !meetLeague);
+        })
+        .sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')) || String(a.meetName || '').localeCompare(String(b.meetName || '')))
+        .map(meet => publicMeetPayload(req, req.db, meet));
+
+      return res.json({ schemaVersion: 1, source: 'SpeedSkateMeet', generated_at: nowIso(), meets });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
 
   router.get('/portal/ssl-packages', requireRole('meet_director'), (req, res) => {
     res.send(pageShell({

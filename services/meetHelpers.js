@@ -153,7 +153,7 @@ function baseGroups() {
 function defaultMeet(ownerUserId) {
   return {
     id:null, createdByUserId:ownerUserId, createdAt:nowIso(), updatedAt:nowIso(),
-    meetName:'New Meet', date:'', endDate:'', startTime:'', registrationCloseAt:'',
+    meetName:'New Meet', leagueAssociation:'', league:'', date:'', endDate:'', startTime:'', registrationCloseAt:'',
     rinkId:1, customRinkName:'', trackLength:100, lanes:4,
     timeTrialsEnabled:false, relayEnabled:false, judgesPanelRequired:true,
     notes:'', scheduleNotes:'', relayNotes:'', isPublic:false, status:'draft', tiebreaker:'d2',

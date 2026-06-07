@@ -486,7 +486,7 @@ app.post('/portal/pending-meets/approve', requireRole('super_admin'), (req, res)
   // Create a lite meet in the meets array
   const rink=db.rinks.find(r=>String(r.city||'').toLowerCase()===p.city.toLowerCase())||db.rinks[0];
   const liteMeet={
-    id:nextId(db.meets), meetName:p.meetName, date:p.date, isPublic:true,
+    id:nextId(db.meets), meetName:p.meetName, leagueAssociation:p.leagueAssociation||'', league:p.leagueAssociation||'', date:p.date, isPublic:true,
     status:'published', isLiteMeet:true,
     city:p.city, state:p.state,
     rinkId:rink?rink.id:1,

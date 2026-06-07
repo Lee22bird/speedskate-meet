@@ -68,6 +68,8 @@ function numberFieldFromBody(body, keys, fallback, minValue) {
 
 function saveMeetFields(meet, body, db) {
   meet.meetName=String(body.meetName||'New Meet').trim();
+  meet.leagueAssociation = String(body.leagueAssociation || body.league || '').trim();
+  meet.league = meet.leagueAssociation;
   meet.date=String(body.date||'').trim();
   meet.endDate=String(body.endDate||'').trim();
   meet.startTime=String(body.startTime||'').trim();

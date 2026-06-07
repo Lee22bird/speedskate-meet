@@ -1,5 +1,30 @@
 const { esc } = require('../utils/html');
 
+const LEAGUE_ASSOCIATION_OPTIONS = [
+  { value: '', label: 'None / Independent' },
+  { value: 'MSSL', label: 'MSSL — Mid South Speed League' },
+  { value: 'Southern Speed League', label: 'Southern Speed League' },
+  { value: 'All Star Speed League', label: 'All Star Speed League' },
+  { value: 'MWPS', label: 'MWPS — Midwest Point Series' },
+  { value: 'Florida Speed League', label: 'Florida Speed League' },
+  { value: 'GLSL', label: 'GLSL — Great Lakes Speed League' },
+  { value: 'South Central Speed Skating', label: 'South Central Speed Skating' },
+  { value: 'SWPISL', label: 'SWPISL — Southwest Pacific Inline Speed League' },
+  { value: 'TRIPOD_CUP', label: 'Tripod Cup Racing Series' },
+  { value: 'TRIPLE_CROWN', label: 'Triple Crown' },
+  { value: 'USARS', label: 'USA Roller Sports' },
+];
+
+function renderLeagueAssociationOptions(value) {
+  const current = String(value || '').trim();
+  const known = new Set(LEAGUE_ASSOCIATION_OPTIONS.map(row => row.value));
+  const rows = known.has(current) ? LEAGUE_ASSOCIATION_OPTIONS : [
+    ...LEAGUE_ASSOCIATION_OPTIONS,
+    { value: current, label: current },
+  ];
+  return rows.map(row => `<option value="${esc(row.value)}" ${String(row.value) === current ? 'selected' : ''}>${esc(row.label)}</option>`).join('');
+}
+
 function toggleSwitch(name, checked, label='', value='on') {
   return `
     <label class="toggle-wrap">
@@ -141,6 +166,7 @@ function renderMeetBuilderView({ db, meet, query = {} }) {
                 <div class="setup-mini-title">Meet Identity</div>
                 <div class="setup-fields">
                   <div class="setup-field-full"><label>Meet Name</label><input name="meetName" value="${esc(meet.meetName)}" required /></div>
+                  <div class="setup-field-full"><label>League Association</label><select name="leagueAssociation">${renderLeagueAssociationOptions(meet.leagueAssociation || meet.league || '')}</select><div class="note">Optional. This tells SpeedSkateLeague which league schedule this meet belongs to. Teams from any SSL league can still register.</div></div>
                 </div>
               </div>
               <div class="setup-mini-card">
