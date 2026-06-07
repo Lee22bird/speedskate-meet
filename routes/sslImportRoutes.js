@@ -1,7 +1,19 @@
 const express = require('express');
 const crypto = require('crypto');
 const { esc } = require('../utils/html');
+const { canEditMeet } = require('../utils/auth');
 const { nowIso } = require('../utils/date');
+const {
+  nextId,
+  nextHelmetNumber,
+  usarsAge,
+  findAgeGroup,
+  challengeAdjustedGroup,
+  generateAdditionalRacesForMeet,
+} = require('../services/meetHelpers');
+const { calcRegistrationCost } = require('../services/pricing');
+const { rebuildRaceAssignmentsSafe } = require('../services/ttHelpers');
+const { ensureCurrentRace } = require('../services/raceDay');
 
 function ensurePackageStore(db) {
   if (!Array.isArray(db.sslRegistrationPackages)) db.sslRegistrationPackages = [];
@@ -15,6 +27,7 @@ function safePackageId() {
 function parsePackage(raw) {
   const text = String(raw || '').trim();
   if (!text) throw new Error('Paste an SSL registration package JSON export first.');
+
   let payload;
   try {
     payload = JSON.parse(text);
@@ -32,15 +45,209 @@ function parsePackage(raw) {
   return payload;
 }
 
+function compactId(value) {
+  return String(value || '').trim();
+}
+
+function normalizeName(value) {
+  return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
 function eventList(row) {
   const names = Array.isArray(row?.selected_event_names) ? row.selected_event_names : [];
   return names.length ? names.join(', ') : 'No events selected';
+}
+
+function selectedEventSet(row) {
+  const out = new Set();
+  const selected = row?.selected_events;
+  const add = key => out.add(String(key || '').trim().toLowerCase());
+
+  if (Array.isArray(selected)) selected.forEach(add);
+  if (selected && typeof selected === 'object' && !Array.isArray(selected)) {
+    Object.entries(selected).forEach(([key, value]) => {
+      if (value) add(key);
+    });
+  }
+  (Array.isArray(row?.selected_event_names) ? row.selected_event_names : []).forEach(name => {
+    const s = String(name || '').trim().toLowerCase();
+    if (!s) return;
+    if (s.includes('challenge')) add('challengeUp');
+    else if (s.includes('novice')) add('novice');
+    else if (s.includes('elite')) add('elite');
+    else if (s.includes('open')) add('open');
+    else if (s.includes('quad')) add('quad');
+    else if (s.includes('relay')) add('relays');
+    else if (s.includes('time')) add('timeTrials');
+    else if (s.includes('skateability') || s.includes('additional') || s.includes('diaper')) add('additional');
+  });
+
+  return out;
+}
+
+function regOptionsFromSslRow(row, meet) {
+  const opts = selectedEventSet(row);
+  const firstAdditional = (meet.additionalGroups || meet.additionalRaceGroups || meet.additionalRaces || meet.skateabilityGroups || []).find(g => g && g.enabled);
+  const wantsRelays = opts.has('relays') || opts.has('relay') || opts.has('relay2person') || opts.has('relay3person') || opts.has('relay4person');
+  const wantsAdditional = opts.has('additional') || opts.has('skateability') || opts.has('diaperdash') || opts.has('diaper_dash');
+
+  return {
+    challengeUp: opts.has('challengeup') || opts.has('challenge_up'),
+    novice: opts.has('novice'),
+    elite: opts.has('elite') || (!opts.has('novice') && !opts.has('open') && !opts.has('quad') && !wantsAdditional),
+    open: opts.has('open'),
+    quad: opts.has('quad'),
+    timeTrials: opts.has('timetrials') || opts.has('time_trials') || opts.has('time trial'),
+    relay2Person: opts.has('relay2person') || opts.has('relay_2_person') || wantsRelays,
+    relay3Person: opts.has('relay3person') || opts.has('relay_3_person'),
+    relay4Person: opts.has('relay4person') || opts.has('relay_4_person'),
+    relays: wantsRelays,
+    additional: wantsAdditional,
+    additionalGroupId: wantsAdditional && firstAdditional ? String(firstAdditional.id || '') : '',
+    skateability: wantsAdditional,
+    skateabilityGroupId: wantsAdditional && firstAdditional ? String(firstAdditional.id || '') : '',
+  };
+}
+
+function genderFromRow(row) {
+  const raw = String(row.gender || row.sex || '').trim().toLowerCase();
+  if (['boys', 'boy', 'male', 'm'].includes(raw)) return 'boys';
+  if (['girls', 'girl', 'female', 'f'].includes(raw)) return 'girls';
+  if (['men', 'man'].includes(raw)) return 'men';
+  if (['women', 'woman', 'ladies'].includes(raw)) return 'women';
+
+  const group = String(row.age_group || '').toLowerCase();
+  if (group.includes('men') || group.includes('male')) return 'men';
+  if (group.includes('women') || group.includes('ladies') || group.includes('female')) return 'women';
+  if (group.includes('boys')) return 'boys';
+  if (group.includes('girls')) return 'girls';
+  return 'boys';
+}
+
+function activeMeetsForUser(db, user) {
+  return (db.pendingMeets || [])
+    .filter(meet => meet && !meet.archivedAt && canEditMeet(user, meet))
+    .sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')) || String(a.meetName || '').localeCompare(String(b.meetName || '')));
+}
+
+function findPackageById(db, pkgId) {
+  return ensurePackageStore(db).find(p => String(p.id) === String(pkgId));
+}
+
+function packageAppliedToMeet(pkg, meetId) {
+  return (pkg.appliedToMeets || []).find(row => String(row.meetId) === String(meetId));
+}
+
+function duplicateRegistration(meet, payload, row) {
+  const sslId = compactId(row.ssl_user_id || row.skater_id);
+  const pkgId = compactId(payload.package_id);
+  const name = normalizeName(row.full_name);
+  const team = normalizeName(row.team || payload.team);
+
+  return (meet.registrations || []).find(reg => {
+    if (sslId && String(reg.sslUserId || '') === sslId) return true;
+    if (sslId && String(reg.importSource || '') === 'ssl' && String(reg.importSourceSkaterId || '') === sslId) return true;
+    if (pkgId && String(reg.importPackageId || '') === pkgId && name && normalizeName(reg.name) === name) return true;
+    return name && team && normalizeName(reg.name) === name && normalizeName(reg.team) === team;
+  });
+}
+
+function makeRegistrationFromSslRow(meet, payload, row) {
+  const gender = genderFromRow(row);
+  const birthdate = compactId(row.birthdate || row.date_of_birth || row.dob);
+  const age = usarsAge(birthdate, meet.date) || Number(row.age || 0) || '';
+  const baseGroup = findAgeGroup(meet.groups || [], age, gender);
+  const opts = regOptionsFromSslRow(row, meet);
+  const finalGroup = challengeAdjustedGroup(meet, baseGroup, !!opts.challengeUp);
+  const requestedHelmet = Number(row.helmet_number || 0);
+  const helmetNumber = Number.isFinite(requestedHelmet) && requestedHelmet > 0 ? requestedHelmet : nextHelmetNumber(meet);
+  const meetNumber = (meet.registrations || []).reduce((max, reg) => Math.max(max, Number(reg.meetNumber) || 0), 0) + 1;
+
+  return {
+    id: nextId(meet.registrations || []),
+    createdAt: nowIso(),
+    name: compactId(row.full_name) || 'SSL Skater',
+    birthdate,
+    age,
+    gender,
+    email: compactId(row.email || ''),
+    team: compactId(row.team || payload.team) || payload.team || '',
+    sponsor: compactId(row.sponsor || ''),
+    originalDivisionGroupId: baseGroup?.id || '',
+    originalDivisionGroupLabel: baseGroup?.label || '',
+    divisionGroupId: finalGroup?.id || '',
+    divisionGroupLabel: finalGroup?.label || row.age_group || 'Unassigned',
+    meetNumber,
+    helmetNumber,
+    paid: false,
+    checkedIn: false,
+    totalCost: calcRegistrationCost(meet, opts),
+    options: opts,
+    importSource: 'ssl',
+    importSourceName: 'SpeedSkateLeague',
+    importPackageId: compactId(payload.package_id),
+    importPackageMeetId: compactId(payload.meet?.ssl_meet_id),
+    importSourceSkaterId: compactId(row.ssl_user_id || row.skater_id),
+    sslUserId: compactId(row.ssl_user_id || row.skater_id),
+    importedAt: nowIso(),
+    attendanceUpdatedAt: row.attendance_updated_at || null,
+  };
+}
+
+function applyPackageToMeet({ db, pkg, meet, user }) {
+  if (!meet) throw new Error('Select a valid meet before applying this package.');
+  if (packageAppliedToMeet(pkg, meet.id)) throw new Error('This SSL package has already been applied to that meet.');
+
+  const payload = pkg.payload || {};
+  const rows = Array.isArray(payload.skaters) ? payload.skaters : [];
+  meet.registrations = Array.isArray(meet.registrations) ? meet.registrations : [];
+
+  const created = [];
+  const skipped = [];
+
+  for (const row of rows) {
+    if (!compactId(row.full_name)) {
+      skipped.push({ row, reason: 'missing name' });
+      continue;
+    }
+    const duplicate = duplicateRegistration(meet, payload, row);
+    if (duplicate) {
+      skipped.push({ row, reason: 'duplicate registration' });
+      continue;
+    }
+    const reg = makeRegistrationFromSslRow(meet, payload, row);
+    meet.registrations.push(reg);
+    created.push(reg);
+  }
+
+  if (created.length) {
+    generateAdditionalRacesForMeet(meet);
+    rebuildRaceAssignmentsSafe(meet);
+    ensureCurrentRace(meet);
+  }
+
+  pkg.status = 'applied';
+  pkg.updatedAt = nowIso();
+  pkg.updatedByUserId = user.id;
+  pkg.appliedToMeets = Array.isArray(pkg.appliedToMeets) ? pkg.appliedToMeets : [];
+  pkg.appliedToMeets.push({
+    meetId: meet.id,
+    meetName: meet.meetName || '',
+    createdCount: created.length,
+    skippedCount: skipped.length,
+    appliedAt: nowIso(),
+    appliedByUserId: user.id,
+    appliedBy: user.displayName || user.username || 'SSM User',
+  });
+
+  return { created, skipped };
 }
 
 function renderPackageCard(pkg, selectedId) {
   const payload = pkg.payload || {};
   const meet = payload.meet || {};
   const counts = payload.counts || {};
+  const appliedCount = Array.isArray(pkg.appliedToMeets) ? pkg.appliedToMeets.length : 0;
   const isSelected = String(pkg.id) === String(selectedId || '');
   return `
     <a class="ssl-package-row${isSelected ? ' active' : ''}" href="/portal/ssl-packages?id=${esc(pkg.id)}">
@@ -48,11 +255,40 @@ function renderPackageCard(pkg, selectedId) {
         <div class="ssl-package-title">${esc(meet.title || 'SSL Registration Package')}</div>
         <div class="ssl-package-meta">${esc(payload.team || 'Team')} • ${esc(meet.date || 'Date TBD')} ${meet.location ? '• ' + esc(meet.location) : ''}</div>
       </div>
-      <div class="ssl-package-count">${esc(counts.ready ?? (payload.skaters || []).length)} ready</div>
+      <div class="ssl-package-count">${appliedCount ? esc(appliedCount + ' applied') : esc((counts.ready ?? (payload.skaters || []).length) + ' ready')}</div>
     </a>`;
 }
 
-function renderPackagePreview(pkg) {
+function renderApplyForm({ pkg, db, user }) {
+  if (!pkg) return '';
+  const meets = activeMeetsForUser(db, user);
+  if (!meets.length) {
+    return `<div class="ssl-warning"><b>No editable active meets found.</b> Create or unarchive a meet before applying this package.</div>`;
+  }
+
+  return `
+    <form method="POST" action="/portal/ssl-packages/${esc(pkg.id)}/apply" class="ssl-apply-form" onsubmit="return confirm('Create SSM registrations from this SSL package? Existing duplicates will be skipped.');">
+      <div>
+        <label>Apply package to SSM meet</label>
+        <select name="meetId" required>
+          <option value="">— Select meet —</option>
+          ${meets.map(meet => `<option value="${esc(meet.id)}">${esc(meet.meetName || 'Meet')} ${meet.date ? '— ' + esc(meet.date) : ''}</option>`).join('')}
+        </select>
+      </div>
+      <button class="btn-orange" type="submit">Create Registrations</button>
+    </form>`;
+}
+
+function renderAppliedHistory(pkg) {
+  const rows = Array.isArray(pkg?.appliedToMeets) ? pkg.appliedToMeets : [];
+  if (!rows.length) return '';
+  return `
+    <div class="good" style="margin-bottom:14px">
+      Applied history: ${rows.map(row => `${esc(row.meetName || 'Meet')} — ${esc(row.createdCount || 0)} created, ${esc(row.skippedCount || 0)} skipped`).join(' · ')}
+    </div>`;
+}
+
+function renderPackagePreview(pkg, db, user) {
   if (!pkg) {
     return `<div class="card ssl-import-empty"><h2>No package selected</h2><p class="muted">Import an SSL package or select one from the list.</p></div>`;
   }
@@ -86,7 +322,7 @@ function renderPackagePreview(pkg) {
           <h2 style="margin:0">${esc(meet.title || 'Meet')}</h2>
           <div class="muted">${esc(payload.team || 'Team')} • ${esc(meet.date || 'Date TBD')} ${meet.location ? '• ' + esc(meet.location) : ''}</div>
         </div>
-        <span class="chip chip-sky">Pending Review</span>
+        <span class="chip ${pkg.status === 'applied' ? 'chip-green' : 'chip-sky'}">${pkg.status === 'applied' ? 'Applied' : 'Pending Review'}</span>
       </div>
 
       <div class="ssl-import-stats">
@@ -96,7 +332,9 @@ function renderPackagePreview(pkg) {
         <div><b>${esc(payload.package_id || pkg.id)}</b><span>Package ID</span></div>
       </div>
 
+      ${renderAppliedHistory(pkg)}
       ${warningHtml || `<div class="good" style="margin-bottom:14px">No package warnings found.</div>`}
+      ${renderApplyForm({ pkg, db, user })}
 
       <table class="table">
         <thead><tr><th>Skater</th><th>Helmet</th><th>Division</th><th>Events</th></tr></thead>
@@ -104,7 +342,7 @@ function renderPackagePreview(pkg) {
       </table>
 
       <div class="hr"></div>
-      <div class="muted small">Imported ${esc(pkg.createdAt || '')} by ${esc(pkg.createdBy || 'SSM user')}. Auto-create registrations is intentionally disabled in this first bridge pass.</div>
+      <div class="muted small">Imported ${esc(pkg.createdAt || '')} by ${esc(pkg.createdBy || 'SSM user')}. Applying a package creates SSM registrations, skips duplicates, and rebuilds race assignments.</div>
     </div>`;
 }
 
@@ -126,9 +364,11 @@ function renderSslPackagePage({ db, user, selectedId, error, ok }) {
       .ssl-import-stats span{font-size:11px;text-transform:uppercase;letter-spacing:.06em;font-weight:800;color:var(--muted);}
       .ssl-warning{border:1px solid #fed7aa;background:#fff7ed;color:#9a3412;border-radius:14px;padding:11px 13px;margin-bottom:10px;font-weight:700;}
       .ssl-import-empty{text-align:center;padding:40px;}
-      @media(max-width:920px){.ssl-import-grid{grid-template-columns:1fr}.ssl-import-stats{grid-template-columns:1fr 1fr;}}
+      .ssl-apply-form{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:end;border:1px solid var(--border);background:#f8fafc;border-radius:14px;padding:12px;margin-bottom:14px;}
+      .ssl-apply-form label{display:block;font-size:12px;font-weight:900;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;}
+      @media(max-width:920px){.ssl-import-grid{grid-template-columns:1fr}.ssl-import-stats{grid-template-columns:1fr 1fr;}.ssl-apply-form{grid-template-columns:1fr;}}
     </style>
-    <div class="page-header"><h1>SSL Registration Packages</h1><div class="sub">Review team registration packages exported from SpeedSkateLeague before creating SSM registrations.</div></div>
+    <div class="page-header"><h1>SSL Registration Packages</h1><div class="sub">Review team registration packages exported from SpeedSkateLeague and create SSM registrations.</div></div>
     ${error ? `<div class="card" style="border-left:4px solid var(--red);margin-bottom:12px"><div class="danger">${esc(error)}</div></div>` : ''}
     ${ok ? `<div class="card" style="border-left:4px solid var(--green);margin-bottom:12px"><div class="good">${esc(ok)}</div></div>` : ''}
     <div class="ssl-import-grid">
@@ -146,7 +386,7 @@ function renderSslPackagePage({ db, user, selectedId, error, ok }) {
           ${packages.length ? packages.map(p => renderPackageCard(p, selected?.id)).join('') : `<div class="muted">No SSL packages imported yet.</div>`}
         </div>
       </div>
-      ${renderPackagePreview(selected)}
+      ${renderPackagePreview(selected, db, user)}
     </div>`;
 }
 
@@ -194,6 +434,24 @@ module.exports = function createSslImportRoutes(deps = {}) {
       return res.redirect('/portal/ssl-packages?id=' + encodeURIComponent(row.id) + '&ok=' + encodeURIComponent('SSL package imported for review.'));
     } catch (err) {
       return res.redirect('/portal/ssl-packages?error=' + encodeURIComponent(err.message));
+    }
+  });
+
+  router.post('/portal/ssl-packages/:pkgId/apply', requireRole('meet_director'), (req, res) => {
+    const pkgId = req.params.pkgId;
+    try {
+      const pkg = findPackageById(req.db, pkgId);
+      if (!pkg) throw new Error('SSL package not found.');
+
+      const meetId = String(req.body.meetId || '').trim();
+      const meet = (req.db.pendingMeets || []).find(m => String(m.id) === meetId);
+      if (!meet || !canEditMeet(req.user, meet)) throw new Error('You do not have permission to apply this package to that meet.');
+
+      const result = applyPackageToMeet({ db: req.db, pkg, meet, user: req.user });
+      saveDb(req.db);
+      return res.redirect('/portal/ssl-packages?id=' + encodeURIComponent(pkg.id) + '&ok=' + encodeURIComponent(`Created ${result.created.length} registration${result.created.length === 1 ? '' : 's'} from SSL. Skipped ${result.skipped.length} duplicate${result.skipped.length === 1 ? '' : 's'}.`));
+    } catch (err) {
+      return res.redirect('/portal/ssl-packages?id=' + encodeURIComponent(pkgId) + '&error=' + encodeURIComponent(err.message));
     }
   });
 
