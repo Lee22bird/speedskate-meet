@@ -14,6 +14,7 @@ const {
 const { calcRegistrationCost } = require('../services/pricing');
 const { rebuildRaceAssignmentsSafe } = require('../services/ttHelpers');
 const { ensureCurrentRace } = require('../services/raceDay');
+const { computeMeetStandings } = require('../services/standings');
 
 function ensurePackageStore(db) {
   if (!Array.isArray(db.sslRegistrationPackages)) db.sslRegistrationPackages = [];
@@ -445,6 +446,96 @@ function publicMeetPayload(req, db, meet) {
   };
 }
 
+
+function registrationById(meet) {
+  const map = new Map();
+  for (const reg of meet.registrations || []) {
+    map.set(String(reg.id), reg);
+    map.set(String(Number(reg.id)), reg);
+  }
+  return map;
+}
+
+function normalizeClassType(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (raw === 'novice') return 'novice';
+  if (raw === 'elite') return 'elite';
+  if (raw.includes('novice')) return 'novice';
+  if (raw.includes('elite')) return 'elite';
+  return raw || 'division';
+}
+
+function safeResultKey(parts) {
+  return parts.map(part => String(part || '').replace(/[^a-zA-Z0-9_.:-]/g, '_')).join('|');
+}
+
+function buildSsmResultsPackage(req, db, meet) {
+  const sections = computeMeetStandings(meet);
+  const regMap = registrationById(meet);
+  const packageId = `SSM-RESULTS-${meet.id}-${Date.now()}`;
+  const results = [];
+
+  for (const section of sections || []) {
+    const divisionLabel = [section.groupLabel, section.division ? String(section.division).replace(/^./, c => c.toUpperCase()) : ''].filter(Boolean).join(' ');
+    const classType = normalizeClassType(section.division);
+
+    for (const standing of section.standings || []) {
+      const reg = regMap.get(String(standing.registrationId || '')) || {};
+      const sslSkaterId = compactId(reg.sslSkaterId || reg.importSourceSkaterId || '');
+      if (!isValidSslSkaterId(sslSkaterId)) continue;
+
+      for (const score of standing.raceScores || []) {
+        const race = (section.races || []).find(r => String(r.id) === String(score.raceId)) || {};
+        const resultKey = safeResultKey(['ssm', meet.id, sslSkaterId, section.key, score.raceId, score.distanceLabel]);
+        results.push({
+          result_key: resultKey,
+          result_type: 'division_race',
+          ssl_skater_id: sslSkaterId,
+          ssm_registration_id: compactId(standing.registrationId),
+          skater_name: standing.skaterName || reg.name || '',
+          team: standing.team || reg.team || '',
+          division_label: divisionLabel,
+          group_id: section.groupId || '',
+          group_label: section.groupLabel || '',
+          class_type: classType,
+          distance_label: score.distanceLabel || race.distanceLabel || '',
+          race_id: compactId(score.raceId || race.id),
+          place: Number(score.place || 0) || null,
+          points: Number(score.points || 0) || 0,
+          overall_place: Number(standing.overallPlace || 0) || null,
+          total_points: Number(standing.totalPoints || 0) || 0,
+          tiebreaker_used: !!standing.tiebreakerUsed,
+        });
+      }
+    }
+  }
+
+  return {
+    schemaVersion: 1,
+    package_type: 'ssm_results_package',
+    package_id: packageId,
+    generated_at: nowIso(),
+    source: {
+      system: 'SpeedSkateMeet',
+      url: publicBaseUrl(req),
+    },
+    meet: {
+      ssm_meet_id: String(meet.id),
+      title: meet.meetName || 'Meet',
+      date: meet.date || '',
+      location: meetLocationLabel(db, meet),
+      league: compactId(meet.leagueAssociation || meet.league || ''),
+      results_url: `${publicBaseUrl(req)}/meet/${encodeURIComponent(meet.id)}/results`,
+    },
+    counts: {
+      results: results.length,
+      linked_skaters: new Set(results.map(r => r.ssl_skater_id)).size,
+      divisions: new Set(results.map(r => `${r.division_label}|${r.class_type}`)).size,
+    },
+    results,
+  };
+}
+
 function renderPackageCard(pkg, selectedId) {
   const payload = pkg.payload || {};
   const meet = payload.meet || {};
@@ -616,6 +707,19 @@ module.exports = function createSslImportRoutes(deps = {}) {
       return res.json({ schemaVersion: 1, source: 'SpeedSkateMeet', generated_at: nowIso(), meets });
     } catch (err) {
       return res.status(500).json({ error: err.message });
+    }
+  });
+
+
+  router.get('/api/ssl/results/:meetId', (req, res) => {
+    try {
+      verifySslPackageApiKey(req);
+      const meet = (req.db.meets || []).find(m => String(m.id) === String(req.params.meetId));
+      if (!meet) return res.status(404).json({ ok: false, error: 'Meet not found.' });
+      const payload = buildSsmResultsPackage(req, req.db, meet);
+      return res.json(payload);
+    } catch (err) {
+      return res.status(err.statusCode || 400).json({ ok: false, error: err.message });
     }
   });
 
