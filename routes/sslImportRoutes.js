@@ -24,6 +24,51 @@ function safePackageId() {
   return 'ssl_pkg_' + crypto.randomBytes(6).toString('hex');
 }
 
+function packageSchemaVersion(payload) {
+  const raw = payload?.schemaVersion ?? payload?.schema_version ?? payload?.version;
+  const n = Number(raw || 0);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+function isValidSslSkaterId(value) {
+  return /^SSL-\d{6,}$/i.test(String(value || '').trim());
+}
+
+function normalizePackageGender(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (['male', 'm', 'boy', 'boys', 'man', 'men'].includes(raw)) return 'male';
+  if (['female', 'f', 'girl', 'girls', 'woman', 'women', 'ladies'].includes(raw)) return 'female';
+  return raw;
+}
+
+function validatePackageSchemaV1(payload) {
+  if (payload.package_type !== 'ssl_team_registration_package') {
+    throw new Error('This does not look like an SSL team registration package.');
+  }
+  if (packageSchemaVersion(payload) !== 1) throw new Error('Unsupported SSL package schema. Expected schemaVersion 1.');
+  if (!compactId(payload.package_id)) throw new Error('Package is missing package_id.');
+  if (!compactId(payload.team)) throw new Error('Package is missing team name.');
+  if (!payload.meet || typeof payload.meet !== 'object') throw new Error('Package is missing meet details.');
+  if (!compactId(payload.meet.ssl_meet_id)) throw new Error('Package meet is missing ssl_meet_id.');
+  if (!compactId(payload.meet.title)) throw new Error('Package meet is missing title.');
+  if (!Array.isArray(payload.skaters)) throw new Error('Package is missing the skaters array.');
+
+  payload.skaters.forEach((row, index) => {
+    const label = `Skater row ${index + 1}`;
+    if (!isValidSslSkaterId(row?.ssl_skater_id)) throw new Error(`${label} is missing a valid ssl_skater_id.`);
+    if (!compactId(row.full_name)) throw new Error(`${label} is missing full_name.`);
+    if (!compactId(row.birthdate)) throw new Error(`${label} is missing birthdate.`);
+    const gender = normalizePackageGender(row.gender);
+    if (!['male', 'female'].includes(gender)) throw new Error(`${label} must have gender male or female.`);
+    if (compactId(row.attendance_status || 'attending') !== 'attending') throw new Error(`${label} is not marked attending.`);
+    if (!row.selected_events || typeof row.selected_events !== 'object' || Array.isArray(row.selected_events)) {
+      throw new Error(`${label} is missing selected_events.`);
+    }
+  });
+
+  return payload;
+}
+
 function parsePackage(raw) {
   const text = String(raw || '').trim();
   if (!text) throw new Error('Paste an SSL registration package JSON export first.');
@@ -35,14 +80,7 @@ function parsePackage(raw) {
     throw new Error('That is not valid JSON. Export the package from SSL again and paste the full file contents.');
   }
 
-  if (payload.package_type !== 'ssl_team_registration_package') {
-    throw new Error('This does not look like an SSL team registration package.');
-  }
-  if (!payload.team) throw new Error('Package is missing team name.');
-  if (!payload.meet || !payload.meet.title) throw new Error('Package is missing meet details.');
-  if (!Array.isArray(payload.skaters)) throw new Error('Package is missing the skaters array.');
-
-  return payload;
+  return validatePackageSchemaV1(payload);
 }
 
 function compactId(value) {
@@ -110,18 +148,13 @@ function regOptionsFromSslRow(row, meet) {
 }
 
 function genderFromRow(row) {
-  const raw = String(row.gender || row.sex || '').trim().toLowerCase();
-  if (['boys', 'boy', 'male', 'm'].includes(raw)) return 'boys';
-  if (['girls', 'girl', 'female', 'f'].includes(raw)) return 'girls';
-  if (['men', 'man'].includes(raw)) return 'men';
-  if (['women', 'woman', 'ladies'].includes(raw)) return 'women';
+  const raw = normalizePackageGender(row.gender || row.sex || '');
+  if (raw === 'male' || raw === 'female') return raw;
 
   const group = String(row.age_group || '').toLowerCase();
-  if (group.includes('men') || group.includes('male')) return 'men';
-  if (group.includes('women') || group.includes('ladies') || group.includes('female')) return 'women';
-  if (group.includes('boys')) return 'boys';
-  if (group.includes('girls')) return 'girls';
-  return 'boys';
+  if (group.includes('men') || group.includes('male') || group.includes('boys')) return 'male';
+  if (group.includes('women') || group.includes('ladies') || group.includes('female') || group.includes('girls')) return 'female';
+  return 'male';
 }
 
 function activeMeetsForUser(db, user) {
