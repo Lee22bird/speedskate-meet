@@ -52,7 +52,7 @@ function renderRegisteredView({ meet, isSuperAdmin = false }) {
       <td>${esc(r.meetNumber)}</td><td>${esc(r.helmetNumber)}</td>
       <td><strong>${esc(r.name)}</strong>${sponsorLineHtml(r.sponsor || '')}</td>
       <td>${esc(r.age)}</td><td>${esc(r.team)}</td>
-      <td>${esc(r.divisionGroupLabel || '')}${r.options?.challengeUp ? `<div class="note">↑ from ${esc(r.originalDivisionGroupLabel || '')}</div>` : ''}</td>
+      <td>${esc(r.divisionGroupLabel || '')}${r.options?.challengeUp ? `<div class="note">Challenge: ${esc(r.options?.novice ? 'Elite in own division' : (r.challengeDivisionGroupLabel || '—'))}</div>` : ''}</td>
       <td>${esc(entryLabel)}</td>
       <td>$${esc(r.totalCost)}</td>
       <td>${r.paid ? `<span class="good">✔</span>` : '—'}</td>

@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 const { nowIso } = require('../utils/date');
 const { ageForReg, ageMatch, ensureRegistrationTotalsAndNumbers, buildRaceSetForEntries,
-        divisionEnabledForRegistration, baseRaceKey, ensureAtLeastOneBlock } = require('./meetHelpers');
+        divisionEnabledForRegistration, registrationMatchesStandardRace, baseRaceKey, ensureAtLeastOneBlock } = require('./meetHelpers');
 const { ensureCurrentRace } = require('./raceDay');
 
 function genderBucket(value) {
@@ -222,7 +222,7 @@ function rebuildRaceAssignmentsSafe(meet) {
   for(const race of meet.races||[]){
     if(isSpecialRace(race))continue;if(['heat','semi'].includes(String(race.stage||'')))continue;
     const key=baseKeyFor(race);if(seenBaseKeys.has(key))continue;seenBaseKeys.add(key);
-    const matchingRegs=(meet.registrations||[]).filter(reg=>String(reg.divisionGroupId||'')===String(race.groupId||'')&&divisionEnabledForRegistration(reg,race.division));
+    const matchingRegs=(meet.registrations||[]).filter(reg=>registrationMatchesStandardRace(reg,race,meet));
     newRaces.push(...buildRaceSetForEntries({...race,parentRaceKey:key},matchingRegs,laneCount));
   }
   const quadBaseKeys=new Set();

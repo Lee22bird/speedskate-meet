@@ -1,5 +1,46 @@
 const crypto = require('crypto');
 
+
+const CHALLENGE_TOWARD_SENIOR = {
+  tiny_tot_girls: 'primary_girls', primary_girls: 'juvenile_girls', juvenile_girls: 'elementary_girls', elementary_girls: 'freshman_girls', freshman_girls: 'sophomore_girls', sophomore_girls: 'junior_women', junior_women: 'senior_women', classic_women: 'senior_women', master_women: 'classic_women', veteran_women: 'master_women', esquire_women: 'veteran_women',
+  tiny_tot_boys: 'primary_boys', primary_boys: 'juvenile_boys', juvenile_boys: 'elementary_boys', elementary_boys: 'freshman_boys', freshman_boys: 'sophomore_boys', sophomore_boys: 'junior_men', junior_men: 'senior_men', classic_men: 'senior_men', master_men: 'classic_men', veteran_men: 'master_men', esquire_men: 'veteran_men',
+};
+
+function findChallengeUpGroup(groups, currentGroupId) {
+  const nextId = CHALLENGE_TOWARD_SENIOR[String(currentGroupId || '')];
+  if (!nextId) return null;
+  return (groups || []).find(g => String(g.id) === String(nextId)) || null;
+}
+
+function noviceChallengeCreatesOwnElite(reg) {
+  const opts = reg?.options || {};
+  return !!(opts.challengeUp && opts.novice);
+}
+
+function eliteChallengeCreatesAgeGroup(reg) {
+  const opts = reg?.options || {};
+  return !!(opts.challengeUp && opts.elite && !opts.novice);
+}
+
+function registrationMatchesStandardRace(reg, race, meet) {
+  const div = String(race?.division || '').toLowerCase();
+  const opts = reg?.options || {};
+  const raceGroupId = String(race?.groupId || '');
+  const baseGroupId = String(reg?.originalDivisionGroupId || reg?.divisionGroupId || '');
+
+  if (raceGroupId === baseGroupId) {
+    if (div === 'elite' && noviceChallengeCreatesOwnElite(reg)) return true;
+    return !!opts[div];
+  }
+
+  if (div === 'elite' && eliteChallengeCreatesAgeGroup(reg)) {
+    const challengeGroup = findChallengeUpGroup(meet?.groups || [], baseGroupId);
+    return !!challengeGroup && String(challengeGroup.id) === raceGroupId;
+  }
+
+  return false;
+}
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -45,10 +86,7 @@ function calculateRegistrationTotal(meet, reg) {
   let total = 0;
 
   for (const race of meet.races || []) {
-    if (
-      String(race.groupId) === String(reg.divisionGroupId) &&
-      divisionEnabledForRegistration(reg, race.division)
-    ) {
+    if (registrationMatchesStandardRace(reg, race, meet)) {
       total += Number(race.cost || 0);
     }
   }
@@ -502,9 +540,7 @@ function rebuildRaceAssignments(meet) {
 
   for (const baseRace of baseRaces) {
     const matchingRegs = (meet.registrations || []).filter(
-      reg =>
-        String(reg.divisionGroupId || '') === String(baseRace.groupId || '') &&
-        divisionEnabledForRegistration(reg, baseRace.division)
+      reg => registrationMatchesStandardRace(reg, baseRace, meet)
     );
 
     newRaces.push(...buildRaceSetForEntries(baseRace, matchingRegs, laneCount));
