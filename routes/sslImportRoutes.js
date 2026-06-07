@@ -138,15 +138,52 @@ function packageAppliedToMeet(pkg, meetId) {
   return (pkg.appliedToMeets || []).find(row => String(row.meetId) === String(meetId));
 }
 
+function sslSkaterIdFromRow(row) {
+  return compactId(
+    row?.ssl_skater_id ||
+    row?.sslSkaterId ||
+    row?.ssl_skater_id_public ||
+    row?.public_skater_id ||
+    row?.skater_public_id ||
+    ''
+  );
+}
+
+function legacySslUserIdFromRow(row) {
+  const raw = compactId(
+    row?.ssl_user_id ||
+    row?.sslUserId ||
+    row?.ssl_profile_id ||
+    row?.profile_id ||
+    row?.user_id ||
+    ''
+  );
+
+  if (raw) return raw;
+
+  const skaterId = compactId(row?.skater_id);
+  if (skaterId && !/^SSL-\d+$/i.test(skaterId)) return skaterId;
+  return '';
+}
+
+function importSkaterIdFromRow(row) {
+  return sslSkaterIdFromRow(row) || compactId(row?.skater_id) || legacySslUserIdFromRow(row);
+}
+
 function duplicateRegistration(meet, payload, row) {
-  const sslId = compactId(row.ssl_user_id || row.skater_id);
+  const sslSkaterId = sslSkaterIdFromRow(row);
+  const legacySslUserId = legacySslUserIdFromRow(row);
+  const importSkaterId = importSkaterIdFromRow(row);
   const pkgId = compactId(payload.package_id);
   const name = normalizeName(row.full_name);
   const team = normalizeName(row.team || payload.team);
 
   return (meet.registrations || []).find(reg => {
-    if (sslId && String(reg.sslUserId || '') === sslId) return true;
-    if (sslId && String(reg.importSource || '') === 'ssl' && String(reg.importSourceSkaterId || '') === sslId) return true;
+    if (sslSkaterId && String(reg.sslSkaterId || '') === sslSkaterId) return true;
+    if (sslSkaterId && String(reg.importSource || '') === 'ssl' && String(reg.importSourceSkaterId || '') === sslSkaterId) return true;
+    if (legacySslUserId && String(reg.sslUserId || '') === legacySslUserId) return true;
+    if (legacySslUserId && String(reg.importSource || '') === 'ssl' && String(reg.importSourceLegacyUserId || '') === legacySslUserId) return true;
+    if (importSkaterId && String(reg.importSource || '') === 'ssl' && String(reg.importSourceSkaterId || '') === importSkaterId) return true;
     if (pkgId && String(reg.importPackageId || '') === pkgId && name && normalizeName(reg.name) === name) return true;
     return name && team && normalizeName(reg.name) === name && normalizeName(reg.team) === team;
   });
@@ -158,6 +195,9 @@ function makeRegistrationFromSslRow(meet, payload, row) {
   const age = usarsAge(birthdate, meet.date) || Number(row.age || 0) || '';
   const baseGroup = findAgeGroup(meet.groups || [], age, gender);
   const opts = regOptionsFromSslRow(row, meet);
+  const sslSkaterId = sslSkaterIdFromRow(row);
+  const legacySslUserId = legacySslUserIdFromRow(row);
+  const importSkaterId = importSkaterIdFromRow(row);
   const finalGroup = challengeAdjustedGroup(meet, baseGroup, !!opts.challengeUp);
   const requestedHelmet = Number(row.helmet_number || 0);
   const helmetNumber = Number.isFinite(requestedHelmet) && requestedHelmet > 0 ? requestedHelmet : nextHelmetNumber(meet);
@@ -187,8 +227,10 @@ function makeRegistrationFromSslRow(meet, payload, row) {
     importSourceName: 'SpeedSkateLeague',
     importPackageId: compactId(payload.package_id),
     importPackageMeetId: compactId(payload.meet?.ssl_meet_id),
-    importSourceSkaterId: compactId(row.ssl_user_id || row.skater_id),
-    sslUserId: compactId(row.ssl_user_id || row.skater_id),
+    importSourceSkaterId: importSkaterId,
+    importSourceLegacyUserId: legacySslUserId,
+    sslSkaterId,
+    sslUserId: legacySslUserId,
     importedAt: nowIso(),
     attendanceUpdatedAt: row.attendance_updated_at || null,
   };
@@ -303,7 +345,7 @@ function renderPackagePreview(pkg, db, user) {
 
   const rows = skaters.map(row => `
     <tr>
-      <td><b>${esc(row.full_name || 'Skater')}</b><div class="muted small">SSL ID: ${esc(row.ssl_user_id || '')}</div></td>
+      <td><b>${esc(row.full_name || 'Skater')}</b><div class="muted small">SSL ID: ${esc(sslSkaterIdFromRow(row) || compactId(row.skater_id) || legacySslUserIdFromRow(row) || '—')}</div></td>
       <td>${esc(row.helmet_number || '—')}</td>
       <td>${esc(row.age_group || '—')}</td>
       <td>${esc(eventList(row))}</td>
