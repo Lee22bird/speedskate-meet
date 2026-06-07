@@ -24,6 +24,38 @@ function safePackageId() {
   return 'ssl_pkg_' + crypto.randomBytes(6).toString('hex');
 }
 
+function configuredSslPackageApiKey() {
+  return String(
+    process.env.SSL_SHARED_API_KEY ||
+    process.env.SSM_SSL_API_KEY ||
+    process.env.SSM_PACKAGE_API_KEY ||
+    process.env.SSO_SHARED_SECRET ||
+    'ssl-ssm-local-dev-package-key'
+  ).trim();
+}
+
+function bearerToken(value) {
+  const raw = String(value || '').trim();
+  const match = raw.match(/^Bearer\s+(.+)$/i);
+  return match ? match[1].trim() : raw;
+}
+
+function verifySslPackageApiKey(req) {
+  const expected = configuredSslPackageApiKey();
+  const provided = String(
+    req.get('x-ssl-api-key') ||
+    req.get('x-ssm-api-key') ||
+    bearerToken(req.get('authorization')) ||
+    ''
+  ).trim();
+
+  if (!expected || !provided || provided !== expected) {
+    const err = new Error('Unauthorized SSL package submission.');
+    err.statusCode = 401;
+    throw err;
+  }
+}
+
 function packageSchemaVersion(payload) {
   const raw = payload?.schemaVersion ?? payload?.schema_version ?? payload?.version;
   const n = Number(raw || 0);
@@ -78,6 +110,18 @@ function parsePackage(raw) {
     payload = JSON.parse(text);
   } catch (err) {
     throw new Error('That is not valid JSON. Export the package from SSL again and paste the full file contents.');
+  }
+
+  return validatePackageSchemaV1(payload);
+}
+
+function parseDirectPackageBody(body) {
+  const payload = body && typeof body === 'object' && !Array.isArray(body) && body.package
+    ? body.package
+    : body;
+
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new Error('Missing SSL registration package payload.');
   }
 
   return validatePackageSchemaV1(payload);
@@ -318,6 +362,41 @@ function applyPackageToMeet({ db, pkg, meet, user }) {
   return { created, skipped };
 }
 
+function upsertImportedPackage({ db, payload, user, source }) {
+  const packages = ensurePackageStore(db);
+  const existing = packages.find(p =>
+    String(p.payload?.package_id || '') === String(payload.package_id || '') &&
+    String(p.payload?.team || '') === String(payload.team || '')
+  );
+
+  const actorId = user?.id || null;
+  const actorName = user?.displayName || user?.username || source?.name || 'SpeedSkateLeague';
+
+  if (existing) {
+    existing.payload = payload;
+    existing.updatedAt = nowIso();
+    existing.updatedByUserId = actorId;
+    existing.updatedBy = actorName;
+    existing.receivedVia = source?.via || existing.receivedVia || 'manual';
+    existing.lastReceivedAt = nowIso();
+    existing.status = existing.status || 'pending';
+    return { pkg: existing, created: false };
+  }
+
+  const row = {
+    id: safePackageId(),
+    status: 'pending',
+    createdAt: nowIso(),
+    createdByUserId: actorId,
+    createdBy: actorName,
+    receivedVia: source?.via || 'manual',
+    lastReceivedAt: nowIso(),
+    payload,
+  };
+  packages.unshift(row);
+  return { pkg: row, created: true };
+}
+
 function renderPackageCard(pkg, selectedId) {
   const payload = pkg.payload || {};
   const meet = payload.meet || {};
@@ -443,14 +522,14 @@ function renderSslPackagePage({ db, user, selectedId, error, ok }) {
       .ssl-apply-form label{display:block;font-size:12px;font-weight:900;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;}
       @media(max-width:920px){.ssl-import-grid{grid-template-columns:1fr}.ssl-import-stats{grid-template-columns:1fr 1fr;}.ssl-apply-form{grid-template-columns:1fr;}}
     </style>
-    <div class="page-header"><h1>SSL Registration Packages</h1><div class="sub">Review team registration packages exported from SpeedSkateLeague and create SSM registrations.</div></div>
+    <div class="page-header"><h1>SSL Registration Packages</h1><div class="sub">Review team registration packages sent or exported from SpeedSkateLeague and create SSM registrations.</div></div>
     ${error ? `<div class="card" style="border-left:4px solid var(--red);margin-bottom:12px"><div class="danger">${esc(error)}</div></div>` : ''}
     ${ok ? `<div class="card" style="border-left:4px solid var(--green);margin-bottom:12px"><div class="good">${esc(ok)}</div></div>` : ''}
     <div class="ssl-import-grid">
       <div class="stack">
         <div class="card">
           <h2>Import Package JSON</h2>
-          <p class="muted">From SSL, click <b>Export JSON</b>, copy the file contents, then paste it here.</p>
+          <p class="muted">From SSL, use <b>Register to SSM</b> when available. You can still paste an exported JSON package here as a fallback.</p>
           <form method="POST" action="/portal/ssl-packages/import">
             <textarea name="packageJson" rows="10" placeholder='{"package_type":"ssl_team_registration_package",...}'></textarea>
             <div class="action-row" style="margin-top:10px"><button class="btn-orange" type="submit">Import Package</button></div>
@@ -486,29 +565,41 @@ module.exports = function createSslImportRoutes(deps = {}) {
   router.post('/portal/ssl-packages/import', requireRole('meet_director'), (req, res) => {
     try {
       const payload = parsePackage(req.body.packageJson);
-      const packages = ensurePackageStore(req.db);
-      const existing = packages.find(p => String(p.payload?.package_id || '') === String(payload.package_id || '') && String(p.payload?.team || '') === String(payload.team || ''));
-      if (existing) {
-        existing.payload = payload;
-        existing.updatedAt = nowIso();
-        existing.updatedByUserId = req.user.id;
-        saveDb(req.db);
-        return res.redirect('/portal/ssl-packages?id=' + encodeURIComponent(existing.id) + '&ok=' + encodeURIComponent('Existing SSL package updated.'));
-      }
-
-      const row = {
-        id: safePackageId(),
-        status: 'pending',
-        createdAt: nowIso(),
-        createdByUserId: req.user.id,
-        createdBy: req.user.displayName || req.user.username || 'SSM User',
+      const result = upsertImportedPackage({
+        db: req.db,
         payload,
-      };
-      packages.unshift(row);
+        user: req.user,
+        source: { via: 'manual', name: req.user.displayName || req.user.username || 'SSM User' },
+      });
       saveDb(req.db);
-      return res.redirect('/portal/ssl-packages?id=' + encodeURIComponent(row.id) + '&ok=' + encodeURIComponent('SSL package imported for review.'));
+      return res.redirect('/portal/ssl-packages?id=' + encodeURIComponent(result.pkg.id) + '&ok=' + encodeURIComponent(result.created ? 'SSL package imported for review.' : 'Existing SSL package updated.'));
     } catch (err) {
       return res.redirect('/portal/ssl-packages?error=' + encodeURIComponent(err.message));
+    }
+  });
+
+  router.post('/api/ssl/packages', (req, res) => {
+    try {
+      verifySslPackageApiKey(req);
+      const payload = parseDirectPackageBody(req.body || {});
+      const result = upsertImportedPackage({
+        db: req.db,
+        payload,
+        user: null,
+        source: { via: 'api', name: 'SpeedSkateLeague Direct Submit' },
+      });
+      saveDb(req.db);
+      return res.json({
+        ok: true,
+        created: result.created,
+        packageId: result.pkg.id,
+        sslPackageId: payload.package_id,
+        status: result.pkg.status || 'pending',
+        message: result.created ? 'SSL package received for SSM review.' : 'Existing SSL package updated for SSM review.',
+        reviewUrl: '/portal/ssl-packages?id=' + encodeURIComponent(result.pkg.id),
+      });
+    } catch (err) {
+      return res.status(err.statusCode || 400).json({ ok: false, error: err.message });
     }
   });
 
