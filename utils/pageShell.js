@@ -40,9 +40,20 @@ function announcerBoxHtml(current,lanes) {
 
 // ── Nav & Tabs ────────────────────────────────────────────────────────────────
 function navHtml(user) {
+  const accountLinks = user
+    ? `<a class="nav-link nav-cta" href="/portal">Portal</a><a class="nav-link nav-ghost" href="/admin/logout">Logout</a>`
+    : `<a class="nav-link nav-cta" href="/admin/login">Login</a>`;
+
+  const mobileAccount = user
+    ? `<a class="mobile-menu-primary" href="/portal">Portal</a><a href="/admin/logout">Logout</a>`
+    : `<a class="mobile-menu-primary" href="/admin/login">Login</a>`;
+
   return `
     <nav class="topnav">
       <div class="nav-inner">
+        <button class="mobile-menu-toggle" type="button" aria-label="Open menu" aria-controls="mobileMenu" aria-expanded="false">
+          <span></span><span></span><span></span>
+        </button>
         <a class="nav-brand" href="/">
           <img src="/public/images/branding/ssm-logo.png" alt="SpeedSkateMeet" class="nav-logo" />
         </a>
@@ -55,9 +66,26 @@ function navHtml(user) {
           <a class="nav-link" href="/submit-rink">Submit a Rink</a>
           <a class="nav-link" href="/rinks">Rinks</a>
           <a class="nav-link" href="/live">Live</a>
-          ${user
-            ? `<a class="nav-link nav-cta" href="/portal">Portal</a><a class="nav-link nav-ghost" href="/admin/logout">Logout</a>`
-            : `<a class="nav-link nav-cta" href="/admin/login">Login</a>`}
+          ${accountLinks}
+        </div>
+        <div class="nav-mobile-account">${user ? `<a class="nav-mobile-portal" href="/portal">Portal</a>` : `<a class="nav-mobile-portal" href="/admin/login">Login</a>`}</div>
+      </div>
+      <div class="mobile-menu-panel" id="mobileMenu" aria-hidden="true">
+        <div class="mobile-menu-section">
+          <a href="/meets">Find a Meet</a>
+          <a href="/live">Live Race Day</a>
+          <a href="/rinks">Rinks</a>
+          <a href="/help">Help</a>
+          <a href="/about">About</a>
+        </div>
+        <div class="mobile-menu-divider"></div>
+        <div class="mobile-menu-section">
+          <a href="/submit-meet">Submit a Meet</a>
+          <a href="/submit-rink">Submit a Rink</a>
+        </div>
+        <div class="mobile-menu-divider"></div>
+        <div class="mobile-menu-section">
+          ${mobileAccount}
         </div>
       </div>
     </nav>`;
@@ -178,6 +206,41 @@ function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
     .nav-cta:hover { background: var(--orange2); color: #fff; }
     .nav-ghost { border: 1px solid rgba(255,255,255,.25); color: rgba(255,255,255,.70); border-radius: 999px; }
     .nav-ghost:hover { border-color: rgba(255,255,255,.50); color: #fff; background: rgba(255,255,255,.06); }
+
+    .mobile-menu-toggle,
+    .nav-mobile-account,
+    .mobile-menu-panel { display: none; }
+    .mobile-menu-toggle {
+      width: 42px; height: 42px; border: 1px solid rgba(255,255,255,.22);
+      border-radius: 12px; background: rgba(255,255,255,.08); cursor: pointer;
+      align-items: center; justify-content: center; flex-direction: column; gap: 5px;
+    }
+    .mobile-menu-toggle span { width: 19px; height: 2px; border-radius: 999px; background: #fff; display: block; transition: transform .18s, opacity .18s; }
+    .mobile-menu-toggle.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+    .mobile-menu-toggle.open span:nth-child(2) { opacity: 0; }
+    .mobile-menu-toggle.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+    .nav-mobile-portal {
+      display: inline-flex; align-items: center; justify-content: center; min-height: 38px;
+      padding: 0 14px; border-radius: 999px; background: var(--orange); color: #fff;
+      font-size: 13px; font-weight: 900; box-shadow: 0 2px 8px rgba(249,115,22,.35);
+    }
+    .nav-mobile-portal:hover { color: #fff; background: var(--orange2); }
+    .mobile-menu-panel {
+      border-top: 1px solid rgba(255,255,255,.10); background: rgba(15,31,61,.98);
+      box-shadow: 0 18px 30px rgba(15,31,61,.32); padding: 12px 16px 16px;
+    }
+    .mobile-menu-panel.open { display: block; }
+    .mobile-menu-section { display: grid; gap: 6px; }
+    .mobile-menu-section a {
+      display: flex; align-items: center; justify-content: space-between; min-height: 46px;
+      padding: 0 14px; border-radius: 14px; color: rgba(255,255,255,.90); font-weight: 850;
+      background: rgba(255,255,255,.055); border: 1px solid rgba(255,255,255,.075);
+    }
+    .mobile-menu-section a:hover { color: #fff; background: rgba(255,255,255,.11); }
+    .mobile-menu-section a::after { content: '›'; opacity: .55; font-size: 18px; }
+    .mobile-menu-section .mobile-menu-primary { background: var(--orange); border-color: rgba(249,115,22,.35); color: #fff; }
+    .mobile-menu-divider { height: 1px; margin: 10px 2px; background: rgba(255,255,255,.12); }
+
 
     /* ── Layout ───────────────────────────────────────────────────── */
     .wrap { max-width: 1340px; margin: 0 auto; padding: 36px 20px 80px; }
@@ -711,6 +774,56 @@ function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
     th { background: var(--off); color: #5c6880; }
     td { border-color: var(--border); }
 
+    /* ── Mobile app cleanup ───────────────────────────────────────── */
+    @media(max-width: 760px) {
+      body { font-size: 14px; line-height: 1.55; }
+      .topnav { position: sticky; }
+      .nav-inner { height: 58px; padding: 0 12px; gap: 10px; display: grid; grid-template-columns: 44px minmax(0,1fr) auto; }
+      .mobile-menu-toggle { display: flex; }
+      .nav-brand { justify-content: center; min-width: 0; }
+      .nav-logo { height: 38px; max-width: 100%; object-fit: contain; }
+      .nav-links { display: none; }
+      .nav-mobile-account { display: block; }
+      .wrap { padding: 18px 12px 54px; }
+      .page-header { margin-bottom: 16px; }
+      .page-header h1, h1 { font-size: 30px; line-height: 1.04; letter-spacing: -.045em; }
+      .page-header .sub { font-size: 14px; line-height: 1.45; }
+      h2 { font-size: 21px; }
+      h3 { font-size: 16px; }
+      .card { padding: 16px; border-radius: 18px; }
+      .card-sm { padding: 12px; }
+      .row { gap: 8px; }
+      .row.between { align-items: flex-start; }
+      .action-row { display: grid !important; grid-template-columns: 1fr; gap: 9px; width: 100%; }
+      .action-row > * { width: 100%; justify-content: center; text-align: center; }
+      .btn, .btn2, .btn-orange, .btn-danger, .btn-purple, .btn-sky, button, input[type="submit"] { min-height: 44px; width: 100%; justify-content: center; }
+      .chip { white-space: normal; text-align: center; }
+      .meet-tabs { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; padding: 8px; margin: -2px 0 16px; border-radius: 18px; background: rgba(255,255,255,.74); border: 1px solid var(--border); box-shadow: var(--shadow-sm); }
+      .meet-tab { margin: 0; min-height: 42px; display: flex; align-items: center; justify-content: center; text-align: center; padding: 8px 10px; border-radius: 12px; font-size: 12px; }
+      .sub-tabs, .live-tabs { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
+      .sub-tab, .live-tab { width: 100%; text-align: center; justify-content: center; }
+      .home-hero { min-height: auto; padding: 22px 14px; border-radius: 20px; margin-bottom: 16px; }
+      .home-hero-logo { width: min(340px, 88vw); margin-bottom: 6px; }
+      .home-hero-title { font-size: 32px; line-height: 1.02; }
+      .home-hero-sub { font-size: 14px; max-width: 320px; }
+      .home-hero-actions { display: grid; grid-template-columns: 1fr; width: 100%; max-width: 320px; margin-left: auto; margin-right: auto; gap: 10px; }
+      .home-hero-actions .btn-orange, .home-hero-actions .btn2 { width: 100%; min-height: 46px; display: flex; justify-content: center; }
+      .home-hero-pills { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; max-width: 330px; margin-left: auto; margin-right: auto; }
+      .home-hero-pills span { text-align: center; border-radius: 12px; padding: 8px 7px; }
+      .feature-grid { grid-template-columns: 1fr; gap: 12px; }
+      .feature-card { min-height: 170px; border-radius: 18px; }
+      .feature-card-content { padding: 18px; }
+      .feature-title { font-size: 22px; }
+      .feature-desc { font-size: 13px; }
+      .portal-meet-card .portal-card-head { display: grid; grid-template-columns: 1fr; gap: 10px; }
+      .portal-meet-card .portal-chip-row { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px; }
+      .portal-meet-card .portal-mini-grid { grid-template-columns: 1fr !important; gap: 10px !important; }
+      .portal-meet-card .portal-mini-card { padding: 12px !important; }
+      table { display: block; overflow-x: auto; white-space: nowrap; }
+      input, select, textarea { font-size: 16px; }
+    }
+
+
   </style>
 </head>
 <body>
@@ -719,6 +832,29 @@ function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
     ${meetTabs(meet, activeTab)}
     ${bodyHtml}
   </div>
+  <script>
+    (function(){
+      var btn = document.querySelector('.mobile-menu-toggle');
+      var panel = document.getElementById('mobileMenu');
+      if(!btn || !panel) return;
+      function closeMenu(){
+        btn.classList.remove('open');
+        panel.classList.remove('open');
+        btn.setAttribute('aria-expanded','false');
+        panel.setAttribute('aria-hidden','true');
+      }
+      btn.addEventListener('click', function(){
+        var open = !panel.classList.contains('open');
+        btn.classList.toggle('open', open);
+        panel.classList.toggle('open', open);
+        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        panel.setAttribute('aria-hidden', open ? 'false' : 'true');
+      });
+      panel.addEventListener('click', function(e){ if(e.target && e.target.tagName === 'A') closeMenu(); });
+      window.addEventListener('resize', function(){ if(window.innerWidth > 760) closeMenu(); });
+      document.addEventListener('keydown', function(e){ if(e.key === 'Escape') closeMenu(); });
+    })();
+  </script>
 </body>
 </html>`;
 }

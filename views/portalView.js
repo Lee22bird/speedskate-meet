@@ -24,13 +24,13 @@ function renderPortalMeetCard({ db, user, meet }) {
   const rinkLabel = meetRinkLabel(db, meet);
 
   return `
-    <div class="card" style="margin-bottom:14px">
-      <div class="row between" style="margin-bottom:12px">
+    <div class="card portal-meet-card" style="margin-bottom:14px">
+      <div class="row between portal-card-head" style="margin-bottom:12px">
         <div>
           <h2 style="margin:0">${esc(meet.meetName)}</h2>
           <div class="muted" style="font-size:13px">${rinkLabel ? `${esc(rinkLabel)} • ` : ``}${esc(meetDateLabel(meet) || 'Date TBD')} • <span class="chip chip-${statusClass}" style="font-size:11px">${esc(meet.status || 'draft')}</span></div>
         </div>
-        <div class="row">
+        <div class="row portal-chip-row">
           <span class="chip">Inline: ${inlineCount}</span>
           <span class="chip chip-orange">Open: ${openCount}</span>
           <span class="chip chip-purple">Quad: ${quadCount}</span>
@@ -38,8 +38,8 @@ function renderPortalMeetCard({ db, user, meet }) {
         </div>
       </div>
       ${canEditMeet(user, meet) ? `
-        <div class="meet-action-groups" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:14px">
-          <div class="mini-card" style="padding:12px;border:1px solid var(--border);border-radius:14px;background:#f8fafc">
+        <div class="meet-action-groups portal-mini-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:14px">
+          <div class="mini-card portal-mini-card" style="padding:12px;border:1px solid var(--border);border-radius:14px;background:#f8fafc">
             <div class="muted" style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Setup</div>
             <div class="action-row">
               <a class="btn" href="/portal/meet/${meet.id}/builder">Meet Builder</a>
@@ -47,14 +47,14 @@ function renderPortalMeetCard({ db, user, meet }) {
               <a class="btn-purple" href="/portal/meet/${meet.id}/quad-builder">🛼 Quad</a>
             </div>
           </div>
-          <div class="mini-card" style="padding:12px;border:1px solid var(--border);border-radius:14px;background:#f8fafc">
+          <div class="mini-card portal-mini-card" style="padding:12px;border:1px solid var(--border);border-radius:14px;background:#f8fafc">
             <div class="muted" style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Race Ops</div>
             <div class="action-row">
               <a class="btn2" href="/portal/meet/${meet.id}/race-day/director">Race Day</a>
               <a class="btn2" href="/portal/meet/${meet.id}/results">Results</a>
             </div>
           </div>
-          <div class="mini-card" style="padding:12px;border:1px solid var(--border);border-radius:14px;background:#f8fafc">
+          <div class="mini-card portal-mini-card" style="padding:12px;border:1px solid var(--border);border-radius:14px;background:#f8fafc">
             <div class="muted" style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Manage</div>
             <div class="action-row">
               <a class="btn2 btn-sm" href="/portal/meet/${meet.id}/clone-confirm">Clone</a>
