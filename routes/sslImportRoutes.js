@@ -372,6 +372,46 @@ function makeRegistrationFromSslRow(meet, payload, row) {
   };
 }
 
+
+function linkRegistrationToSslRow(reg, payload, row, pkg = null) {
+  if (!reg || !row) return false;
+
+  const sslSkaterId = sslSkaterIdFromRow(row);
+  if (!isValidSslSkaterId(sslSkaterId)) return false;
+
+  const legacySslUserId = legacySslUserIdFromRow(row);
+  const packagePayload = pkg?.payload || payload || {};
+
+  let changed = false;
+  const setIfDifferent = (key, value) => {
+    const clean = compactId(value);
+    if (!clean) return;
+    if (String(reg[key] || '') === clean) return;
+    reg[key] = clean;
+    changed = true;
+  };
+
+  setIfDifferent('importSource', 'ssl');
+  setIfDifferent('importSourceName', 'SpeedSkateLeague');
+  setIfDifferent('importPackageId', packagePayload.package_id);
+  setIfDifferent('importPackageMeetId', packagePayload.meet?.ssl_meet_id);
+  setIfDifferent('importSourceSkaterId', sslSkaterId);
+  setIfDifferent('sslSkaterId', sslSkaterId);
+  setIfDifferent('sslUserId', legacySslUserId);
+  setIfDifferent('importSourceLegacyUserId', legacySslUserId);
+
+  if (!reg.importedAt) {
+    reg.importedAt = nowIso();
+    changed = true;
+  }
+  if (row.attendance_updated_at && reg.attendanceUpdatedAt !== row.attendance_updated_at) {
+    reg.attendanceUpdatedAt = row.attendance_updated_at;
+    changed = true;
+  }
+
+  return changed;
+}
+
 function applyPackageToMeet({ db, pkg, meet, user }) {
   if (!meet) throw new Error('Select a valid meet before applying this package.');
   if (packageAppliedToMeet(pkg, meet.id)) throw new Error('This SSL package has already been applied to that meet.');
@@ -390,7 +430,8 @@ function applyPackageToMeet({ db, pkg, meet, user }) {
     }
     const duplicate = duplicateRegistration(meet, payload, row);
     if (duplicate) {
-      skipped.push({ row, reason: 'duplicate registration' });
+      const linked = linkRegistrationToSslRow(duplicate, payload, row, pkg);
+      skipped.push({ row, reason: linked ? 'duplicate registration linked to SSL ID' : 'duplicate registration' });
       continue;
     }
     const reg = makeRegistrationFromSslRow(meet, payload, row);
@@ -635,18 +676,7 @@ function hydrateRegistrationSslLinksFromPackages(db, meet) {
     if (!matched) continue;
 
     const { pkg, row } = matched;
-    const sslSkaterId = sslSkaterIdFromRow(row);
-    if (!isValidSslSkaterId(sslSkaterId)) continue;
-
-    reg.importSource = reg.importSource || 'ssl';
-    reg.importSourceName = reg.importSourceName || 'SpeedSkateLeague';
-    reg.importPackageId = reg.importPackageId || compactId(pkg.payload?.package_id);
-    reg.importPackageMeetId = reg.importPackageMeetId || compactId(pkg.payload?.meet?.ssl_meet_id);
-    reg.importSourceSkaterId = reg.importSourceSkaterId || sslSkaterId;
-    reg.sslSkaterId = reg.sslSkaterId || sslSkaterId;
-    reg.sslUserId = reg.sslUserId || legacySslUserIdFromRow(row);
-    reg.importSourceLegacyUserId = reg.importSourceLegacyUserId || legacySslUserIdFromRow(row);
-    changed = true;
+    if (linkRegistrationToSslRow(reg, pkg.payload || {}, row, pkg)) changed = true;
   }
 
   if (changed) meet.updatedAt = nowIso();
@@ -810,7 +840,7 @@ function buildSsmResultsPackage(req, db, meet) {
     },
     counts: {
       results: results.length,
-      linked_skaters: new Set(results.map(r => r.ssl_skater_id)).size,
+      linked_skaters: new Set(results.map(r => r.ssl_skater_id).filter(Boolean)).size,
       divisions: new Set(results.map(r => `${r.division_label}|${r.class_type}`)).size,
       unlinked_standings: unlinkedStandings.length,
     },
