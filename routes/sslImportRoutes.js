@@ -239,6 +239,31 @@ function findPackageById(db, pkgId) {
 function packageAppliedToMeet(pkg, meetId) {
   return (pkg.appliedToMeets || []).find(row => String(row.meetId) === String(meetId));
 }
+function packageHasAppliedHistory(pkg) {
+  return Array.isArray(pkg?.appliedToMeets) && pkg.appliedToMeets.length > 0;
+}
+
+function packageBackMeetId(pkg) {
+  const applied = Array.isArray(pkg?.appliedToMeets) ? pkg.appliedToMeets[pkg.appliedToMeets.length - 1] : null;
+  if (applied?.meetId) return String(applied.meetId);
+
+  const raw = compactId(
+    pkg?.payload?.meet?.ssm_meet_id ||
+    pkg?.payload?.meet?.ssmMeetId ||
+    pkg?.payload?.meet?.meet_id ||
+    pkg?.payload?.meet?.meetId ||
+    ''
+  );
+  if (!raw) return '';
+  const match = raw.match(/^ssm-(.+)$/i);
+  return match ? match[1] : raw;
+}
+
+function packageBackRegisteredUrl(pkg) {
+  const meetId = packageBackMeetId(pkg);
+  return meetId ? `/portal/meet/${encodeURIComponent(meetId)}/registered` : '/portal';
+}
+
 
 function sslSkaterIdFromRow(row) {
   return compactId(
@@ -300,7 +325,10 @@ function makeRegistrationFromSslRow(meet, payload, row) {
   const sslSkaterId = sslSkaterIdFromRow(row);
   const legacySslUserId = legacySslUserIdFromRow(row);
   const importSkaterId = importSkaterIdFromRow(row);
-  const finalGroup = challengeAdjustedGroup(meet, baseGroup, !!opts.challengeUp);
+  // Real-world SSM rule: if a skater selected both Novice and Elite, their own-class
+  // Elite entry already acts as the challenge. Do not bump their age group again.
+  const effectiveChallengeUp = !!opts.challengeUp && !(opts.novice && opts.elite);
+  const finalGroup = challengeAdjustedGroup(meet, baseGroup, effectiveChallengeUp);
   const requestedHelmet = Number(row.helmet_number || 0);
   const helmetNumber = Number.isFinite(requestedHelmet) && requestedHelmet > 0 ? requestedHelmet : nextHelmetNumber(meet);
   const meetNumber = (meet.registrations || []).reduce((max, reg) => Math.max(max, Number(reg.meetNumber) || 0), 0) + 1;
@@ -398,13 +426,29 @@ function upsertImportedPackage({ db, payload, user, source }) {
   const actorName = user?.displayName || user?.username || source?.name || 'SpeedSkateLeague';
 
   if (existing) {
+    // Keep applied packages locked so a second SSL submit does not quietly replace
+    // the package the meet director already approved. Pending/returned packages may
+    // still be updated by a fresh coach submission.
+    if (existing.status === 'applied') {
+      existing.lastReceivedAt = nowIso();
+      existing.lastDuplicateReceivedAt = nowIso();
+      existing.receivedVia = source?.via || existing.receivedVia || 'manual';
+      return { pkg: existing, created: false, alreadyApplied: true };
+    }
+
     existing.payload = payload;
     existing.updatedAt = nowIso();
     existing.updatedByUserId = actorId;
     existing.updatedBy = actorName;
     existing.receivedVia = source?.via || existing.receivedVia || 'manual';
     existing.lastReceivedAt = nowIso();
-    existing.status = existing.status || 'pending';
+    existing.status = existing.status === 'returned' ? 'pending' : (existing.status || 'pending');
+    if (existing.status === 'pending') {
+      delete existing.returnedAt;
+      delete existing.returnedBy;
+      delete existing.returnedByUserId;
+      delete existing.returnReason;
+    }
     return { pkg: existing, created: false };
   }
 
@@ -565,6 +609,9 @@ function renderPackageCard(pkg, selectedId) {
   const meet = payload.meet || {};
   const counts = payload.counts || {};
   const appliedCount = Array.isArray(pkg.appliedToMeets) ? pkg.appliedToMeets.length : 0;
+  const statusText = pkg.status === 'returned'
+    ? 'returned'
+    : (appliedCount ? `${appliedCount} applied` : `${counts.ready ?? (payload.skaters || []).length} ready`);
   const isSelected = String(pkg.id) === String(selectedId || '');
   return `
     <a class="ssl-package-row${isSelected ? ' active' : ''}" href="/portal/ssl-packages?id=${esc(pkg.id)}">
@@ -572,24 +619,40 @@ function renderPackageCard(pkg, selectedId) {
         <div class="ssl-package-title">${esc(meet.title || 'SSL Registration Package')}</div>
         <div class="ssl-package-meta">${esc(payload.team || 'Team')} • ${esc(meet.date || 'Date TBD')} ${meet.location ? '• ' + esc(meet.location) : ''}</div>
       </div>
-      <div class="ssl-package-count">${appliedCount ? esc(appliedCount + ' applied') : esc((counts.ready ?? (payload.skaters || []).length) + ' ready')}</div>
+      <div class="ssl-package-count">${esc(statusText)}</div>
     </a>`;
 }
 
 function renderApplyForm({ pkg, db, user }) {
   if (!pkg) return '';
+
+  if (packageHasAppliedHistory(pkg) || pkg.status === 'applied') {
+    return `
+      <div class="good" style="margin-bottom:14px">
+        This package has already been applied. New registrations were created from the applied snapshot, so Create Registrations is disabled to prevent accidental duplicates.
+      </div>`;
+  }
+
+  if (pkg.status === 'returned') {
+    return `
+      <div class="ssl-warning">
+        <b>Returned to coach.</b>${pkg.returnReason ? ' ' + esc(pkg.returnReason) : ''}
+      </div>`;
+  }
+
   const meets = activeMeetsForUser(db, user);
   if (!meets.length) {
     return `<div class="ssl-warning"><b>No editable active meets found.</b> Create or unarchive a meet before applying this package.</div>`;
   }
 
+  const preferredMeetId = packageBackMeetId(pkg);
   return `
     <form method="POST" action="/portal/ssl-packages/${esc(pkg.id)}/apply" class="ssl-apply-form" onsubmit="return confirm('Create SSM registrations from this SSL package? Existing duplicates will be skipped.');">
       <div>
         <label>Apply package to SSM meet</label>
         <select name="meetId" required>
           <option value="">— Select meet —</option>
-          ${meets.map(meet => `<option value="${esc(meet.id)}">${esc(meet.meetName || 'Meet')} ${meet.date ? '— ' + esc(meet.date) : ''}</option>`).join('')}
+          ${meets.map(meet => `<option value="${esc(meet.id)}"${String(meet.id) === String(preferredMeetId) ? ' selected' : ''}>${esc(meet.meetName || 'Meet')} ${meet.date ? '— ' + esc(meet.date) : ''}</option>`).join('')}
         </select>
       </div>
       <button class="btn-orange" type="submit">Create Registrations</button>
@@ -602,6 +665,24 @@ function renderAppliedHistory(pkg) {
   return `
     <div class="good" style="margin-bottom:14px">
       Applied history: ${rows.map(row => `${esc(row.meetName || 'Meet')} — ${esc(row.createdCount || 0)} created, ${esc(row.skippedCount || 0)} skipped`).join(' · ')}
+    </div>`;
+}
+
+function renderPackageActions(pkg) {
+  if (!pkg) return '';
+  const disableDeleteMessage = packageHasAppliedHistory(pkg)
+    ? "This package has already been applied. Delete only removes the package review record; it does not delete created registrations. Continue?"
+    : "Delete this SSL team submission?";
+
+  return `
+    <div class="ssl-package-actions">
+      <form method="POST" action="/portal/ssl-packages/${esc(pkg.id)}/return" onsubmit="return confirm('Return this team submission to the coach?');">
+        <input type="text" name="reason" placeholder="Optional return note" />
+        <button class="btn2" type="submit">Return to Coach</button>
+      </form>
+      <form method="POST" action="/portal/ssl-packages/${esc(pkg.id)}/delete" onsubmit="return confirm('${esc(disableDeleteMessage)}');">
+        <button class="btn-danger" type="submit">Delete Submission</button>
+      </form>
     </div>`;
 }
 
@@ -639,7 +720,7 @@ function renderPackagePreview(pkg, db, user) {
           <h2 style="margin:0">${esc(meet.title || 'Meet')}</h2>
           <div class="muted">${esc(payload.team || 'Team')} • ${esc(meet.date || 'Date TBD')} ${meet.location ? '• ' + esc(meet.location) : ''}</div>
         </div>
-        <span class="chip ${pkg.status === 'applied' ? 'chip-green' : 'chip-sky'}">${pkg.status === 'applied' ? 'Applied' : 'Pending Review'}</span>
+        <span class="chip ${pkg.status === 'applied' ? 'chip-green' : (pkg.status === 'returned' ? 'chip-warn' : 'chip-sky')}">${pkg.status === 'applied' ? 'Applied' : (pkg.status === 'returned' ? 'Returned' : 'Pending Review')}</span>
       </div>
 
       <div class="ssl-import-stats">
@@ -651,6 +732,7 @@ function renderPackagePreview(pkg, db, user) {
 
       ${renderAppliedHistory(pkg)}
       ${warningHtml || `<div class="good" style="margin-bottom:14px">No package warnings found.</div>`}
+      ${renderPackageActions(pkg)}
       ${renderApplyForm({ pkg, db, user })}
 
       <table class="table">
@@ -683,8 +765,14 @@ function renderSslPackagePage({ db, user, selectedId, error, ok }) {
       .ssl-import-empty{text-align:center;padding:40px;}
       .ssl-apply-form{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:end;border:1px solid var(--border);background:#f8fafc;border-radius:14px;padding:12px;margin-bottom:14px;}
       .ssl-apply-form label{display:block;font-size:12px;font-weight:900;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;}
-      @media(max-width:920px){.ssl-import-grid{grid-template-columns:1fr}.ssl-import-stats{grid-template-columns:1fr 1fr;}.ssl-apply-form{grid-template-columns:1fr;}}
+      .ssl-package-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px;}
+      .ssl-package-actions form{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0;}
+      .ssl-package-actions input{min-width:220px;}
+      .ssl-back-row{margin-bottom:12px;display:flex;gap:10px;align-items:center;}
+      .chip-warn{background:#fff7ed;border-color:#fed7aa;color:#9a3412;}
+      @media(max-width:920px){.ssl-import-grid{grid-template-columns:1fr}.ssl-import-stats{grid-template-columns:1fr 1fr;}.ssl-apply-form{grid-template-columns:1fr;}.ssl-package-actions input{min-width:100%;}}
     </style>
+    ${selected ? `<div class="ssl-back-row"><a class="btn2" href="${esc(packageBackRegisteredUrl(selected))}">← Back to Registered</a></div>` : ''}
     <div class="page-header"><h1>SSL Registration Packages</h1><div class="sub">Review team registration packages sent or exported from SpeedSkateLeague and create SSM registrations.</div></div>
     ${error ? `<div class="card" style="border-left:4px solid var(--red);margin-bottom:12px"><div class="danger">${esc(error)}</div></div>` : ''}
     ${ok ? `<div class="card" style="border-left:4px solid var(--green);margin-bottom:12px"><div class="good">${esc(ok)}</div></div>` : ''}
@@ -803,11 +891,47 @@ module.exports = function createSslImportRoutes(deps = {}) {
         packageId: result.pkg.id,
         sslPackageId: payload.package_id,
         status: result.pkg.status || 'pending',
-        message: result.created ? 'SSL package received for SSM review.' : 'Existing SSL package updated for SSM review.',
+        message: result.alreadyApplied
+          ? 'This SSL package was already applied in SSM. No new submission was created.'
+          : (result.created ? 'SSL package received for SSM review.' : 'Existing SSL package updated for SSM review.'),
         reviewUrl: '/portal/ssl-packages?id=' + encodeURIComponent(result.pkg.id),
       });
     } catch (err) {
       return res.status(err.statusCode || 400).json({ ok: false, error: err.message });
+    }
+  });
+
+  router.post('/portal/ssl-packages/:pkgId/return', requireRole('meet_director'), (req, res) => {
+    const pkgId = req.params.pkgId;
+    try {
+      const pkg = findPackageById(req.db, pkgId);
+      if (!pkg) throw new Error('SSL package not found.');
+      pkg.status = 'returned';
+      pkg.returnedAt = nowIso();
+      pkg.returnedByUserId = req.user.id;
+      pkg.returnedBy = req.user.displayName || req.user.username || 'SSM User';
+      pkg.returnReason = compactId(req.body.reason || '');
+      pkg.updatedAt = nowIso();
+      pkg.updatedByUserId = req.user.id;
+      saveDb(req.db);
+      return res.redirect('/portal/ssl-packages?id=' + encodeURIComponent(pkg.id) + '&ok=' + encodeURIComponent('Team submission returned to coach.'));
+    } catch (err) {
+      return res.redirect('/portal/ssl-packages?id=' + encodeURIComponent(pkgId) + '&error=' + encodeURIComponent(err.message));
+    }
+  });
+
+  router.post('/portal/ssl-packages/:pkgId/delete', requireRole('meet_director'), (req, res) => {
+    const pkgId = req.params.pkgId;
+    try {
+      const packages = ensurePackageStore(req.db);
+      const index = packages.findIndex(p => String(p.id) === String(pkgId));
+      if (index < 0) throw new Error('SSL package not found.');
+      const [removed] = packages.splice(index, 1);
+      saveDb(req.db);
+      const backUrl = packageBackRegisteredUrl(removed);
+      return res.redirect(backUrl + '?ok=' + encodeURIComponent('SSL team submission deleted.'));
+    } catch (err) {
+      return res.redirect('/portal/ssl-packages?id=' + encodeURIComponent(pkgId) + '&error=' + encodeURIComponent(err.message));
     }
   });
 
@@ -821,6 +945,7 @@ module.exports = function createSslImportRoutes(deps = {}) {
       const meet = findEditableMeetById(req.db, req.user, meetId);
       if (!meet) throw new Error('You do not have permission to apply this package to that meet.');
 
+      if (pkg.status === 'returned') throw new Error('This package was returned to the coach and cannot be applied unless the coach resubmits it.');
       const result = applyPackageToMeet({ db: req.db, pkg, meet, user: req.user });
       saveDb(req.db);
       return res.redirect('/portal/ssl-packages?id=' + encodeURIComponent(pkg.id) + '&ok=' + encodeURIComponent(`Created ${result.created.length} registration${result.created.length === 1 ? '' : 's'} from SSL. Skipped ${result.skipped.length} duplicate${result.skipped.length === 1 ? '' : 's'}.`));
