@@ -264,6 +264,12 @@ function packageBackRegisteredUrl(pkg) {
   return meetId ? `/portal/meet/${encodeURIComponent(meetId)}/registered` : '/portal';
 }
 
+function registeredBackUrlFromContext(pkg, meetId) {
+  const contextMeetId = compactId(meetId || '');
+  if (contextMeetId) return `/portal/meet/${encodeURIComponent(contextMeetId)}/registered`;
+  return packageBackRegisteredUrl(pkg);
+}
+
 
 function sslSkaterIdFromRow(row) {
   return compactId(
@@ -605,7 +611,7 @@ function buildSsmResultsPackage(req, db, meet) {
   };
 }
 
-function renderPackageCard(pkg, selectedId) {
+function renderPackageCard(pkg, selectedId, meetId = '') {
   const payload = pkg.payload || {};
   const meet = payload.meet || {};
   const counts = payload.counts || {};
@@ -617,7 +623,7 @@ function renderPackageCard(pkg, selectedId) {
       : (appliedCount ? `${appliedCount} applied` : `${counts.ready ?? (payload.skaters || []).length} ready`));
   const isSelected = String(pkg.id) === String(selectedId || '');
   return `
-    <a class="ssl-package-row${isSelected ? ' active' : ''}" href="/portal/ssl-packages?id=${esc(pkg.id)}">
+    <a class="ssl-package-row${isSelected ? ' active' : ''}" href="/portal/ssl-packages?id=${esc(pkg.id)}${meetId ? '&meetId=' + encodeURIComponent(meetId) : ''}">
       <div>
         <div class="ssl-package-title">${esc(meet.title || 'SSL Registration Package')}</div>
         <div class="ssl-package-meta">${esc(payload.team || 'Team')} • ${esc(meet.date || 'Date TBD')} ${meet.location ? '• ' + esc(meet.location) : ''}</div>
@@ -753,7 +759,7 @@ function renderPackagePreview(pkg, db, user) {
     </div>`;
 }
 
-function renderSslPackagePage({ db, user, selectedId, error, ok }) {
+function renderSslPackagePage({ db, user, selectedId, meetId, error, ok }) {
   const packages = ensurePackageStore(db)
     .filter(p => String(p.status || '').toLowerCase() !== 'deleted')
     .slice()
@@ -784,7 +790,7 @@ function renderSslPackagePage({ db, user, selectedId, error, ok }) {
       .chip-warn{background:#fff7ed;border-color:#fed7aa;color:#9a3412;}
       @media(max-width:920px){.ssl-import-grid{grid-template-columns:1fr}.ssl-import-stats{grid-template-columns:1fr 1fr;}.ssl-apply-form{grid-template-columns:1fr;}.ssl-package-actions input{min-width:100%;}}
     </style>
-    ${selected ? `<div class="ssl-back-row"><a class="btn2" href="${esc(packageBackRegisteredUrl(selected))}">← Back to Registered</a></div>` : ''}
+    ${(selected || meetId) ? `<div class="ssl-back-row"><a class="btn2" href="${esc(registeredBackUrlFromContext(selected, meetId))}">← Back to Registered</a></div>` : ''}
     <div class="page-header"><h1>SSL Registration Packages</h1><div class="sub">Review team registration packages sent or exported from SpeedSkateLeague and create SSM registrations.</div></div>
     ${error ? `<div class="card" style="border-left:4px solid var(--red);margin-bottom:12px"><div class="danger">${esc(error)}</div></div>` : ''}
     ${ok ? `<div class="card" style="border-left:4px solid var(--green);margin-bottom:12px"><div class="good">${esc(ok)}</div></div>` : ''}
@@ -800,7 +806,7 @@ function renderSslPackagePage({ db, user, selectedId, error, ok }) {
         </div>
         <div class="card">
           <h2>Incoming Packages</h2>
-          ${packages.length ? packages.map(p => renderPackageCard(p, selected?.id)).join('') : `<div class="muted">No SSL packages imported yet.</div>`}
+          ${packages.length ? packages.map(p => renderPackageCard(p, selected?.id, meetId)).join('') : `<div class="muted">No SSL packages imported yet.</div>`}
         </div>
       </div>
       ${renderPackagePreview(selected, db, user)}
@@ -863,6 +869,7 @@ module.exports = function createSslImportRoutes(deps = {}) {
         db: req.db,
         user: req.user,
         selectedId: req.query.id,
+        meetId: req.query.meetId,
         error: req.query.error,
         ok: req.query.ok,
       }),
