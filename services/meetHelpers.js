@@ -481,9 +481,36 @@ function findAgeGroup(groups,age,genderGuess) {
   return candidates.find(g=>genderAliases.includes(String(g.gender||'').toLowerCase()))||candidates[0];
 }
 
+const CHALLENGE_TOWARD_SENIOR = {
+  tiny_tot_girls: 'primary_girls',
+  primary_girls: 'juvenile_girls',
+  juvenile_girls: 'elementary_girls',
+  elementary_girls: 'freshman_girls',
+  freshman_girls: 'sophomore_girls',
+  sophomore_girls: 'junior_women',
+  junior_women: 'senior_women',
+  classic_women: 'senior_women',
+  master_women: 'classic_women',
+  veteran_women: 'master_women',
+  esquire_women: 'veteran_women',
+
+  tiny_tot_boys: 'primary_boys',
+  primary_boys: 'juvenile_boys',
+  juvenile_boys: 'elementary_boys',
+  elementary_boys: 'freshman_boys',
+  freshman_boys: 'sophomore_boys',
+  sophomore_boys: 'junior_men',
+  junior_men: 'senior_men',
+  classic_men: 'senior_men',
+  master_men: 'classic_men',
+  veteran_men: 'master_men',
+  esquire_men: 'veteran_men',
+};
+
 function findChallengeUpGroup(groups,currentGroupId) {
-  const idx=groups.findIndex(g=>String(g.id)===String(currentGroupId));
-  if(idx<0) return null; return groups[idx+1]||null;
+  const nextId = CHALLENGE_TOWARD_SENIOR[String(currentGroupId || '')];
+  if (!nextId) return null;
+  return (groups || []).find(g => String(g.id) === String(nextId)) || null;
 }
 
 function challengeAdjustedGroup(meet,baseGroup,challengeUp) {
@@ -492,6 +519,37 @@ function challengeAdjustedGroup(meet,baseGroup,challengeUp) {
 }
 
 function divisionEnabledForRegistration(reg,division) { return !!reg.options?.[division]; }
+
+function noviceChallengeCreatesOwnElite(reg) {
+  const opts = reg?.options || {};
+  return !!(opts.challengeUp && opts.novice);
+}
+
+function eliteChallengeCreatesAgeGroup(reg) {
+  const opts = reg?.options || {};
+  return !!(opts.challengeUp && opts.elite && !opts.novice);
+}
+
+function registrationMatchesStandardRace(reg, race, meet) {
+  const div = String(race?.division || '').toLowerCase();
+  const opts = reg?.options || {};
+  const raceGroupId = String(race?.groupId || '');
+  const baseGroupId = String(reg?.originalDivisionGroupId || reg?.divisionGroupId || '');
+
+  if (!div || !raceGroupId || !baseGroupId) return false;
+
+  if (raceGroupId === baseGroupId) {
+    if (div === 'elite' && noviceChallengeCreatesOwnElite(reg)) return true;
+    return !!opts[div];
+  }
+
+  if (div === 'elite' && eliteChallengeCreatesAgeGroup(reg)) {
+    const challengeGroup = findChallengeUpGroup(meet?.groups || [], baseGroupId);
+    return !!challengeGroup && String(challengeGroup.id) === raceGroupId;
+  }
+
+  return false;
+}
 
 function nextHelmetNumber(meet) {
   const used=new Set((meet.registrations||[]).map(r=>Number(r.helmetNumber)).filter(n=>Number.isFinite(n)&&n>0));
@@ -1129,6 +1187,7 @@ module.exports = {
   findChallengeUpGroup,
   challengeAdjustedGroup,
   divisionEnabledForRegistration,
+  registrationMatchesStandardRace,
   nextHelmetNumber,
   ensureRegistrationTotalsAndNumbers,
   entryLabelForRegistration,
