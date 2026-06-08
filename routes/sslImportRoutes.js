@@ -572,6 +572,104 @@ function registrationById(meet) {
   return map;
 }
 
+function normalizedLookupText(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+}
+
+function rowsFromAppliedPackagesForMeet(db, meet) {
+  const meetId = String(meet?.id || '');
+  const rows = [];
+
+  for (const pkg of ensurePackageStore(db)) {
+    if (String(pkg.status || '').toLowerCase() === 'deleted') continue;
+    const applied = Array.isArray(pkg.appliedToMeets)
+      ? pkg.appliedToMeets.some(item => String(item?.meetId || '') === meetId)
+      : false;
+    if (!applied) continue;
+
+    const skaters = Array.isArray(pkg.payload?.skaters) ? pkg.payload.skaters : [];
+    for (const row of skaters) {
+      rows.push({ pkg, row });
+    }
+  }
+
+  return rows;
+}
+
+function registrationMatchesSslRow(reg, row, payload = {}) {
+  if (!reg || !row) return false;
+
+  const rowSslId = sslSkaterIdFromRow(row);
+  if (rowSslId) {
+    if (String(reg.sslSkaterId || '') === rowSslId) return true;
+    if (String(reg.importSourceSkaterId || '') === rowSslId) return true;
+  }
+
+  const regName = normalizedLookupText(reg.name);
+  const rowName = normalizedLookupText(row.full_name);
+  if (!regName || !rowName || regName !== rowName) return false;
+
+  const regTeam = normalizedLookupText(reg.team);
+  const rowTeam = normalizedLookupText(row.team || payload.team);
+  if (regTeam && rowTeam && regTeam !== rowTeam) return false;
+
+  const regBirthdate = String(reg.birthdate || '').slice(0, 10);
+  const rowBirthdate = String(row.birthdate || '').slice(0, 10);
+  if (regBirthdate && rowBirthdate && regBirthdate !== rowBirthdate) return false;
+
+  return true;
+}
+
+function hydrateRegistrationSslLinksFromPackages(db, meet) {
+  let changed = false;
+  const appliedRows = rowsFromAppliedPackagesForMeet(db, meet);
+  if (!appliedRows.length) return false;
+
+  for (const reg of meet.registrations || []) {
+    if (isValidSslSkaterId(reg.sslSkaterId || reg.importSourceSkaterId || '')) continue;
+
+    const matched = appliedRows.find(({ pkg, row }) => registrationMatchesSslRow(reg, row, pkg.payload || {}));
+    if (!matched) continue;
+
+    const { pkg, row } = matched;
+    const sslSkaterId = sslSkaterIdFromRow(row);
+    if (!isValidSslSkaterId(sslSkaterId)) continue;
+
+    reg.importSource = reg.importSource || 'ssl';
+    reg.importSourceName = reg.importSourceName || 'SpeedSkateLeague';
+    reg.importPackageId = reg.importPackageId || compactId(pkg.payload?.package_id);
+    reg.importPackageMeetId = reg.importPackageMeetId || compactId(pkg.payload?.meet?.ssl_meet_id);
+    reg.importSourceSkaterId = reg.importSourceSkaterId || sslSkaterId;
+    reg.sslSkaterId = reg.sslSkaterId || sslSkaterId;
+    reg.sslUserId = reg.sslUserId || legacySslUserIdFromRow(row);
+    reg.importSourceLegacyUserId = reg.importSourceLegacyUserId || legacySslUserIdFromRow(row);
+    changed = true;
+  }
+
+  if (changed) meet.updatedAt = nowIso();
+  return changed;
+}
+
+function registrationForStanding(meet, regMap, standing) {
+  const direct = regMap.get(String(standing?.registrationId || '')) || regMap.get(String(Number(standing?.registrationId || '')));
+  if (direct) return direct;
+
+  const name = normalizedLookupText(standing?.skaterName);
+  const team = normalizedLookupText(standing?.team);
+  if (!name) return null;
+
+  const candidates = (meet.registrations || []).filter(reg => {
+    if (normalizedLookupText(reg.name) !== name) return false;
+    const regTeam = normalizedLookupText(reg.team);
+    return !team || !regTeam || regTeam === team;
+  });
+
+  return candidates.length === 1 ? candidates[0] : null;
+}
+
 function normalizeClassType(value) {
   const raw = String(value || '').trim().toLowerCase();
   if (raw === 'novice') return 'novice';
@@ -586,6 +684,12 @@ function safeResultKey(parts) {
 }
 
 function buildSsmResultsPackage(req, db, meet) {
+  // Older SSL-imported registrations may have been created before the SSM
+  // registration row stored sslSkaterId. Repair those links from the applied
+  // package snapshot before building the results package, then fall back to
+  // matching standings by skater/team when a race lane lost registrationId.
+  hydrateRegistrationSslLinksFromPackages(db, meet);
+
   const sections = computeMeetStandings(meet);
   const regMap = registrationById(meet);
   const packageId = `SSM-RESULTS-${meet.id}-${Date.now()}`;
@@ -596,7 +700,7 @@ function buildSsmResultsPackage(req, db, meet) {
     const classType = normalizeClassType(section.division);
 
     for (const standing of section.standings || []) {
-      const reg = regMap.get(String(standing.registrationId || '')) || {};
+      const reg = registrationForStanding(meet, regMap, standing) || {};
       const sslSkaterId = compactId(reg.sslSkaterId || reg.importSourceSkaterId || '');
       if (!isValidSslSkaterId(sslSkaterId)) continue;
 
@@ -607,7 +711,7 @@ function buildSsmResultsPackage(req, db, meet) {
           result_key: resultKey,
           result_type: 'division_race',
           ssl_skater_id: sslSkaterId,
-          ssm_registration_id: compactId(standing.registrationId),
+          ssm_registration_id: compactId(standing.registrationId || reg.id),
           skater_name: standing.skaterName || reg.name || '',
           team: standing.team || reg.team || '',
           division_label: divisionLabel,
