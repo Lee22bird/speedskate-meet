@@ -376,6 +376,59 @@ router.post('/portal/meet/:meetId/dev/import-spring-fling', requireRole('super_a
   return res.redirect(`/portal/meet/${meet.id}/registered?devImported=${count}`);
 });
 
+
+function normalizePackageMeetId(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  return raw.replace(/^ssm[-_:]/i, '');
+}
+
+function packageTargetsMeet(pkg, meet) {
+  const payload = pkg && pkg.payload ? pkg.payload : {};
+  const pMeet = payload.meet || {};
+  const meetId = normalizePackageMeetId(meet && meet.id);
+  const candidateIds = [
+    pMeet.ssm_meet_id,
+    pMeet.ssmMeetId,
+    pMeet.meet_id,
+    pMeet.meetId,
+    pMeet.ssl_meet_id,
+    pMeet.id,
+  ].map(normalizePackageMeetId).filter(Boolean);
+
+  if (meetId && candidateIds.includes(meetId)) return true;
+
+  const urlText = [
+    pMeet.registration_url,
+    pMeet.ssm_url,
+    pMeet.url,
+  ].map(v => String(v || '')).join(' ');
+  if (meetId && new RegExp('/meet/' + meetId + '(/|$)').test(urlText)) return true;
+
+  const title = String(pMeet.title || pMeet.meet_title || '').trim().toLowerCase();
+  const meetTitle = String(meet && meet.meetName || '').trim().toLowerCase();
+  const date = String(pMeet.date || pMeet.meet_date || pMeet.event_date || '').slice(0, 10);
+  const meetDate = String(meet && meet.date || '').slice(0, 10);
+  const league = String(pMeet.league || pMeet.leagueAssociation || '').trim().toLowerCase();
+  const meetLeague = String(meet && (meet.leagueAssociation || meet.league) || '').trim().toLowerCase();
+
+  return !!title && title === meetTitle && (!date || !meetDate || date === meetDate) && (!league || !meetLeague || league === meetLeague);
+}
+
+function sslSubmissionSummaryForMeet(db, meet) {
+  const packages = Array.isArray(db.sslRegistrationPackages) ? db.sslRegistrationPackages : [];
+  const matching = packages.filter(pkg => packageTargetsMeet(pkg, meet));
+  const pending = matching.filter(pkg => String(pkg.status || 'pending').toLowerCase() !== 'applied');
+  const latest = matching.slice().sort((a, b) => String(b.lastReceivedAt || b.updatedAt || b.createdAt || '').localeCompare(String(a.lastReceivedAt || a.updatedAt || a.createdAt || '')))[0] || null;
+  return {
+    total: matching.length,
+    pending: pending.length,
+    applied: matching.length - pending.length,
+    latestTeam: String(latest?.payload?.team || '').trim(),
+    latestAt: latest?.lastReceivedAt || latest?.updatedAt || latest?.createdAt || '',
+  };
+}
+
 router.get('/portal/meet/:meetId/registered', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
@@ -386,7 +439,7 @@ router.get('/portal/meet/:meetId/registered', requireRole('meet_director'), (req
     user:req.user,
     meet,
     activeTab:'registered',
-    bodyHtml:renderRegisteredView({ meet, isSuperAdmin: hasRole(req.user,'super_admin'), query:req.query || {} })
+    bodyHtml:renderRegisteredView({ meet, isSuperAdmin: hasRole(req.user,'super_admin'), query:req.query || {}, sslSubmissionSummary: sslSubmissionSummaryForMeet(req.db, meet) })
   }));
 });
 

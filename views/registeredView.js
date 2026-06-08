@@ -31,13 +31,23 @@ function entryLabelForRegistration(reg) {
     .join(', ') || '—';
 }
 
-function renderRegisteredView({ meet, isSuperAdmin = false }) {
+function renderRegisteredView({ meet, isSuperAdmin = false, sslSubmissionSummary = null }) {
   const registrations = meet.registrations || [];
   const divisionOptions = Array.from(new Set(
     registrations
       .map(r => String(r.divisionGroupLabel || '').trim())
       .filter(Boolean)
   )).sort((a, b) => a.localeCompare(b));
+
+
+  const sslSummary = sslSubmissionSummary || { pending: 0, total: 0, latestTeam: '', latestAt: '' };
+  const sslButtonClass = sslSummary.pending ? 'btn-orange' : 'btn2';
+  const sslButtonLabel = sslSummary.pending
+    ? `Team Submissions (${esc(sslSummary.pending)})`
+    : 'Team Submissions';
+  const sslButtonNote = sslSummary.pending
+    ? `<span class="ssl-submission-alert">${esc(sslSummary.pending)} new</span>`
+    : '';
 
   const rows = registrations.map(r => {
     const entryLabel = entryLabelForRegistration(r);
@@ -67,11 +77,22 @@ function renderRegisteredView({ meet, isSuperAdmin = false }) {
   }).join('');
 
   return `
+    <style>
+      .ssl-submission-alert{
+        display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:9px 12px;
+        background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;font-weight:900;font-size:12px;
+        text-transform:uppercase;letter-spacing:.04em;
+      }
+      .ssl-submission-alert:before{content:'●';color:#f97316;font-size:14px;line-height:1;}
+      @media(max-width:900px){.ssl-submission-alert{width:100%;justify-content:center;}}
+    </style>
     <div class="page-header"><h1>Registered</h1><div class="sub">${esc(meet.meetName)} • <span id="registeredVisibleCount">${registrations.length}</span> of ${registrations.length} skaters</div></div>
     <div class="card">
       <div class="row between" style="margin-bottom:18px">
         <div class="note">Registration close: ${meet.registrationCloseAt ? esc(meet.registrationCloseAt.replace('T', ' ')) : 'Not set'}</div>
         <div class="action-row">
+          <a class="${sslButtonClass}" href="/portal/ssl-packages?meetId=${encodeURIComponent(meet.id)}">${sslButtonLabel}</a>
+          ${sslButtonNote}
           <form method="POST" action="/portal/meet/${meet.id}/assign-races" onsubmit="return confirm('Rebuild will re-split heats and reassign lanes.\n\nYour block structure will be preserved but lane assignments will change.\n\nContinue?')"><button class="btn2" type="submit">Rebuild Assignments</button></form>
           <a class="btn-orange" href="/meet/${meet.id}/register" target="_blank">Public Registration</a>
           ${isSuperAdmin ? `<a class="btn2" href="/portal/meet/${meet.id}/dev/import-spring-fling">Dev Import</a>` : ''}
