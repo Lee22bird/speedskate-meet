@@ -417,13 +417,17 @@ function packageTargetsMeet(pkg, meet) {
 
 function sslSubmissionSummaryForMeet(db, meet) {
   const packages = Array.isArray(db.sslRegistrationPackages) ? db.sslRegistrationPackages : [];
-  const matching = packages.filter(pkg => packageTargetsMeet(pkg, meet));
-  const pending = matching.filter(pkg => String(pkg.status || 'pending').toLowerCase() !== 'applied');
+  const matching = packages.filter(pkg =>
+    String(pkg.status || '').toLowerCase() !== 'deleted' &&
+    packageTargetsMeet(pkg, meet)
+  );
+  const pending = matching.filter(pkg => String(pkg.status || 'pending').toLowerCase() === 'pending');
+  const applied = matching.filter(pkg => String(pkg.status || '').toLowerCase() === 'applied');
   const latest = matching.slice().sort((a, b) => String(b.lastReceivedAt || b.updatedAt || b.createdAt || '').localeCompare(String(a.lastReceivedAt || a.updatedAt || a.createdAt || '')))[0] || null;
   return {
     total: matching.length,
     pending: pending.length,
-    applied: matching.length - pending.length,
+    applied: applied.length,
     latestTeam: String(latest?.payload?.team || '').trim(),
     latestAt: latest?.lastReceivedAt || latest?.updatedAt || latest?.createdAt || '',
   };

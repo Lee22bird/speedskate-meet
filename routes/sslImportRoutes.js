@@ -418,6 +418,7 @@ function applyPackageToMeet({ db, pkg, meet, user }) {
 function upsertImportedPackage({ db, payload, user, source }) {
   const packages = ensurePackageStore(db);
   const existing = packages.find(p =>
+    String(p.status || '').toLowerCase() !== 'deleted' &&
     String(p.payload?.package_id || '') === String(payload.package_id || '') &&
     String(p.payload?.team || '') === String(payload.team || '')
   );
@@ -609,9 +610,11 @@ function renderPackageCard(pkg, selectedId) {
   const meet = payload.meet || {};
   const counts = payload.counts || {};
   const appliedCount = Array.isArray(pkg.appliedToMeets) ? pkg.appliedToMeets.length : 0;
-  const statusText = pkg.status === 'returned'
-    ? 'returned'
-    : (appliedCount ? `${appliedCount} applied` : `${counts.ready ?? (payload.skaters || []).length} ready`);
+  const statusText = pkg.status === 'deleted'
+    ? 'deleted'
+    : (pkg.status === 'returned'
+      ? 'returned'
+      : (appliedCount ? `${appliedCount} applied` : `${counts.ready ?? (payload.skaters || []).length} ready`));
   const isSelected = String(pkg.id) === String(selectedId || '');
   return `
     <a class="ssl-package-row${isSelected ? ' active' : ''}" href="/portal/ssl-packages?id=${esc(pkg.id)}">
@@ -627,9 +630,14 @@ function renderApplyForm({ pkg, db, user }) {
   if (!pkg) return '';
 
   if (packageHasAppliedHistory(pkg) || pkg.status === 'applied') {
+    const latest = Array.isArray(pkg.appliedToMeets) && pkg.appliedToMeets.length
+      ? pkg.appliedToMeets[pkg.appliedToMeets.length - 1]
+      : null;
     return `
-      <div class="good" style="margin-bottom:14px">
-        This package has already been applied. New registrations were created from the applied snapshot, so Create Registrations is disabled to prevent accidental duplicates.
+      <div class="good ssl-applied-summary">
+        <b>Applied to:</b> ${esc(latest?.meetName || 'SSM meet')}<br>
+        <b>Created:</b> ${esc(latest?.createdCount || 0)} registration${Number(latest?.createdCount || 0) === 1 ? '' : 's'} · <b>Skipped:</b> ${esc(latest?.skippedCount || 0)} duplicate${Number(latest?.skippedCount || 0) === 1 ? '' : 's'}<br>
+        <span class="muted small">Create Registrations is disabled to prevent accidental duplicates. Deleting this submission only removes the review package; created registrations stay in the meet.</span>
       </div>`;
   }
 
@@ -671,8 +679,8 @@ function renderAppliedHistory(pkg) {
 function renderPackageActions(pkg) {
   if (!pkg) return '';
   const disableDeleteMessage = packageHasAppliedHistory(pkg)
-    ? "This package has already been applied. Delete only removes the package review record; it does not delete created registrations. Continue?"
-    : "Delete this SSL team submission?";
+    ? "Delete Submission? This removes the SSL package from the review list. Registrations already created in this meet will NOT be deleted. Continue?"
+    : "Delete Submission? This removes the SSL package from the review list. This action cannot be undone.";
 
   return `
     <div class="ssl-package-actions">
@@ -720,7 +728,7 @@ function renderPackagePreview(pkg, db, user) {
           <h2 style="margin:0">${esc(meet.title || 'Meet')}</h2>
           <div class="muted">${esc(payload.team || 'Team')} • ${esc(meet.date || 'Date TBD')} ${meet.location ? '• ' + esc(meet.location) : ''}</div>
         </div>
-        <span class="chip ${pkg.status === 'applied' ? 'chip-green' : (pkg.status === 'returned' ? 'chip-warn' : 'chip-sky')}">${pkg.status === 'applied' ? 'Applied' : (pkg.status === 'returned' ? 'Returned' : 'Pending Review')}</span>
+        <span class="chip ${pkg.status === 'applied' ? 'chip-green' : (pkg.status === 'returned' ? 'chip-warn' : (pkg.status === 'deleted' ? 'chip-warn' : 'chip-sky'))}">${pkg.status === 'applied' ? 'Applied' : (pkg.status === 'returned' ? 'Returned' : (pkg.status === 'deleted' ? 'Deleted' : 'Pending Review'))}</span>
       </div>
 
       <div class="ssl-import-stats">
@@ -746,7 +754,10 @@ function renderPackagePreview(pkg, db, user) {
 }
 
 function renderSslPackagePage({ db, user, selectedId, error, ok }) {
-  const packages = ensurePackageStore(db).slice().sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+  const packages = ensurePackageStore(db)
+    .filter(p => String(p.status || '').toLowerCase() !== 'deleted')
+    .slice()
+    .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
   const selected = packages.find(p => String(p.id) === String(selectedId || '')) || packages[0] || null;
 
   return `
@@ -762,6 +773,7 @@ function renderSslPackagePage({ db, user, selectedId, error, ok }) {
       .ssl-import-stats b{display:block;font-size:20px;color:var(--navy);line-height:1.1;word-break:break-word;}
       .ssl-import-stats span{font-size:11px;text-transform:uppercase;letter-spacing:.06em;font-weight:800;color:var(--muted);}
       .ssl-warning{border:1px solid #fed7aa;background:#fff7ed;color:#9a3412;border-radius:14px;padding:11px 13px;margin-bottom:10px;font-weight:700;}
+      .ssl-applied-summary{border:1px solid #bbf7d0;background:#f0fdf4;color:#047857;border-radius:14px;padding:12px 14px;margin-bottom:14px;font-weight:800;line-height:1.45;}
       .ssl-import-empty{text-align:center;padding:40px;}
       .ssl-apply-form{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:end;border:1px solid var(--border);background:#f8fafc;border-radius:14px;padding:12px;margin-bottom:14px;}
       .ssl-apply-form label{display:block;font-size:12px;font-weight:900;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;}
@@ -923,13 +935,17 @@ module.exports = function createSslImportRoutes(deps = {}) {
   router.post('/portal/ssl-packages/:pkgId/delete', requireRole('meet_director'), (req, res) => {
     const pkgId = req.params.pkgId;
     try {
-      const packages = ensurePackageStore(req.db);
-      const index = packages.findIndex(p => String(p.id) === String(pkgId));
-      if (index < 0) throw new Error('SSL package not found.');
-      const [removed] = packages.splice(index, 1);
+      const pkg = findPackageById(req.db, pkgId);
+      if (!pkg) throw new Error('SSL package not found.');
+      pkg.status = 'deleted';
+      pkg.deletedAt = nowIso();
+      pkg.deletedByUserId = req.user.id;
+      pkg.deletedBy = req.user.displayName || req.user.username || 'SSM User';
+      pkg.updatedAt = nowIso();
+      pkg.updatedByUserId = req.user.id;
       saveDb(req.db);
-      const backUrl = packageBackRegisteredUrl(removed);
-      return res.redirect(backUrl + '?ok=' + encodeURIComponent('SSL team submission deleted.'));
+      const backUrl = packageBackRegisteredUrl(pkg);
+      return res.redirect(backUrl + '?ok=' + encodeURIComponent('SSL team submission deleted. Created registrations remain in the meet.'));
     } catch (err) {
       return res.redirect('/portal/ssl-packages?id=' + encodeURIComponent(pkgId) + '&error=' + encodeURIComponent(err.message));
     }
@@ -945,6 +961,7 @@ module.exports = function createSslImportRoutes(deps = {}) {
       const meet = findEditableMeetById(req.db, req.user, meetId);
       if (!meet) throw new Error('You do not have permission to apply this package to that meet.');
 
+      if (pkg.status === 'deleted') throw new Error('This package was deleted and cannot be applied. Ask the coach to submit again if needed.');
       if (pkg.status === 'returned') throw new Error('This package was returned to the coach and cannot be applied unless the coach resubmits it.');
       const result = applyPackageToMeet({ db: req.db, pkg, meet, user: req.user });
       saveDb(req.db);
