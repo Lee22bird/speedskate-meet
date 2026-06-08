@@ -474,9 +474,22 @@ function genderAliasesForDivisionMatch(value) {
   return raw ? [raw] : [];
 }
 
+function baseGroupAgeMatch(group, age) {
+  const n = Number(age);
+  if (!Number.isFinite(n)) return false;
+  return ageMatch(String(group?.ages || '').trim(), n);
+}
+
 function findAgeGroup(groups,age,genderGuess) {
   const n=Number(age); if(!Number.isFinite(n)) return null;
-  const candidates=groups.filter(g=>groupAgeMatch(g,n)); if(!candidates.length) return null;
+
+  // Base age-group placement must use the group's official USARS age range.
+  // Meet Builder division-specific age overrides are intentionally NOT used here:
+  // those fields let directors combine or shape race offerings, but they should
+  // not relabel a skater's actual division on registration/check-in/results.
+  const candidates=(groups || []).filter(g=>baseGroupAgeMatch(g,n));
+  if(!candidates.length) return null;
+
   const genderAliases = genderAliasesForDivisionMatch(genderGuess);
   return candidates.find(g=>genderAliases.includes(String(g.gender||'').toLowerCase()))||candidates[0];
 }
