@@ -757,18 +757,21 @@ function buildSsmResultsPackage(req, db, meet) {
     for (const standing of section.standings || []) {
       const reg = registrationForStanding(meet, regMap, standing) || {};
       const sslSkaterId = sslSkaterIdFromRegistration(reg) || sslSkaterIdFromStanding(standing);
-      if (!isValidSslSkaterId(sslSkaterId)) {
+      const linkedToSsl = isValidSslSkaterId(sslSkaterId);
+      if (!linkedToSsl) {
         unlinkedStandings.push(describeUnlinkedStanding(reg, standing));
-        continue;
       }
 
       for (const score of standing.raceScores || []) {
         const race = (section.races || []).find(r => String(r.id) === String(score.raceId)) || {};
-        const resultKey = safeResultKey(['ssm', meet.id, sslSkaterId, section.key, score.raceId, score.distanceLabel]);
+        const identityPart = linkedToSsl
+          ? sslSkaterId
+          : safeResultKey(['unresolved', standing.registrationId || reg.id || standing.skaterName, standing.team || reg.team]);
+        const resultKey = safeResultKey(['ssm', meet.id, identityPart, section.key, score.raceId, score.distanceLabel]);
         results.push({
           result_key: resultKey,
           result_type: 'division_race',
-          ssl_skater_id: sslSkaterId,
+          ssl_skater_id: linkedToSsl ? sslSkaterId : '',
           ssm_registration_id: compactId(standing.registrationId || reg.id),
           skater_name: standing.skaterName || reg.name || '',
           team: standing.team || reg.team || '',
@@ -1077,11 +1080,7 @@ module.exports = function createSslImportRoutes(deps = {}) {
       if (!canEditMeet(req.user, meet)) throw new Error('You do not have permission to send results for this meet.');
       const payload = buildSsmResultsPackage(req, db, meet);
       if (!payload.results.length) {
-        const unlinked = Array.isArray(payload.warnings?.unlinked_standings) ? payload.warnings.unlinked_standings : [];
-        const suffix = unlinked.length
-          ? ` Unlinked standings: ${unlinked.slice(0, 6).join('; ')}${unlinked.length > 6 ? '; +' + (unlinked.length - 6) + ' more' : ''}.`
-          : '';
-        throw new Error('No SSL-linked skater results found yet. Make sure imported skaters have SSL IDs and races have posted results.' + suffix);
+        throw new Error('No result rows found yet. Make sure races have posted results before sending to SSL.');
       }
       const result = await postResultsPackageToSsl(payload);
       meet.lastSslResultsSentAt = nowIso();
@@ -1090,7 +1089,7 @@ module.exports = function createSslImportRoutes(deps = {}) {
       meet.updatedAt = nowIso();
       saveDb(req.db || db);
       const localUnlinked = Number(payload.counts?.unlinked_standings || 0);
-      const msg = `Sent ${payload.results.length} result rows to SSL (${result.linked || 0} linked, ${result.unlinked || 0} unlinked${localUnlinked ? `; ${localUnlinked} SSM standings skipped before send` : ''}).`;
+      const msg = `Sent ${payload.results.length} result rows to SSL (${result.linked || 0} linked, ${result.unlinked || 0} unlinked${localUnlinked ? `; ${localUnlinked} row group(s) were resolved by SSL profile matching if possible` : ''}).`;
       return res.redirect(`/portal/meet/${encodeURIComponent(meet.id)}/results?ok=${encodeURIComponent(msg)}`);
     } catch (err) {
       return res.redirect(`/portal/meet/${encodeURIComponent(req.params.meetId)}/results?error=${encodeURIComponent(err.message)}`);
