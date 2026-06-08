@@ -791,18 +791,26 @@ router.get('/portal/meet/:meetId/results', requireRole('meet_director','judge','
   const sections=computeMeetStandings(meet);
   const openSections=computeOpenResults(meet);
   const quadSections=computeQuadStandings(meet);
+  const okMsg = req.query.ok ? String(req.query.ok) : '';
+  const errorMsg = req.query.error ? String(req.query.error) : '';
+  const canManageResults = hasRole(req.user,'super_admin') || canEditMeet(req.user,meet);
   res.send(pageShell({title:'Results',user:req.user,meet,activeTab:'results', bodyHtml:`
     <div class="page-header"><h1>Results</h1><div class="sub">${esc(meet.meetName)}</div></div>
+    ${okMsg ? `<div class="good" style="margin-bottom:16px">${esc(okMsg)}</div>` : ''}
+    ${errorMsg ? `<div class="bad" style="margin-bottom:16px">${esc(errorMsg)}</div>` : ''}
     <div class="card" style="margin-bottom:16px">
       <div class="row between center">
         <div class="action-row">
           <span class="chip chip-${meet.status==='complete'?'green':meet.status==='live'?'orange':'sky'}">${esc(meet.status||'draft')}</span>
+          ${meet.lastSslResultsSentAt ? `<span class="chip chip-green">Sent to SSL</span>` : ''}
         </div>
         <div class="action-row">
-          ${hasRole(req.user,'super_admin')||canEditMeet(req.user,meet)?(meet.status==='complete'?`<form method="POST" action="/portal/meet/${meet.id}/reopen"><button class="btn2" type="submit">Reopen Meet</button></form><a class="btn2" href="/portal/meet/${meet.id}/clone-confirm">Clone Setup</a><a class="btn-orange" href="/portal/meet/${meet.id}/archive-confirm">Archive Meet</a>`:meet.status==='archived'?`<form method="POST" action="/portal/meet/${meet.id}/unarchive"><button class="btn2" type="submit">Unarchive Meet</button></form>`:`<form method="POST" action="/portal/meet/${meet.id}/finalize"><button class="btn-orange" type="submit">Finalize Meet</button></form>`):''}
+          ${canManageResults ? (meet.status==='complete'?`<form method="POST" action="/portal/meet/${meet.id}/reopen"><button class="btn2" type="submit">Reopen Meet</button></form><a class="btn2" href="/portal/meet/${meet.id}/clone-confirm">Clone Setup</a><a class="btn-orange" href="/portal/meet/${meet.id}/archive-confirm">Archive Meet</a>`:meet.status==='archived'?`<form method="POST" action="/portal/meet/${meet.id}/unarchive"><button class="btn2" type="submit">Unarchive Meet</button></form>`:`<form method="POST" action="/portal/meet/${meet.id}/finalize"><button class="btn-orange" type="submit">Finalize Meet</button></form>`):''}
+          ${canManageResults ? `<form method="POST" action="/portal/meet/${meet.id}/results/send-to-ssl" onsubmit="return confirm('Send official results from this SSM meet to SSL career profiles?');"><button class="btn2" type="submit">Send Results to SSL</button></form>` : ''}
           <a class="btn2" href="/portal/meet/${meet.id}/results/print" target="_blank">Print Results</a>
         </div>
       </div>
+      ${meet.lastSslResultsSentAt ? `<div class="note" style="margin-top:10px">Last sent to SSL: ${esc(new Date(meet.lastSslResultsSentAt).toLocaleString())}</div>` : ''}
     </div>
     ${sections.map(resultsSectionHtml).join('<div class="spacer"></div>')||`<div class="card"><div class="muted">No inline standings yet.</div></div>`}
     ${openSections.length?`

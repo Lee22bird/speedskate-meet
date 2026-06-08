@@ -481,6 +481,47 @@ function publicBaseUrl(req) {
   return `${proto}://${req.get('host')}`.replace(/\/+$/, '');
 }
 
+
+function configuredSslBaseUrl() {
+  return String(
+    process.env.SSL_BASE_URL ||
+    process.env.SPEEDSKATELEAGUE_BASE_URL ||
+    process.env.PUBLIC_SSL_BASE_URL ||
+    'https://speedskateleague.com'
+  ).trim().replace(/\/+$/, '');
+}
+
+function configuredSslResultsApiKey() {
+  return String(
+    process.env.SSL_SHARED_API_KEY ||
+    process.env.SSL_SSM_API_KEY ||
+    process.env.SSM_RESULTS_API_KEY ||
+    process.env.SSO_SHARED_SECRET ||
+    'ssl-ssm-local-dev-package-key'
+  ).trim();
+}
+
+async function postResultsPackageToSsl(payload) {
+  const base = configuredSslBaseUrl();
+  if (!base) throw new Error('SSL_BASE_URL is not configured.');
+  if (typeof fetch !== 'function') throw new Error('This Node runtime does not support fetch. Upgrade Node or add a fetch polyfill.');
+  const response = await fetch(`${base}/api/ssm/results`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-ssm-results-key': configuredSslResultsApiKey(),
+    },
+    body: JSON.stringify(payload),
+  });
+  const text = await response.text();
+  let body = {};
+  try { body = text ? JSON.parse(text) : {}; } catch (_) { body = { error: text }; }
+  if (!response.ok || body.ok === false) {
+    throw new Error(body.error || body.message || `SSL results import failed with HTTP ${response.status}`);
+  }
+  return body;
+}
+
 function isPublishedMeet(meet) {
   return !!meet && !meet.archivedAt && !!meet.isPublic && String(meet.status || '').toLowerCase() === 'published';
 }
@@ -858,6 +899,28 @@ module.exports = function createSslImportRoutes(deps = {}) {
       return res.json(payload);
     } catch (err) {
       return res.status(err.statusCode || 400).json({ ok: false, error: err.message });
+    }
+  });
+
+
+  router.post('/portal/meet/:meetId/results/send-to-ssl', requireRole('meet_director'), async (req, res) => {
+    try {
+      const db = routeDb(req);
+      const meet = (db.meets || []).find(m => String(m.id) === String(req.params.meetId));
+      if (!meet) throw new Error('Meet not found.');
+      if (!canEditMeet(req.user, meet)) throw new Error('You do not have permission to send results for this meet.');
+      const payload = buildSsmResultsPackage(req, db, meet);
+      if (!payload.results.length) throw new Error('No SSL-linked skater results found yet. Make sure imported skaters have SSL IDs and races have posted results.');
+      const result = await postResultsPackageToSsl(payload);
+      meet.lastSslResultsSentAt = nowIso();
+      meet.lastSslResultsPackageId = payload.package_id;
+      meet.lastSslResultsImportSummary = result;
+      meet.updatedAt = nowIso();
+      saveDb(req.db || db);
+      const msg = `Sent ${payload.results.length} result rows to SSL (${result.linked || 0} linked, ${result.unlinked || 0} unlinked).`;
+      return res.redirect(`/portal/meet/${encodeURIComponent(meet.id)}/results?ok=${encodeURIComponent(msg)}`);
+    } catch (err) {
+      return res.redirect(`/portal/meet/${encodeURIComponent(req.params.meetId)}/results?error=${encodeURIComponent(err.message)}`);
     }
   });
 
