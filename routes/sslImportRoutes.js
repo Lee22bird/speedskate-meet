@@ -202,10 +202,34 @@ function genderFromRow(row) {
   return 'male';
 }
 
+function allMeetRows(db) {
+  const rows = [];
+  const seen = new Set();
+  for (const meet of Array.isArray(db?.meets) ? db.meets : []) {
+    if (!meet) continue;
+    const key = 'meet:' + String(meet.id || '');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    rows.push(meet);
+  }
+  for (const meet of Array.isArray(db?.pendingMeets) ? db.pendingMeets : []) {
+    if (!meet) continue;
+    const key = 'meet:' + String(meet.id || '');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    rows.push(meet);
+  }
+  return rows;
+}
+
 function activeMeetsForUser(db, user) {
-  return (db.pendingMeets || [])
+  return allMeetRows(db)
     .filter(meet => meet && !meet.archivedAt && canEditMeet(user, meet))
     .sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')) || String(a.meetName || '').localeCompare(String(b.meetName || '')));
+}
+
+function findEditableMeetById(db, user, meetId) {
+  return allMeetRows(db).find(meet => String(meet?.id || '') === String(meetId || '') && !meet.archivedAt && canEditMeet(user, meet));
 }
 
 function findPackageById(db, pkgId) {
@@ -794,8 +818,8 @@ module.exports = function createSslImportRoutes(deps = {}) {
       if (!pkg) throw new Error('SSL package not found.');
 
       const meetId = String(req.body.meetId || '').trim();
-      const meet = (req.db.pendingMeets || []).find(m => String(m.id) === meetId);
-      if (!meet || !canEditMeet(req.user, meet)) throw new Error('You do not have permission to apply this package to that meet.');
+      const meet = findEditableMeetById(req.db, req.user, meetId);
+      if (!meet) throw new Error('You do not have permission to apply this package to that meet.');
 
       const result = applyPackageToMeet({ db: req.db, pkg, meet, user: req.user });
       saveDb(req.db);
