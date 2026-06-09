@@ -767,6 +767,44 @@ function safeResultKey(parts) {
   return parts.map(part => String(part || '').replace(/[^a-zA-Z0-9_.:-]/g, '_')).join('|');
 }
 
+const USARS_STANDARD_POINTS = { 1: 30, 2: 20, 3: 10, 4: 5 };
+
+function cleanResultPlace(value) {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? Math.trunc(n) : null;
+}
+
+function cleanResultPoints(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function usarsPointsForPlace(place) {
+  const n = cleanResultPlace(place);
+  return n ? Number(USARS_STANDARD_POINTS[n] || 0) : 0;
+}
+
+function normalizedRaceScoreForSsl(score) {
+  const place = cleanResultPlace(
+    score?.place ??
+    score?.result_place ??
+    score?.race_place ??
+    score?.finish_place ??
+    score?.placement ??
+    score?.rank
+  );
+  const explicitPoints = cleanResultPoints(
+    score?.points ??
+    score?.result_points ??
+    score?.race_points
+  );
+  const points = explicitPoints !== null && explicitPoints > 0
+    ? explicitPoints
+    : usarsPointsForPlace(place);
+
+  return { place, points };
+}
+
 function buildSsmResultsPackage(req, db, meet) {
   // Older SSL-imported registrations may have been created before the SSM
   // registration row stored sslSkaterId. Repair those links from the applied
@@ -798,6 +836,7 @@ function buildSsmResultsPackage(req, db, meet) {
           ? sslSkaterId
           : safeResultKey(['unresolved', standing.registrationId || reg.id || standing.skaterName, standing.team || reg.team]);
         const resultKey = safeResultKey(['ssm', meet.id, identityPart, section.key, score.raceId, score.distanceLabel]);
+        const normalizedScore = normalizedRaceScoreForSsl(score);
         results.push({
           result_key: resultKey,
           result_type: 'division_race',
@@ -811,10 +850,11 @@ function buildSsmResultsPackage(req, db, meet) {
           class_type: classType,
           distance_label: score.distanceLabel || race.distanceLabel || '',
           race_id: compactId(score.raceId || race.id),
-          place: Number(score.place || 0) || null,
-          points: Number(score.points || 0) || 0,
+          place: normalizedScore.place,
+          points: normalizedScore.points,
           overall_place: Number(standing.overallPlace || 0) || null,
           total_points: Number(standing.totalPoints || 0) || 0,
+          scoring_system: 'USARS_FINALS_30_20_10_5',
           tiebreaker_used: !!standing.tiebreakerUsed,
         });
       }

@@ -304,6 +304,45 @@ function meetDayCount(meet) {
   return Number.isFinite(diff) && diff > 0 ? diff : 1;
 }
 function nextSetupPresetId(db) { return nextId(db.setupPresets || []); }
+
+
+function orderedRacesForSetupPreset(meet) {
+  const raceById = new Map((Array.isArray(meet?.races) ? meet.races : []).map(race => [String(race?.id || ''), race]));
+  const ordered = [];
+
+  for (const block of Array.isArray(meet?.blocks) ? meet.blocks : []) {
+    for (const raceId of Array.isArray(block?.raceIds) ? block.raceIds : []) {
+      const race = raceById.get(String(raceId || ''));
+      if (!race) continue;
+
+      ordered.push({
+        ...race,
+        blockId: block.id || '',
+        blockName: block.name || '',
+        blockDay: block.day || '',
+        blockType: block.type || 'race',
+        blockNotes: block.notes || '',
+      });
+    }
+  }
+
+  const assigned = new Set(ordered.map(race => String(race?.id || '')));
+
+  for (const race of Array.isArray(meet?.races) ? meet.races : []) {
+    if (!assigned.has(String(race?.id || ''))) {
+      ordered.push({
+        ...race,
+        blockId: race.blockId || '',
+        blockName: race.blockName || 'Unassigned',
+        blockDay: race.blockDay || '',
+        blockType: race.blockType || 'race',
+        blockNotes: race.blockNotes || '',
+      });
+    }
+  }
+
+  return ordered;
+}
 function makeSetupPresetFromMeet(db, meet, name, ownerUserId) {
   return {
     id: nextSetupPresetId(db),
@@ -337,7 +376,7 @@ function makeSetupPresetFromMeet(db, meet, name, ownerUserId) {
     additionalRaces: JSON.parse(JSON.stringify(meet.additionalGroups || meet.additionalRaceGroups || meet.additionalRaces || meet.skateabilityGroups || [])),
     skateabilityGroups: JSON.parse(JSON.stringify(meet.additionalGroups || meet.additionalRaceGroups || meet.additionalRaces || meet.skateabilityGroups || [])),
     blocks: JSON.parse(JSON.stringify(meet.blocks || [])),
-    raceOrder: orderedRaces(meet).map(r => ({
+    raceOrder: orderedRacesForSetupPreset(meet).map(r => ({
       raceId: r.id, groupId: r.groupId, groupLabel: r.groupLabel, division: r.division,
       distanceLabel: r.distanceLabel, dayIndex: r.dayIndex, blockId: r.blockId || '', blockName: r.blockName || ''
     })),
