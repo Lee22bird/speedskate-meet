@@ -1,7 +1,7 @@
 const express = require('express');
 const { esc, cap } = require('../utils/html');
 const { nowIso } = require('../utils/date');
-const { canEditMeet } = require('../utils/auth');
+const { canEditMeet, hasRole } = require('../utils/auth');
 const {
   getMeetOr404, meetRinkLabel, meetDateLabel, nextId,
   normalizeOpenGroups, normalizeQuadGroups, normalizeDivisionSet,
@@ -24,6 +24,11 @@ const {
   rebuildRaceAssignmentsSafe,
 } = require('../services/ttHelpers');
 const { raceDisplayStage, ensureCurrentRace } = require('../services/raceDay');
+
+
+function canManageSetupPresets(user) {
+  return hasRole(user, 'super_admin');
+}
 
 module.exports = function createBuilderRoutes(deps = {}) {
   const router = express.Router();
@@ -49,7 +54,7 @@ router.get('/portal/meet/:meetId/builder', requireRole('meet_director'), (req, r
     user:req.user,
     meet,
     activeTab:'builder',
-    bodyHtml:renderMeetBuilderView({ db:req.db, meet, query:req.query }),
+    bodyHtml:renderMeetBuilderView({ db:req.db, meet, user:req.user, query:req.query }),
   }));
 });
 
@@ -273,7 +278,19 @@ router.post('/portal/meet/:meetId/setup-presets/delete', requireRole('meet_direc
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet) return res.redirect('/portal');
   if(!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
-  const presetId = String(req.body.presetId||'').trim();
+
+  // Setup presets are global templates shared by meet builders.
+  // Only super admins may delete them. Meet directors can save/load presets,
+  // but they cannot remove shared templates that other meets may depend on.
+  if(!canManageSetupPresets(req.user)) {
+    return res.redirect(`/portal/meet/${meet.id}/builder?error=${encodeURIComponent('Only a super admin can delete shared setup presets.')}`);
+  }
+
+  const presetId = String(req.body.presetId||req.body.deletePresetId||'').trim();
+  if(!presetId) {
+    return res.redirect(`/portal/meet/${meet.id}/builder?error=${encodeURIComponent('Select a setup preset before deleting.')}`);
+  }
+
   if(!Array.isArray(req.db.setupPresets)) req.db.setupPresets=[];
   const index = req.db.setupPresets.findIndex(p=>String(p.id)===presetId);
   if(index >= 0) {
@@ -281,7 +298,7 @@ router.post('/portal/meet/:meetId/setup-presets/delete', requireRole('meet_direc
     saveDb(req.db);
     return res.redirect(`/portal/meet/${meet.id}/builder?presetDeleted=1&clearPreset=1`);
   }
-  res.redirect(`/portal/meet/${meet.id}/builder`);
+  res.redirect(`/portal/meet/${meet.id}/builder?error=${encodeURIComponent('Setup preset not found.')}`);
 });
 
 // Save meet fields and sync configured races while preserving the manual Block Builder schedule.

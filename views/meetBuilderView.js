@@ -1,4 +1,5 @@
 const { esc } = require('../utils/html');
+const { hasRole } = require('../utils/auth');
 
 const LEAGUE_ASSOCIATION_OPTIONS = [
   { value: '', label: 'None / Independent' },
@@ -56,7 +57,7 @@ function makeAdditionalRaceSlots(raw) {
   });
 }
 
-function renderMeetBuilderView({ db, meet, query = {} }) {
+function renderMeetBuilderView({ db, meet, user = null, query = {} }) {
   const rinkInputValue = String(meet.customRinkName || '').trim() || (() => { const r = db.rinks.find(x => Number(x.id) === Number(meet.rinkId)); return r ? `${r.name} (${r.city || ''}${r.city && r.state ? ', ' : ''}${r.state || ''})` : ''; })();
   const rinkDataList=db.rinks.map(r=>`<option value="${esc(r.name)} (${esc(r.city||'')}${r.city&&r.state?', ':''}${esc(r.state||'')})" data-id="${r.id}"></option>`).join('');
   const rinkLookupScript=JSON.stringify((db.rinks||[]).map(r=>({id:r.id,label:`${r.name} (${r.city||''}${r.city&&r.state?', ':''}${r.state||''})`,name:r.name})));
@@ -66,6 +67,7 @@ function renderMeetBuilderView({ db, meet, query = {} }) {
   const presetSavedFlash=query.presetSaved?'<div class="card" style="border-left:4px solid var(--green);margin-bottom:12px"><div class="good">✅ Meet setup preset saved for future use.</div></div>':'';
   const presetLoadedFlash=query.presetLoaded?'<div class="card" style="border-left:4px solid var(--green);margin-bottom:12px"><div class="good">✅ Meet setup preset loaded into this meet.</div></div>':'';
   const presetDeletedFlash=query.presetDeleted?'<div class="card" style="border-left:4px solid var(--green);margin-bottom:12px"><div class="good">✅ Meet setup preset deleted.</div></div>':'';
+  const canDeleteSetupPresets = hasRole(user || {}, 'super_admin');
   const setupPresetOptions = (db.setupPresets||[]).map(p=>`<option value="${esc(p.id)}">${esc(p.name||p.presetName||'Preset')}</option>`).join('');
   const presetSelectHtml = `${query.clearPreset?'<option value="" selected>Choose a preset</option>':''}${setupPresetOptions||'<option value="">(no presets)</option>'}`;
   const meetStatus = String(meet.status || 'draft').toLowerCase();
@@ -307,8 +309,13 @@ function renderMeetBuilderView({ db, meet, query = {} }) {
                 <div class="preset-manage-row">
                   <select id="presetSelect" name="presetId">${presetSelectHtml}</select>
                   <button id="loadPresetBtn" class="btn2 btn-sm" type="submit" form="meetBuilderForm" formaction="/portal/meet/${meet.id}/setup-presets/load" onclick="return confirm('Load setup will overwrite current divisions, blocks, and race structure. Continue?')">Load</button>
-                  <input type="hidden" name="deletePresetId" id="deletePresetId" value="" />
-                  <button id="deletePresetBtn" class="btn-danger btn-sm" type="submit" form="meetBuilderForm" formaction="/portal/meet/${meet.id}/setup-presets/delete" onclick="return confirm('Delete selected setup preset? This cannot be undone.')">Delete</button>
+                  ${canDeleteSetupPresets ? `
+                    <input type="hidden" name="deletePresetId" id="deletePresetId" value="" />
+                    <button id="deletePresetBtn" class="btn-danger btn-sm" type="submit" form="meetBuilderForm" formaction="/portal/meet/${meet.id}/setup-presets/delete" onclick="return confirm('Delete selected setup preset? This cannot be undone.')">Delete</button>
+                  ` : `
+                    <span class="muted small">Only super admins can delete shared presets.</span>
+                    <input type="hidden" name="deletePresetId" id="deletePresetId" value="" />
+                  `}
                 </div>
                 <div class="setup-warning-note">Loading a preset can overwrite divisions, fees, blocks, and race structure. Save this meet first if you may need to come back to the current setup.</div>
                 <script>
