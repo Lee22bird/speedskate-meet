@@ -207,6 +207,170 @@ function autoArrangeMeetHeatFinalFlow(meet) {
   return changedBlocks;
 }
 
+
+function raceListNumber(meet, race) {
+  const ordered = orderedRaces(meet);
+  const idx = ordered.findIndex(r => String(r.id) === String(race?.id || ''));
+  return idx >= 0 ? idx + 1 : '';
+}
+
+function correctionRaceLabel(meet, race) {
+  const raceNo = raceListNumber(meet, race);
+  return [
+    raceNo ? `Race ${raceNo}` : 'Race',
+    race?.groupLabel || 'Division',
+    cap(race?.division || ''),
+    race?.distanceLabel || '',
+    raceDisplayStage(race),
+  ].filter(Boolean).join(' — ');
+}
+
+function laneEntrySnapshot(entry) {
+  return {
+    lane: Number(entry?.lane || 0) || '',
+    registrationId: String(entry?.registrationId || ''),
+    helmetNumber: String(entry?.helmetNumber || ''),
+    skaterName: String(entry?.skaterName || ''),
+    team: String(entry?.team || ''),
+    place: String(entry?.place || ''),
+    time: String(entry?.time || ''),
+    status: String(entry?.status || ''),
+  };
+}
+
+function raceCorrectionSnapshot(race) {
+  return {
+    raceId: String(race?.id || ''),
+    status: String(race?.status || ''),
+    resultsMode: String(race?.resultsMode || 'places'),
+    notes: String(race?.notes || ''),
+    laneEntries: (Array.isArray(race?.laneEntries) ? race.laneEntries : []).map(laneEntrySnapshot),
+  };
+}
+
+function laneCountForCorrection(meet, race, existingLaneEntries) {
+  if (race?.isTimeTrial) return Math.max(existingLaneEntries.length, 1);
+  if (race?.isOpenRace || isOpenDivision(race?.division) || race?.isRelayRace) return Math.max(existingLaneEntries.length, 1);
+  return Math.max(existingLaneEntries.length, Number(meet?.lanes || 0), 1);
+}
+
+function applyRaceCorrectionFromBody(meet, race, body) {
+  const existingLaneEntries = Array.isArray(race.laneEntries) ? [...race.laneEntries] : [];
+  const laneCount = laneCountForCorrection(meet, race, existingLaneEntries);
+  const nextLaneEntries = [];
+
+  for (let i = 1; i <= laneCount; i++) {
+    const existing = existingLaneEntries.find(x => Number(x.lane) === i) || {};
+    nextLaneEntries.push({
+      lane: i,
+      registrationId: existing.registrationId || '',
+      helmetNumber: existing.helmetNumber || '',
+      skaterName: String(body[`skaterName_${i}`] ?? existing.skaterName ?? '').trim(),
+      team: String(body[`team_${i}`] ?? existing.team ?? '').trim(),
+      place: String(body[`place_${i}`] ?? existing.place ?? '').trim(),
+      time: String(body[`time_${i}`] ?? existing.time ?? '').trim(),
+      status: String(body[`status_${i}`] ?? existing.status ?? '').trim(),
+    });
+  }
+
+  race.laneEntries = nextLaneEntries;
+  race.resultsMode = String(body.resultsMode || race.resultsMode || 'places') === 'times' ? 'times' : 'places';
+  race.notes = String(body.notes ?? race.notes ?? '');
+  race.status = 'closed';
+  race.closedAt = race.closedAt || nowIso();
+  race.correctedAt = nowIso();
+}
+
+function correctionAuditReason(value) {
+  return String(value || '').trim().slice(0, 500);
+}
+
+function recordRaceCorrection(meet, race, user, before, after, reason) {
+  if (!Array.isArray(meet.raceCorrections)) meet.raceCorrections = [];
+  meet.raceCorrections.unshift({
+    id: `corr_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`,
+    raceId: String(race?.id || ''),
+    raceLabel: correctionRaceLabel(meet, race),
+    correctedAt: nowIso(),
+    correctedByUserId: user?.id || '',
+    correctedBy: user?.displayName || user?.username || 'Meet Director',
+    reason,
+    before,
+    after,
+  });
+  meet.raceCorrections = meet.raceCorrections.slice(0, 200);
+}
+
+function correctionWarningHtml(race) {
+  const isAdvancement = isAdvancementRace(race);
+  return `
+    <div class="card" style="border-left:5px solid var(--orange);margin-bottom:16px;background:#fff7ed">
+      <h2 style="margin:0 0 8px;color:#9a3412">⚠ Correction Mode</h2>
+      <div style="font-weight:800;color:#9a3412;line-height:1.45">
+        You are editing a completed race. This does not rewind the meet, does not change the current race, and does not rebuild later races.
+        ${isAdvancement ? '<br>This race may affect advancement. Review downstream races manually after saving.' : ''}
+      </div>
+    </div>`;
+}
+
+function renderCorrectionRaceForm(meet, race, regMap, error = '', ok = '') {
+  const lanes = laneRowsForRace(race, meet);
+  const raceNo = raceListNumber(meet, race);
+  const correctionHistory = (Array.isArray(meet.raceCorrections) ? meet.raceCorrections : [])
+    .filter(row => String(row.raceId || '') === String(race.id || ''))
+    .slice(0, 5);
+
+  return `
+    <div class="page-header"><h1>Race Correction</h1><div class="sub">${esc(meet.meetName)}${raceNo ? ' • Race ' + esc(raceNo) : ''}</div></div>
+    ${raceDaySubTabs(meet, 'director')}
+    <div class="action-row" style="margin-bottom:14px"><a class="btn2" href="/portal/meet/${esc(meet.id)}/race-day/director">← Back to Race Day</a></div>
+    ${error ? `<div class="bad" style="margin-bottom:16px">${esc(error)}</div>` : ''}
+    ${ok ? `<div class="good" style="margin-bottom:16px">${esc(ok)}</div>` : ''}
+    ${correctionWarningHtml(race)}
+    <div class="card">
+      <div class="row between center" style="margin-bottom:14px">
+        <div>
+          <h2 style="margin:0">${esc(correctionRaceLabel(meet, race))}</h2>
+          <div class="note">Current race remains unchanged. Use this only for result disputes or scoring corrections.</div>
+        </div>
+        <span class="chip chip-${race.status === 'closed' ? 'green' : 'sky'}">${esc(race.status || 'open')}</span>
+      </div>
+      <form method="POST" action="/portal/meet/${esc(meet.id)}/race-day/correction/save" onsubmit="return confirm('Save this correction? This updates this race only and will not rebuild later races.');">
+        <input type="hidden" name="raceId" value="${esc(race.id)}" />
+        <div class="action-row" style="margin-bottom:14px">
+          <label class="toggle-wrap"><input type="radio" name="resultsMode" value="places" ${race.resultsMode !== 'times' ? 'checked' : ''} style="width:auto" /> <span style="font-size:14px;font-weight:600">Places</span></label>
+          <label class="toggle-wrap"><input type="radio" name="resultsMode" value="times" ${race.resultsMode === 'times' ? 'checked' : ''} style="width:auto" /> <span style="font-size:14px;font-weight:600">Times</span></label>
+        </div>
+        <div style="overflow-x:auto">
+          <table class="table">
+            <thead><tr><th>Lane</th><th>Helmet</th><th>Skater</th><th>Team</th><th>Place</th><th>Time</th><th>Status</th></tr></thead>
+            <tbody>${lanes.map(l => { const reg = regMap.get(Number(l.registrationId)); return `<tr>
+              <td>${esc(l.lane)}</td>
+              <td>${l.helmetNumber ? '#' + esc(l.helmetNumber) : ''}</td>
+              <td><input name="skaterName_${esc(l.lane)}" value="${esc(l.skaterName)}" />${reg?.sponsor ? `<div class="sponsor-line">Sponsor: ${esc(reg.sponsor)}</div>` : ''}</td>
+              <td><input name="team_${esc(l.lane)}" value="${esc(l.team)}" /></td>
+              <td><input name="place_${esc(l.lane)}" value="${esc(l.place)}" /></td>
+              <td><input name="time_${esc(l.lane)}" value="${esc(l.time)}" /></td>
+              <td><select name="status_${esc(l.lane)}">
+                <option value="" ${!l.status ? 'selected' : ''}>—</option>
+                <option value="DNS" ${l.status === 'DNS' ? 'selected' : ''}>DNS</option>
+                <option value="DQ" ${l.status === 'DQ' ? 'selected' : ''}>DQ</option>
+                <option value="Scratch" ${l.status === 'Scratch' ? 'selected' : ''}>Scratch</option>
+              </select></td>
+            </tr>`; }).join('')}</tbody>
+          </table>
+        </div>
+        <div style="margin-top:14px"><label>Race Notes</label><textarea name="notes">${esc(race.notes || '')}</textarea></div>
+        <div style="margin-top:14px"><label>Correction Reason</label><textarea name="reason" placeholder="Example: Judge review corrected finishing order after protest." required></textarea></div>
+        <div class="action-row" style="margin-top:14px">
+          <button class="btn-orange" type="submit">Save Correction</button>
+          <a class="btn2" href="/portal/meet/${esc(meet.id)}/race-day/director">Cancel</a>
+        </div>
+      </form>
+    </div>
+    ${correctionHistory.length ? `<div class="card" style="margin-top:16px"><h2>Recent Corrections for This Race</h2><table class="table"><thead><tr><th>Time</th><th>By</th><th>Reason</th></tr></thead><tbody>${correctionHistory.map(row => `<tr><td>${esc(new Date(row.correctedAt || '').toLocaleString())}</td><td>${esc(row.correctedBy || '')}</td><td>${esc(row.reason || '')}</td></tr>`).join('')}</tbody></table></div>` : ''}`;
+}
+
 router.get('/portal/meet/:meetId/blocks', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet) return res.redirect('/portal');
@@ -377,6 +541,22 @@ router.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','j
             ${current&&current.status==='closed'?`<button class="btn-danger" onclick="unlockRace('${current.id}')">Unlock Race</button>`:''}
           </div>
         </div>
+      </div>
+      <div class="card" style="margin-bottom:16px;border-left:5px solid var(--orange)">
+        <div class="row between center">
+          <div>
+            <h2 style="margin:0">Correction Mode</h2>
+            <div class="note">Fix a completed race without rewinding the meet, advancing racers, or rebuilding later races.</div>
+          </div>
+          <form method="GET" action="/portal/meet/${meet.id}/race-day/correction" class="action-row" style="margin:0">
+            <select name="raceId" required>
+              <option value="">Select completed race…</option>
+              ${info.ordered.filter(r=>String(r.status||'')==='closed').map((r,idx)=>`<option value="${esc(r.id)}">Race ${info.ordered.findIndex(x=>String(x.id)===String(r.id))+1} — ${esc(r.groupLabel)} — ${esc(cap(r.division))} — ${esc(r.distanceLabel)} — ${esc(raceDisplayStage(r))}</option>`).join('')}
+            </select>
+            <button class="btn-orange" type="submit">Open Correction</button>
+          </form>
+        </div>
+        <div class="note" style="margin-top:10px">Judges remain locked to the live current race. Corrections are director-only in Phase 1.</div>
       </div>
       <div class="grid-2">
         <div class="card">
@@ -612,6 +792,66 @@ router.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','j
   res.send(pageShell({title:'Race Day',user:req.user,meet,activeTab:'race-day', bodyHtml:body}));
 });
 
+
+router.get('/portal/meet/:meetId/race-day/correction', requireRole('meet_director'), (req, res) => {
+  const meet=getMeetOr404(req.db,req.params.meetId);
+  if(!meet) return res.redirect('/portal');
+  if(!canEditMeet(req.user,meet)) return res.status(403).send(pageShell({title:'Forbidden',user:req.user,bodyHtml:`<div class="page-header"><h1>Forbidden</h1></div><div class="card"><div class="danger">Only the meet owner can correct race results.</div></div>`}));
+
+  const ordered=orderedRaces(meet);
+  const closed=ordered.filter(r=>String(r.status||'')==='closed');
+  const raceId=String(req.query.raceId||'');
+  const race=closed.find(r=>String(r.id)===raceId);
+  const regMap=new Map((meet.registrations||[]).map(r=>[Number(r.id),r]));
+
+  if(race) {
+    return res.send(pageShell({
+      title:'Race Correction',
+      user:req.user,
+      meet,
+      activeTab:'race-day',
+      bodyHtml:renderCorrectionRaceForm(meet,race,regMap,req.query.error||'',req.query.ok||''),
+    }));
+  }
+
+  const options=closed.map(r=>`<option value="${esc(r.id)}">${esc(correctionRaceLabel(meet,r))}</option>`).join('');
+  return res.send(pageShell({title:'Race Correction',user:req.user,meet,activeTab:'race-day',bodyHtml:`
+    <div class="page-header"><h1>Race Correction</h1><div class="sub">${esc(meet.meetName)}</div></div>
+    ${raceDaySubTabs(meet,'director')}
+    <div class="action-row" style="margin-bottom:14px"><a class="btn2" href="/portal/meet/${esc(meet.id)}/race-day/director">← Back to Race Day</a></div>
+    <div class="card" style="border-left:5px solid var(--orange)">
+      <h2>Open Completed Race Correction</h2>
+      <div class="note" style="margin-bottom:12px">This does not change the current race and will not rebuild later races.</div>
+      ${closed.length ? `<form method="GET" action="/portal/meet/${esc(meet.id)}/race-day/correction" class="form-grid cols-2"><div><label>Completed Race</label><select name="raceId" required><option value="">Select race…</option>${options}</select></div><div class="action-row" style="align-self:flex-end"><button class="btn-orange" type="submit">Open Correction</button></div></form>` : `<div class="muted">No completed races are available for correction yet.</div>`}
+    </div>`}));
+});
+
+router.post('/portal/meet/:meetId/race-day/correction/save', requireRole('meet_director'), (req, res) => {
+  const meet=getMeetOr404(req.db,req.params.meetId);
+  if(!meet) return res.redirect('/portal');
+  if(!canEditMeet(req.user,meet)) return res.status(403).send(pageShell({title:'Forbidden',user:req.user,bodyHtml:`<div class="page-header"><h1>Forbidden</h1></div><div class="card"><div class="danger">Only the meet owner can correct race results.</div></div>`}));
+
+  const race=(meet.races||[]).find(r=>String(r.id)===String(req.body.raceId||''));
+  if(!race) return res.redirect(`/portal/meet/${encodeURIComponent(meet.id)}/race-day/correction?error=${encodeURIComponent('Race not found.')}`);
+  if(String(race.status||'')!=='closed') return res.redirect(`/portal/meet/${encodeURIComponent(meet.id)}/race-day/correction?error=${encodeURIComponent('Only completed/closed races can be corrected from Correction Mode.')}`);
+
+  const reason=correctionAuditReason(req.body.reason);
+  if(!reason) return res.redirect(`/portal/meet/${encodeURIComponent(meet.id)}/race-day/correction?raceId=${encodeURIComponent(race.id)}&error=${encodeURIComponent('Correction reason is required.')}`);
+
+  const before=raceCorrectionSnapshot(race);
+  applyRaceCorrectionFromBody(meet,race,req.body||{});
+  const after=raceCorrectionSnapshot(race);
+  recordRaceCorrection(meet,race,req.user,before,after,reason);
+
+  // Important race-day integrity rule:
+  // Correction Mode updates this race only. It must not call heat advancement,
+  // must not set currentRaceId, and must not rebuild any later race entries.
+  meet.updatedAt=nowIso();
+  saveDb(req.db);
+
+  return res.redirect(`/portal/meet/${encodeURIComponent(meet.id)}/race-day/correction?raceId=${encodeURIComponent(race.id)}&ok=${encodeURIComponent('Race correction saved. Later races were not rebuilt and current race was not changed.')}`);
+});
+
 router.post('/portal/meet/:meetId/race-day/judges/save', requireRole('judge','meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet) return res.redirect('/portal');
@@ -778,8 +1018,10 @@ router.post('/api/meet/:meetId/race-day/unlock-race', requireRole('meet_director
   if(!meet||!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
   const race=(meet.races||[]).find(r=>r.id===String(req.body.raceId||''));
   if(!race) return res.status(404).send('Race not found');
-  race.status='open'; race.closedAt=''; meet.currentRaceId=race.id;
-  meet.currentRaceIndex=orderedRaces(meet).findIndex(r=>r.id===race.id);
+  race.status='open'; race.closedAt='';
+  // Unlocking a race should not rewind the live race pointer. Use Set Current Race
+  // deliberately if the director is truly moving race-day operations.
+  meet.updatedAt=nowIso();
   saveDb(req.db); res.json({ok:true});
 });
 
