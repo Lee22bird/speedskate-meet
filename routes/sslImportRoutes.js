@@ -16,6 +16,7 @@ const { rebuildRaceAssignmentsSafe } = require('../services/ttHelpers');
 const { ensureCurrentRace } = require('../services/raceDay');
 const { computeMeetStandings } = require('../services/standings');
 const { staffAssignmentsForMeet } = require('../services/staffAssignments');
+const { usarsPointsForPlace } = require('../services/usarsScoring');
 
 function ensurePackageStore(db) {
   if (!Array.isArray(db.sslRegistrationPackages)) db.sslRegistrationPackages = [];
@@ -780,8 +781,6 @@ function safeResultKey(parts) {
   return parts.map(part => String(part || '').replace(/[^a-zA-Z0-9_.:-]/g, '_')).join('|');
 }
 
-const USARS_STANDARD_POINTS = { 1: 30, 2: 20, 3: 10, 4: 5 };
-
 function cleanResultPlace(value) {
   const n = Number(value);
   return Number.isFinite(n) && n > 0 ? Math.trunc(n) : null;
@@ -790,11 +789,6 @@ function cleanResultPlace(value) {
 function cleanResultPoints(value) {
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
-}
-
-function usarsPointsForPlace(place) {
-  const n = cleanResultPlace(place);
-  return n ? Number(USARS_STANDARD_POINTS[n] || 0) : 0;
 }
 
 function normalizedRaceScoreForSsl(score) {

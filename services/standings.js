@@ -1,106 +1,13 @@
 const crypto = require('crypto');
-
-const STANDARD_POINTS = { 1: 30, 2: 20, 3: 10, 4: 5 };
-
-// SR832 tiebreaker point weights: [short, middle, long]
-const SR832_WEIGHTS = {
-  1: [96, 108, 120.75],
-  2: [64, 72, 80.5],
-  3: [32, 36, 40.25],
-  4: [16, 18, 20.125],
-};
+const {
+  STANDARD_POINTS,
+  scoreRaceByStandardPoints,
+  computeTiebreakerScore,
+  raceCountsForUsarsStandardOverall,
+} = require('./usarsScoring');
 
 function isOpenDivision(div) {
   return String(div || '').toLowerCase() === 'open';
-}
-
-function normalizePlaceValue(place) {
-  const n = Number(String(place || '').trim());
-  return Number.isFinite(n) ? n : null;
-}
-
-function scoreRaceByStandardPoints(race) {
-  const results = [];
-
-  for (const entry of race.laneEntries || []) {
-    const place = normalizePlaceValue(entry.place);
-    if (place == null || place > 4) continue;
-
-    // Prevent blank/phantom placed lanes from becoming "Unknown" standings rows.
-    const hasRegistrationId = entry.registrationId !== undefined && entry.registrationId !== null && String(entry.registrationId).trim() !== '';
-    const hasSkaterName = String(entry.skaterName || '').trim() !== '';
-    if (!hasRegistrationId && !hasSkaterName) continue;
-
-    results.push({
-      registrationId: entry.registrationId,
-      skaterName: String(entry.skaterName || '').trim() || 'Unknown',
-      team: entry.team,
-      place,
-    });
-  }
-
-  const grouped = new Map();
-
-  for (const item of results) {
-    if (!grouped.has(item.place)) grouped.set(item.place, []);
-    grouped.get(item.place).push(item);
-  }
-
-  const scored = [];
-
-  for (const place of Array.from(grouped.keys()).sort((a, b) => a - b)) {
-    const tied = grouped.get(place) || [];
-    if (!tied.length) continue;
-
-    let pointPool = 0;
-
-    for (let i = 0; i < tied.length; i++) {
-      pointPool += Number(STANDARD_POINTS[place + i] || 0);
-    }
-
-    const each = tied.length ? pointPool / tied.length : 0;
-
-    for (const skater of tied) {
-      scored.push({
-        ...skater,
-        points: each,
-      });
-    }
-  }
-
-  return scored;
-}
-
-function computeTiebreakerScore(raceScores, races, mode) {
-  const sorted = [...races].sort(
-    (a, b) => Number(a.dayIndex || 0) - Number(b.dayIndex || 0)
-  );
-
-  const raceOrder = new Map(sorted.map((r, i) => [r.id, i]));
-
-  if (mode === 'd2') {
-    const midRace = sorted[1] || sorted[0];
-    if (!midRace) return 0;
-
-    const midScore = raceScores.find(s => s.raceId === midRace.id);
-
-    return -(midScore?.place || 999);
-  }
-
-  let total = 0;
-
-  for (const rs of raceScores) {
-    const pos = raceOrder.get(rs.raceId);
-    if (pos == null) continue;
-
-    const place = Number(rs.place || 0);
-    const weights = SR832_WEIGHTS[place];
-    if (!weights) continue;
-
-    total += weights[Math.min(pos, 2)];
-  }
-
-  return total;
 }
 
 function computeMeetStandings(meet) {
@@ -110,9 +17,7 @@ function computeMeetStandings(meet) {
   const regMap = new Map((meet.registrations || []).map(r => [Number(r.id), r]));
 
   for (const race of meet.races || []) {
-    if (race.isOpenRace || race.isQuadRace || race.isTimeTrial) continue;
-    if (!race.isFinal || !race.countsForOverall) continue;
-    if (String(race.status || '') !== 'closed') continue;
+    if (!raceCountsForUsarsStandardOverall(race)) continue;
 
     const bucketKey = `${race.groupId}|${race.division}`;
 
