@@ -87,6 +87,7 @@ const {
   isAdvancementRace, advancementFamilyKey, numericPlace, tryAdvanceTopThreeFromTwoHeats,
   pricingFieldsFromMeet, buildRegistrationPricingPreview, racingSoonLabel,
   isArchivedMeet, activeMeets, archivedMeetsForUser, cloneMeetSetup,
+  applyMeetOwner,
   coachVisibleMeets, coachTeamRegistrations, coachUpcomingForMeet,
   coachRecentResultsForMeet, coachStandingsForMeet, isPublicMeet, resultsSectionHtml,
 } = require('./services/meetHelpers');
@@ -287,7 +288,10 @@ function loadDb() {
   db.version=19; db.updatedAt=nowIso(); return db;
 }
 
-function saveDb(db) { db.version=19; db.updatedAt=nowIso(); writeJsonAtomic(DATA_FILE,db); }
+function saveDb(db) {
+  if (Array.isArray(db.meets)) db.meets.forEach(m => migrateMeet(m));
+  db.version=19; db.updatedAt=nowIso(); writeJsonAtomic(DATA_FILE,db);
+}
 
 function getSessionUser(req) {
   const token=parseCookies(req)[SESSION_COOKIE]; if(!token) return null;
@@ -496,6 +500,7 @@ app.post('/portal/pending-meets/approve', requireRole('super_admin'), (req, res)
     createdByUserId:1, createdAt:nowIso(), updatedAt:nowIso(),
     races:[], blocks:[], registrations:[], groups:[], textAlerts:[],
   };
+  applyMeetOwner(liteMeet, db.users.find(u => Number(u.id) === 1) || 1);
   db.meets.push(liteMeet);
   saveDb(db);
   // Email submitter

@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 const { nowIso } = require('../utils/date');
 const { esc, cap } = require('../utils/html');
-const { hasRole } = require('../utils/auth');
+const { hasRole, canEditMeet, ensureMeetOwnership, userSslId } = require('../utils/auth');
 const { calculateRegistrationTotal } = require('./pricing');
 const { buildCostWidget } = require('./pricingUi');
 const { computeMeetStandings } = require('./standings');
@@ -150,9 +150,29 @@ function baseGroups() {
   ].map(g=>({...g,divisions:makeDivisionsTemplate()}));
 }
 
-function defaultMeet(ownerUserId) {
+function ownerNameForUser(user) {
+  return String(user?.displayName || user?.name || user?.username || user?.email || '').trim();
+}
+
+function applyMeetOwner(meet, userOrId) {
+  const user = userOrId && typeof userOrId === 'object' ? userOrId : null;
+  const ownerUserId = user ? user.id : userOrId;
+  meet.createdByUserId = ownerUserId;
+  meet.meet_owner_user_id = ownerUserId;
+  meet.meet_owner_ssl_id = user ? userSslId(user) : '';
+  meet.meet_owner_name = user ? ownerNameForUser(user) : '';
+  meet.ownership_locked = true;
+  return meet;
+}
+
+function defaultMeet(ownerUser) {
+  const ownerUserId = ownerUser && typeof ownerUser === 'object' ? ownerUser.id : ownerUser;
   return {
-    id:null, createdByUserId:ownerUserId, createdAt:nowIso(), updatedAt:nowIso(),
+    id:null, createdByUserId:ownerUserId, meet_owner_user_id:ownerUserId,
+    meet_owner_ssl_id:ownerUser && typeof ownerUser === 'object' ? userSslId(ownerUser) : '',
+    meet_owner_name:ownerUser && typeof ownerUser === 'object' ? ownerNameForUser(ownerUser) : '',
+    ownership_locked:true,
+    createdAt:nowIso(), updatedAt:nowIso(),
     meetName:'New Meet', leagueAssociation:'', league:'', date:'', endDate:'', startTime:'', registrationCloseAt:'',
     rinkId:1, customRinkName:'', trackLength:100, lanes:4,
     timeTrialsEnabled:false, relayEnabled:false, judgesPanelRequired:true,
@@ -197,7 +217,7 @@ function normalizeQuadGroups(raw) {
 }
 
 function migrateMeet(meet,fallbackOwnerId) {
-  if(!meet.createdByUserId) meet.createdByUserId=fallbackOwnerId;
+  ensureMeetOwnership(meet);
   if(!meet.createdAt) meet.createdAt=nowIso();
   if(!meet.updatedAt) meet.updatedAt=nowIso();
   if(typeof meet.meetName!=='string') meet.meetName='New Meet';
@@ -1054,7 +1074,7 @@ function activeMeets(meets) {
 function archivedMeetsForUser(db, user) {
   const archived = (db.meets || []).filter(isArchivedMeet);
   if (hasRole(user, 'super_admin')) return archived;
-  if (hasRole(user, 'meet_director')) return archived.filter(m => Number(m.createdByUserId) === Number(user.id));
+  if (hasRole(user, 'meet_director')) return archived.filter(m => canEditMeet(user, m));
   if (hasRole(user, 'coach')) {
     const teamKey = String(user.team || '').trim().toLowerCase();
     return archived.filter(m => (m.registrations || []).some(r => String(r.team || '').trim().toLowerCase() === teamKey));
@@ -1062,11 +1082,11 @@ function archivedMeetsForUser(db, user) {
   return [];
 }
 
-function cloneMeetSetup(sourceMeet, newId, ownerUserId) {
+function cloneMeetSetup(sourceMeet, newId, ownerUser) {
   const clone = JSON.parse(JSON.stringify(sourceMeet || {}));
 
   clone.id = newId;
-  clone.createdByUserId = ownerUserId;
+  applyMeetOwner(clone, ownerUser);
   clone.createdAt = nowIso();
   clone.updatedAt = nowIso();
   clone.meetName = `Copy of ${String(sourceMeet?.meetName || 'Meet').trim() || 'Meet'}`;
@@ -1109,7 +1129,7 @@ function cloneMeetSetup(sourceMeet, newId, ownerUserId) {
 function coachVisibleMeets(db,user) {
   const meets = activeMeets(db.meets);
   if(hasRole(user,'super_admin')) return meets;
-  if(hasRole(user,'meet_director')) return meets.filter(m=>Number(m.createdByUserId)===Number(user.id));
+  if(hasRole(user,'meet_director')) return meets.filter(m=>canEditMeet(user,m));
   if(hasRole(user,'coach')) return meets.filter(m=>(m.registrations||[]).some(r=>String(r.team||'').trim().toLowerCase()===String(user.team||'').trim().toLowerCase()));
   return [];
 }
@@ -1266,6 +1286,7 @@ module.exports = {
   activeMeets,
   archivedMeetsForUser,
   cloneMeetSetup,
+  applyMeetOwner,
   coachVisibleMeets,
   coachTeamRegistrations,
   coachUpcomingForMeet,

@@ -135,7 +135,7 @@ router.post('/meet/:meetId/register', (req, res) => {
     sendEmail(regEmail, `Registration Confirmed — ${meet.meetName}`, html, `You're registered for ${meet.meetName} on ${meet.date||'TBD'}. Follow live at speedskatemeet.com`);
   }
   // Notify meet director
-  const director=db.users.find(u=>Number(u.id)===Number(meet.createdByUserId));
+  const director=db.users.find(u=>Number(u.id)===Number(meet.meet_owner_user_id || meet.createdByUserId));
   if(director&&director.email) {
     const html=emailHtmlWrap(`
       <h2 style="color:#0F1F3D">New Registration 🏁</h2>

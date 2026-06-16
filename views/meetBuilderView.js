@@ -1,5 +1,5 @@
 const { esc } = require('../utils/html');
-const { hasRole } = require('../utils/auth');
+const { hasRole, isSuperAdmin, isMeetOwner } = require('../utils/auth');
 
 const LEAGUE_ASSOCIATION_OPTIONS = [
   { value: '', label: 'None / Independent' },
@@ -67,7 +67,28 @@ function renderMeetBuilderView({ db, meet, user = null, query = {} }) {
   const presetSavedFlash=query.presetSaved?'<div class="card" style="border-left:4px solid var(--green);margin-bottom:12px"><div class="good">✅ Meet setup preset saved for future use.</div></div>':'';
   const presetLoadedFlash=query.presetLoaded?'<div class="card" style="border-left:4px solid var(--green);margin-bottom:12px"><div class="good">✅ Meet setup preset loaded into this meet.</div></div>':'';
   const presetDeletedFlash=query.presetDeleted?'<div class="card" style="border-left:4px solid var(--green);margin-bottom:12px"><div class="good">✅ Meet setup preset deleted.</div></div>':'';
+  const ownershipFlash=query.ownership?'<div class="card" style="border-left:4px solid var(--green);margin-bottom:12px"><div class="good">Ownership updated.</div></div>':'';
   const canDeleteSetupPresets = hasRole(user || {}, 'super_admin');
+  const superOverride = isSuperAdmin(user || {}) && !isMeetOwner(user || {}, meet);
+  const ownerName = String(meet.meet_owner_name || meet.createdByName || meet.createdBy || '').trim() || 'Unassigned';
+  const ownerOptions = (db.users || [])
+    .filter(u => u.active !== false && Array.isArray(u.roles) && (u.roles.includes('meet_director') || u.roles.includes('super_admin')))
+    .map(u => `<option value="${esc(String(u.id))}" ${Number(u.id) === Number(meet.meet_owner_user_id) ? 'selected' : ''}>${esc(u.displayName || u.username || u.email || ('User ' + u.id))}</option>`)
+    .join('');
+  const ownershipPanel = `
+    <div class="card" style="margin-bottom:16px">
+      <div class="row between center" style="gap:12px;flex-wrap:wrap">
+        <div>
+          <div class="bold">Owner: ${esc(ownerName)}</div>
+          <div class="note">${superOverride ? 'Super Admin override active.' : 'Only the meet owner or Super Admin can change this meet.'}</div>
+        </div>
+        ${isSuperAdmin(user || {}) ? `
+          <form method="POST" action="/portal/meet/${meet.id}/ownership" class="action-row">
+            <select name="ownerUserId" required>${ownerOptions}</select>
+            <button class="btn2" type="submit">Assign Owner</button>
+          </form>` : ''}
+      </div>
+    </div>`;
   const setupPresetOptions = (db.setupPresets||[]).map(p=>`<option value="${esc(p.id)}">${esc(p.name||p.presetName||'Preset')}</option>`).join('');
   const presetSelectHtml = `${query.clearPreset?'<option value="" selected>Choose a preset</option>':''}${setupPresetOptions||'<option value="">(no presets)</option>'}`;
   const meetStatus = String(meet.status || 'draft').toLowerCase();
@@ -131,6 +152,8 @@ function renderMeetBuilderView({ db, meet, user = null, query = {} }) {
     ${presetSavedFlash}
     ${presetLoadedFlash}
     ${presetDeletedFlash}
+    ${ownershipFlash}
+    ${ownershipPanel}
     <div class="grid-2" style="margin-bottom:16px">
       <div class="card card-accent" style="border-left-color:var(--orange)">
         <div class="row between center">

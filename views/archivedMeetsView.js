@@ -1,5 +1,5 @@
 const { esc } = require('../utils/html');
-const { canEditMeet } = require('../utils/auth');
+const { canEditMeet, isSuperAdmin, isMeetOwner } = require('../utils/auth');
 
 function meetRinkLabel(db, meet) {
   const custom = String(meet?.customRinkName || '').trim();
@@ -14,6 +14,10 @@ function meetDateLabel(meet) {
   const end = String(meet?.endDate || '').trim();
   if (start && end && start !== end) return `${start} to ${end}`;
   return start;
+}
+
+function meetOwnerLabel(meet) {
+  return String(meet?.meet_owner_name || meet?.createdByName || meet?.createdBy || '').trim() || 'Unassigned';
 }
 
 function countArchivedRaceTypes(meet) {
@@ -39,6 +43,7 @@ function renderArchivedMeetsView({ db, user, archived = [] }) {
     const archivedDate = meet.archivedAt ? new Date(meet.archivedAt).toLocaleDateString() : 'Unknown';
     const rinkLabel = meetRinkLabel(db, meet);
     const meetDate = meetDateLabel(meet) || 'Date TBD';
+    const superOverride = isSuperAdmin(user) && !isMeetOwner(user, meet);
 
     return `
       <div class="card" style="margin-bottom:14px;border-left:4px solid var(--green)">
@@ -49,6 +54,7 @@ function renderArchivedMeetsView({ db, user, archived = [] }) {
             <div class="muted" style="font-size:13px;line-height:1.55">
               ${rinkLabel ? `${esc(rinkLabel)}<br/>` : ``}
               ${esc(meetDate)}<br/>
+              Owner: ${esc(meetOwnerLabel(meet))}${superOverride ? ` <span class="chip chip-sky" style="font-size:11px;margin-left:6px">Super Admin override active</span>` : ''}<br/>
               Archived ${esc(archivedDate)}${archivedBy ? ` by ${esc(archivedBy.displayName || archivedBy.name || archivedBy.username || '')}` : ''}
             </div>
           </div>

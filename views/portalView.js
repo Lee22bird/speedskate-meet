@@ -1,5 +1,5 @@
 const { esc } = require('../utils/html');
-const { hasRole, canEditMeet } = require('../utils/auth');
+const { hasRole, isSuperAdmin, isMeetOwner, canEditMeet, canArchiveMeet, canDeleteMeet } = require('../utils/auth');
 
 function meetRinkLabel(db, meet) {
   const custom = String(meet?.customRinkName || '').trim();
@@ -16,12 +16,19 @@ function meetDateLabel(meet) {
   return start;
 }
 
+function meetOwnerLabel(meet) {
+  return String(meet?.meet_owner_name || meet?.createdByName || meet?.createdBy || '').trim() || 'Unassigned';
+}
+
 function renderPortalMeetCard({ db, user, meet }) {
   const openCount = (meet.openGroups || []).filter(g => g.enabled).length;
   const quadCount = (meet.quadGroups || []).filter(g => g.enabled).length;
   const inlineCount = (meet.races || []).filter(r => !r.isOpenRace && !r.isQuadRace).length;
   const statusClass = meet.status === 'live' ? 'green' : meet.status === 'complete' ? 'sky' : 'orange';
   const rinkLabel = meetRinkLabel(db, meet);
+  const canManage = canEditMeet(user, meet);
+  const superOverride = isSuperAdmin(user) && !isMeetOwner(user, meet);
+  const ownerLine = `<div class="muted" style="font-size:13px;margin-top:4px">Owner: ${esc(meetOwnerLabel(meet))}${superOverride ? ` <span class="chip chip-sky" style="font-size:11px;margin-left:6px">Super Admin override active</span>` : ''}</div>`;
 
   return `
     <div class="card portal-meet-card" style="margin-bottom:14px">
@@ -29,6 +36,7 @@ function renderPortalMeetCard({ db, user, meet }) {
         <div>
           <h2 style="margin:0">${esc(meet.meetName)}</h2>
           <div class="muted" style="font-size:13px">${rinkLabel ? `${esc(rinkLabel)} • ` : ``}${esc(meetDateLabel(meet) || 'Date TBD')} • <span class="chip chip-${statusClass}" style="font-size:11px">${esc(meet.status || 'draft')}</span></div>
+          ${ownerLine}
         </div>
         <div class="row portal-chip-row">
           <span class="chip">Inline: ${inlineCount}</span>
@@ -37,7 +45,7 @@ function renderPortalMeetCard({ db, user, meet }) {
           <span class="chip">Regs: ${(meet.registrations || []).length}</span>
         </div>
       </div>
-      ${canEditMeet(user, meet) ? `
+      ${canManage ? `
         <div class="meet-action-groups portal-mini-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:14px">
           <div class="mini-card portal-mini-card" style="padding:12px;border:1px solid var(--border);border-radius:14px;background:#f8fafc">
             <div class="muted" style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Setup</div>
@@ -58,12 +66,12 @@ function renderPortalMeetCard({ db, user, meet }) {
             <div class="muted" style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Manage</div>
             <div class="action-row">
               <a class="btn2 btn-sm" href="/portal/meet/${meet.id}/clone-confirm">Clone</a>
-              <a class="btn2 btn-sm" href="/portal/meet/${meet.id}/archive-confirm">📦 Archive</a>
-              <a class="btn-danger btn-sm" href="/portal/meet/${meet.id}/delete-confirm">Delete</a>
+              ${canArchiveMeet(user, meet) ? `<a class="btn2 btn-sm" href="/portal/meet/${meet.id}/archive-confirm">Archive</a>` : ''}
+              ${canDeleteMeet(user, meet) ? `<a class="btn-danger btn-sm" href="/portal/meet/${meet.id}/delete-confirm">Delete</a>` : ''}
             </div>
           </div>
         </div>
-      ` : `<div class="action-row"><a class="btn2" href="/portal/meet/${meet.id}/coach">Coach Panel</a>
+      ` : `<div class="notice">Only the meet owner or Super Admin can change this meet.</div><div class="action-row"><a class="btn2" href="/portal/meet/${meet.id}/coach">Coach Panel</a>
            <a class="btn2" href="/meet/${meet.id}/live">Live</a></div>`}
     </div>`;
 }

@@ -1,11 +1,11 @@
 const express = require('express');
 const { esc } = require('../utils/html');
 const { nowIso } = require('../utils/date');
-const { canEditMeet } = require('../utils/auth');
+const { canEditMeet, canArchiveMeet, canDeleteMeet } = require('../utils/auth');
 const { sendSms } = require('../services/sms');
 const {
   getMeetOr404, meetRinkLabel, meetDateLabel, nextId,
-  isArchivedMeet, cloneMeetSetup, defaultMeet, ensureAtLeastOneBlock,
+  isArchivedMeet, cloneMeetSetup, defaultMeet, ensureAtLeastOneBlock, applyMeetOwner,
 } = require('../services/meetHelpers');
 
 module.exports = function createAdminRoutes(deps = {}) {
@@ -18,6 +18,20 @@ module.exports = function createAdminRoutes(deps = {}) {
 
   function nextUserId(db) {
     return (db.users || []).reduce((max, user) => Math.max(max, Number(user.id) || 0), 0) + 1;
+  }
+
+  function auditMeetEvent(db, meet, user, action, details = {}) {
+    if (!Array.isArray(db.auditLogs)) db.auditLogs = [];
+    db.auditLogs.push({
+      id: 'audit_' + Date.now() + '_' + Math.random().toString(16).slice(2),
+      at: nowIso(),
+      action,
+      meetId: meet?.id || null,
+      meetName: meet?.meetName || '',
+      userId: user?.id || null,
+      userName: user?.displayName || user?.username || '',
+      details,
+    });
   }
 
 router.get('/portal/archived-meets', requireRole('meet_director','coach','super_admin'), (req, res) => {
@@ -33,7 +47,7 @@ router.get('/portal/archived-meets', requireRole('meet_director','coach','super_
 
 router.get('/portal/meet/:meetId/archive-confirm', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
-  if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
+  if(!meet||!canArchiveMeet(req.user,meet)) return res.redirect('/portal');
   res.send(pageShell({title:'Archive Meet',user:req.user, bodyHtml:`
     <div style="max-width:620px;margin:40px auto">
       <div class="page-header"><h1>Archive Meet</h1><div class="sub">${esc(meet.meetName)}</div></div>
@@ -53,7 +67,10 @@ router.get('/portal/meet/:meetId/archive-confirm', requireRole('meet_director'),
 
 router.post('/portal/meet/:meetId/archive', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
-  if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
+  if(!meet||!canArchiveMeet(req.user,meet)) {
+    if (meet) { auditMeetEvent(req.db, meet, req.user, 'archive_denied'); saveDb(req.db); }
+    return res.redirect('/portal');
+  }
   meet.previousStatus = meet.previousStatus || meet.status || 'complete';
   meet.status = 'archived';
   meet.archivedAt = nowIso();
@@ -65,7 +82,7 @@ router.post('/portal/meet/:meetId/archive', requireRole('meet_director'), (req, 
 
 router.post('/portal/meet/:meetId/unarchive', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
-  if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
+  if(!meet||!canArchiveMeet(req.user,meet)) return res.redirect('/portal');
   meet.status = meet.previousStatus && meet.previousStatus !== 'archived' ? meet.previousStatus : 'complete';
   meet.archivedAt = '';
   meet.archivedByUserId = null;
@@ -100,7 +117,7 @@ router.get('/portal/meet/:meetId/clone-confirm', requireRole('meet_director'), (
 router.post('/portal/meet/:meetId/clone', requireRole('meet_director'), (req, res) => {
   const source=getMeetOr404(req.db,req.params.meetId);
   if(!source||!canEditMeet(req.user,source)) return res.redirect('/portal');
-  const clone=cloneMeetSetup(source, nextId(req.db.meets), req.user.id);
+  const clone=cloneMeetSetup(source, nextId(req.db.meets), req.user);
   req.db.meets.push(clone);
   saveDb(req.db);
   res.redirect(`/portal/meet/${clone.id}/builder`);
@@ -109,13 +126,13 @@ router.post('/portal/meet/:meetId/clone', requireRole('meet_director'), (req, re
 // ── Meet CRUD ─────────────────────────────────────────────────────────────────
 
 router.post('/portal/create-meet', requireRole('meet_director'), (req, res) => {
-  const meet=defaultMeet(req.user.id); meet.id=nextId(req.db.meets);
+  const meet=defaultMeet(req.user); meet.id=nextId(req.db.meets);
   req.db.meets.push(meet); saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/builder`);
 });
 
 router.get('/portal/meet/:meetId/delete-confirm', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
-  if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
+  if(!meet||!canDeleteMeet(req.user,meet)) return res.redirect('/portal');
   res.send(pageShell({title:'Delete Meet',user:req.user, bodyHtml:`
     <div style="max-width:500px;margin:40px auto">
       <div class="page-header"><h1>Delete Meet</h1></div>
@@ -133,9 +150,38 @@ router.get('/portal/meet/:meetId/delete-confirm', requireRole('meet_director'), 
 
 router.post('/portal/meet/:meetId/delete', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
-  if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
+  if(!meet||!canDeleteMeet(req.user,meet)) {
+    if (meet) { auditMeetEvent(req.db, meet, req.user, 'delete_denied'); saveDb(req.db); }
+    return res.redirect('/portal');
+  }
   req.db.meets=req.db.meets.filter(m=>Number(m.id)!==Number(req.params.meetId));
   saveDb(req.db); res.redirect('/portal');
+});
+
+router.post('/portal/meet/:meetId/ownership', requireRole('super_admin'), (req, res) => {
+  const meet=getMeetOr404(req.db,req.params.meetId);
+  if(!meet) return res.redirect('/portal');
+  const owner=(req.db.users||[]).find(u=>Number(u.id)===Number(req.body.ownerUserId));
+  if(!owner) return res.redirect(`/portal/meet/${meet.id}/builder?error=${encodeURIComponent('Owner not found.')}`);
+  const previous = {
+    meet_owner_user_id: meet.meet_owner_user_id,
+    meet_owner_ssl_id: meet.meet_owner_ssl_id,
+    meet_owner_name: meet.meet_owner_name,
+  };
+  applyMeetOwner(meet, owner);
+  meet.ownershipAssignedAt = nowIso();
+  meet.ownershipAssignedByUserId = req.user.id;
+  meet.updatedAt = nowIso();
+  auditMeetEvent(req.db, meet, req.user, previous.meet_owner_user_id ? 'ownership_changed' : 'ownership_assigned', {
+    previous,
+    next: {
+      meet_owner_user_id: meet.meet_owner_user_id,
+      meet_owner_ssl_id: meet.meet_owner_ssl_id,
+      meet_owner_name: meet.meet_owner_name,
+    },
+  });
+  saveDb(req.db);
+  res.redirect(`/portal/meet/${meet.id}/builder?ownership=1`);
 });
 
 // ── Users ─────────────────────────────────────────────────────────────────────
