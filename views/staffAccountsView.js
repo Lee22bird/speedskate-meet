@@ -98,9 +98,9 @@ function renderStaffAccountsView({ users = [], teamList = [] }) {
             if (!res.ok && !body.failures) throw new Error(body.error || 'Sync failed.');
             out.textContent =
               'Total users: ' + (body.total_users || 0) + '\\n' +
-              'Synced: ' + (body.synced_count || 0) + '\\n' +
-              'Skipped: ' + (body.skipped_count || 0) + '\\n' +
-              'Failed: ' + (body.failed_count || 0) +
+              'Synced: ' + (body.synced || body.synced_count || 0) + '\\n' +
+              'Skipped: ' + (body.skipped || body.skipped_count || 0) + '\\n' +
+              'Failed: ' + (body.failed || body.failed_count || 0) +
               (body.failures && body.failures.length ? '\\n\\nFailures:\\n' + JSON.stringify(body.failures, null, 2) : '');
           } catch (err) {
             out.textContent = err.message || 'Sync failed.';

@@ -87,6 +87,9 @@ module.exports = function createAdminRoutes(deps = {}) {
     return {
       ok: failures.length === 0,
       total_users: users.length,
+      synced,
+      skipped,
+      failed: failures.length,
       synced_count: synced,
       skipped_count: skipped,
       failed_count: failures.length,
@@ -299,7 +302,7 @@ router.post('/portal/users/:userId/update', requireRole('super_admin'), async (r
 
 router.post('/admin/tools/sync-ssl-user-mirrors', requireRole('super_admin'), async (req, res) => {
   const summary = await syncAllUserMirrors(req.db);
-  res.status(summary.failed_count ? 207 : 200).json(summary);
+  res.status(summary.failed ? 207 : 200).json(summary);
 });
 
 router.post('/portal/users/:userId/delete', requireRole('super_admin'), (req, res) => {
