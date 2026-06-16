@@ -190,6 +190,8 @@ function configuredSslApiKey() {
 }
 
 function ssmUserMirrorSnapshot(user) {
+  const roles = Array.isArray(user?.roles) ? user.roles.map(role => String(role || '').trim()).filter(Boolean) : [];
+  const requestedRole = String(user?.requestedRole || user?.pending_role || user?.requested_role || '').trim();
   return {
     ssm_user_id: String(user?.id || ''),
     ssl_user_id: String(user?.ssl_user_id || user?.sslUserId || ''),
@@ -198,7 +200,9 @@ function ssmUserMirrorSnapshot(user) {
     email: String(user?.email || '').trim().toLowerCase(),
     team: String(user?.team || ''),
     league: String(user?.league || ''),
-    roles: Array.isArray(user?.roles) ? user.roles.map(role => String(role || '').trim()).filter(Boolean) : [],
+    role: roles[0] || requestedRole || '',
+    roles,
+    requested_role: requestedRole,
     avatar_url: String(user?.avatar_url || user?.avatarUrl || ''),
   };
 }

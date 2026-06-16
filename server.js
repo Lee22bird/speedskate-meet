@@ -842,6 +842,22 @@ async function handleSslSsoCallback(req, res) {
 app.get('/sso/ssl/callback', handleSslSsoCallback);
 app.get('/ssl-sso', handleSslSsoCallback);
 
+async function syncSsmUserMirrorBestEffort(db, user, label) {
+  try {
+    const mirrorResult = await postSsmUserMirrorToSsl(user);
+    user.sslMirrorSyncStatus = 'ok';
+    user.sslMirrorSyncedAt = nowIso();
+    user.sslMirrorSyncError = '';
+    user.sslMirrorSyncResponse = mirrorResult?.user?.id ? { id: mirrorResult.user.id } : { ok: true };
+  } catch (err) {
+    user.sslMirrorSyncStatus = 'failed';
+    user.sslMirrorSyncAttemptedAt = nowIso();
+    user.sslMirrorSyncError = String(err.message || err);
+    console.warn(`SSL user mirror sync failed (${label}):`, err.message);
+  }
+  saveDb(db);
+}
+
 app.get('/account/pending', (req, res) => {
   const data=getSessionUser(req);
   res.send(pageShell({title:'Account Pending',user:data?.user||null, bodyHtml:`
@@ -911,7 +927,7 @@ app.post('/admin/login', (req, res) => {
   return res.redirect(ssmRedirectForUser(user));
 });
 
-app.post('/admin/register', (req, res) => {
+app.post('/admin/register', async (req, res) => {
   const db=loadDb();
   db.users=db.users||[];
   const email=String(req.body.email||'').trim().toLowerCase();
@@ -938,7 +954,7 @@ app.post('/admin/register', (req, res) => {
       </div>`}));
   }
 
-  db.users.push({
+  const user = {
     id:nextUserId(db),
     username:email,
     email,
@@ -954,8 +970,10 @@ app.post('/admin/register', (req, res) => {
     authProvider:'local',
     createdAt:nowIso(),
     updatedAt:nowIso(),
-  });
+  };
+  db.users.push(user);
   saveDb(db);
+  await syncSsmUserMirrorBestEffort(db, user, 'direct signup');
   sendSms(ADMIN_PHONE, `🔐 New SSM staff account request\n${displayName}\n${email}\nRequested: ${requestedRole.replace(/_/g, ' ')}\nReview: speedskatemeet.com/portal/users`);
   res.redirect('/admin/login?created=1');
 });

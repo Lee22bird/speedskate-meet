@@ -3,6 +3,7 @@ const { esc } = require('../utils/html');
 const { nowIso } = require('../utils/date');
 const { canEditMeet, canArchiveMeet, canDeleteMeet } = require('../utils/auth');
 const { sendSms } = require('../services/sms');
+const { postSsmUserMirrorToSsl } = require('../services/ssoService');
 const {
   getMeetOr404, meetRinkLabel, meetDateLabel, nextId,
   isArchivedMeet, cloneMeetSetup, defaultMeet, ensureAtLeastOneBlock, applyMeetOwner,
@@ -32,6 +33,22 @@ module.exports = function createAdminRoutes(deps = {}) {
       userName: user?.displayName || user?.username || '',
       details,
     });
+  }
+
+  async function syncUserMirrorBestEffort(db, user, label) {
+    try {
+      const result = await postSsmUserMirrorToSsl(user);
+      user.sslMirrorSyncStatus = 'ok';
+      user.sslMirrorSyncedAt = nowIso();
+      user.sslMirrorSyncError = '';
+      user.sslMirrorSyncResponse = result?.user?.id ? { id: result.user.id } : { ok: true };
+    } catch (err) {
+      user.sslMirrorSyncStatus = 'failed';
+      user.sslMirrorSyncAttemptedAt = nowIso();
+      user.sslMirrorSyncError = String(err.message || err);
+      console.warn(`SSL user mirror sync failed (${label}):`, err.message);
+    }
+    saveDb(db);
   }
 
 router.get('/portal/archived-meets', requireRole('meet_director','coach','super_admin'), (req, res) => {
@@ -199,10 +216,10 @@ router.get('/portal/users', requireRole('super_admin'), (req, res) => {
   }));
 });
 
-router.post('/portal/users/new', requireRole('super_admin'), (req, res) => {
+router.post('/portal/users/new', requireRole('super_admin'), async (req, res) => {
   const rolesRaw=req.body.roles; const roles=Array.isArray(rolesRaw)?rolesRaw:(rolesRaw?[rolesRaw]:[]);
   const email=String(req.body.email||req.body.username||'').trim().toLowerCase();
-  req.db.users.push({
+  const user = {
     id:nextUserId(req.db),
     displayName:String(req.body.displayName||'').trim(),
     username:email,
@@ -214,11 +231,14 @@ router.post('/portal/users/new', requireRole('super_admin'), (req, res) => {
     authProvider:'local',
     createdAt:nowIso(),
     updatedAt:nowIso(),
-  });
-  saveDb(req.db); res.redirect('/portal/users');
+  };
+  req.db.users.push(user);
+  saveDb(req.db);
+  await syncUserMirrorBestEffort(req.db, user, 'admin create user');
+  res.redirect('/portal/users');
 });
 
-router.post('/portal/users/:userId/update', requireRole('super_admin'), (req, res) => {
+router.post('/portal/users/:userId/update', requireRole('super_admin'), async (req, res) => {
   const user=(req.db.users||[]).find(u=>Number(u.id)===Number(req.params.userId));
   if(!user) return res.redirect('/portal/users');
   const rolesRaw=req.body.roles; const roles=Array.isArray(rolesRaw)?rolesRaw:(rolesRaw?[rolesRaw]:[]);
@@ -229,7 +249,9 @@ router.post('/portal/users/:userId/update', requireRole('super_admin'), (req, re
     user.requestedRoleResolvedAt = nowIso();
   }
   user.updatedAt=nowIso();
-  saveDb(req.db); res.redirect('/portal/users');
+  saveDb(req.db);
+  await syncUserMirrorBestEffort(req.db, user, 'admin update user');
+  res.redirect('/portal/users');
 });
 
 router.post('/portal/users/:userId/delete', requireRole('super_admin'), (req, res) => {
