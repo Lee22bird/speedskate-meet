@@ -207,13 +207,15 @@ async function postSsmUserMirrorToSsl(user) {
   const base = configuredSslBaseUrl();
   if (!base) throw new Error('SSL_BASE_URL is not configured.');
   if (typeof fetch !== 'function') throw new Error('This Node runtime does not support fetch. Upgrade Node or add a fetch polyfill.');
+  const apiKey = configuredSslApiKey();
 
   const response = await fetch(`${base}/api/ssm/user-mirror`, {
     method: 'POST',
     headers: {
       accept: 'application/json',
       'content-type': 'application/json',
-      'x-ssm-api-key': configuredSslApiKey(),
+      'x-ssm-api-key': apiKey,
+      'x-ssl-api-key': apiKey,
     },
     body: JSON.stringify({ user: ssmUserMirrorSnapshot(user) }),
   });

@@ -823,10 +823,18 @@ async function handleSslSsoCallback(req, res) {
   const sessionToken = createSsmSessionForUser(db, user);
   saveDb(db);
   try {
-    await postSsmUserMirrorToSsl(user);
+    const mirrorResult = await postSsmUserMirrorToSsl(user);
+    user.sslMirrorSyncStatus = 'ok';
+    user.sslMirrorSyncedAt = nowIso();
+    user.sslMirrorSyncError = '';
+    user.sslMirrorSyncResponse = mirrorResult?.user?.id ? { id: mirrorResult.user.id } : { ok: true };
   } catch (err) {
+    user.sslMirrorSyncStatus = 'failed';
+    user.sslMirrorSyncAttemptedAt = nowIso();
+    user.sslMirrorSyncError = String(err.message || err);
     console.warn('SSL user mirror sync failed:', err.message);
   }
+  saveDb(db);
   setCookie(res, SESSION_COOKIE, sessionToken, Math.floor(SESSION_TTL_MS / 1000));
   return res.redirect(ssmRedirectForUser(user));
 }
