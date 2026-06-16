@@ -26,6 +26,7 @@ const {
   rebuildTimeTrialRace,
 } = require('../services/ttHelpers');
 const { ensureCurrentRace } = require('../services/raceDay');
+const { renderMeetStaffList } = require('../services/staffAssignments');
 
 module.exports = function createRegistrationRoutes(deps = {}) {
   const router = express.Router();
@@ -38,9 +39,12 @@ router.get('/meet/:meetId/register', (req, res) => {
   const closed=isRegistrationClosed(meet);
   const costWidget=buildRegistrationPricingPreview(meet);
   const today = new Date().toISOString().split('T')[0];
+  const staffList = renderMeetStaffList(meet, { compact: true });
   res.send(pageShell({title:'Register',user:data?.user||null, bodyHtml:`
     <div class="page-header"><h1>Register</h1><div class="sub">${esc(meet.meetName)}${meet.date?` • ${esc(meet.date)}`:''}</div></div>
     <div class="card">
+      ${staffList}
+      ${staffList ? '<div class="hr"></div>' : ''}
       ${closed?`<div class="danger" style="font-size:18px">Registration is closed.</div>`:`
         <form method="POST" action="/meet/${meet.id}/register" class="stack">
           <div class="form-grid cols-3">

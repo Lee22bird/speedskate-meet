@@ -127,6 +127,8 @@ const createBuilderRoutes = require('./routes/builderRoutes');
 const createRegistrationRoutes = require('./routes/registrationRoutes');
 const createRaceDayRoutes = require('./routes/raceDayRoutes');
 const createSslImportRoutes = require('./routes/sslImportRoutes');
+const createStaffRoutes = require('./routes/staffRoutes');
+const { renderMeetStaffList } = require('./services/staffAssignments');
 
 function rebuildTimeTrialRace(meet) {
   const ttHelpers = require('./services/ttHelpers');
@@ -556,6 +558,7 @@ app.get('/meets', (req, res) => {
             <span class="chip chip-green">${esc(m.status||'draft')}</span>
           </div>
         </div>
+        ${renderMeetStaffList(m, { compact: true })}
         <div class="hr"></div>
         <div class="action-row">
           <a class="btn-orange" href="/meet/${m.id}/register">Register</a>
@@ -1715,6 +1718,7 @@ app.use('/', createAdminRoutes(routeDeps));
 app.use('/', createBuilderRoutes(routeDeps));
 app.use('/', createRegistrationRoutes(routeDeps));
 app.use('/', createRaceDayRoutes(routeDeps));
+app.use('/', createStaffRoutes(routeDeps));
 app.use('/', createSslImportRoutes(routeDeps));
 
 // ── Start server ──────────────────────────────────────────────────────────────

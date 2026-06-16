@@ -14,6 +14,7 @@ const {
   defaultPricingFields,
   normalizeMeetPricingFields,
 } = require('./pricingModel');
+const { normalizeMeetStaffAssignments } = require('./staffAssignments');
 
 // USARS SR150.1: ages are reckoned as of January 1 of the competitive year.
 function usarsAge(birthdate, meetDate) {
@@ -175,6 +176,7 @@ function defaultMeet(ownerUser) {
     createdAt:nowIso(), updatedAt:nowIso(),
     meetName:'New Meet', leagueAssociation:'', league:'', date:'', endDate:'', startTime:'', registrationCloseAt:'',
     rinkId:1, customRinkName:'', trackLength:100, lanes:4,
+    meet_staff_assignments:[], staffAssignments:[],
     timeTrialsEnabled:false, relayEnabled:false, judgesPanelRequired:true,
     notes:'', scheduleNotes:'', relayNotes:'', isPublic:false, status:'draft', tiebreaker:'d2',
     ...defaultPricingFields(),
@@ -218,6 +220,7 @@ function normalizeQuadGroups(raw) {
 
 function migrateMeet(meet,fallbackOwnerId) {
   ensureMeetOwnership(meet);
+  normalizeMeetStaffAssignments(meet);
   if(!meet.createdAt) meet.createdAt=nowIso();
   if(!meet.updatedAt) meet.updatedAt=nowIso();
   if(typeof meet.meetName!=='string') meet.meetName='New Meet';

@@ -769,6 +769,78 @@ function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
       background: var(--panel);
       border-color: var(--border);
     }
+    .meet-staff-list { display: grid; gap: 10px; margin-top: 10px; }
+    .staff-assignment-grid { display: grid; gap: 12px; }
+    .staff-assignment-row {
+      display: grid;
+      grid-template-columns: minmax(240px, 1fr) minmax(260px, 1fr);
+      gap: 12px;
+      align-items: start;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--panel);
+    }
+    .staff-person { display: flex; gap: 10px; align-items: center; min-width: 0; }
+    .staff-person.compact { margin-top: 8px; }
+    .staff-person-body { min-width: 0; }
+    .staff-name { font-weight: 850; color: var(--navy); overflow-wrap: anywhere; }
+    .staff-meta { color: var(--muted); font-size: 12px; display: flex; gap: 7px; align-items: center; flex-wrap: wrap; }
+    .staff-avatar {
+      width: 46px;
+      height: 46px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 auto;
+      overflow: hidden;
+      background: linear-gradient(135deg, #0F1F3D, #0EA5E9);
+      color: #fff;
+      font-weight: 900;
+      font-size: 14px;
+    }
+    .staff-avatar.small { width: 34px; height: 34px; font-size: 12px; }
+    .staff-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .staff-role-badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 22px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: rgba(14,165,233,.1);
+      color: var(--sky2);
+      font-size: 11px;
+      font-weight: 850;
+    }
+    .staff-picker { display: grid; gap: 8px; }
+    .staff-search-results { display: grid; gap: 6px; }
+    .staff-result-row { margin: 0; }
+    .staff-result-button {
+      width: 100%;
+      min-height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 10px;
+      padding: 8px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: #fff;
+      color: var(--text);
+      box-shadow: none;
+      text-align: left;
+    }
+    .staff-result-button span { display: grid; min-width: 0; }
+    .staff-result-button small { color: var(--muted); overflow-wrap: anywhere; }
+    .staff-result-empty {
+      padding: 10px 12px;
+      border: 1px dashed var(--border);
+      border-radius: 12px;
+      color: var(--muted);
+      background: rgba(255,255,255,.72);
+      font-size: 13px;
+    }
     .card .card, .inner-card { background: var(--panel); }
     table { background: var(--card); }
     th { background: var(--off); color: #5c6880; }
@@ -819,6 +891,8 @@ function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
       .portal-meet-card .portal-chip-row { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px; }
       .portal-meet-card .portal-mini-grid { grid-template-columns: 1fr !important; gap: 10px !important; }
       .portal-meet-card .portal-mini-card { padding: 12px !important; }
+      .staff-assignment-row { grid-template-columns: 1fr; }
+      .staff-result-button { min-height: 54px; }
       table { display: block; overflow-x: auto; white-space: nowrap; }
       input, select, textarea { font-size: 16px; }
     }

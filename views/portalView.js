@@ -1,5 +1,6 @@
 const { esc } = require('../utils/html');
 const { hasRole, isSuperAdmin, isMeetOwner, canEditMeet, canArchiveMeet, canDeleteMeet } = require('../utils/auth');
+const { renderMeetStaffList } = require('../services/staffAssignments');
 
 function meetRinkLabel(db, meet) {
   const custom = String(meet?.customRinkName || '').trim();
@@ -37,6 +38,7 @@ function renderPortalMeetCard({ db, user, meet }) {
           <h2 style="margin:0">${esc(meet.meetName)}</h2>
           <div class="muted" style="font-size:13px">${rinkLabel ? `${esc(rinkLabel)} • ` : ``}${esc(meetDateLabel(meet) || 'Date TBD')} • <span class="chip chip-${statusClass}" style="font-size:11px">${esc(meet.status || 'draft')}</span></div>
           ${ownerLine}
+          ${renderMeetStaffList(meet, { compact: true })}
         </div>
         <div class="row portal-chip-row">
           <span class="chip">Inline: ${inlineCount}</span>

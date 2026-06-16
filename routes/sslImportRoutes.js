@@ -15,6 +15,7 @@ const { calcRegistrationCost } = require('../services/pricing');
 const { rebuildRaceAssignmentsSafe } = require('../services/ttHelpers');
 const { ensureCurrentRace } = require('../services/raceDay');
 const { computeMeetStandings } = require('../services/standings');
+const { staffAssignmentsForMeet } = require('../services/staffAssignments');
 
 function ensurePackageStore(db) {
   if (!Array.isArray(db.sslRegistrationPackages)) db.sslRegistrationPackages = [];
@@ -578,6 +579,16 @@ function publicMeetPayload(req, db, meet) {
   const base = publicBaseUrl(req);
   const league = compactId(meet.leagueAssociation || meet.league || '');
   const registerPath = `/meet/${encodeURIComponent(meet.id)}/register`;
+  const staff = staffAssignmentsForMeet(meet)
+    .filter(row => row.assignment)
+    .map(row => ({
+      staff_role: row.key,
+      staff_role_label: row.label,
+      staff_ssl_id: row.assignment.staff_ssl_id || '',
+      staff_user_id: row.assignment.staff_user_id || '',
+      staff_name: row.assignment.staff_name || '',
+      staff_avatar_url: row.assignment.staff_avatar_url || '',
+    }));
   return {
     source: 'SpeedSkateMeet',
     meet_id: `ssm-${meet.id}`,
@@ -599,6 +610,8 @@ function publicMeetPayload(req, db, meet) {
     registration_url: `${base}${registerPath}`,
     ssm_url: `${base}${registerPath}`,
     results_url: `${base}/meet/${encodeURIComponent(meet.id)}/results`,
+    staff,
+    meet_staff_assignments: staff,
     updated_at: meet.updatedAt || meet.createdAt || '',
   };
 }
