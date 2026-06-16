@@ -190,7 +190,7 @@ function verifySslSsoToken(token) {
 
 function ssmAllowedRolesFromSsl(payload) {
   const incoming = Array.isArray(payload?.roles) ? payload.roles.map(r => String(r || '').toLowerCase()) : [];
-  const allowed = ['super_admin', 'meet_director', 'judge', 'announcer', 'coach'];
+  const allowed = ['super_admin', 'meet_director', 'league_director', 'judge', 'announcer', 'coach'];
   const roles = incoming.filter(role => allowed.includes(role));
   return Array.from(new Set(roles));
 }
@@ -902,8 +902,10 @@ app.get('/ssl-sso', (req, res) => {
       email,
       roles,
       team: String(payload.team || 'Independent'),
+      league: String(payload.league || ''),
       active: true,
       sslUserId,
+      sslSkaterId: String(payload.ssl_skater_id || ''),
       authProvider: 'ssl',
       createdAt: nowIso(),
       updatedAt: nowIso()
@@ -915,8 +917,10 @@ app.get('/ssl-sso', (req, res) => {
     user.displayName = String(payload.full_name || user.displayName || email || 'SSL User');
     user.roles = roles;
     user.team = String(payload.team || user.team || 'Independent');
+    user.league = String(payload.league || user.league || '');
     user.active = true;
     user.sslUserId = sslUserId || user.sslUserId || '';
+    user.sslSkaterId = String(payload.ssl_skater_id || user.sslSkaterId || '');
     user.authProvider = 'ssl';
     user.updatedAt = nowIso();
   }

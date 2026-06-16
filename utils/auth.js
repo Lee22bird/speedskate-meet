@@ -1,5 +1,8 @@
 function hasRole(user, role) {
-  return Array.isArray(user.roles) && user.roles.includes(role);
+  const roles = Array.isArray(user.roles) ? user.roles : [];
+  if (roles.includes(role)) return true;
+  if (roles.includes('league_director') && ['meet_director', 'judge', 'coach'].includes(role)) return true;
+  return false;
 }
 
 function isSuperAdmin(user) {
@@ -20,6 +23,49 @@ function userSslId(user) {
 
 function userDisplayName(user) {
   return String(user?.displayName || user?.name || user?.username || user?.email || '').trim();
+}
+
+function normalizeLeague(value) {
+  const raw = String(value || '').trim();
+  const lower = raw.toLowerCase();
+  const aliases = {
+    mssl: 'MSSL',
+    'mid south speed league': 'MSSL',
+    'mid-south speed league': 'MSSL',
+    'mid-south-speed-league': 'MSSL',
+    'mid south': 'MSSL',
+    mwps: 'MWPS',
+    'midwest point series': 'MWPS',
+    glsl: 'GLSL',
+    'great lakes speed league': 'GLSL',
+    swpisl: 'SWPISL',
+    'southwest pacific inline speed league': 'SWPISL',
+  };
+  return aliases[lower] || raw;
+}
+
+function userLeague(user) {
+  return normalizeLeague(
+    user?.league ||
+    user?.leagueScope ||
+    user?.league_code ||
+    user?.profile?.league ||
+    user?.profile?.pending_league ||
+    ''
+  );
+}
+
+function meetLeague(meet) {
+  return normalizeLeague(meet?.leagueAssociation || meet?.league || meet?.league_code || '');
+}
+
+function isLeagueDirectorForMeet(user, meet) {
+  if (!user || !meet) return false;
+  const roles = Array.isArray(user.roles) ? user.roles : [];
+  if (!roles.includes('league_director')) return false;
+  const left = userLeague(user);
+  const right = meetLeague(meet);
+  return !!left && !!right && left === right;
 }
 
 function ensureMeetOwnership(meet, user = null) {
@@ -83,8 +129,17 @@ function isMeetOwner(user, meet) {
 
 function canEditMeet(user, meet) {
   if (isSuperAdmin(user)) return true;
+  if (isLeagueDirectorForMeet(user, meet)) return true;
   if (!hasRole(user, 'meet_director')) return false;
   return isMeetOwner(user, meet);
+}
+
+function canJudgeMeet(user, meet) {
+  if (isSuperAdmin(user)) return true;
+  if (isLeagueDirectorForMeet(user, meet)) return true;
+  const roles = Array.isArray(user?.roles) ? user.roles : [];
+  if (roles.includes('league_director') && !roles.includes('judge') && !roles.includes('meet_director')) return false;
+  return hasRole(user, 'judge') || canEditMeet(user, meet);
 }
 
 function canDeleteMeet(user, meet) {
@@ -103,9 +158,13 @@ module.exports = {
   hasRole,
   isSuperAdmin,
   userSslId,
+  userLeague,
+  meetLeague,
   ensureMeetOwnership,
   isMeetOwner,
+  isLeagueDirectorForMeet,
   canEditMeet,
+  canJudgeMeet,
   canDeleteMeet,
   canArchiveMeet,
   canManageMeetSettings,

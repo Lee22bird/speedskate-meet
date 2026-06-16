@@ -1,7 +1,7 @@
 const express = require('express');
 const { esc, cap } = require('../utils/html');
 const { nowIso } = require('../utils/date');
-const { canEditMeet, hasRole } = require('../utils/auth');
+const { canEditMeet, canJudgeMeet, hasRole } = require('../utils/auth');
 const { raceDaySubTabs, meetTabs: _mt, announcerBoxHtml: _abh } = require('../utils/pageShell');
 const {
   getMeetOr404, meetRinkLabel, meetDateLabel, nextId,
@@ -855,6 +855,7 @@ router.post('/portal/meet/:meetId/race-day/correction/save', requireRole('meet_d
 router.post('/portal/meet/:meetId/race-day/judges/save', requireRole('judge','meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet) return res.redirect('/portal');
+  if(!canJudgeMeet(req.user,meet)) return res.status(403).send('Forbidden');
   const wantsJson = String(req.get('accept') || '').includes('application/json') || String(req.body.ajax || '') === '1';
   const judgeUrl = `/portal/meet/${meet.id}/race-day/judges`;
   const race=(meet.races||[]).find(r=>r.id===String(req.body.raceId||''));
@@ -910,6 +911,7 @@ router.post('/portal/meet/:meetId/race-day/judges/save', requireRole('judge','me
 router.post('/portal/meet/:meetId/race-day/judges/tt-post', requireRole('judge','meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet) return res.redirect('/portal');
+  if(!canJudgeMeet(req.user,meet)) return res.status(403).send('Forbidden');
   let race=(meet.races||[]).find(r=>r.id===String(req.body.raceId||'')&&r.isTimeTrial) || timeTrialRaceForMeet(meet);
   if(!race) race = rebuildTimeTrialRaceSafe(meet);
   if(!race) return res.redirect(`/portal/meet/${req.params.meetId}/race-day/judges`);
@@ -976,6 +978,7 @@ router.post('/portal/meet/:meetId/race-day/judges/tt-post', requireRole('judge',
 router.post('/portal/meet/:meetId/race-day/judges/tt-remove', requireRole('judge','meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet) return res.redirect('/portal');
+  if(!canJudgeMeet(req.user,meet)) return res.status(403).send('Forbidden');
   const race=(meet.races||[]).find(r=>r.id===String(req.body.raceId||'')&&r.isTimeTrial) || timeTrialRaceForMeet(meet);
   if(!race) return res.redirect(`/portal/meet/${req.params.meetId}/race-day/judges`);
   const regId=String(req.body.registrationId||'');
