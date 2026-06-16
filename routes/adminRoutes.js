@@ -51,6 +51,49 @@ module.exports = function createAdminRoutes(deps = {}) {
     saveDb(db);
   }
 
+  async function syncAllUserMirrors(db) {
+    const users = Array.isArray(db.users) ? db.users : [];
+    const failures = [];
+    let synced = 0;
+    let skipped = 0;
+
+    for (const user of users) {
+      if (!user || user.id == null) {
+        skipped += 1;
+        continue;
+      }
+      try {
+        const result = await postSsmUserMirrorToSsl(user);
+        user.sslMirrorSyncStatus = 'ok';
+        user.sslMirrorSyncedAt = nowIso();
+        user.sslMirrorSyncError = '';
+        user.sslMirrorSyncResponse = result?.user?.id ? { id: result.user.id } : { ok: true };
+        synced += 1;
+      } catch (err) {
+        user.sslMirrorSyncStatus = 'failed';
+        user.sslMirrorSyncAttemptedAt = nowIso();
+        user.sslMirrorSyncError = String(err.message || err);
+        failures.push({
+          ssm_user_id: String(user.id || ''),
+          name: String(user.displayName || user.name || user.username || user.email || ''),
+          email: String(user.email || ''),
+          error: String(err.message || err),
+        });
+        console.warn('SSL user mirror sync failed (admin bulk sync):', user.id, err.message);
+      }
+    }
+
+    saveDb(db);
+    return {
+      ok: failures.length === 0,
+      total_users: users.length,
+      synced_count: synced,
+      skipped_count: skipped,
+      failed_count: failures.length,
+      failures,
+    };
+  }
+
 router.get('/portal/archived-meets', requireRole('meet_director','coach','super_admin'), (req, res) => {
   const archived = archivedMeetsForUser(req.db, req.user)
     .sort((a, b) => new Date(b.archivedAt || b.updatedAt || 0) - new Date(a.archivedAt || a.updatedAt || 0));
@@ -252,6 +295,11 @@ router.post('/portal/users/:userId/update', requireRole('super_admin'), async (r
   saveDb(req.db);
   await syncUserMirrorBestEffort(req.db, user, 'admin update user');
   res.redirect('/portal/users');
+});
+
+router.post('/admin/tools/sync-ssl-user-mirrors', requireRole('super_admin'), async (req, res) => {
+  const summary = await syncAllUserMirrors(req.db);
+  res.status(summary.failed_count ? 207 : 200).json(summary);
 });
 
 router.post('/portal/users/:userId/delete', requireRole('super_admin'), (req, res) => {

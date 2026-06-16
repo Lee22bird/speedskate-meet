@@ -55,6 +55,16 @@ function renderStaffAccountsView({ users = [], teamList = [] }) {
 
   return `
     <div class="page-header"><h1>Users</h1><div class="sub">SSM staff accounts only: Meet Directors, Judges, Announcers, and Coaches.</div></div>
+    <div class="card" style="margin-bottom:16px">
+      <div class="row between center" style="gap:12px;align-items:flex-start">
+        <div>
+          <h2 style="margin:0">SSL User Mirror Sync</h2>
+          <div class="muted" style="font-size:13px;margin-top:4px">Push existing SSM staff users into SSL identity migration search.</div>
+        </div>
+        <button class="btn2" type="button" id="sync-ssl-user-mirrors-btn">Sync SSM Users To SSL</button>
+      </div>
+      <div id="sync-ssl-user-mirrors-result" class="muted" style="font-size:13px;margin-top:10px;white-space:pre-wrap;overflow-wrap:anywhere"></div>
+    </div>
     <div class="card">
       <form method="POST" action="/portal/users/new" class="stack">
         <h2 style="margin-top:0">Add Staff User</h2>
@@ -73,7 +83,33 @@ function renderStaffAccountsView({ users = [], teamList = [] }) {
         <thead><tr><th>Name / Email</th><th>Login</th><th>Roles / Team</th><th>Status</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
-    </div>`;
+    </div>
+    <script>
+      (function(){
+        var btn = document.getElementById('sync-ssl-user-mirrors-btn');
+        var out = document.getElementById('sync-ssl-user-mirrors-result');
+        if (!btn || !out) return;
+        btn.addEventListener('click', async function(){
+          btn.disabled = true;
+          out.textContent = 'Syncing...';
+          try {
+            var res = await fetch('/admin/tools/sync-ssl-user-mirrors', { method: 'POST', headers: { accept: 'application/json' } });
+            var body = await res.json().catch(function(){ return {}; });
+            if (!res.ok && !body.failures) throw new Error(body.error || 'Sync failed.');
+            out.textContent =
+              'Total users: ' + (body.total_users || 0) + '\\n' +
+              'Synced: ' + (body.synced_count || 0) + '\\n' +
+              'Skipped: ' + (body.skipped_count || 0) + '\\n' +
+              'Failed: ' + (body.failed_count || 0) +
+              (body.failures && body.failures.length ? '\\n\\nFailures:\\n' + JSON.stringify(body.failures, null, 2) : '');
+          } catch (err) {
+            out.textContent = err.message || 'Sync failed.';
+          } finally {
+            btn.disabled = false;
+          }
+        });
+      })();
+    </script>`;
 }
 
 module.exports = {
