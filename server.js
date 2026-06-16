@@ -136,6 +136,7 @@ const {
   mirrorSslUser,
   createSsmSessionForUser,
   ssmRedirectForUser,
+  postSsmUserMirrorToSsl,
 } = require('./services/ssoService');
 
 function rebuildTimeTrialRace(meet) {
@@ -801,7 +802,7 @@ app.post('/admin/reset-password', (req, res) => {
 });
 
 
-function handleSslSsoCallback(req, res) {
+async function handleSslSsoCallback(req, res) {
   let payload;
   try {
     payload = verifySslSsoToken(req.query.token || '');
@@ -821,6 +822,11 @@ function handleSslSsoCallback(req, res) {
 
   const sessionToken = createSsmSessionForUser(db, user);
   saveDb(db);
+  try {
+    await postSsmUserMirrorToSsl(user);
+  } catch (err) {
+    console.warn('SSL user mirror sync failed:', err.message);
+  }
   setCookie(res, SESSION_COOKIE, sessionToken, Math.floor(SESSION_TTL_MS / 1000));
   return res.redirect(ssmRedirectForUser(user));
 }

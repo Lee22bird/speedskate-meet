@@ -168,6 +168,65 @@ function ssmRedirectForUser(user) {
   return '/portal';
 }
 
+function configuredSslBaseUrl() {
+  return String(
+    process.env.SSL_BASE_URL ||
+    process.env.SPEEDSKATELEAGUE_BASE_URL ||
+    process.env.PUBLIC_SSL_BASE_URL ||
+    'https://speedskateleague.com'
+  ).trim().replace(/\/+$/, '');
+}
+
+function configuredSslApiKey() {
+  return String(
+    process.env.SSL_SHARED_API_KEY ||
+    process.env.SSL_SSM_API_KEY ||
+    process.env.SSM_SSL_API_KEY ||
+    process.env.SSM_PACKAGE_API_KEY ||
+    process.env.SSM_RESULTS_API_KEY ||
+    process.env.SSO_SHARED_SECRET ||
+    'ssl-ssm-local-dev-package-key'
+  ).trim();
+}
+
+function ssmUserMirrorSnapshot(user) {
+  return {
+    ssm_user_id: String(user?.id || ''),
+    ssl_user_id: String(user?.ssl_user_id || user?.sslUserId || ''),
+    ssl_skater_id: String(user?.ssl_skater_id || user?.sslSkaterId || ''),
+    name: String(user?.name || user?.displayName || user?.username || user?.email || 'SSM User'),
+    email: String(user?.email || '').trim().toLowerCase(),
+    team: String(user?.team || ''),
+    league: String(user?.league || ''),
+    roles: Array.isArray(user?.roles) ? user.roles.map(role => String(role || '').trim()).filter(Boolean) : [],
+    avatar_url: String(user?.avatar_url || user?.avatarUrl || ''),
+  };
+}
+
+async function postSsmUserMirrorToSsl(user) {
+  const base = configuredSslBaseUrl();
+  if (!base) throw new Error('SSL_BASE_URL is not configured.');
+  if (typeof fetch !== 'function') throw new Error('This Node runtime does not support fetch. Upgrade Node or add a fetch polyfill.');
+
+  const response = await fetch(`${base}/api/ssm/user-mirror`, {
+    method: 'POST',
+    headers: {
+      accept: 'application/json',
+      'content-type': 'application/json',
+      'x-ssm-api-key': configuredSslApiKey(),
+    },
+    body: JSON.stringify({ user: ssmUserMirrorSnapshot(user) }),
+  });
+
+  const text = await response.text();
+  let body = {};
+  try { body = text ? JSON.parse(text) : {}; } catch (_) { body = { error: text }; }
+  if (!response.ok || body.ok === false) {
+    throw new Error(body.error || body.message || `SSL user mirror sync failed with HTTP ${response.status}`);
+  }
+  return body;
+}
+
 module.exports = {
   DEFAULT_SESSION_TTL_MS,
   verifySslSsoToken,
@@ -176,4 +235,8 @@ module.exports = {
   mirrorSslUser,
   createSsmSessionForUser,
   ssmRedirectForUser,
+  configuredSslBaseUrl,
+  configuredSslApiKey,
+  ssmUserMirrorSnapshot,
+  postSsmUserMirrorToSsl,
 };
