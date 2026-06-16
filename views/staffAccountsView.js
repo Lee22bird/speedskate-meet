@@ -14,10 +14,23 @@ function staffRoleOptions(selectedRoles = []) {
   ).join('');
 }
 
+function roleLabel(value) {
+  const labels = {
+    meet_director: 'Meet Director',
+    judge: 'Judge / Tabulator',
+    announcer: 'Announcer',
+    coach: 'Coach',
+  };
+  return labels[String(value || '').trim()] || '';
+}
+
 function renderStaffAccountsView({ users = [], teamList = [] }) {
   const rows = users.map(u => {
     const roles = Array.isArray(u.roles) ? u.roles : [];
     const status = u.active === false ? 'Off' : (roles.length ? 'On' : 'Pending Role');
+    const requestedRole = roleLabel(u.requestedRole);
+    const requestedRoleText = requestedRole || (roles.length ? '' : 'Not specified');
+    const requestedAt = u.requestedRoleAt ? new Date(u.requestedRoleAt).toLocaleDateString() : '';
 
     return `
     <tr>
@@ -33,7 +46,10 @@ function renderStaffAccountsView({ users = [], teamList = [] }) {
           <button class="btn2 btn-sm" type="submit">Save</button>
         </form>
       </td>
-      <td><span class="chip ${roles.length ? 'chip-green' : 'chip-orange'}">${esc(status)}</span></td>
+      <td>
+        <span class="chip ${roles.length ? 'chip-green' : 'chip-orange'}">${esc(status)}</span>
+        ${requestedRoleText ? `<div class="muted" style="font-size:12px;margin-top:6px">Requested: ${esc(requestedRoleText)}${requestedAt ? ` • ${esc(requestedAt)}` : ''}</div>` : ''}
+      </td>
     </tr>`;
   }).join('');
 

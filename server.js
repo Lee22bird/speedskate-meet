@@ -973,6 +973,7 @@ app.get('/admin/login', (req, res) => {
               <div><label>Birthdate</label><input type="date" name="birthdate" required /></div>
               <div><label>Gender</label><select name="gender" required><option value="">Select...</option><option value="female">Female</option><option value="male">Male</option><option value="other">Other / Prefer not to say</option></select></div>
             </div>
+            <div><label>Requested Role</label><select name="requestedRole" required><option value="">Select...</option><option value="meet_director">Meet Director</option><option value="judge">Judge / Tabulator</option><option value="announcer">Announcer</option><option value="coach">Coach</option></select></div>
             <button class="btn-orange" type="submit" style="width:100%">Create Account</button>
             <div class="muted" style="font-size:12px;text-align:center">Staff roles are assigned by an admin after account creation.</div>
           </form>
@@ -1007,8 +1008,10 @@ app.post('/admin/register', (req, res) => {
   const password=String(req.body.password||'').trim();
   const birthdate=String(req.body.birthdate||'').trim();
   const gender=String(req.body.gender||'').trim();
+  const requestedRole=String(req.body.requestedRole||'').trim();
+  const allowedRequestedRoles = new Set(['meet_director', 'judge', 'announcer', 'coach']);
 
-  if(!email||!displayName||password.length<6||!birthdate||!gender) {
+  if(!email||!displayName||password.length<6||!birthdate||!gender||!allowedRequestedRoles.has(requestedRole)) {
     return res.redirect('/admin/login?err=missing');
   }
 
@@ -1032,6 +1035,8 @@ app.post('/admin/register', (req, res) => {
     displayName,
     birthdate,
     gender,
+    requestedRole,
+    requestedRoleAt:nowIso(),
     roles:[],
     team:'',
     active:true,
@@ -1040,6 +1045,7 @@ app.post('/admin/register', (req, res) => {
     updatedAt:nowIso(),
   });
   saveDb(db);
+  sendSms(ADMIN_PHONE, `🔐 New SSM staff account request\n${displayName}\n${email}\nRequested: ${requestedRole.replace(/_/g, ' ')}\nReview: speedskatemeet.com/portal/users`);
   res.redirect('/admin/login?created=1');
 });
 

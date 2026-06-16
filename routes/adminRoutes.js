@@ -225,6 +225,9 @@ router.post('/portal/users/:userId/update', requireRole('super_admin'), (req, re
   user.roles=roles;
   user.team=String(req.body.team||'').trim();
   user.active=String(req.body.active||'true')==='true';
+  if (roles.length && user.requestedRole && !user.requestedRoleResolvedAt) {
+    user.requestedRoleResolvedAt = nowIso();
+  }
   user.updatedAt=nowIso();
   saveDb(req.db); res.redirect('/portal/users');
 });
