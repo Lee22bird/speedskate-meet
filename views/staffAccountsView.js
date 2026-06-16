@@ -99,6 +99,8 @@ function renderStaffAccountsView({ users = [], teamList = [] }) {
             out.textContent =
               'Total users: ' + (body.total_users || 0) + '\\n' +
               'Synced: ' + (body.synced || body.synced_count || 0) + '\\n' +
+              'Synced linked: ' + (body.synced_linked || 0) + '\\n' +
+              'Synced unlinked: ' + (body.synced_unlinked || 0) + '\\n' +
               'Skipped: ' + (body.skipped || body.skipped_count || 0) + '\\n' +
               'Failed: ' + (body.failed || body.failed_count || 0) +
               (body.failures && body.failures.length ? '\\n\\nFailures:\\n' + JSON.stringify(body.failures, null, 2) : '');

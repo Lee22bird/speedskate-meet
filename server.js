@@ -824,10 +824,16 @@ async function handleSslSsoCallback(req, res) {
   saveDb(db);
   try {
     const mirrorResult = await postSsmUserMirrorToSsl(user);
-    user.sslMirrorSyncStatus = 'ok';
-    user.sslMirrorSyncedAt = nowIso();
-    user.sslMirrorSyncError = '';
-    user.sslMirrorSyncResponse = mirrorResult?.user?.id ? { id: mirrorResult.user.id } : { ok: true };
+    if (mirrorResult?.skipped) {
+      user.sslMirrorSyncStatus = 'skipped';
+      user.sslMirrorSyncError = mirrorResult.reason || 'Skipped by SSL mirror receiver.';
+      user.sslMirrorSyncResponse = { skipped: true, reason: mirrorResult.reason || '' };
+    } else {
+      user.sslMirrorSyncStatus = mirrorResult?.user?.ssl_user_id || mirrorResult?.user?.ssl_skater_id ? 'ok_linked' : 'ok_unlinked';
+      user.sslMirrorSyncedAt = nowIso();
+      user.sslMirrorSyncError = '';
+      user.sslMirrorSyncResponse = mirrorResult?.user?.id ? { id: mirrorResult.user.id } : { ok: true };
+    }
   } catch (err) {
     user.sslMirrorSyncStatus = 'failed';
     user.sslMirrorSyncAttemptedAt = nowIso();
@@ -845,10 +851,16 @@ app.get('/ssl-sso', handleSslSsoCallback);
 async function syncSsmUserMirrorBestEffort(db, user, label) {
   try {
     const mirrorResult = await postSsmUserMirrorToSsl(user);
-    user.sslMirrorSyncStatus = 'ok';
-    user.sslMirrorSyncedAt = nowIso();
-    user.sslMirrorSyncError = '';
-    user.sslMirrorSyncResponse = mirrorResult?.user?.id ? { id: mirrorResult.user.id } : { ok: true };
+    if (mirrorResult?.skipped) {
+      user.sslMirrorSyncStatus = 'skipped';
+      user.sslMirrorSyncError = mirrorResult.reason || 'Skipped by SSL mirror receiver.';
+      user.sslMirrorSyncResponse = { skipped: true, reason: mirrorResult.reason || '' };
+    } else {
+      user.sslMirrorSyncStatus = mirrorResult?.user?.ssl_user_id || mirrorResult?.user?.ssl_skater_id ? 'ok_linked' : 'ok_unlinked';
+      user.sslMirrorSyncedAt = nowIso();
+      user.sslMirrorSyncError = '';
+      user.sslMirrorSyncResponse = mirrorResult?.user?.id ? { id: mirrorResult.user.id } : { ok: true };
+    }
   } catch (err) {
     user.sslMirrorSyncStatus = 'failed';
     user.sslMirrorSyncAttemptedAt = nowIso();

@@ -38,10 +38,16 @@ module.exports = function createAdminRoutes(deps = {}) {
   async function syncUserMirrorBestEffort(db, user, label) {
     try {
       const result = await postSsmUserMirrorToSsl(user);
-      user.sslMirrorSyncStatus = 'ok';
-      user.sslMirrorSyncedAt = nowIso();
-      user.sslMirrorSyncError = '';
-      user.sslMirrorSyncResponse = result?.user?.id ? { id: result.user.id } : { ok: true };
+      if (result?.skipped) {
+        user.sslMirrorSyncStatus = 'skipped';
+        user.sslMirrorSyncError = result.reason || 'Skipped by SSL mirror receiver.';
+        user.sslMirrorSyncResponse = { skipped: true, reason: result.reason || '' };
+      } else {
+        user.sslMirrorSyncStatus = result?.user?.ssl_user_id || result?.user?.ssl_skater_id ? 'ok_linked' : 'ok_unlinked';
+        user.sslMirrorSyncedAt = nowIso();
+        user.sslMirrorSyncError = '';
+        user.sslMirrorSyncResponse = result?.user?.id ? { id: result.user.id } : { ok: true };
+      }
     } catch (err) {
       user.sslMirrorSyncStatus = 'failed';
       user.sslMirrorSyncAttemptedAt = nowIso();
@@ -54,7 +60,8 @@ module.exports = function createAdminRoutes(deps = {}) {
   async function syncAllUserMirrors(db) {
     const users = Array.isArray(db.users) ? db.users : [];
     const failures = [];
-    let synced = 0;
+    let syncedLinked = 0;
+    let syncedUnlinked = 0;
     let skipped = 0;
 
     for (const user of users) {
@@ -64,11 +71,21 @@ module.exports = function createAdminRoutes(deps = {}) {
       }
       try {
         const result = await postSsmUserMirrorToSsl(user);
-        user.sslMirrorSyncStatus = 'ok';
+        if (result?.skipped) {
+          skipped += 1;
+          user.sslMirrorSyncStatus = 'skipped';
+          user.sslMirrorSyncAttemptedAt = nowIso();
+          user.sslMirrorSyncError = result.reason || 'Skipped by SSL mirror receiver.';
+          user.sslMirrorSyncResponse = { skipped: true, reason: result.reason || '' };
+          continue;
+        }
+        const linked = !!(result?.user?.ssl_user_id || result?.user?.ssl_skater_id);
+        if (linked) syncedLinked += 1;
+        else syncedUnlinked += 1;
+        user.sslMirrorSyncStatus = linked ? 'ok_linked' : 'ok_unlinked';
         user.sslMirrorSyncedAt = nowIso();
         user.sslMirrorSyncError = '';
         user.sslMirrorSyncResponse = result?.user?.id ? { id: result.user.id } : { ok: true };
-        synced += 1;
       } catch (err) {
         user.sslMirrorSyncStatus = 'failed';
         user.sslMirrorSyncAttemptedAt = nowIso();
@@ -87,10 +104,12 @@ module.exports = function createAdminRoutes(deps = {}) {
     return {
       ok: failures.length === 0,
       total_users: users.length,
-      synced,
+      synced: syncedLinked + syncedUnlinked,
+      synced_linked: syncedLinked,
+      synced_unlinked: syncedUnlinked,
       skipped,
       failed: failures.length,
-      synced_count: synced,
+      synced_count: syncedLinked + syncedUnlinked,
       skipped_count: skipped,
       failed_count: failures.length,
       failures,

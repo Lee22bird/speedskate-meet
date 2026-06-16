@@ -192,10 +192,12 @@ function configuredSslApiKey() {
 function ssmUserMirrorSnapshot(user) {
   const roles = Array.isArray(user?.roles) ? user.roles.map(role => String(role || '').trim()).filter(Boolean) : [];
   const requestedRole = String(user?.requestedRole || user?.pending_role || user?.requested_role || '').trim();
+  const sslUserId = String(user?.ssl_user_id || user?.sslUserId || '').trim();
+  const sslSkaterId = String(user?.ssl_skater_id || user?.sslSkaterId || '').trim();
   return {
     ssm_user_id: String(user?.id || ''),
-    ssl_user_id: String(user?.ssl_user_id || user?.sslUserId || ''),
-    ssl_skater_id: String(user?.ssl_skater_id || user?.sslSkaterId || ''),
+    ssl_user_id: sslUserId || null,
+    ssl_skater_id: sslSkaterId || null,
     name: String(user?.name || user?.displayName || user?.username || user?.email || 'SSM User'),
     email: String(user?.email || '').trim().toLowerCase(),
     team: String(user?.team || ''),
