@@ -129,6 +129,14 @@ const createRaceDayRoutes = require('./routes/raceDayRoutes');
 const createSslImportRoutes = require('./routes/sslImportRoutes');
 const createStaffRoutes = require('./routes/staffRoutes');
 const { renderMeetStaffList } = require('./services/staffAssignments');
+const {
+  DEFAULT_SESSION_TTL_MS,
+  nextUserId,
+  verifySslSsoToken,
+  mirrorSslUser,
+  createSsmSessionForUser,
+  ssmRedirectForUser,
+} = require('./services/ssoService');
 
 function rebuildTimeTrialRace(meet) {
   const ttHelpers = require('./services/ttHelpers');
@@ -150,70 +158,7 @@ const DATA_FILE = process.env.SSM_DATA_FILE || path.join(DATA_DIR, 'ssm_db.json'
 const SESSION_COOKIE = 'ssm_sess';
 const ADMIN_PHONE = '+13166516013';
 
-// ── SSL → SSM trusted login ─────────────────────────────────────────────────
-const SSL_SSO_SECRET = process.env.SSM_SSO_SECRET || process.env.SSO_SHARED_SECRET || 'ssl-ssm-local-dev-secret';
-const SSL_SSO_MAX_AGE_SECONDS = 300;
-
-function base64UrlDecode(value) {
-  value = String(value || '').replace(/-/g, '+').replace(/_/g, '/');
-  while (value.length % 4) value += '=';
-  return Buffer.from(value, 'base64').toString('utf8');
-}
-
-function base64UrlSign(value) {
-  return crypto.createHmac('sha256', SSL_SSO_SECRET)
-    .update(value)
-    .digest('base64')
-    .replace(/=/g, '')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_');
-}
-
-function verifySslSsoToken(token) {
-  const parts = String(token || '').split('.');
-  if (parts.length !== 2) throw new Error('Invalid SSO token format.');
-  const [body, sig] = parts;
-  const expected = base64UrlSign(body);
-  const a = Buffer.from(sig);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) throw new Error('Invalid SSO signature.');
-
-  const payload = JSON.parse(base64UrlDecode(body));
-  const now = Math.floor(Date.now() / 1000);
-  if (payload.aud !== 'speedskatemeet.com') throw new Error('Invalid SSO audience.');
-  if (payload.iss !== 'speedskateleague.com') throw new Error('Invalid SSO issuer.');
-  if (!payload.exp || payload.exp < now) throw new Error('SSO token expired.');
-  if (payload.iat && payload.iat > now + 60) throw new Error('SSO token issued in the future.');
-  if (payload.iat && now - payload.iat > SSL_SSO_MAX_AGE_SECONDS) throw new Error('SSO token too old.');
-  return payload;
-}
-
-function ssmAllowedRolesFromSsl(payload) {
-  const incoming = Array.isArray(payload?.roles) ? payload.roles.map(r => String(r || '').toLowerCase()) : [];
-  const allowed = ['super_admin', 'meet_director', 'league_director', 'judge', 'announcer', 'coach'];
-  const roles = incoming.filter(role => allowed.includes(role));
-  return Array.from(new Set(roles));
-}
-
-function nextUserId(db) {
-  return (db.users || []).reduce((max, user) => Math.max(max, Number(user.id) || 0), 0) + 1;
-}
-
-function createSsmSessionForUser(db, user) {
-  const token = crypto.randomBytes(24).toString('hex');
-  db.sessions = (db.sessions || []).filter(s => Number(s.userId) !== Number(user.id));
-  db.sessions.push({ token, userId: user.id, createdAt: nowIso(), expiresAt: new Date(Date.now() + SESSION_TTL_MS).toISOString() });
-  return token;
-}
-
-function ssmRedirectForUser(user) {
-  if (!Array.isArray(user?.roles) || user.roles.length === 0) return '/account/pending';
-  if (hasRole(user, 'coach') && !hasRole(user, 'meet_director') && !hasRole(user, 'super_admin')) return '/portal/coach';
-  if ((hasRole(user, 'judge') || hasRole(user, 'announcer')) && !hasRole(user, 'meet_director') && !hasRole(user, 'super_admin')) return '/portal/meet-picker';
-  return '/portal';
-}
-
-const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 14;
+const SESSION_TTL_MS = DEFAULT_SESSION_TTL_MS;
 
 const ADMIN_USERNAME = 'Lbird22';
 const ADMIN_PASSWORD = 'Redline22';
@@ -856,7 +801,7 @@ app.post('/admin/reset-password', (req, res) => {
 });
 
 
-app.get('/ssl-sso', (req, res) => {
+function handleSslSsoCallback(req, res) {
   let payload;
   try {
     payload = verifySslSsoToken(req.query.token || '');
@@ -871,65 +816,17 @@ app.get('/ssl-sso', (req, res) => {
       </div>` }));
   }
 
-  const roles = ssmAllowedRolesFromSsl(payload);
-  if (!roles.length) {
-    return res.status(403).send(pageShell({ title: 'SSM Access Required', user: null, bodyHtml: `
-      <div style="max-width:520px;margin:40px auto">
-        <div class="page-header"><h1>SpeedSkateMeet Access</h1></div>
-        <div class="card">
-          <div class="danger" style="margin-bottom:14px">Your SpeedSkateLeague profile does not currently have Coach, Meet Director, Judge, or Admin access.</div>
-          <a class="btn2" href="https://speedskateleague.com/portal">Back to SpeedSkateLeague</a>
-        </div>
-      </div>` }));
-  }
-
   const db = loadDb();
-  db.users = db.users || [];
-  const email = String(payload.email || '').trim().toLowerCase();
-  const sslUserId = String(payload.sub || '').trim();
-  const username = email || ('ssl_' + sslUserId.slice(0, 12));
-
-  let user = db.users.find(u => String(u.sslUserId || '') === sslUserId)
-    || db.users.find(u => email && String(u.email || '').trim().toLowerCase() === email)
-    || db.users.find(u => String(u.username || '').trim().toLowerCase() === username);
-
-  if (!user) {
-    user = {
-      id: nextUserId(db),
-      username,
-      password: crypto.randomBytes(18).toString('hex'),
-      displayName: String(payload.full_name || email || 'SSL User'),
-      email,
-      roles,
-      team: String(payload.team || 'Independent'),
-      league: String(payload.league || ''),
-      active: true,
-      sslUserId,
-      sslSkaterId: String(payload.ssl_skater_id || ''),
-      authProvider: 'ssl',
-      createdAt: nowIso(),
-      updatedAt: nowIso()
-    };
-    db.users.push(user);
-  } else {
-    user.username = user.username || username;
-    user.email = email || user.email || '';
-    user.displayName = String(payload.full_name || user.displayName || email || 'SSL User');
-    user.roles = roles;
-    user.team = String(payload.team || user.team || 'Independent');
-    user.league = String(payload.league || user.league || '');
-    user.active = true;
-    user.sslUserId = sslUserId || user.sslUserId || '';
-    user.sslSkaterId = String(payload.ssl_skater_id || user.sslSkaterId || '');
-    user.authProvider = 'ssl';
-    user.updatedAt = nowIso();
-  }
+  const user = mirrorSslUser(db, payload);
 
   const sessionToken = createSsmSessionForUser(db, user);
   saveDb(db);
   setCookie(res, SESSION_COOKIE, sessionToken, Math.floor(SESSION_TTL_MS / 1000));
   return res.redirect(ssmRedirectForUser(user));
-});
+}
+
+app.get('/sso/ssl/callback', handleSslSsoCallback);
+app.get('/ssl-sso', handleSslSsoCallback);
 
 app.get('/account/pending', (req, res) => {
   const data=getSessionUser(req);
