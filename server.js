@@ -884,10 +884,9 @@ app.get('/account/pending', (req, res) => {
     </div>`}));
 });
 
-function sslSignupUrl() {
+function sslAccountUrl() {
   const sslBaseUrl = String(process.env.SSL_BASE_URL || 'https://speedskateleague.com').replace(/\/+$/, '');
-  const ssmBaseUrl = String(process.env.SSM_BASE_URL || 'https://speedskatemeet.com').replace(/\/+$/, '');
-  return `${sslBaseUrl}/signup?source=ssm&return_to=${encodeURIComponent(ssmBaseUrl)}`;
+  return `${sslBaseUrl}/login?source=ssm`;
 }
 
 function ssmSignupExplanationCard() {
@@ -900,7 +899,7 @@ function ssmSignupExplanationCard() {
       <p style="line-height:1.7">
         You’ll create your SpeedSkateLeague profile first, then return to SpeedSkateMeet.
       </p>
-      <a class="btn-orange" href="${esc(sslSignupUrl())}" style="display:block;text-align:center;text-decoration:none">Continue To SpeedSkateLeague Signup</a>
+      <a class="btn-orange" href="${esc(sslAccountUrl())}" style="display:block;text-align:center;text-decoration:none">Continue To SpeedSkateLeague Signup</a>
     </div>`;
 }
 

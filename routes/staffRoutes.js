@@ -28,24 +28,37 @@ function configuredSslStaffApiKey() {
   ).trim();
 }
 
-async function searchSslStaff({ q, role }) {
+async function searchSslStaff({ q, role, meetId = '' }) {
   const base = configuredSslBaseUrl();
   if (!base) throw new Error('SSL_BASE_URL is not configured.');
   if (typeof fetch !== 'function') throw new Error('This Node runtime does not support SSL staff search.');
   const url = new URL('/api/ssm/staff-search', base);
   url.searchParams.set('q', q);
   url.searchParams.set('role', role);
+  url.searchParams.set('staff_role', role);
+  if (meetId) url.searchParams.set('meetId', meetId);
   const response = await fetch(url.toString(), {
     headers: {
       accept: 'application/json',
       'x-ssm-api-key': configuredSslStaffApiKey(),
+      'x-ssl-api-key': configuredSslStaffApiKey(),
     },
   });
   const text = await response.text();
   let body = {};
   try { body = text ? JSON.parse(text) : {}; } catch (_) { body = { error: text }; }
+  const people = Array.isArray(body.people) ? body.people : [];
+  console.log('SSM staff search proxy:', {
+    requested_role: role,
+    query: q,
+    meet_id: meetId,
+    ssl_url: url.toString(),
+    ssl_response_status: response.status,
+    ssl_result_count: people.length,
+    ssl_error: body.error || body.message || '',
+  });
   if (!response.ok || body.ok === false) throw new Error(body.error || body.message || `SSL staff search failed with HTTP ${response.status}`);
-  return Array.isArray(body.people) ? body.people : [];
+  return people;
 }
 
 function normalizePostedPerson(body = {}) {
@@ -79,9 +92,22 @@ module.exports = function createStaffRoutes(deps = {}) {
       const q = String(req.query.q || '').trim();
       if (!STAFF_ROLE_KEYS.has(role)) return res.status(400).json({ ok: false, error: 'Unsupported staff role.' });
       if (q.length < 2) return res.json({ ok: true, people: [] });
-      const people = await searchSslStaff({ q, role });
+      const people = await searchSslStaff({ q, role, meetId: req.params.meetId });
+      console.log('SSM staff search result:', {
+        meet_id: String(req.params.meetId || ''),
+        requested_role: role,
+        query: q,
+        result_count: people.length,
+        empty_reason: people.length ? '' : 'No approved SSL users found for this staff role.',
+      });
       return res.json({ ok: true, people });
     } catch (err) {
+      console.warn('SSM staff search failed:', {
+        meet_id: String(req.params.meetId || ''),
+        requested_role: String(req.query.role || req.query.staff_role || ''),
+        query: String(req.query.q || ''),
+        message: err.message,
+      });
       return res.status(err.statusCode || 400).json({ ok: false, error: err.message });
     }
   });
@@ -96,7 +122,7 @@ module.exports = function createStaffRoutes(deps = {}) {
       if (!STAFF_ROLE_KEYS.has(role)) throw new Error('Unsupported staff role.');
 
       const posted = normalizePostedPerson(req.body);
-      const candidates = await searchSslStaff({ q: posted.staff_ssl_id || posted.staff_name || posted.staff_user_id, role });
+      const candidates = await searchSslStaff({ q: posted.staff_ssl_id || posted.staff_name || posted.staff_user_id, role, meetId });
       const verified = candidates.find(candidate => personMatchesPosted(candidate, posted));
       if (!verified) throw new Error('That SSL profile could not be verified for this staff role.');
 

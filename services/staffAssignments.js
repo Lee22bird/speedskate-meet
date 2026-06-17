@@ -205,7 +205,7 @@ function renderMeetStaffManager({ meet, canManage = false }) {
                     .then(function(body){
                       var people = Array.isArray(body.people) ? body.people : [];
                       if(!people.length){
-                        results.innerHTML = '<div class="staff-result-empty">No matching SSL staff found.</div>';
+                        results.innerHTML = '<div class="staff-result-empty">No approved SSL users found for this staff role.</div>';
                         return;
                       }
                       results.innerHTML = people.map(function(person){
