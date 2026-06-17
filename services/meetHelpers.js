@@ -177,7 +177,7 @@ function defaultMeet(ownerUser) {
     meetName:'New Meet', leagueAssociation:'', league:'', date:'', endDate:'', startTime:'', registrationCloseAt:'',
     rinkId:1, customRinkName:'', trackLength:100, lanes:4,
     meet_staff_assignments:[], staffAssignments:[],
-    timeTrialsEnabled:false, relayEnabled:false, judgesPanelRequired:true,
+    timeTrialsEnabled:false, timeTrialEvent:{enabled:false,distance:'100m',runOrder:'youngest_oldest',countsForOverall:false}, timeTrialEvents:[], relayEnabled:false, judgesPanelRequired:true,
     notes:'', scheduleNotes:'', relayNotes:'', isPublic:false, status:'draft', tiebreaker:'d2',
     ...defaultPricingFields(),
     groups:baseGroups(), openGroups:makeOpenGroupsTemplate(), quadGroups:makeQuadGroupsTemplate(),
@@ -256,6 +256,14 @@ function migrateMeet(meet,fallbackOwnerId) {
   if(!Array.isArray(meet.races)) meet.races=[];
   if(!Array.isArray(meet.blocks)) meet.blocks=[];
   if(!Array.isArray(meet.registrations)) meet.registrations=[];
+  if(!meet.timeTrialEvent || typeof meet.timeTrialEvent !== 'object') {
+    meet.timeTrialEvent = { enabled: !!meet.timeTrialsEnabled, distance: '100m', runOrder: 'youngest_oldest', countsForOverall: false };
+  }
+  meet.timeTrialEvent.enabled = !!meet.timeTrialEvent.enabled;
+  meet.timeTrialEvent.distance = String(meet.timeTrialEvent.distance || '100m').trim() || '100m';
+  meet.timeTrialEvent.runOrder = 'youngest_oldest';
+  meet.timeTrialEvent.countsForOverall = !!meet.timeTrialEvent.countsForOverall;
+  if(!Array.isArray(meet.timeTrialEvents)) meet.timeTrialEvents=[];
   if(typeof meet.currentRaceId!=='string') meet.currentRaceId='';
   if(typeof meet.currentRaceIndex!=='number') meet.currentRaceIndex=-1;
   if(typeof meet.raceDayPaused!=='boolean') meet.raceDayPaused=false;
@@ -284,6 +292,7 @@ function migrateMeet(meet,fallbackOwnerId) {
     id:String(b.id||('b'+(idx+1))), name:String(b.name||`Block ${idx+1}`),
     day:String(b.day||'Day 1'), type:String(b.type||'race'), notes:String(b.notes||''),
     raceIds:Array.isArray(b.raceIds)?b.raceIds.map(String):[],
+    timeTrialEventIds:Array.isArray(b.timeTrialEventIds)?b.timeTrialEventIds.map(String).filter(Boolean):[],
   }));
   meet.registrations=meet.registrations.map((reg,idx)=>({
     id:Number(reg.id||idx+1), createdAt:String(reg.createdAt||nowIso()),

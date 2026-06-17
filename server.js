@@ -128,6 +128,7 @@ const createRegistrationRoutes = require('./routes/registrationRoutes');
 const createRaceDayRoutes = require('./routes/raceDayRoutes');
 const createSslImportRoutes = require('./routes/sslImportRoutes');
 const createStaffRoutes = require('./routes/staffRoutes');
+const createTimeTrialRoutes = require('./routes/timeTrialRoutes');
 const { renderMeetStaffList } = require('./services/staffAssignments');
 const {
   DEFAULT_SESSION_TTL_MS,
@@ -1642,6 +1643,7 @@ app.use('/', createBuilderRoutes(routeDeps));
 app.use('/', createRegistrationRoutes(routeDeps));
 app.use('/', createRaceDayRoutes(routeDeps));
 app.use('/', createStaffRoutes(routeDeps));
+app.use('/', createTimeTrialRoutes(routeDeps));
 app.use('/', createSslImportRoutes(routeDeps));
 
 // ── Start server ──────────────────────────────────────────────────────────────

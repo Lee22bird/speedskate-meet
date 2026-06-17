@@ -26,6 +26,7 @@ const {
   timeTrialEntriesForMeet, timeTrialLeaderboards,
   rebuildRaceAssignmentsSafe,
 } = ttHelpers;
+const { ensureTimeTrialEvent, timeTrialResults } = require('../services/timeTrialEvents');
 
 function rebuildTimeTrialRaceSafe(meet) {
   const freshTtHelpers = require('../services/ttHelpers');
@@ -466,6 +467,22 @@ router.post('/api/meet/:meetId/blocks/move-race', requireRole('meet_director'), 
   // unassigned race is dropped into that same block. The Block Builder page is already
   // rendered from the current saved race list, so the dragged raceId should exist as-is.
   ensureAtLeastOneBlock(meet);
+
+  const ttEvent = ensureTimeTrialEvent(meet);
+  if (ttEvent && String(ttEvent.id) === raceId) {
+    for (const block of meet.blocks || []) {
+      block.timeTrialEventIds = (block.timeTrialEventIds || []).map(String).filter(id => id !== raceId);
+    }
+    if (destBlockId !== '__unassigned__') {
+      const block = (meet.blocks || []).find(b => String(b.id) === destBlockId);
+      if (!block) return res.status(404).send('Block not found');
+      if ((block.type || 'race') !== 'race') return res.status(400).send('Cannot drop time trial events into non-race blocks');
+      if (!(block.timeTrialEventIds || []).map(String).includes(raceId)) block.timeTrialEventIds.push(raceId);
+    }
+    meet.updatedAt = nowIso();
+    saveDb(req.db);
+    return res.json({ ok: true });
+  }
 
   const race=(meet.races||[]).find(r=>String(r.id)===raceId);
   if(!race) return res.status(404).send('Race not found');
@@ -1036,6 +1053,8 @@ router.get('/portal/meet/:meetId/results', requireRole('meet_director','judge','
   const sections=computeMeetStandings(meet);
   const openSections=computeOpenResults(meet);
   const quadSections=computeQuadStandings(meet);
+  const ttEvent=ensureTimeTrialEvent(meet);
+  const ttResults=ttEvent ? timeTrialResults(ttEvent) : null;
   const okMsg = req.query.ok ? String(req.query.ok) : '';
   const errorMsg = req.query.error ? String(req.query.error) : '';
   const canManageResults = hasRole(req.user,'super_admin') || canEditMeet(req.user,meet);
@@ -1085,7 +1104,17 @@ router.get('/portal/meet/:meetId/results', requireRole('meet_director','judge','
             <thead><tr><th>Place</th><th>Skater</th><th>Team</th><th>Points</th></tr></thead>
             <tbody>${s.standings.map(r=>`<tr><td><strong>${r.overallPlace}</strong></td><td>${esc(r.skaterName||'')}${sponsorLineHtml(r.sponsor||'')}</td><td>${esc(r.team||'')}</td><td><strong>${Number(r.totalPoints||0)}</strong></td></tr>`).join('')||`<tr><td colspan="4" class="muted">No standings yet.</td></tr>`}</tbody>
           </table>
-        </div>`).join('')}`:``}`}));
+        </div>`).join('')}`:``}
+    ${ttResults && ttResults.overall.length?`
+      <div class="spacer"></div>
+      <h2 style="color:var(--sky2)">⏱ Time Trial Event Results</h2>
+      <div class="grid-3">
+        ${[['Fastest Male', ttResults.male], ['Fastest Female', ttResults.female], ['Overall', ttResults.overall]].map(([title, rows]) => `
+          <div class="card" style="border-left:4px solid var(--sky2)">
+            <h2 style="margin-top:0">${esc(title)}</h2>
+            <table class="table"><tbody>${rows.map(row => `<tr><td>${row.rank}</td><td><strong>${esc(row.skater)}</strong><div class="muted" style="font-size:12px">${esc(row.team || '')}</div></td><td>${esc(row.time)}</td></tr>`).join('')}</tbody></table>
+          </div>`).join('')}
+      </div>`:``}`}));
 });
 
 router.post('/portal/meet/:meetId/finalize', requireRole('meet_director'), (req, res) => {

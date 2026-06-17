@@ -1,18 +1,24 @@
 const { esc, cap } = require('../utils/html');
 const { raceDisplayStage } = require('../services/raceDay');
+const { ensureTimeTrialEvent, timeTrialEventTitle } = require('../services/timeTrialEvents');
 
 function renderBlockBuilderView({ meet }) {
+  const timeTrialEvent = ensureTimeTrialEvent(meet);
+  const timeTrialEventById = new Map((meet.timeTrialEvents || []).filter(e => e.enabled).map(e => [e.id, e]));
   const raceById = new Map((meet.races || []).map(r => [r.id, r]));
   const assigned = new Set();
+  const assignedTimeTrialEvents = new Set();
   for (const block of meet.blocks || []) {
     for (const rid of block.raceIds || []) assigned.add(rid);
+    for (const eid of block.timeTrialEventIds || []) assignedTimeTrialEvents.add(eid);
   }
 
   const unassigned = (meet.races || []).filter(r => !assigned.has(r.id));
+  const unassignedTimeTrialEvents = timeTrialEvent ? [timeTrialEvent].filter(e => !assignedTimeTrialEvents.has(e.id)) : [];
   const inlineRaceCount = (meet.races || []).filter(r => !r.isOpenRace && !r.isQuadRace && !r.isTimeTrial && !r.isRelayRace).length;
   const openRaceCount = (meet.races || []).filter(r => r.isOpenRace).length;
   const quadRaceCount = (meet.races || []).filter(r => r.isQuadRace).length;
-  const timeTrialRaceCount = (meet.races || []).filter(r => r.isTimeTrial).length;
+  const timeTrialRaceCount = (timeTrialEvent ? 1 : 0);
   const relayRaceCount = (meet.races || []).filter(r => r.isRelayRace).length;
   const additionalRaceCount = (meet.races || []).filter(r => r.isAdditionalRace || String(r.division || '').toLowerCase() === 'additional').length;
   const breakTypes = ['break', 'lunch', 'awards', 'practice'];
@@ -29,6 +35,22 @@ function renderBlockBuilderView({ meet }) {
         data-day-index="${esc(race.dayIndex)}">
         <div class="race-label">${tag}${esc(race.groupLabel)} <span style="opacity:.6">•</span> ${esc(cap(race.division))}</div>
         <div class="race-meta">${esc(race.distanceLabel)} • D${esc(race.dayIndex)} • ${esc(raceDisplayStage(race))} • ${esc(cap(race.startType))}</div>
+      </div>`;
+  }
+
+  function timeTrialItemHtml(event, draggable = true) {
+    const total = Array.isArray(event.participants) ? event.participants.length : 0;
+    const completed = (event.participants || []).filter(row => String(row.time || '').trim()).length;
+    return `
+      <div class="race-item tt-item" draggable="${draggable}"
+        data-race-id="${esc(event.id)}"
+        data-item-type="time-trial-event"
+        data-group-label="${esc(String(timeTrialEventTitle(event)).toLowerCase())}"
+        data-division="time_trial"
+        data-day-index="tt">
+        <div class="race-label">⏱ ${esc(timeTrialEventTitle(event))}</div>
+        <div class="race-meta">Queue event • ${completed}/${total} complete • Counts overall: ${event.countsForOverall ? 'Yes' : 'No'}</div>
+        <div style="margin-top:6px"><a class="btn2 btn-sm" href="/portal/meet/${esc(meet.id)}/time-trials/${esc(event.id)}">Open Time Trial</a></div>
       </div>`;
   }
 
@@ -88,6 +110,10 @@ function renderBlockBuilderView({ meet }) {
           <div><label>Notes</label><input value="${esc(block.notes || '')}" onblur="setBlockNotes('${esc(block.id)}',this.value)" placeholder="notes..." /></div>
         </div>
         <div class="drop-zone" data-drop-block="${esc(block.id)}">
+          ${(block.timeTrialEventIds || []).map(eid => {
+            const event = timeTrialEventById.get(eid);
+            return event ? timeTrialItemHtml(event, true) : '';
+          }).join('')}
           ${(block.raceIds || []).map(rid => {
             const race = raceById.get(rid);
             if (!race) return '';
@@ -210,7 +236,8 @@ Continue?')">
                 </div>
               </div>
               <div class="unassigned-list drop-zone" data-drop-block="__unassigned__" id="unassignedZone">
-                ${unassigned.map(race => raceItemHtml(race, meet.currentRaceId === race.id)).join('') || `<div class="note" style="padding:8px">All races assigned.</div>`}
+                ${unassignedTimeTrialEvents.map(event => timeTrialItemHtml(event)).join('')}
+                ${unassigned.map(race => raceItemHtml(race, meet.currentRaceId === race.id)).join('') || (!unassignedTimeTrialEvents.length ? `<div class="note" style="padding:8px">All races assigned.</div>` : '')}
               </div>
             </div>
           </div>

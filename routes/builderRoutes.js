@@ -23,6 +23,7 @@ const {
   timeTrialEntriesForMeet, rebuildTimeTrialRace, timeTrialLeaderboards,
   rebuildRaceAssignmentsSafe,
 } = require('../services/ttHelpers');
+const { ensureTimeTrialEvent, normalizeTimeTrialSettings } = require('../services/timeTrialEvents');
 const { raceDisplayStage, ensureCurrentRace } = require('../services/raceDay');
 
 
@@ -101,6 +102,14 @@ function saveMeetFields(meet, body, db) {
   meet.trackLength = numberFieldFromBody(body, ['trackLength', 'track_length'], meet.trackLength || 100, 1);
   meet.lanes = numberFieldFromBody(body, ['lanes', 'laneCount', 'lane_count'], meet.lanes || 4, 1);
   meet.timeTrialsEnabled=!!body.timeTrialsEnabled;
+  meet.timeTrialEvent = {
+    enabled: !!body.timeTrialEventEnabled,
+    distance: String(body.timeTrialEventDistance || '100m').trim() || '100m',
+    runOrder: 'youngest_oldest',
+    countsForOverall: String(body.timeTrialEventCountsForOverall || '').toLowerCase() === 'yes',
+  };
+  normalizeTimeTrialSettings(meet);
+  ensureTimeTrialEvent(meet);
   if(Array.isArray(meet.openGroups)) {
     meet.openGroups=normalizeOpenGroups(meet.openGroups).map(g=>({...g,timeTrial:!!meet.timeTrialsEnabled,ttDistance:'100m'}));
   }

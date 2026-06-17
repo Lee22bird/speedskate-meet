@@ -98,6 +98,7 @@ function renderMeetBuilderView({ db, meet, user = null, query = {} }) {
   const isPublished = meetStatus === 'published' || meetStatus === 'live' || meetStatus === 'complete' || meet.isPublic === true;
   const statusLabel = isPublished ? 'Published' : 'Draft';
   const statusBadgeClass = isPublished ? 'published' : 'draft';
+  const ttEvent = meet.timeTrialEvent || {};
 
   function divCardHtml(group, gi, divKey) {
     const div=group.divisions[divKey];
@@ -180,6 +181,20 @@ function renderMeetBuilderView({ db, meet, user = null, query = {} }) {
       </div>
     </div>
     <form id="meetBuilderForm" method="POST" action="/portal/meet/${meet.id}/builder/save" class="stack">
+      <div class="card" style="margin-bottom:16px;border-left:5px solid var(--sky2)">
+        <div class="row between center" style="gap:12px;align-items:flex-start">
+          <div>
+            <h2 style="margin:0 0 4px">Time Trial Builder</h2>
+            <div class="note">Standalone queue, manual times, and live leaderboard. Does not generate heats, finals, or brackets.</div>
+          </div>
+          ${toggleSwitch('timeTrialEventEnabled', !!ttEvent.enabled, 'Enable Time Trials')}
+        </div>
+        <div class="form-grid cols-3" style="margin-top:14px">
+          <div><label>Distance</label><input name="timeTrialEventDistance" value="${esc(ttEvent.distance || '100m')}" placeholder="100m" /></div>
+          <div><label>Run Order</label><input value="Youngest → Oldest" disabled /></div>
+          <div><label>Counts For Overall</label><select name="timeTrialEventCountsForOverall"><option value="no" ${ttEvent.countsForOverall ? '' : 'selected'}>No</option><option value="yes" ${ttEvent.countsForOverall ? 'selected' : ''}>Yes</option></select></div>
+        </div>
+      </div>
       <div class="card setup-card">
         <div class="setup-head">
           <div>
