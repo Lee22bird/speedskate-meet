@@ -884,14 +884,32 @@ app.get('/account/pending', (req, res) => {
     </div>`}));
 });
 
+function sslSignupUrl() {
+  const sslBaseUrl = String(process.env.SSL_BASE_URL || 'https://speedskateleague.com').replace(/\/+$/, '');
+  const ssmBaseUrl = String(process.env.SSM_BASE_URL || 'https://speedskatemeet.com').replace(/\/+$/, '');
+  return `${sslBaseUrl}/signup?source=ssm&return_to=${encodeURIComponent(ssmBaseUrl)}`;
+}
+
+function ssmSignupExplanationCard() {
+  return `
+    <div class="card">
+      <h2 style="margin-top:0">Create Your SpeedSkateLeague Account</h2>
+      <p style="line-height:1.7;margin-top:0">
+        SpeedSkateMeet now uses SpeedSkateLeague accounts for identity, roles, SSL IDs, teams, profile photos, and future results history.
+      </p>
+      <p style="line-height:1.7">
+        You’ll create your SpeedSkateLeague profile first, then return to SpeedSkateMeet.
+      </p>
+      <a class="btn-orange" href="${esc(sslSignupUrl())}" style="display:block;text-align:center;text-decoration:none">Continue To SpeedSkateLeague Signup</a>
+    </div>`;
+}
+
 app.get('/admin/login', (req, res) => {
-  const created=req.query.created;
   const reset=req.query.reset;
   res.send(pageShell({title:'Staff Login',user:null, bodyHtml:`
     <div style="max-width:860px;margin:40px auto">
       <div class="page-header"><h1>SpeedSkateMeet Staff Access</h1><div class="sub">For Meet Directors, Judges, Announcers, and Coaches.</div></div>
       ${reset?'<div class="card" style="border-left:4px solid var(--green);margin-bottom:12px"><div class="good">✅ Password updated! Sign in with your new password.</div></div>':''}
-      ${created?'<div class="card" style="border-left:4px solid var(--green);margin-bottom:12px"><div class="good">✅ Account created. Sign in, then an admin can assign your staff role.</div></div>':''}
       <div class="form-grid cols-2">
         <div class="card">
           <h2 style="margin-top:0">Sign In</h2>
@@ -902,22 +920,17 @@ app.get('/admin/login', (req, res) => {
             <a href="/admin/forgot-password" style="text-align:center;font-size:13px;color:var(--muted);display:block;margin-top:8px">Forgot password?</a>
           </form>
         </div>
-        <div class="card">
-          <h2 style="margin-top:0">Create Account</h2>
-          <form method="POST" action="/admin/register" class="stack">
-            <div><label>Full Name</label><input name="displayName" autocomplete="name" required /></div>
-            <div><label>Email</label><input type="email" name="email" autocomplete="email" required /></div>
-            <div><label>Password</label><input name="password" type="password" autocomplete="new-password" minlength="6" required /></div>
-            <div class="form-grid cols-2">
-              <div><label>Birthdate</label><input type="date" name="birthdate" required /></div>
-              <div><label>Gender</label><select name="gender" required><option value="">Select...</option><option value="female">Female</option><option value="male">Male</option><option value="other">Other / Prefer not to say</option></select></div>
-            </div>
-            <div><label>Requested Role</label><select name="requestedRole" required><option value="">Select...</option><option value="meet_director">Meet Director</option><option value="judge">Judge / Tabulator</option><option value="announcer">Announcer</option><option value="coach">Coach</option></select></div>
-            <button class="btn-orange" type="submit" style="width:100%">Create Account</button>
-            <div class="muted" style="font-size:12px;text-align:center">Staff roles are assigned by an admin after account creation.</div>
-          </form>
-        </div>
+        ${ssmSignupExplanationCard()}
       </div>
+    </div>`}));
+});
+
+app.get('/signup', (req, res) => {
+  res.send(pageShell({title:'Create Account',user:null, bodyHtml:`
+    <div style="max-width:620px;margin:40px auto">
+      <div class="page-header"><h1>SpeedSkateMeet Signup</h1><div class="sub">Create your SpeedSkateLeague profile first.</div></div>
+      ${ssmSignupExplanationCard()}
+      <div style="margin-top:16px"><a class="btn2" href="/admin/login">Back to SSM Login</a></div>
     </div>`}));
 });
 
@@ -940,54 +953,14 @@ app.post('/admin/login', (req, res) => {
 });
 
 app.post('/admin/register', async (req, res) => {
-  const db=loadDb();
-  db.users=db.users||[];
-  const email=String(req.body.email||'').trim().toLowerCase();
-  const displayName=String(req.body.displayName||'').trim();
-  const password=String(req.body.password||'').trim();
-  const birthdate=String(req.body.birthdate||'').trim();
-  const gender=String(req.body.gender||'').trim();
-  const requestedRole=String(req.body.requestedRole||'').trim();
-  const allowedRequestedRoles = new Set(['meet_director', 'judge', 'announcer', 'coach']);
-
-  if(!email||!displayName||password.length<6||!birthdate||!gender||!allowedRequestedRoles.has(requestedRole)) {
-    return res.redirect('/admin/login?err=missing');
-  }
-
-  const existing=findUserByLogin(db,email);
-  if(existing) {
-    return res.send(pageShell({title:'Account Exists',user:null, bodyHtml:`
-      <div style="max-width:420px;margin:40px auto">
-        <div class="page-header"><h1>Account Exists</h1></div>
-        <div class="card">
-          <div class="danger" style="margin-bottom:14px">An account already exists for that email.</div>
-          <a class="btn2" href="/admin/login">Back to Login</a>
-        </div>
-      </div>`}));
-  }
-
-  const user = {
-    id:nextUserId(db),
-    username:email,
-    email,
-    password,
-    displayName,
-    birthdate,
-    gender,
-    requestedRole,
-    requestedRoleAt:nowIso(),
-    roles:[],
-    team:'',
-    active:true,
-    authProvider:'local',
-    createdAt:nowIso(),
-    updatedAt:nowIso(),
-  };
-  db.users.push(user);
-  saveDb(db);
-  await syncSsmUserMirrorBestEffort(db, user, 'direct signup');
-  sendSms(ADMIN_PHONE, `🔐 New SSM staff account request\n${displayName}\n${email}\nRequested: ${requestedRole.replace(/_/g, ' ')}\nReview: speedskatemeet.com/portal/users`);
-  res.redirect('/admin/login?created=1');
+  res.status(403).send(pageShell({title:'Create Account',user:null, bodyHtml:`
+    <div style="max-width:620px;margin:40px auto">
+      <div class="page-header"><h1>Create Your SpeedSkateLeague Account</h1></div>
+      ${ssmSignupExplanationCard()}
+      <div class="card" style="border-left:4px solid var(--amber);margin-top:16px">
+        <div class="danger">Direct SpeedSkateMeet account creation is closed. Please create your SpeedSkateLeague profile first.</div>
+      </div>
+    </div>`}));
 });
 
 app.get('/admin/logout', (req, res) => {
