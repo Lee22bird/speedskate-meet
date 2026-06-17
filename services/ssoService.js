@@ -206,6 +206,10 @@ function ssmUserMirrorSnapshot(user) {
     roles,
     requested_role: requestedRole,
     avatar_url: String(user?.avatar_url || user?.avatarUrl || ''),
+    active: user?.active !== false,
+    disabled: user?.active === false || !!user?.disabledAt,
+    migrated: !!user?.migratedAt,
+    status: user?.disabledAt ? 'disabled' : (user?.migratedAt ? 'migrated' : 'active'),
   };
 }
 

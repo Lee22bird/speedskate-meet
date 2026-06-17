@@ -24,13 +24,16 @@ function roleLabel(value) {
   return labels[String(value || '').trim()] || '';
 }
 
-function renderStaffAccountsView({ users = [], teamList = [] }) {
+function renderStaffAccountsView({ users = [], teamList = [], currentUserId = null, err = '', ok = '' }) {
   const rows = users.map(u => {
     const roles = Array.isArray(u.roles) ? u.roles : [];
-    const status = u.active === false ? 'Off' : (roles.length ? 'On' : 'Pending Role');
+    const status = u.active === false ? (u.migrationStatus === 'disabled_legacy_login' ? 'Disabled / Migrated' : 'Off') : (roles.length ? 'On' : 'Pending Role');
     const requestedRole = roleLabel(u.requestedRole);
     const requestedRoleText = requestedRole || (roles.length ? '' : 'Not specified');
     const requestedAt = u.requestedRoleAt ? new Date(u.requestedRoleAt).toLocaleDateString() : '';
+    const isCurrent = Number(currentUserId) === Number(u.id);
+    const disabledReason = u.disabledReason ? `<div class="muted" style="font-size:12px;margin-top:6px">Reason: ${esc(u.disabledReason)}</div>` : '';
+    const deleteDisabled = isCurrent ? 'disabled title="You cannot delete your current account"' : '';
 
     return `
     <tr>
@@ -49,12 +52,23 @@ function renderStaffAccountsView({ users = [], teamList = [] }) {
       <td>
         <span class="chip ${roles.length ? 'chip-green' : 'chip-orange'}">${esc(status)}</span>
         ${requestedRoleText ? `<div class="muted" style="font-size:12px;margin-top:6px">Requested: ${esc(requestedRoleText)}${requestedAt ? ` • ${esc(requestedAt)}` : ''}</div>` : ''}
+        ${disabledReason}
+        <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:10px">
+          <form method="POST" action="/admin/users/${esc(u.id)}/disable" style="margin:0" onsubmit="return confirm('Disable this SSM login? Existing meet ownership and staff records will stay in place.');">
+            <button class="btn2 btn-sm" type="submit" ${isCurrent ? 'disabled title="You cannot disable your current account"' : ''}>Disable User</button>
+          </form>
+          <form method="POST" action="/admin/users/${esc(u.id)}/delete" style="margin:0" onsubmit="return confirm('Delete this SSM user only if it has no local references? If references exist, SSM will disable it instead.');">
+            <button class="btn-danger btn-sm" type="submit" ${deleteDisabled}>Delete User</button>
+          </form>
+        </div>
       </td>
     </tr>`;
   }).join('');
 
   return `
     <div class="page-header"><h1>Users</h1><div class="sub">SSM staff accounts only: Meet Directors, Judges, Announcers, and Coaches.</div></div>
+    ${err ? `<div class="card" style="border-left:4px solid var(--red);margin-bottom:12px"><div class="danger">${esc(err)}</div></div>` : ''}
+    ${ok ? `<div class="card" style="border-left:4px solid var(--green);margin-bottom:12px"><div class="good">${esc(ok)}</div></div>` : ''}
     <div class="card" style="margin-bottom:16px">
       <div class="row between center" style="gap:12px;align-items:flex-start">
         <div>
@@ -80,7 +94,7 @@ function renderStaffAccountsView({ users = [], teamList = [] }) {
       </form>
       <div class="hr"></div>
       <table class="table">
-        <thead><tr><th>Name / Email</th><th>Login</th><th>Roles / Team</th><th>Status</th></tr></thead>
+        <thead><tr><th>Name / Email</th><th>Login</th><th>Roles / Team</th><th>Status / Actions</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>

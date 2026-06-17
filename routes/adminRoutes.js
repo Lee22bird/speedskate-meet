@@ -116,6 +116,144 @@ module.exports = function createAdminRoutes(deps = {}) {
     };
   }
 
+  function userDisplayName(user) {
+    return String(user?.displayName || user?.name || user?.username || user?.email || ('User ' + (user?.id || ''))).trim();
+  }
+
+  function idMatches(value, targetId) {
+    if (value == null || value === '') return false;
+    return String(value) === String(targetId) || Number(value) === Number(targetId);
+  }
+
+  function addReference(refs, type, label, path, recordId) {
+    refs.push({
+      type,
+      label,
+      path,
+      record_id: recordId == null ? '' : String(recordId),
+    });
+  }
+
+  function collectExplicitUserReferences(db, targetId) {
+    const refs = [];
+    const meets = Array.isArray(db.meets) ? db.meets : [];
+    for (const meet of meets) {
+      const meetId = meet?.id || '';
+      const meetName = meet?.meetName || meet?.name || meet?.title || meetId || 'Meet';
+      [
+        ['meet_owner_user_id', 'meet ownership'],
+        ['createdByUserId', 'meet created by'],
+        ['created_by_user_id', 'meet created by'],
+        ['ownershipAssignedByUserId', 'ownership assigned by'],
+        ['archivedByUserId', 'meet archived by'],
+        ['deletedByUserId', 'meet deleted by'],
+      ].forEach(([field, label]) => {
+        if (idMatches(meet?.[field], targetId)) addReference(refs, 'meet', `${label}: ${meetName}`, `meets.${meetId}.${field}`, meetId);
+      });
+
+      const staffRows = []
+        .concat(Array.isArray(meet?.meet_staff_assignments) ? meet.meet_staff_assignments : [])
+        .concat(Array.isArray(meet?.staffAssignments) ? meet.staffAssignments : []);
+      staffRows.forEach((row, index) => {
+        ['user_id', 'userId', 'ssm_user_id', 'ssmUserId', 'staff_user_id', 'assigned_by_user_id', 'assignedByUserId'].forEach(field => {
+          if (idMatches(row?.[field], targetId)) {
+            addReference(refs, 'staff_assignment', `staff assignment on ${meetName}`, `meets.${meetId}.staff.${index}.${field}`, row?.id || meetId);
+          }
+        });
+      });
+    }
+
+    (Array.isArray(db.sessions) ? db.sessions : []).forEach((session, index) => {
+      if (idMatches(session?.userId || session?.user_id, targetId)) {
+        addReference(refs, 'session', 'active or stored session', `sessions.${index}.userId`, session?.token || index);
+      }
+    });
+
+    (Array.isArray(db.ssm_user_mirrors) ? db.ssm_user_mirrors : []).forEach((mirror, index) => {
+      if (idMatches(mirror?.ssm_user_id || mirror?.ssmUserId || mirror?.user_id || mirror?.userId, targetId)) {
+        addReference(refs, 'ssm_user_mirror', 'local SSM user mirror row', `ssm_user_mirrors.${index}`, mirror?.id || index);
+      }
+    });
+
+    (Array.isArray(db.auditLogs) ? db.auditLogs : []).forEach((row, index) => {
+      ['userId', 'user_id', 'adminUserId', 'admin_user_id', 'createdByUserId', 'deletedByUserId'].forEach(field => {
+        if (idMatches(row?.[field], targetId)) addReference(refs, 'audit', 'admin/audit record', `auditLogs.${index}.${field}`, row?.id || index);
+      });
+    });
+
+    return refs;
+  }
+
+  function collectRecursiveUserReferences(db, targetId) {
+    const refs = [];
+    const seen = new Set();
+    const userIdKey = /(^|_)(user_id|userId|createdByUserId|created_by_user_id|deletedByUserId|archivedByUserId|assignedByUserId|assigned_by_user_id|ownerUserId|owner_user_id|ssm_user_id|ssmUserId)$/;
+    const skipTop = new Set(['users']);
+
+    function walk(value, pathParts) {
+      if (!value || typeof value !== 'object') return;
+      if (seen.has(value)) return;
+      seen.add(value);
+      if (pathParts.length === 1 && skipTop.has(pathParts[0])) return;
+
+      if (Array.isArray(value)) {
+        value.forEach((item, index) => walk(item, pathParts.concat(String(index))));
+        return;
+      }
+
+      for (const [key, child] of Object.entries(value)) {
+        const childPath = pathParts.concat(key);
+        if (userIdKey.test(key) && idMatches(child, targetId)) {
+          addReference(refs, pathParts[0] || 'record', 'user reference', childPath.join('.'), value.id || '');
+        }
+        if (child && typeof child === 'object') walk(child, childPath);
+      }
+    }
+
+    walk(db, []);
+    return refs;
+  }
+
+  function dedupeReferences(refs) {
+    const seen = new Set();
+    return refs.filter(ref => {
+      const key = `${ref.type}|${ref.path}|${ref.record_id}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+
+  function userDeleteReferences(db, targetId) {
+    return dedupeReferences([
+      ...collectExplicitUserReferences(db, targetId),
+      ...collectRecursiveUserReferences(db, targetId),
+    ]);
+  }
+
+  function disableLegacyUser(db, target, actor, reason) {
+    target.active = false;
+    target.disabledAt = nowIso();
+    target.disabledByUserId = actor?.id || null;
+    target.disabledBy = userDisplayName(actor);
+    target.disabledReason = reason || 'Disabled by Super Admin.';
+    target.migratedAt = target.migratedAt || nowIso();
+    target.migratedByUserId = target.migratedByUserId || actor?.id || null;
+    target.migratedBy = target.migratedBy || userDisplayName(actor);
+    target.migrationStatus = 'disabled_legacy_login';
+    target.updatedAt = nowIso();
+    db.sessions = (db.sessions || []).filter(s => !idMatches(s.userId || s.user_id, target.id));
+    return target;
+  }
+
+  function activeSuperAdminCount(users) {
+    return (users || []).filter(u =>
+      u.active !== false &&
+      Array.isArray(u.roles) &&
+      u.roles.includes('super_admin')
+    ).length;
+  }
+
 router.get('/portal/archived-meets', requireRole('meet_director','coach','super_admin'), (req, res) => {
   const archived = archivedMeetsForUser(req.db, req.user)
     .sort((a, b) => new Date(b.archivedAt || b.updatedAt || 0) - new Date(a.archivedAt || a.updatedAt || 0));
@@ -277,6 +415,7 @@ router.get('/portal/users', requireRole('super_admin'), (req, res) => {
       teamList: TEAM_LIST,
       currentUserId: req.user?.id,
       err: req.query.err ? decodeURIComponent(String(req.query.err)) : '',
+      ok: req.query.ok ? decodeURIComponent(String(req.query.ok)) : '',
     }),
   }));
 });
@@ -319,41 +458,82 @@ router.post('/portal/users/:userId/update', requireRole('super_admin'), async (r
   res.redirect('/portal/users');
 });
 
-router.post('/admin/tools/sync-ssl-user-mirrors', requireRole('super_admin'), async (req, res) => {
-  const summary = await syncAllUserMirrors(req.db);
-  res.status(summary.failed ? 207 : 200).json(summary);
-});
-
-router.post('/portal/users/:userId/delete', requireRole('super_admin'), (req, res) => {
+async function disableUserHandler(req, res) {
   const targetId = Number(req.params.userId);
   const users = req.db.users || [];
   const target = users.find(u => Number(u.id) === targetId);
 
-  if (!target) return res.redirect('/portal/users');
+  if (!target) return res.redirect('/portal/users?err=' + encodeURIComponent('User not found.'));
+
+  if (Number(req.user?.id) === targetId) {
+    return res.redirect('/portal/users?err=' + encodeURIComponent('You cannot disable the account you are currently logged in as.'));
+  }
+
+  const targetIsSuperAdmin = Array.isArray(target.roles) && target.roles.includes('super_admin');
+  if (targetIsSuperAdmin && activeSuperAdminCount(users) <= 1) {
+    return res.redirect('/portal/users?err=' + encodeURIComponent('You cannot disable the last active Super Admin account.'));
+  }
+
+  const references = userDeleteReferences(req.db, targetId);
+  const reason = String(req.body.reason || '').trim()
+    || (references.length ? `Disabled instead of deleted because ${references.length} reference(s) exist.` : 'Disabled by Super Admin.');
+  disableLegacyUser(req.db, target, req.user, reason);
+  saveDb(req.db);
+  await syncUserMirrorBestEffort(req.db, target, 'admin disable user');
+  return res.redirect('/portal/users?ok=' + encodeURIComponent(`Disabled ${userDisplayName(target)}.`));
+}
+
+async function deleteUserHandler(req, res) {
+  const targetId = Number(req.params.userId);
+  const users = req.db.users || [];
+  const target = users.find(u => Number(u.id) === targetId);
+
+  if (!target) return res.redirect('/portal/users?err=' + encodeURIComponent('User not found.'));
 
   if (Number(req.user?.id) === targetId) {
     return res.redirect('/portal/users?err=' + encodeURIComponent('You cannot delete the account you are currently logged in as.'));
   }
 
   const targetIsSuperAdmin = Array.isArray(target.roles) && target.roles.includes('super_admin');
-  if (targetIsSuperAdmin) {
-    const superAdminCount = users.filter(u =>
-      u.active !== false &&
-      Array.isArray(u.roles) &&
-      u.roles.includes('super_admin')
-    ).length;
+  if (targetIsSuperAdmin && activeSuperAdminCount(users) <= 1) {
+    return res.redirect('/portal/users?err=' + encodeURIComponent('You cannot delete the last active Super Admin account.'));
+  }
 
-    if (superAdminCount <= 1) {
-      return res.redirect('/portal/users?err=' + encodeURIComponent('You cannot delete the last active Super Admin account.'));
-    }
+  const references = userDeleteReferences(req.db, targetId);
+  if (references.length) {
+    const reason = `Hard delete blocked: ${references.length} reference(s) exist. ` +
+      references.slice(0, 6).map(ref => ref.label || ref.path).join('; ') +
+      (references.length > 6 ? '; plus more' : '');
+    disableLegacyUser(req.db, target, req.user, reason);
+    saveDb(req.db);
+    await syncUserMirrorBestEffort(req.db, target, 'admin delete blocked; disabled user');
+    return res.redirect('/portal/users?err=' + encodeURIComponent(`${userDisplayName(target)} was disabled instead of deleted. ${reason}`));
   }
 
   req.db.users = users.filter(u => Number(u.id) !== targetId);
-  req.db.sessions = (req.db.sessions || []).filter(s => Number(s.userId) !== targetId);
+  req.db.sessions = (req.db.sessions || []).filter(s => !idMatches(s.userId || s.user_id, targetId));
   saveDb(req.db);
 
-  res.redirect('/portal/users');
+  const mirrorUser = Object.assign({}, target, {
+    active: false,
+    disabledAt: nowIso(),
+    disabledReason: 'Deleted from SSM local users by Super Admin after safety scan found no references.',
+    migrationStatus: 'deleted_legacy_login',
+  });
+  await syncUserMirrorBestEffort(req.db, mirrorUser, 'admin delete user');
+
+  return res.redirect('/portal/users?ok=' + encodeURIComponent(`Deleted ${userDisplayName(target)}. No local references were found.`));
+}
+
+router.post('/admin/tools/sync-ssl-user-mirrors', requireRole('super_admin'), async (req, res) => {
+  const summary = await syncAllUserMirrors(req.db);
+  res.status(summary.failed ? 207 : 200).json(summary);
 });
+
+router.post('/admin/users/:userId/disable', requireRole('super_admin'), disableUserHandler);
+router.post('/portal/users/:userId/disable', requireRole('super_admin'), disableUserHandler);
+router.post('/admin/users/:userId/delete', requireRole('super_admin'), deleteUserHandler);
+router.post('/portal/users/:userId/delete', requireRole('super_admin'), deleteUserHandler);
 
 // ── Rinks ─────────────────────────────────────────────────────────────────────
 
