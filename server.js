@@ -39,6 +39,7 @@ const {
 const {
   buildCostWidget,
 } = require('./services/pricingUi');
+const { skaterAvatarHtml } = require('./services/avatarDisplay');
 const {
   defaultPricingFields,
   normalizeMeetPricingFields,
@@ -1214,19 +1215,23 @@ app.get('/meet/:meetId/tv', (req, res) => {
   const info=currentRaceInfo(meet);
   const current=info.current;
   const lanes=current?laneRowsForRace(current,meet):[];
+  const tvRegMap=new Map((meet.registrations||[]).map(r=>[Number(r.id),r]));
   const recent=recentClosedRaces(meet,4);
   const lastRace=recent[0];
   const lastResults=lastRace?(lastRace.laneEntries||[]).filter(x=>x.place).sort((a,b)=>Number(a.place||999)-Number(b.place||999)).slice(0,3):[];
   const isTT=!!(current&&current.isTimeTrial);
   const ttSorted=isTT?[...(current.laneEntries||[])].sort((a,b)=>parseFloat(a.time||'999')-parseFloat(b.time||'999')):[];
 
-  const lanesHtml = lanes.filter(l=>l.skaterName).map(l=>
+  const lanesHtml = lanes.filter(l=>l.skaterName).map(l=>{
+    const reg=tvRegMap.get(Number(l.registrationId));
+    return (
     '<div class="tv-lane">' +
     '<div class="tv-lane-num">'+l.lane+'</div>' +
     '<div class="tv-helmet">'+(l.helmetNumber?'#'+esc(l.helmetNumber):'')+'</div>' +
+    skaterAvatarHtml(l, reg, 'small') +
     '<div style="flex:1"><div class="tv-skater-name">'+esc(l.skaterName)+'</div><div class="tv-team">'+esc(l.team||'')+'</div></div>' +
-    '</div>'
-  ).join('') || '<div style="opacity:.4;font-size:24px;margin-top:20px">No skaters entered yet</div>';
+    '</div>');
+  }).join('') || '<div style="opacity:.4;font-size:24px;margin-top:20px">No skaters entered yet</div>';
 
   const ttTop3Html = ttSorted.slice(0,3).map((e,i)=>
     '<div class="tv-podium-row" style="padding:10px 14px">' +
@@ -1538,7 +1543,7 @@ app.get('/meet/:meetId/live', (req, res) => {
           <h2>${esc(current.groupLabel)} — ${esc(cap(current.division))} — ${esc(current.distanceLabel)}</h2>
           <table class="table">
             <thead><tr><th>Lane</th><th>Helmet</th><th>Skater</th><th>Team</th><th>Result</th><th>Status</th></tr></thead>
-            <tbody>${lanes.map(l=>{const reg=regMap.get(Number(l.registrationId));return`<tr><td>${l.lane}</td><td>${l.helmetNumber?'#'+esc(l.helmetNumber):''}</td><td><strong>${esc(l.skaterName)}</strong>${sponsorLineHtml(reg?.sponsor||'')}</td><td>${esc(l.team)}</td><td>${esc(current.resultsMode==='times'?l.time:l.place)}</td><td>${esc(l.status)}</td></tr>`;}).join('')}</tbody>
+            <tbody>${lanes.map(l=>{const reg=regMap.get(Number(l.registrationId));return`<tr><td>${l.lane}</td><td>${l.helmetNumber?'#'+esc(l.helmetNumber):''}</td><td><div style="display:flex;align-items:center;gap:10px">${skaterAvatarHtml(l, reg, 'small')}<div><strong>${esc(l.skaterName)}</strong>${sponsorLineHtml(reg?.sponsor||'')}</div></div></td><td>${esc(l.team)}</td><td>${esc(current.resultsMode==='times'?l.time:l.place)}</td><td>${esc(l.status)}</td></tr>`;}).join('')}</tbody>
           </table>`:
         `<div class="muted">No race selected.</div>`}
       </div>

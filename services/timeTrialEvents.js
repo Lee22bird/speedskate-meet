@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const { nowIso } = require('../utils/date');
 const { ageForReg } = require('./meetHelpers');
+const { avatarUrlFromSources } = require('./avatarDisplay');
 
 function genderBucket(value) {
   const v = String(value || '').trim().toLowerCase();
@@ -44,6 +45,9 @@ function queueFromRegistrations(meet, event) {
         age,
         ageGroup: String(reg.divisionGroupLabel || reg.ageGroup || '').trim(),
         helmetNumber: String(reg.helmetNumber || '').trim(),
+        avatar_url: avatarUrlFromSources(previous, reg),
+        profile_photo_url: String(previous.profile_photo_url || reg.profile_photo_url || '').trim(),
+        photo_url: String(previous.photo_url || reg.photo_url || '').trim(),
         time: String(previous.time || '').trim(),
         recordedAt: previous.recordedAt || '',
         recordedByUserId: previous.recordedByUserId || '',

@@ -9,6 +9,7 @@ const {
   timeTrialStats,
   saveTimeTrialTime,
 } = require('../services/timeTrialEvents');
+const { skaterAvatarHtml } = require('../services/avatarDisplay');
 
 function leaderboardColumn(title, rows) {
   return `
@@ -16,7 +17,7 @@ function leaderboardColumn(title, rows) {
       <h2 style="margin-top:0">${esc(title)}</h2>
       <table class="table">
         <tbody>${rows.map(row => `
-          <tr><td style="width:36px">${row.rank}</td><td><strong>${esc(row.skater)}</strong><div class="muted" style="font-size:12px">${esc(row.team || '')}</div></td><td>${esc(row.time)}</td></tr>
+          <tr><td style="width:36px">${row.rank}</td><td><div style="display:flex;align-items:center;gap:10px">${skaterAvatarHtml(row, {}, 'small')}<div><strong>${esc(row.skater)}</strong><div class="muted" style="font-size:12px">${esc(row.team || '')}</div></div></div></td><td>${esc(row.time)}</td></tr>
         `).join('') || '<tr><td class="muted">No times yet.</td></tr>'}</tbody>
       </table>
     </div>`;
@@ -28,7 +29,7 @@ function queueHtml(event) {
     const done = String(row.time || '').trim();
     const marker = done ? '✓' : (index === currentIndex ? '▶' : '○');
     const cls = done ? 'good' : (index === currentIndex ? 'bold' : 'muted');
-    return `<div class="${cls}" style="padding:6px 0;border-bottom:1px solid rgba(0,0,0,.06)">${marker} ${esc(row.skater)}${done ? ` <span class="muted">(${esc(row.time)})</span>` : ''}</div>`;
+    return `<div class="${cls}" style="padding:6px 0;border-bottom:1px solid rgba(0,0,0,.06);display:flex;align-items:center;gap:10px"><span style="width:18px">${marker}</span>${skaterAvatarHtml(row, {}, 'small')}<span>${esc(row.skater)}${done ? ` <span class="muted">(${esc(row.time)})</span>` : ''}</span></div>`;
   }).join('');
 }
 
@@ -57,8 +58,13 @@ module.exports = function createTimeTrialRoutes(deps = {}) {
         <div class="card">
           <h2 style="margin-top:0">Current Skater</h2>
           ${current ? `
-            <div style="font-size:34px;font-weight:900;color:var(--navy);line-height:1.05">${esc(current.skater)}</div>
-            <div class="muted" style="margin:8px 0 14px">Team: ${esc(current.team || '')}</div>
+            <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px">
+              ${skaterAvatarHtml(current, {}, '')}
+              <div>
+                <div style="font-size:34px;font-weight:900;color:var(--navy);line-height:1.05">${esc(current.skater)}</div>
+                <div class="muted" style="margin-top:6px">Team: ${esc(current.team || '')}</div>
+              </div>
+            </div>
             ${canManage ? `
               <form method="POST" action="/portal/meet/${esc(meet.id)}/time-trials/${esc(event.id)}/time" class="stack">
                 <input type="hidden" name="registrationId" value="${esc(current.registrationId)}" />

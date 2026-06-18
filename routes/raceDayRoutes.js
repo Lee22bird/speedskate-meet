@@ -14,6 +14,7 @@ const {
   laneRowsForRace, recentClosedRaces, raceDisplayStage,
 } = require('../services/raceDay');
 const { fireRaceAlerts, fireResultAlerts } = require('../services/raceAlerts');
+const { skaterAvatarHtml } = require('../services/avatarDisplay');
 const {
   STANDARD_POINTS, computeMeetStandings, computeQuadStandings, computeOpenResults,
 } = require('../services/standings');
@@ -348,7 +349,7 @@ function renderCorrectionRaceForm(meet, race, regMap, error = '', ok = '') {
             <tbody>${lanes.map(l => { const reg = regMap.get(Number(l.registrationId)); return `<tr>
               <td>${esc(l.lane)}</td>
               <td>${l.helmetNumber ? '#' + esc(l.helmetNumber) : ''}</td>
-              <td><input name="skaterName_${esc(l.lane)}" value="${esc(l.skaterName)}" />${reg?.sponsor ? `<div class="sponsor-line">Sponsor: ${esc(reg.sponsor)}</div>` : ''}</td>
+              <td><div style="display:flex;align-items:center;gap:10px">${skaterAvatarHtml(l, reg, 'small')}<div style="flex:1"><input name="skaterName_${esc(l.lane)}" value="${esc(l.skaterName)}" />${reg?.sponsor ? `<div class="sponsor-line">Sponsor: ${esc(reg.sponsor)}</div>` : ''}</div></div></td>
               <td><input name="team_${esc(l.lane)}" value="${esc(l.team)}" /></td>
               <td><input name="place_${esc(l.lane)}" value="${esc(l.place)}" /></td>
               <td><input name="time_${esc(l.lane)}" value="${esc(l.time)}" /></td>
@@ -590,7 +591,7 @@ router.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','j
             </div>
             <table class="table">
               <thead><tr><th>Lane</th><th>Helmet</th><th>Skater</th><th>Team</th><th>Result</th><th>Status</th></tr></thead>
-              <tbody>${currentLanes.map(l=>{const reg=regMap.get(Number(l.registrationId));return`<tr><td>${l.lane}</td><td>${l.helmetNumber?'#'+esc(l.helmetNumber):''}</td><td><strong>${esc(l.skaterName||'')}</strong>${sponsorLineHtml(reg?.sponsor||'')}</td><td>${esc(l.team||'')}</td><td>${esc(current.resultsMode==='times'?l.time:l.place)}</td><td>${esc(l.status||'')}</td></tr>`;}).join('')}</tbody>
+              <tbody>${currentLanes.map(l=>{const reg=regMap.get(Number(l.registrationId));return`<tr><td>${l.lane}</td><td>${l.helmetNumber?'#'+esc(l.helmetNumber):''}</td><td><div style="display:flex;align-items:center;gap:10px">${skaterAvatarHtml(l, reg, 'small')}<div><strong>${esc(l.skaterName||'')}</strong>${sponsorLineHtml(reg?.sponsor||'')}</div></div></td><td>${esc(l.team||'')}</td><td>${esc(current.resultsMode==='times'?l.time:l.place)}</td><td>${esc(l.status||'')}</td></tr>`;}).join('')}</tbody>
             </table>`:
           `<div class="muted">No race selected yet.</div>`}
         </div>
@@ -732,7 +733,7 @@ router.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','j
                 <thead><tr><th>Lane</th><th>Helmet</th><th>Skater</th><th>Team</th><th>Place</th><th>Time</th><th>Status</th></tr></thead>
                 <tbody>${currentLanes.map(l=>{const reg=regMap.get(Number(l.registrationId));return`<tr>
                   <td>${l.lane}</td><td>${l.helmetNumber?'#'+esc(l.helmetNumber):''}</td>
-                  <td><input name="skaterName_${l.lane}" value="${esc(l.skaterName)}" />${reg?.sponsor?`<div class="sponsor-line">Sponsor: ${esc(reg.sponsor)}</div>`:''}</td>
+                  <td><div style="display:flex;align-items:center;gap:10px">${skaterAvatarHtml(l, reg, 'small')}<div style="flex:1"><input name="skaterName_${l.lane}" value="${esc(l.skaterName)}" />${reg?.sponsor?`<div class="sponsor-line">Sponsor: ${esc(reg.sponsor)}</div>`:''}</div></div></td>
                   <td><input name="team_${l.lane}"       value="${esc(l.team)}"       /></td>
                   <td><input name="place_${l.lane}"      value="${esc(l.place)}"      /></td>
                   <td><input name="time_${l.lane}"       value="${esc(l.time)}"       /></td>
