@@ -22,8 +22,11 @@ function timeTrialEventTitle(event) {
 
 function normalizeTimeTrialSettings(meet) {
   if (!meet) return null;
+  const existingEnabledEvent = Array.isArray(meet.timeTrialEvents)
+    ? meet.timeTrialEvents.some(event => event && event.type === 'time_trial_event' && event.enabled !== false)
+    : false;
   meet.timeTrialEvent = meet.timeTrialEvent || {};
-  meet.timeTrialEvent.enabled = !!meet.timeTrialEvent.enabled;
+  meet.timeTrialEvent.enabled = !!meet.timeTrialEvent.enabled || !!meet.timeTrialsEnabled || existingEnabledEvent;
   meet.timeTrialEvent.distance = String(meet.timeTrialEvent.distance || '100m').trim() || '100m';
   meet.timeTrialEvent.runOrder = 'youngest_oldest';
   meet.timeTrialEvent.countsForOverall = !!meet.timeTrialEvent.countsForOverall;
@@ -31,9 +34,29 @@ function normalizeTimeTrialSettings(meet) {
   return meet.timeTrialEvent;
 }
 
+function timeTrialEventAvailable(meet) {
+  const settings = normalizeTimeTrialSettings(meet);
+  return !!settings?.enabled;
+}
+
+function registrationSelectedForTimeTrial(reg, event) {
+  if (!reg) return false;
+  const opts = reg.options || {};
+  const eventId = String(event?.id || '').trim();
+  const ids = []
+    .concat(Array.isArray(reg.timeTrialEventIds) ? reg.timeTrialEventIds : [])
+    .concat(Array.isArray(opts.timeTrialEventIds) ? opts.timeTrialEventIds : [])
+    .map(value => String(value || '').trim())
+    .filter(Boolean);
+
+  if (eventId && ids.includes(eventId)) return true;
+  return !!(reg.timeTrials || opts.timeTrials);
+}
+
 function queueFromRegistrations(meet, event) {
   const existing = new Map((event?.participants || []).map(row => [String(row.registrationId || ''), row]));
   return (meet.registrations || [])
+    .filter(reg => registrationSelectedForTimeTrial(reg, event))
     .map(reg => {
       const previous = existing.get(String(reg.id || '')) || {};
       const age = ageForReg(reg, meet);
@@ -136,6 +159,8 @@ module.exports = {
   ensureTimeTrialEvent,
   timeTrialEventForMeet,
   timeTrialEventTitle,
+  timeTrialEventAvailable,
+  registrationSelectedForTimeTrial,
   timeTrialResults,
   timeTrialStats,
   saveTimeTrialTime,

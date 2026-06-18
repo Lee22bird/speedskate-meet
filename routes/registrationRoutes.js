@@ -27,6 +27,65 @@ const {
 } = require('../services/ttHelpers');
 const { ensureCurrentRace } = require('../services/raceDay');
 const { renderMeetStaffList } = require('../services/staffAssignments');
+const {
+  ensureTimeTrialEvent,
+  timeTrialEventAvailable,
+  timeTrialEventTitle,
+  registrationSelectedForTimeTrial,
+} = require('../services/timeTrialEvents');
+
+function timeTrialLabelForMeet(meet) {
+  const event = ensureTimeTrialEvent(meet);
+  return event ? timeTrialEventTitle(event) : 'Time Trials';
+}
+
+function registrationTimeTrialSelection(meet, body = {}) {
+  if (!timeTrialEventAvailable(meet) || !body.timeTrials) {
+    return { selected: false, eventIds: [] };
+  }
+  const event = ensureTimeTrialEvent(meet);
+  return event ? { selected: true, eventIds: [event.id] } : { selected: false, eventIds: [] };
+}
+
+function registrationOptionLabels(meet, opts = {}) {
+  const labels = [];
+  if (opts.challengeUp) labels.push('Challenge Up');
+  if (opts.novice) labels.push('Novice');
+  if (opts.elite) labels.push('Elite');
+  if (opts.open) labels.push('Open');
+  if (opts.quad) labels.push('Quad');
+  if (opts.additional || opts.skateability) labels.push('Additional Races');
+  if (opts.timeTrials) labels.push(timeTrialLabelForMeet(meet));
+  if (opts.relay2Person) labels.push('2 Person Relay');
+  if (opts.relay3Person) labels.push('3 Person Relay');
+  if (opts.relay4Person) labels.push('4 Person Relay');
+  return labels;
+}
+
+function registrationOptionsFromBody(meet, body = {}) {
+  const tt = registrationTimeTrialSelection(meet, body);
+  return {
+    challengeUp: !!body.challengeUp,
+    novice: !!body.novice,
+    elite: !!body.elite,
+    open: !!body.open,
+    quad: !!body.quad,
+    additional: !!(body.additional || body.skateability),
+    additionalGroupId: String(body.additionalGroupId || body.skateabilityGroupId || ''),
+    skateability: !!(body.additional || body.skateability),
+    skateabilityGroupId: String(body.additionalGroupId || body.skateabilityGroupId || ''),
+    timeTrials: tt.selected,
+    timeTrialEventIds: tt.eventIds,
+    relay2Person: !!body.relay2Person,
+    relay3Person: !!body.relay3Person,
+    relay4Person: !!body.relay4Person,
+    relays: !!(body.relay2Person || body.relay3Person || body.relay4Person),
+  };
+}
+
+function syncTimeTrialQueueIfEnabled(meet) {
+  if (timeTrialEventAvailable(meet)) ensureTimeTrialEvent(meet);
+}
 
 module.exports = function createRegistrationRoutes(deps = {}) {
   const router = express.Router();
@@ -40,6 +99,8 @@ router.get('/meet/:meetId/register', (req, res) => {
   const costWidget=buildRegistrationPricingPreview(meet);
   const today = new Date().toISOString().split('T')[0];
   const staffList = renderMeetStaffList(meet, { compact: true });
+  const timeTrialAvailable = timeTrialEventAvailable(meet);
+  const timeTrialLabel = timeTrialAvailable ? timeTrialLabelForMeet(meet) : '';
   res.send(pageShell({title:'Register',user:data?.user||null, bodyHtml:`
     <div class="page-header"><h1>Register</h1><div class="sub">${esc(meet.meetName)}${meet.date?` • ${esc(meet.date)}`:''}</div></div>
     <div class="card">
@@ -70,7 +131,7 @@ router.get('/meet/:meetId/register', (req, res) => {
             <div class="toggle-row"><div><div class="toggle-row-label">Elite</div></div>${toggleSwitch('elite',false)}</div>
             <div class="toggle-row"><div><div class="toggle-row-label">Open</div></div>${toggleSwitch('open',false)}</div>
             ${(meet.quadGroups||[]).some(g=>g.enabled)?`<div class="toggle-row"><div><div class="toggle-row-label">Quad</div></div>${toggleSwitch('quad',false)}</div>`:''}
-            ${meet.timeTrialsEnabled?`<div class="toggle-row"><div><div class="toggle-row-label">Time Trials</div></div>${toggleSwitch('timeTrials',false)}</div>`:''}
+            ${timeTrialAvailable?`<div class="toggle-row"><div><div class="toggle-row-label">${esc(timeTrialLabel)}</div></div>${toggleSwitch('timeTrials',false)}</div>`:''}
             ${meet.relayEnabled?`<div class="toggle-row"><div><div class="toggle-row-label">2 Person Relay</div></div>${toggleSwitch('relay2Person',false)}</div><div class="toggle-row"><div><div class="toggle-row-label">3 Person Relay</div></div>${toggleSwitch('relay3Person',false)}</div><div class="toggle-row"><div><div class="toggle-row-label">4 Person Relay</div></div>${toggleSwitch('relay4Person',false)}</div>`:''}
             ${(meet.additionalGroups||meet.additionalRaceGroups||meet.additionalRaces||meet.skateabilityGroups||[]).length?`
               <div class="toggle-row"><div><div class="toggle-row-label">Additional Races</div><div class="toggle-row-desc">Extra race division — select your group below if enabled</div></div>${toggleSwitch('additional',false)}</div>
@@ -106,9 +167,9 @@ router.post('/meet/:meetId/register', (req, res) => {
   const finalGroup=challengeAdjustedGroup(meet,baseGroup,!!req.body.challengeUp);
   const meetNumber=(meet.registrations||[]).reduce((max,r)=>Math.max(max,Number(r.meetNumber)||0),0)+1;
   const regEmail=String(req.body.email||'').trim();
-  const regOpts={challengeUp:!!req.body.challengeUp,novice:!!req.body.novice,elite:!!req.body.elite,open:!!req.body.open,quad:!!req.body.quad,additional:!!(req.body.additional||req.body.skateability),additionalGroupId:String(req.body.additionalGroupId||req.body.skateabilityGroupId||''),skateability:!!(req.body.additional||req.body.skateability),skateabilityGroupId:String(req.body.additionalGroupId||req.body.skateabilityGroupId||''),timeTrials:!!req.body.timeTrials,relay2Person:!!req.body.relay2Person,relay3Person:!!req.body.relay3Person,relay4Person:!!req.body.relay4Person,relays:!!(req.body.relay2Person||req.body.relay3Person||req.body.relay4Person)};
+  const regOpts=registrationOptionsFromBody(meet, req.body);
   const totalCost=calcRegistrationCost(meet,regOpts);
-  meet.registrations.push({
+  const reg = {
     id:nextId(meet.registrations),createdAt:nowIso(),
     name:String(req.body.name||'').trim(),birthdate,age:compAge,gender,email:regEmail,
     team:String(req.body.team||'Midwest Racing').trim()||'Midwest Racing',
@@ -117,12 +178,17 @@ router.post('/meet/:meetId/register', (req, res) => {
     originalDivisionGroupId:baseGroup?.id||'',originalDivisionGroupLabel:baseGroup?.label||'',
     meetNumber,helmetNumber:nextHelmetNumber(meet),
     paid:false,checkedIn:false,totalCost,
+    timeTrials:regOpts.timeTrials,
+    timeTrialEventIds:regOpts.timeTrialEventIds,
     options:regOpts,
-  });
+  };
+  meet.registrations.push(reg);
+  syncTimeTrialQueueIfEnabled(meet);
   generateAdditionalRacesForMeet(meet); rebuildRaceAssignmentsSafe(meet); ensureCurrentRace(meet); saveDb(db);
   // Send confirmation email to registrant
   if(regEmail) {
     const rink=db.rinks.find(r=>Number(r.id)===Number(meet.rinkId));
+    const selectedEvents = registrationOptionLabels(meet, regOpts).join(', ') || 'None selected';
     const html=emailHtmlWrap(`
       <h2 style="color:#0F1F3D">Registration Confirmed! 🏁</h2>
       <p>Hi ${esc(String(req.body.name||'').trim())},</p>
@@ -131,12 +197,13 @@ router.post('/meet/:meetId/register', (req, res) => {
         <tr><td style="padding:8px;border-bottom:1px solid #e2e8f0;color:#64748b">Date</td><td style="padding:8px;border-bottom:1px solid #e2e8f0"><strong>${esc(meet.date||'TBD')}</strong></td></tr>
         <tr><td style="padding:8px;border-bottom:1px solid #e2e8f0;color:#64748b">Venue</td><td style="padding:8px;border-bottom:1px solid #e2e8f0"><strong>${esc(meetRinkLabel(db,meet)||'TBD')}</strong></td></tr>
         <tr><td style="padding:8px;border-bottom:1px solid #e2e8f0;color:#64748b">Division</td><td style="padding:8px;border-bottom:1px solid #e2e8f0"><strong>${esc(finalGroup?.label||'TBD')}</strong></td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #e2e8f0;color:#64748b">Selected Events</td><td style="padding:8px;border-bottom:1px solid #e2e8f0"><strong>${esc(selectedEvents)}</strong></td></tr>
         ${meet.startTime?'<tr><td style="padding:8px;color:#64748b">Start Time</td><td style="padding:8px"><strong>'+esc(meet.startTime)+'</strong></td></tr>':''}
       </table>
       <p>Follow live results on race day at <a href="https://speedskatemeet.com/meet/${meet.id}/live" style="color:#F97316">speedskatemeet.com</a></p>
       <p>Sign up for text alerts at <a href="https://speedskatemeet.com/meet/${meet.id}/alerts" style="color:#F97316">speedskatemeet.com/meet/${meet.id}/alerts</a></p>
     `);
-    sendEmail(regEmail, `Registration Confirmed — ${meet.meetName}`, html, `You're registered for ${meet.meetName} on ${meet.date||'TBD'}. Follow live at speedskatemeet.com`);
+    sendEmail(regEmail, `Registration Confirmed — ${meet.meetName}`, html, `You're registered for ${meet.meetName} on ${meet.date||'TBD'}. Selected events: ${selectedEvents}. Follow live at speedskatemeet.com`);
   }
   // Notify meet director
   const director=db.users.find(u=>Number(u.id)===Number(meet.meet_owner_user_id || meet.createdByUserId));
@@ -156,6 +223,9 @@ function registrationForm(meet,reg,action,title) {
   const gender=normalizeSkaterGender(reg.gender)||'male';
   const isAdd = String(title || '').toLowerCase().includes('add');
   const today = new Date().toISOString().split('T')[0];
+  const timeTrialAvailable = timeTrialEventAvailable(meet);
+  const timeTrialLabel = timeTrialAvailable ? timeTrialLabelForMeet(meet) : '';
+  const timeTrialSelected = timeTrialAvailable && registrationSelectedForTimeTrial(reg, ensureTimeTrialEvent(meet));
   return `
     <div style="max-width:760px">
       <div class="page-header"><h1>${esc(title)}</h1><div class="sub">${isAdd ? 'Manual late-entry / race-day add' : 'Update racer details and event selections'}</div></div>
@@ -197,7 +267,7 @@ function registrationForm(meet,reg,action,title) {
             <div class="toggle-row"><div><div class="toggle-row-label">Elite</div></div>${toggleSwitch('elite',!!reg.options?.elite)}</div>
             <div class="toggle-row"><div><div class="toggle-row-label">Open</div></div>${toggleSwitch('open',!!reg.options?.open)}</div>
             ${(meet.quadGroups||[]).some(g=>g.enabled)?`<div class="toggle-row"><div><div class="toggle-row-label">Quad</div></div>${toggleSwitch('quad',!!reg.options?.quad)}</div>`:''}
-            <div class="toggle-row"><div><div class="toggle-row-label">Time Trials</div></div>${toggleSwitch('timeTrials',!!reg.options?.timeTrials)}</div>
+            ${timeTrialAvailable?`<div class="toggle-row"><div><div class="toggle-row-label">${esc(timeTrialLabel)}</div></div>${toggleSwitch('timeTrials',timeTrialSelected)}</div>`:''}
             ${meet.relayEnabled?`<div class="toggle-row"><div><div class="toggle-row-label">2 Person Relay</div></div>${toggleSwitch('relay2Person',!!reg.options?.relay2Person)}</div><div class="toggle-row"><div><div class="toggle-row-label">3 Person Relay</div></div>${toggleSwitch('relay3Person',!!reg.options?.relay3Person)}</div><div class="toggle-row"><div><div class="toggle-row-label">4 Person Relay</div></div>${toggleSwitch('relay4Person',!!reg.options?.relay4Person)}</div>`:''}
             ${(meet.additionalGroups||meet.additionalRaceGroups||meet.additionalRaces||meet.skateabilityGroups||[]).length?`
               <div class="toggle-row"><div><div class="toggle-row-label">Additional Races</div><div class="toggle-row-desc">Extra race division</div></div>${toggleSwitch('additional',!!(reg.options?.additional||reg.options?.skateability))}</div>
@@ -482,7 +552,7 @@ router.post('/portal/meet/:meetId/registered/add', requireRole('meet_director'),
   const meetNumber=(meet.registrations||[]).reduce((max,r)=>Math.max(max,Number(r.meetNumber)||0),0)+1;
   const requestedHelmet=Number(req.body.helmetNumber || 0);
   const helmetNumber=Number.isFinite(requestedHelmet)&&requestedHelmet>0 ? requestedHelmet : nextHelmetNumber(meet);
-  const regOpts={challengeUp:!!req.body.challengeUp,novice:!!req.body.novice,elite:!!req.body.elite,open:!!req.body.open,quad:!!req.body.quad,additional:!!(req.body.additional||req.body.skateability),additionalGroupId:String(req.body.additionalGroupId||req.body.skateabilityGroupId||''),skateability:!!(req.body.additional||req.body.skateability),skateabilityGroupId:String(req.body.additionalGroupId||req.body.skateabilityGroupId||''),timeTrials:!!req.body.timeTrials,relay2Person:!!req.body.relay2Person,relay3Person:!!req.body.relay3Person,relay4Person:!!req.body.relay4Person,relays:!!(req.body.relay2Person||req.body.relay3Person||req.body.relay4Person)};
+  const regOpts=registrationOptionsFromBody(meet, req.body);
   const totalCost=calcRegistrationCost(meet,regOpts);
   const reg={
     id:nextId(meet.registrations),
@@ -503,11 +573,14 @@ router.post('/portal/meet/:meetId/registered/add', requireRole('meet_director'),
     paid:!!req.body.paid,
     checkedIn:!!req.body.checkedIn,
     totalCost,
+    timeTrials:regOpts.timeTrials,
+    timeTrialEventIds:regOpts.timeTrialEventIds,
     options:regOpts,
     addedByStaff:true,
     addedAt:nowIso(),
   };
   meet.registrations.push(reg);
+  syncTimeTrialQueueIfEnabled(meet);
   generateAdditionalRacesForMeet(meet);
   rebuildRaceAssignmentsSafe(meet);
   ensureCurrentRace(meet);
@@ -533,9 +606,10 @@ router.post('/portal/meet/:meetId/registered/:regId/edit', requireRole('meet_dir
   const compAge=usarsAge(birthdate,meet.date)||Number(reg.age||0);
   const baseGroup=findAgeGroup(meet.groups,compAge,gender);
   const finalGroup=challengeAdjustedGroup(meet,baseGroup,!!req.body.challengeUp);
-  const regOpts={challengeUp:!!req.body.challengeUp,novice:!!req.body.novice,elite:!!req.body.elite,open:!!req.body.open,quad:!!req.body.quad,additional:!!(req.body.additional||req.body.skateability),additionalGroupId:String(req.body.additionalGroupId||req.body.skateabilityGroupId||''),skateability:!!(req.body.additional||req.body.skateability),skateabilityGroupId:String(req.body.additionalGroupId||req.body.skateabilityGroupId||''),timeTrials:!!req.body.timeTrials,relay2Person:!!req.body.relay2Person,relay3Person:!!req.body.relay3Person,relay4Person:!!req.body.relay4Person,relays:!!(req.body.relay2Person||req.body.relay3Person||req.body.relay4Person)};
+  const regOpts=registrationOptionsFromBody(meet, req.body);
   const requestedHelmet=Number(req.body.helmetNumber || 0);
-  Object.assign(reg,{name:String(req.body.name||'').trim(),birthdate,age:compAge,gender,email:String(req.body.email||'').trim(),team:String(req.body.team||'Midwest Racing').trim()||'Midwest Racing',sponsor:String(req.body.sponsor||'').trim(),originalDivisionGroupId:baseGroup?.id||'',originalDivisionGroupLabel:baseGroup?.label||'',divisionGroupId:finalGroup?.id||'',divisionGroupLabel:finalGroup?.label||'Unassigned',helmetNumber:Number.isFinite(requestedHelmet)&&requestedHelmet>0 ? requestedHelmet : reg.helmetNumber,paid:!!req.body.paid,checkedIn:!!req.body.checkedIn,options:regOpts,totalCost:calcRegistrationCost(meet,regOpts)});
+  Object.assign(reg,{name:String(req.body.name||'').trim(),birthdate,age:compAge,gender,email:String(req.body.email||'').trim(),team:String(req.body.team||'Midwest Racing').trim()||'Midwest Racing',sponsor:String(req.body.sponsor||'').trim(),originalDivisionGroupId:baseGroup?.id||'',originalDivisionGroupLabel:baseGroup?.label||'',divisionGroupId:finalGroup?.id||'',divisionGroupLabel:finalGroup?.label||'Unassigned',helmetNumber:Number.isFinite(requestedHelmet)&&requestedHelmet>0 ? requestedHelmet : reg.helmetNumber,paid:!!req.body.paid,checkedIn:!!req.body.checkedIn,timeTrials:regOpts.timeTrials,timeTrialEventIds:regOpts.timeTrialEventIds,options:regOpts,totalCost:calcRegistrationCost(meet,regOpts)});
+  syncTimeTrialQueueIfEnabled(meet);
   generateAdditionalRacesForMeet(meet); rebuildRaceAssignmentsSafe(meet); saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/registered`);
 });
 
@@ -561,6 +635,7 @@ router.post('/portal/meet/:meetId/registered/:regId/delete', requireRole('meet_d
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
   meet.registrations=(meet.registrations||[]).filter(r=>Number(r.id)!==Number(req.params.regId));
+  syncTimeTrialQueueIfEnabled(meet);
   rebuildRaceAssignmentsSafe(meet); saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/registered`);
 });
 
