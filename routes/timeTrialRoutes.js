@@ -1,6 +1,6 @@
 const express = require('express');
 const { esc } = require('../utils/html');
-const { canEditMeet } = require('../utils/auth');
+const { canEditMeet, hasRole } = require('../utils/auth');
 const { getMeetOr404 } = require('../services/meetHelpers');
 const {
   timeTrialEventForMeet,
@@ -37,12 +37,12 @@ module.exports = function createTimeTrialRoutes(deps = {}) {
   const router = express.Router();
   const { requireRole, pageShell, saveDb } = deps;
 
-  router.get('/portal/meet/:meetId/time-trials/:eventId', requireRole('meet_director','judge','coach','super_admin'), (req, res) => {
+  router.get('/portal/meet/:meetId/time-trials/:eventId', requireRole('meet_director','judge','announcer','coach','super_admin'), (req, res) => {
     const meet = getMeetOr404(req.db, req.params.meetId);
     if (!meet) return res.redirect('/portal');
     const event = timeTrialEventForMeet(meet, req.params.eventId);
     if (!event) return res.redirect(`/portal/meet/${encodeURIComponent(meet.id)}/blocks`);
-    const canManage = canEditMeet(req.user, meet);
+    const canManage = canEditMeet(req.user, meet) || hasRole(req.user, 'judge');
     const stats = timeTrialStats(event);
     const current = event.participants[Number(event.currentIndex || 0)] || event.participants.find(row => !String(row.time || '').trim()) || event.participants[0] || null;
     const results = timeTrialResults(event);
@@ -91,9 +91,9 @@ module.exports = function createTimeTrialRoutes(deps = {}) {
     ` }));
   });
 
-  router.post('/portal/meet/:meetId/time-trials/:eventId/time', requireRole('meet_director','super_admin'), (req, res) => {
+  router.post('/portal/meet/:meetId/time-trials/:eventId/time', requireRole('meet_director','judge','super_admin'), (req, res) => {
     const meet = getMeetOr404(req.db, req.params.meetId);
-    if (!meet || !canEditMeet(req.user, meet)) return res.redirect('/portal');
+    if (!meet || (!canEditMeet(req.user, meet) && !hasRole(req.user, 'judge'))) return res.redirect('/portal');
     const event = timeTrialEventForMeet(meet, req.params.eventId);
     if (!event) return res.redirect(`/portal/meet/${encodeURIComponent(meet.id)}/blocks`);
     try {
@@ -105,9 +105,9 @@ module.exports = function createTimeTrialRoutes(deps = {}) {
     return res.redirect(`/portal/meet/${encodeURIComponent(meet.id)}/time-trials/${encodeURIComponent(event.id)}`);
   });
 
-  router.post('/portal/meet/:meetId/time-trials/:eventId/step', requireRole('meet_director','super_admin'), (req, res) => {
+  router.post('/portal/meet/:meetId/time-trials/:eventId/step', requireRole('meet_director','judge','super_admin'), (req, res) => {
     const meet = getMeetOr404(req.db, req.params.meetId);
-    if (!meet || !canEditMeet(req.user, meet)) return res.redirect('/portal');
+    if (!meet || (!canEditMeet(req.user, meet) && !hasRole(req.user, 'judge'))) return res.redirect('/portal');
     const event = timeTrialEventForMeet(meet, req.params.eventId);
     if (event) {
       const dir = Number(req.body.direction || 0);

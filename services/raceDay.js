@@ -1,13 +1,40 @@
+const { ensureTimeTrialEvent, timeTrialEventTitle } = require('./timeTrialEvents');
+
 function orderedRaces(meet) {
+  const timeTrialEvent = ensureTimeTrialEvent(meet);
+  const timeTrialById = new Map((meet.timeTrialEvents || []).filter(event => event.enabled).map(event => [String(event.id), event]));
   const raceById = new Map((meet.races || []).map(r => [r.id, r]));
   const out = [];
 
   for (const block of meet.blocks || []) {
+    for (const eventId of block.timeTrialEventIds || []) {
+      const event = timeTrialById.get(String(eventId));
+      if (event) {
+        out.push({
+          id: event.id,
+          type: 'time_trial',
+          groupLabel: timeTrialEventTitle(event),
+          division: 'time_trial',
+          distanceLabel: event.distance || '100m',
+          stage: 'event',
+          status: event.status || 'open',
+          startType: 'individual',
+          laneEntries: [],
+          timeTrialEvent: event,
+          blockId: block.id,
+          blockName: block.name,
+          blockDay: block.day,
+          blockType: block.type || 'race',
+          blockNotes: block.notes || '',
+        });
+      }
+    }
     for (const raceId of block.raceIds || []) {
       const race = raceById.get(raceId);
       if (race) {
         out.push({
           ...race,
+          type: 'race',
           blockId: block.id,
           blockName: block.name,
           blockDay: block.day,
@@ -24,6 +51,7 @@ function orderedRaces(meet) {
     if (!assigned.has(race.id)) {
       out.push({
         ...race,
+        type: 'race',
         blockId: '',
         blockName: 'Unassigned',
         blockDay: '',
@@ -31,6 +59,26 @@ function orderedRaces(meet) {
         blockNotes: '',
       });
     }
+  }
+
+  if (timeTrialEvent && !out.some(item => String(item.id) === String(timeTrialEvent.id))) {
+    out.push({
+      id: timeTrialEvent.id,
+      type: 'time_trial',
+      groupLabel: timeTrialEventTitle(timeTrialEvent),
+      division: 'time_trial',
+      distanceLabel: timeTrialEvent.distance || '100m',
+      stage: 'event',
+      status: timeTrialEvent.status || 'open',
+      startType: 'individual',
+      laneEntries: [],
+      timeTrialEvent,
+      blockId: '',
+      blockName: 'Unassigned',
+      blockDay: '',
+      blockType: 'race',
+      blockNotes: '',
+    });
   }
 
   return out;
@@ -105,6 +153,7 @@ function recentClosedRaces(meet, count = 5) {
 }
 
 function raceDisplayStage(race) {
+  if (race?.type === 'time_trial') return 'Event';
   if (race.stage === 'heat') return `Heat ${race.heatNumber}`;
   if (race.stage === 'semi') return `Semi ${race.heatNumber}`;
   if (race.stage === 'final') return 'Final';

@@ -29,6 +29,22 @@ const {
 } = ttHelpers;
 const { ensureTimeTrialEvent, timeTrialResults } = require('../services/timeTrialEvents');
 
+function raceDayItemLabel(item) {
+  if (!item) return '—';
+  if (item.type === 'time_trial') return item.groupLabel || 'Time Trial Event';
+  return `${item.groupLabel} — ${cap(item.division)} — ${item.distanceLabel} — ${raceDisplayStage(item)}`;
+}
+
+function raceDayItemSub(item) {
+  if (!item) return '';
+  if (item.type === 'time_trial') return `${item.distanceLabel || '100m'} • Time Trial Event`;
+  return `${cap(item.division)} • ${item.distanceLabel} • ${raceDisplayStage(item)}`;
+}
+
+function isTimeTrialItem(item) {
+  return item?.type === 'time_trial';
+}
+
 function rebuildTimeTrialRaceSafe(meet) {
   const freshTtHelpers = require('../services/ttHelpers');
   const fn = freshTtHelpers && freshTtHelpers.rebuildTimeTrialRace;
@@ -519,13 +535,16 @@ router.post('/portal/meet/:meetId/blocks/generate', requireRole('meet_director')
 
 
 
-router.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','judge','coach'), (req, res) => {
+router.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','judge','announcer','coach'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet) return res.redirect('/portal');
   rebuildTimeTrialRaceSafe(meet); saveDb(req.db);
   const mode=String(req.params.mode||'director');
   const info=currentRaceInfo(meet); const current=info.current;
-  const currentLanes=current?laneRowsForRace(current,meet):[];
+  if (isTimeTrialItem(current) && (mode === 'judges' || mode === 'announcer')) {
+    return res.redirect(`/portal/meet/${encodeURIComponent(meet.id)}/time-trials/${encodeURIComponent(current.id)}?mode=${encodeURIComponent(mode)}`);
+  }
+  const currentLanes=current && !isTimeTrialItem(current) ? laneRowsForRace(current,meet):[];
   const recent=recentClosedRaces(meet,5);
   const regMap=new Map((meet.registrations||[]).map(r=>[Number(r.id),r]));
 
@@ -539,11 +558,11 @@ router.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','j
     return res.redirect(`/portal/meet/${meet.id}/race-day/announcer`);
   }
   if(mode==='director') {
-    const raceOptions=info.ordered.map((r,idx)=>`<option value="${r.id}" ${r.id===meet.currentRaceId?'selected':''}>${idx+1}. ${r.groupLabel} — ${cap(r.division)} — ${r.distanceLabel} — ${raceDisplayStage(r)}</option>`).join('');
+    const raceOptions=info.ordered.map((r,idx)=>`<option value="${r.id}" ${r.id===meet.currentRaceId?'selected':''}>${idx+1}. ${esc(raceDayItemLabel(r))}</option>`).join('');
     body+=`
       <div class="stat-grid" style="margin-bottom:16px">
-        <div class="stat-card orange"><div class="stat-label">Current Race</div><div class="stat-value">${current?esc(current.groupLabel):'—'}</div><div class="stat-sub">${current?`${esc(cap(current.division))} • ${esc(current.distanceLabel)} • ${esc(raceDisplayStage(current))}`:''}</div></div>
-        <div class="stat-card yellow"><div class="stat-label">In Staging</div><div class="stat-value">${info.next?esc(info.next.groupLabel):'—'}</div><div class="stat-sub">${info.next?`${esc(cap(info.next.division))} • ${esc(info.next.distanceLabel)}`:''}</div></div>
+        <div class="stat-card orange"><div class="stat-label">Current Event</div><div class="stat-value">${current?esc(current.groupLabel):'—'}</div><div class="stat-sub">${current?esc(raceDayItemSub(current)):''}</div></div>
+        <div class="stat-card yellow"><div class="stat-label">In Staging</div><div class="stat-value">${info.next?esc(info.next.groupLabel):'—'}</div><div class="stat-sub">${info.next?esc(raceDayItemSub(info.next)):''}</div></div>
         <div class="stat-card navy"><div class="stat-label">Progress</div><div class="stat-value">${Math.max(info.idx+1,0)} <span style="font-size:18px;opacity:.6">/ ${info.ordered.length}</span></div><div class="stat-sub">${meet.raceDayPaused?'⏸ Paused':'▶ Running'}</div></div>
       </div>
       <div class="card" style="margin-bottom:16px">
@@ -556,7 +575,7 @@ router.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','j
           <div class="action-row" style="align-self:flex-end">
             <button class="btn2" onclick="pauseMeet()">${meet.raceDayPaused?'▶ Resume':'⏸ Pause'}</button>
             <a class="btn-sky" href="/meet/${meet.id}/tv" target="_blank">📺 TV Display</a>
-            ${current&&current.status==='closed'?`<button class="btn-danger" onclick="unlockRace('${current.id}')">Unlock Race</button>`:''}
+            ${current&&!isTimeTrialItem(current)&&current.status==='closed'?`<button class="btn-danger" onclick="unlockRace('${current.id}')">Unlock Race</button>`:''}
           </div>
         </div>
       </div>
@@ -569,7 +588,7 @@ router.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','j
           <form method="GET" action="/portal/meet/${meet.id}/race-day/correction" class="action-row" style="margin:0">
             <select name="raceId" required>
               <option value="">Select completed race…</option>
-              ${info.ordered.filter(r=>String(r.status||'')==='closed').map((r,idx)=>`<option value="${esc(r.id)}">Race ${info.ordered.findIndex(x=>String(x.id)===String(r.id))+1} — ${esc(r.groupLabel)} — ${esc(cap(r.division))} — ${esc(r.distanceLabel)} — ${esc(raceDisplayStage(r))}</option>`).join('')}
+              ${info.ordered.filter(r=>!isTimeTrialItem(r)&&String(r.status||'')==='closed').map((r,idx)=>`<option value="${esc(r.id)}">Race ${info.ordered.findIndex(x=>String(x.id)===String(r.id))+1} — ${esc(r.groupLabel)} — ${esc(cap(r.division))} — ${esc(r.distanceLabel)} — ${esc(raceDisplayStage(r))}</option>`).join('')}
             </select>
             <button class="btn-orange" type="submit">Open Correction</button>
           </form>
@@ -578,8 +597,16 @@ router.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','j
       </div>
       <div class="grid-2">
         <div class="card">
-          <h2>Current Race</h2>
-          ${current?`
+          <h2>Current Event</h2>
+          ${isTimeTrialItem(current)?`
+            <div class="action-row" style="margin-bottom:12px">
+              <span class="chip">${esc(current.blockName||'Unassigned')}</span>
+              <span class="chip chip-sky">⏱ Time Trial</span>
+              <span class="chip">${esc(current.distanceLabel || '100m')}</span>
+            </div>
+            <p class="note">This is a standalone queue event with manual time entry and live leaderboards.</p>
+            <a class="btn-orange" href="/portal/meet/${esc(meet.id)}/time-trials/${esc(current.id)}">Open Time Trial Event</a>
+          `:current?`
             <div class="action-row" style="margin-bottom:12px">
               <span class="chip">${esc(current.blockName||'Unassigned')}</span>
               <span class="chip">${esc(cap(current.division))}</span>
@@ -599,7 +626,7 @@ router.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','j
           <h2>Coming Up</h2>
           <table class="table">
             <thead><tr><th>Race</th><th>Division</th><th>Class</th><th>Distance</th></tr></thead>
-            <tbody>${info.coming.map((r,i)=>`<tr><td>${info.idx+i+3}</td><td>${esc(r.groupLabel)}</td><td>${esc(cap(r.division))}</td><td>${esc(r.distanceLabel)}</td></tr>`).join('')||`<tr><td colspan="4" class="muted">Nothing queued.</td></tr>`}</tbody>
+            <tbody>${info.coming.map((r,i)=>`<tr><td>${info.idx+i+3}</td><td>${esc(r.groupLabel)}</td><td>${isTimeTrialItem(r)?'Time Trial':esc(cap(r.division))}</td><td>${esc(r.distanceLabel)}</td></tr>`).join('')||`<tr><td colspan="4" class="muted">Nothing queued.</td></tr>`}</tbody>
           </table>
         </div>
       </div>
