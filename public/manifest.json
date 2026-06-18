@@ -1,0 +1,14 @@
+{
+  "name": "SpeedSkateMeet",
+  "short_name": "SSM",
+  "display": "standalone",
+  "theme_color": "#12284b",
+  "background_color": "#12284b",
+  "icons": [
+    {
+      "src": "/icons/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ]
+}

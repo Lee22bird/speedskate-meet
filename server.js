@@ -154,33 +154,37 @@ function isStandaloneTimeTrialItem(item) {
 
 function timeTrialLeaderboardCard(title, rows, { tv = false } = {}) {
   const safeRows = Array.isArray(rows) ? rows : [];
-  const rowHtml = safeRows.map(row => {
+  const rowHtml = safeRows.map((row, index) => {
     const rank = row.rank || '';
     const name = row.skater || row.skaterName || row.name || '';
     const team = row.team || '';
     const time = row.time || '';
+    const rankClass = index < 3 ? ` rank-top rank-${index + 1}` : '';
     if (tv) {
-      return '<div class="tt-tv-row">' +
+      return '<div class="tt-tv-row'+rankClass+'">' +
         '<div class="tt-tv-rank">'+esc(rank)+'</div>' +
         skaterAvatarHtml(row, {}, 'small') +
         '<div class="tt-tv-person"><div class="tt-tv-name">'+esc(name)+'</div><div class="tt-tv-team">'+esc(team)+'</div></div>' +
         '<div class="tt-tv-time">'+esc(time)+'</div>' +
       '</div>';
     }
-    return '<tr><td style="width:44px;font-weight:900">'+esc(rank)+'</td>' +
-      '<td><div style="display:flex;align-items:center;gap:10px">'+skaterAvatarHtml(row, {}, 'small')+'<div><strong>'+esc(name)+'</strong><div class="muted" style="font-size:12px">'+esc(team)+'</div></div></div></td>' +
-      '<td style="font-weight:900;color:var(--sky2);text-align:right">'+esc(time)+'</td></tr>';
+    return '<div class="tt-live-row'+rankClass+'">' +
+      '<div class="tt-live-rank">'+esc(rank)+'</div>' +
+      skaterAvatarHtml(row, {}, 'small') +
+      '<div class="tt-live-person"><div class="tt-live-name">'+esc(name)+'</div><div class="tt-live-team">'+esc(team)+'</div></div>' +
+      '<div class="tt-live-time">'+esc(time)+'</div>' +
+    '</div>';
   }).join('');
 
   if (tv) {
     return '<div class="tt-tv-card"><div class="tt-tv-heading">'+esc(title)+'</div>' +
-      (rowHtml || '<div class="tt-tv-empty">No times yet.</div>') +
+      (rowHtml || '<div class="tt-tv-empty">Waiting for first time...</div>') +
     '</div>';
   }
 
-  return '<div class="card"><h2 style="margin-top:0">'+esc(title)+'</h2><table class="table"><tbody>' +
-    (rowHtml || '<tr><td class="muted">No times yet.</td></tr>') +
-  '</tbody></table></div>';
+  return '<section class="tt-live-card"><div class="tt-live-card-title">'+esc(title)+'</div>' +
+    (rowHtml || '<div class="tt-live-empty">Waiting for first time...</div>') +
+  '</section>';
 }
 
 function timeTrialLeaderboardColumns(event, opts = {}) {
@@ -197,6 +201,10 @@ const app = express();
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json({ limit: '1mb' }));
 app.use('/public', express.static(path.join(__dirname, 'public')));
+app.use('/icons', express.static(path.join(__dirname, 'public/icons')));
+app.get('/manifest.json', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public/manifest.json'));
+});
 
 const PORT = process.env.PORT || 10000;
 const HOST = '0.0.0.0';
@@ -1375,12 +1383,23 @@ app.get('/meet/:meetId/tv', (req, res) => {
     '<div class="tv-sidebar">'+sidebarHtml+'</div>';
 
   if (isStandaloneTT && current) {
-    mainHtml = '<div class="tt-tv-board">' + timeTrialLeaderboardColumns(current, { tv: true }) + '</div>';
+    const distanceLabel = current.distanceLabel || current.timeTrialEvent?.distance || '100m';
+    mainHtml = '<div class="tt-tv-board">' +
+      '<div class="tt-tv-event-header"><div><div class="tt-tv-kicker">Live Leaderboard</div><div class="tt-tv-event-title">Time Trials</div></div><div class="tt-tv-distance">Distance: '+esc(distanceLabel)+'</div></div>' +
+      timeTrialLeaderboardColumns(current, { tv: true }) +
+    '</div>';
   }
 
   const html = '<!doctype html><html lang="en"><head><meta charset="utf-8"/>' +
     '<meta name="viewport" content="width=device-width,initial-scale=1"/>' +
+    '<meta name="apple-mobile-web-app-capable" content="yes"/>' +
+    '<meta name="apple-mobile-web-app-status-bar-style" content="default"/>' +
+    '<meta name="apple-mobile-web-app-title" content="SpeedSkateMeet"/>' +
+    '<meta name="theme-color" content="#12284b"/>' +
     '<title>TV — '+esc(meet.meetName)+'</title>' +
+    '<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png"/>' +
+    '<link rel="icon" href="/icons/apple-touch-icon.png"/>' +
+    '<link rel="manifest" href="/manifest.json"/>' +
     '<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;700;900&family=Barlow:wght@400;600;700&display=swap" rel="stylesheet"/>' +
     '<style>' +
     '*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}' +
@@ -1428,23 +1447,34 @@ app.get('/meet/:meetId/tv', (req, res) => {
     '.tv-footer-place{display:flex;align-items:center;gap:8px;font-size:16px;}' +
     '.tv-footer-medal{font-size:20px;}' +
     '.tv-footer-name{font-weight:700;}' +
-    '.tt-tv-board{grid-column:1/-1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:22px;padding:28px;background:#162847;overflow:hidden;}' +
-    '.tt-tv-card{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.10);border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:10px;min-width:0;}' +
-    '.tt-tv-heading{font-family:Barlow Condensed,sans-serif;font-size:42px;font-weight:900;color:#fff;border-bottom:2px solid rgba(56,189,248,.45);padding-bottom:10px;margin-bottom:4px;}' +
-    '.tt-tv-row{display:grid;grid-template-columns:44px auto minmax(0,1fr) 88px;align-items:center;gap:12px;background:rgba(255,255,255,.07);border-radius:10px;padding:10px 12px;min-width:0;}' +
-    '.tt-tv-rank{font-family:Barlow Condensed,sans-serif;font-size:30px;font-weight:900;color:#38BDF8;text-align:center;}' +
+    '.staff-avatar{width:46px;height:46px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;background:#0f1f3d;color:#fff;border:2px solid rgba(255,255,255,.22);font-weight:900;font-size:16px;}' +
+    '.staff-avatar.small{width:46px;height:46px;font-size:16px;}' +
+    '.staff-avatar img{width:100%;height:100%;object-fit:cover;display:block;}' +
+    '.tt-tv-board{grid-column:1/-1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:auto 1fr;gap:22px;padding:26px 28px;background:#162847;overflow:hidden;}' +
+    '.tt-tv-event-header{grid-column:1/-1;display:flex;align-items:end;justify-content:space-between;gap:24px;padding-bottom:2px;}' +
+    '.tt-tv-kicker{font-size:15px;text-transform:uppercase;letter-spacing:.18em;font-weight:900;color:#7dd3fc;}' +
+    '.tt-tv-event-title{font-family:Barlow Condensed,sans-serif;font-size:62px;font-weight:900;line-height:.95;color:#fff;}' +
+    '.tt-tv-distance{border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.08);border-radius:999px;padding:12px 18px;font-size:22px;font-weight:900;color:#fff;}' +
+    '.tt-tv-card{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:10px;min-width:0;box-shadow:0 18px 40px rgba(0,0,0,.18);}' +
+    '.tt-tv-heading{font-family:Barlow Condensed,sans-serif;font-size:46px;font-weight:900;color:#fff;border-bottom:3px solid rgba(56,189,248,.58);padding-bottom:9px;margin-bottom:4px;}' +
+    '.tt-tv-row{display:grid;grid-template-columns:52px auto minmax(0,1fr) 112px;align-items:center;gap:14px;background:rgba(255,255,255,.075);border-radius:10px;padding:12px 14px;min-width:0;border:1px solid rgba(255,255,255,.06);}' +
+    '.tt-tv-row.rank-top{background:rgba(255,255,255,.11);}' +
+    '.tt-tv-row.rank-1{background:linear-gradient(90deg,rgba(249,115,22,.24),rgba(255,255,255,.09));border-color:rgba(249,115,22,.35);}' +
+    '.tt-tv-rank{font-family:Barlow Condensed,sans-serif;font-size:38px;font-weight:900;color:#38BDF8;text-align:center;}' +
     '.tt-tv-person{min-width:0;}' +
-    '.tt-tv-name{font-family:Barlow Condensed,sans-serif;font-size:25px;font-weight:900;line-height:1.05;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
-    '.tt-tv-team{font-size:13px;color:rgba(255,255,255,.58);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;}' +
-    '.tt-tv-time{font-family:Barlow Condensed,sans-serif;font-size:30px;font-weight:900;color:#38BDF8;text-align:right;}' +
-    '.tt-tv-empty{font-size:22px;color:rgba(255,255,255,.48);padding:20px 0;}' +
+    '.tt-tv-name{font-family:Barlow Condensed,sans-serif;font-size:34px;font-weight:900;line-height:1.02;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
+    '.tt-tv-team{font-size:16px;color:rgba(255,255,255,.62);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:3px;}' +
+    '.tt-tv-time{font-family:Barlow Condensed,sans-serif;font-size:42px;font-weight:900;color:#38BDF8;text-align:right;}' +
+    '.tt-tv-empty{font-size:28px;color:rgba(255,255,255,.52);padding:28px 0;font-weight:800;}' +
+    '@media(max-width:1180px){.tt-tv-board{grid-template-columns:repeat(2,minmax(0,1fr));overflow:auto}.tt-tv-card:last-child{grid-column:1/-1}.tt-tv-event-title{font-size:52px}}' +
+    '@media(max-width:760px){html,body{overflow:auto}.tt-tv-board{grid-template-columns:1fr}.tt-tv-card:last-child{grid-column:auto}.tt-tv-event-header{align-items:flex-start;flex-direction:column}.tt-tv-event-title{font-size:44px}.tt-tv-row{grid-template-columns:44px auto minmax(0,1fr)}.tt-tv-time{grid-column:3;font-size:36px;text-align:left}.tt-tv-name{font-size:30px}}' +
     '</style></head><body>' +
     '<div class="tv-wrap">' +
     '<div class="tv-header">' +
     '<img src="/public/images/branding/ssm-logo.png" class="tv-logo" alt="SSM"/>' +
     '<div class="tv-meet-name">'+esc(meet.meetName)+'</div>' +
     '<div class="tv-progress">' +
-    (current?'<div class="tv-race-num">RACE '+Math.max(info.idx+1,1)+' OF '+info.ordered.length+'</div>':'') +
+    (current?(isStandaloneTT?'<div class="tv-race-num">LIVE LEADERBOARD</div>':'<div class="tv-race-num">RACE '+Math.max(info.idx+1,1)+' OF '+info.ordered.length+'</div>'):'') +
     '<div style="font-size:13px;color:rgba(255,255,255,.4);margin-top:2px">'+(meet.date||'')+'</div>' +
     '</div></div>' +
     '<div class="tv-main">'+mainHtml+'</div>' +
@@ -1480,7 +1510,7 @@ app.get('/meet/:meetId/results', (req, res) => {
 app.get('/portal/meet/:meetId/results/print', requireRole('meet_director','judge','coach'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId); if(!meet) return res.redirect('/portal');
   const sections=computeMeetStandings(meet); const openSections=computeOpenResults(meet); const quadSections=computeQuadStandings(meet);
-  res.send(`<!doctype html><html><head><meta charset="utf-8"><title>Results — ${esc(meet.meetName)}</title>
+  res.send(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="apple-mobile-web-app-title" content="SpeedSkateMeet"><meta name="theme-color" content="#12284b"><link rel="apple-touch-icon" href="/icons/apple-touch-icon.png"><link rel="icon" href="/icons/apple-touch-icon.png"><link rel="manifest" href="/manifest.json"><title>Results — ${esc(meet.meetName)}</title>
     <style>body{font-family:Arial,sans-serif;padding:18px;color:#111;font-size:12px}h1,h2{margin:0 0 6px}
     .meta{color:#555;margin-bottom:12px}.section{margin-bottom:26px}
     table{width:100%;border-collapse:collapse;margin-top:8px}th,td{padding:6px 8px;border-bottom:1px solid #ddd;text-align:left}
@@ -1585,13 +1615,41 @@ app.get('/meet/:meetId/live', (req, res) => {
   const recent=recentClosedRaces(meet,5);
   const regMap=new Map((meet.registrations||[]).map(r=>[Number(r.id),r]));
   if (isStandaloneTimeTrialItem(current)) {
+    const distanceLabel = current.distanceLabel || current.timeTrialEvent?.distance || '100m';
     return res.send(pageShell({title:'Live',user:data?.user||null, bodyHtml:`
+      <style>
+        .tt-live-header{background:linear-gradient(135deg,#0f1f3d,#172f55);border-radius:8px;padding:18px 20px;margin:0 0 16px;color:#fff;box-shadow:0 10px 26px rgba(15,31,61,.18)}
+        .tt-live-kicker{font-size:12px;text-transform:uppercase;letter-spacing:.12em;font-weight:900;color:#7dd3fc}
+        .tt-live-title{font-family:Barlow Condensed,sans-serif;font-size:42px;font-weight:900;line-height:1;margin-top:4px}
+        .tt-live-meta{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+        .tt-live-chip{border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.08);border-radius:999px;padding:7px 10px;font-weight:800;font-size:13px}
+        .tt-live-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:start}
+        .tt-live-card{background:#fff;border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 22px rgba(15,31,61,.08);overflow:hidden}
+        .tt-live-card-title{font-family:Barlow Condensed,sans-serif;font-size:28px;font-weight:900;color:var(--navy);padding:14px 16px;border-bottom:3px solid var(--sky2);background:#f8fafc}
+        .tt-live-row{display:grid;grid-template-columns:38px auto minmax(0,1fr) auto;gap:10px;align-items:center;padding:12px 14px;border-bottom:1px solid #e2e8f0}
+        .tt-live-row:last-child{border-bottom:none}
+        .tt-live-row.rank-top{background:linear-gradient(90deg,#f8fafc,#fff)}
+        .tt-live-row.rank-1{background:linear-gradient(90deg,#fff7ed,#fff)}
+        .tt-live-rank{font-family:Barlow Condensed,sans-serif;font-size:27px;font-weight:900;color:var(--navy);text-align:center}
+        .tt-live-person{min-width:0}
+        .tt-live-name{font-family:Barlow Condensed,sans-serif;font-size:23px;font-weight:900;color:var(--navy);line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .tt-live-team{font-size:12px;color:#64748b;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .tt-live-time{font-family:Barlow Condensed,sans-serif;font-size:30px;font-weight:900;color:var(--sky2);text-align:right}
+        .tt-live-empty{padding:28px 16px;color:#64748b;font-weight:800;text-align:center}
+        @media(max-width:1100px){.tt-live-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.tt-live-card:last-child{grid-column:1/-1}}
+        @media(max-width:720px){.tt-live-grid{grid-template-columns:1fr}.tt-live-card:last-child{grid-column:auto}.tt-live-title{font-size:34px}.tt-live-row{grid-template-columns:34px auto minmax(0,1fr);}.tt-live-time{grid-column:3;text-align:left;font-size:27px}.tt-live-name{font-size:21px}}
+      </style>
       <div class="live-tabs">
         <a class="live-tab active" href="/meet/${meet.id}/live">Live Board</a>
         <a class="live-tab" href="/meet/${meet.id}/results">Results</a>
         <a class="live-tab" href="/meet/${meet.id}/alerts">📲 Text Alerts</a>
       </div>
-      <div class="grid-3">
+      <div class="tt-live-header">
+        <div class="tt-live-kicker">Live Leaderboard</div>
+        <div class="tt-live-title">Time Trials</div>
+        <div class="tt-live-meta"><span class="tt-live-chip">Distance: ${esc(distanceLabel)}</span><span class="tt-live-chip">${esc(meet.meetName || '')}</span></div>
+      </div>
+      <div class="tt-live-grid">
         ${timeTrialLeaderboardColumns(current)}
       </div>
       <script>setTimeout(()=>location.reload(),20000);</script>`}));
@@ -1690,7 +1748,7 @@ app.get('/portal/meet/:meetId/registered/print-race-list', requireRole('meet_dir
     }).join('');
     return `<div style="margin-bottom:24px"><h2>${esc(day)}</h2>${blockSections}</div>`;
   }).join('');
-  res.send(`<!doctype html><html><head><meta charset="utf-8"><title>Race List — ${esc(meet.meetName)}</title>
+  res.send(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="apple-mobile-web-app-title" content="SpeedSkateMeet"><meta name="theme-color" content="#12284b"><link rel="apple-touch-icon" href="/icons/apple-touch-icon.png"><link rel="icon" href="/icons/apple-touch-icon.png"><link rel="manifest" href="/manifest.json"><title>Race List — ${esc(meet.meetName)}</title>
     <style>body{font-family:Arial,sans-serif;padding:18px;color:#111;font-size:12px}h1,h2,h3{margin:0 0 6px}
     table{width:100%;border-collapse:collapse;margin-top:8px}th,td{padding:6px 8px;border-bottom:1px solid #ddd;text-align:left}
     th{font-size:11px;text-transform:uppercase;color:#666}</style></head><body>

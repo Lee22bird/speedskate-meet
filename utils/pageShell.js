@@ -122,6 +122,10 @@ function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="SpeedSkateMeet" />
+  <meta name="theme-color" content="#12284b" />
   <title>${esc(title)} — SpeedSkateMeet</title>
   <meta name="description" content="${esc(description||'SpeedSkateMeet — The all-in-one platform for inline speed skating meets. Registration, heat assignments, live scoring, text alerts, and results.')}" />
   <meta name="keywords" content="inline speed skating, speed skating meet, inline skating competition, race management, heat assignments, skating results" />
@@ -129,6 +133,9 @@ function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
   <meta property="og:description" content="${esc(description||'SpeedSkateMeet — The all-in-one platform for inline speed skating meets.')}" />
   <meta property="og:url" content="https://speedskatemeet.com" />
   <meta property="og:type" content="website" />
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+  <link rel="icon" href="/icons/apple-touch-icon.png" />
+  <link rel="manifest" href="/manifest.json" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet" />
