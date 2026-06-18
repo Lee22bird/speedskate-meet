@@ -40,6 +40,7 @@ const {
   buildCostWidget,
 } = require('./services/pricingUi');
 const { skaterAvatarHtml } = require('./services/avatarDisplay');
+const { timeTrialResults } = require('./services/timeTrialEvents');
 const {
   defaultPricingFields,
   normalizeMeetPricingFields,
@@ -145,6 +146,51 @@ function rebuildTimeTrialRace(meet) {
   const ttHelpers = require('./services/ttHelpers');
   if (!ttHelpers || typeof ttHelpers.rebuildTimeTrialRace !== 'function') return null;
   return ttHelpers.rebuildTimeTrialRace(meet);
+}
+
+function isStandaloneTimeTrialItem(item) {
+  return item && String(item.type || '') === 'time_trial';
+}
+
+function timeTrialLeaderboardCard(title, rows, { tv = false } = {}) {
+  const safeRows = Array.isArray(rows) ? rows : [];
+  const rowHtml = safeRows.map(row => {
+    const rank = row.rank || '';
+    const name = row.skater || row.skaterName || row.name || '';
+    const team = row.team || '';
+    const time = row.time || '';
+    if (tv) {
+      return '<div class="tt-tv-row">' +
+        '<div class="tt-tv-rank">'+esc(rank)+'</div>' +
+        skaterAvatarHtml(row, {}, 'small') +
+        '<div class="tt-tv-person"><div class="tt-tv-name">'+esc(name)+'</div><div class="tt-tv-team">'+esc(team)+'</div></div>' +
+        '<div class="tt-tv-time">'+esc(time)+'</div>' +
+      '</div>';
+    }
+    return '<tr><td style="width:44px;font-weight:900">'+esc(rank)+'</td>' +
+      '<td><div style="display:flex;align-items:center;gap:10px">'+skaterAvatarHtml(row, {}, 'small')+'<div><strong>'+esc(name)+'</strong><div class="muted" style="font-size:12px">'+esc(team)+'</div></div></div></td>' +
+      '<td style="font-weight:900;color:var(--sky2);text-align:right">'+esc(time)+'</td></tr>';
+  }).join('');
+
+  if (tv) {
+    return '<div class="tt-tv-card"><div class="tt-tv-heading">'+esc(title)+'</div>' +
+      (rowHtml || '<div class="tt-tv-empty">No times yet.</div>') +
+    '</div>';
+  }
+
+  return '<div class="card"><h2 style="margin-top:0">'+esc(title)+'</h2><table class="table"><tbody>' +
+    (rowHtml || '<tr><td class="muted">No times yet.</td></tr>') +
+  '</tbody></table></div>';
+}
+
+function timeTrialLeaderboardColumns(event, opts = {}) {
+  const sourceEvent = event?.timeTrialEvent || event;
+  const results = timeTrialResults(sourceEvent);
+  return [
+    timeTrialLeaderboardCard('Fastest Male', results.male, opts),
+    timeTrialLeaderboardCard('Fastest Female', results.female, opts),
+    timeTrialLeaderboardCard('Overall', results.overall, opts),
+  ].join('');
 }
 
 const app = express();
@@ -1219,6 +1265,7 @@ app.get('/meet/:meetId/tv', (req, res) => {
   const recent=recentClosedRaces(meet,4);
   const lastRace=recent[0];
   const lastResults=lastRace?(lastRace.laneEntries||[]).filter(x=>x.place).sort((a,b)=>Number(a.place||999)-Number(b.place||999)).slice(0,3):[];
+  const isStandaloneTT = isStandaloneTimeTrialItem(current);
   const isTT=!!(current&&current.isTimeTrial);
   const ttSorted=isTT?[...(current.laneEntries||[])].sort((a,b)=>parseFloat(a.time||'999')-parseFloat(b.time||'999')):[];
 
@@ -1313,7 +1360,7 @@ app.get('/meet/:meetId/tv', (req, res) => {
   const currentLabel = isTT ? '⏱ TIME TRIAL — NOW RUNNING' : '▶ NOW RACING';
   const currentMeta = isTT ? '100m • 1 Lap • Youngest to Oldest' : esc(cap(current&&current.division||''))+' • '+esc(current&&current.distanceLabel||'')+' • '+(current?esc(cap(current.startType)):'')+ ' Start';
 
-  const mainHtml = !current ?
+  let mainHtml = !current ?
     '<div class="tv-current" style="grid-column:1/-1;align-items:center;justify-content:center;display:flex;flex-direction:column;gap:16px;opacity:.4"><img src="/public/images/branding/ssm-logo.png" style="height:120px"/><div style="font-family:Barlow Condensed,sans-serif;font-size:48px;font-weight:900;letter-spacing:2px">STAND BY</div></div>'
     :
     '<div class="tv-current">' +
@@ -1326,6 +1373,10 @@ app.get('/meet/:meetId/tv', (req, res) => {
       '</div>' +
     '</div>' +
     '<div class="tv-sidebar">'+sidebarHtml+'</div>';
+
+  if (isStandaloneTT && current) {
+    mainHtml = '<div class="tt-tv-board">' + timeTrialLeaderboardColumns(current, { tv: true }) + '</div>';
+  }
 
   const html = '<!doctype html><html lang="en"><head><meta charset="utf-8"/>' +
     '<meta name="viewport" content="width=device-width,initial-scale=1"/>' +
@@ -1377,6 +1428,16 @@ app.get('/meet/:meetId/tv', (req, res) => {
     '.tv-footer-place{display:flex;align-items:center;gap:8px;font-size:16px;}' +
     '.tv-footer-medal{font-size:20px;}' +
     '.tv-footer-name{font-weight:700;}' +
+    '.tt-tv-board{grid-column:1/-1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:22px;padding:28px;background:#162847;overflow:hidden;}' +
+    '.tt-tv-card{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.10);border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:10px;min-width:0;}' +
+    '.tt-tv-heading{font-family:Barlow Condensed,sans-serif;font-size:42px;font-weight:900;color:#fff;border-bottom:2px solid rgba(56,189,248,.45);padding-bottom:10px;margin-bottom:4px;}' +
+    '.tt-tv-row{display:grid;grid-template-columns:44px auto minmax(0,1fr) 88px;align-items:center;gap:12px;background:rgba(255,255,255,.07);border-radius:10px;padding:10px 12px;min-width:0;}' +
+    '.tt-tv-rank{font-family:Barlow Condensed,sans-serif;font-size:30px;font-weight:900;color:#38BDF8;text-align:center;}' +
+    '.tt-tv-person{min-width:0;}' +
+    '.tt-tv-name{font-family:Barlow Condensed,sans-serif;font-size:25px;font-weight:900;line-height:1.05;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
+    '.tt-tv-team{font-size:13px;color:rgba(255,255,255,.58);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;}' +
+    '.tt-tv-time{font-family:Barlow Condensed,sans-serif;font-size:30px;font-weight:900;color:#38BDF8;text-align:right;}' +
+    '.tt-tv-empty{font-size:22px;color:rgba(255,255,255,.48);padding:20px 0;}' +
     '</style></head><body>' +
     '<div class="tv-wrap">' +
     '<div class="tv-header">' +
@@ -1387,13 +1448,13 @@ app.get('/meet/:meetId/tv', (req, res) => {
     '<div style="font-size:13px;color:rgba(255,255,255,.4);margin-top:2px">'+(meet.date||'')+'</div>' +
     '</div></div>' +
     '<div class="tv-main">'+mainHtml+'</div>' +
-    '<div class="tv-footer">' +
+    (isStandaloneTT ? '' : '<div class="tv-footer">' +
     '<div class="tv-footer-label">Last Result</div>' +
     (lastRace ?
       '<div class="tv-footer-race">'+esc(lastRace.groupLabel)+' • '+esc(cap(lastRace.division))+' • '+esc(lastRace.distanceLabel)+'</div>' +
       '<div class="tv-footer-results">'+lastResultHtml+'</div>'
       : '<div style="opacity:.4">No results yet</div>') +
-    '</div></div>' +
+    '</div>') + '</div>' +
     '<script>setTimeout(()=>location.reload(),20000);</script>' +
     '</body></html>';
 
@@ -1523,6 +1584,18 @@ app.get('/meet/:meetId/live', (req, res) => {
   const lanes=current?laneRowsForRace(current,meet):[];
   const recent=recentClosedRaces(meet,5);
   const regMap=new Map((meet.registrations||[]).map(r=>[Number(r.id),r]));
+  if (isStandaloneTimeTrialItem(current)) {
+    return res.send(pageShell({title:'Live',user:data?.user||null, bodyHtml:`
+      <div class="live-tabs">
+        <a class="live-tab active" href="/meet/${meet.id}/live">Live Board</a>
+        <a class="live-tab" href="/meet/${meet.id}/results">Results</a>
+        <a class="live-tab" href="/meet/${meet.id}/alerts">📲 Text Alerts</a>
+      </div>
+      <div class="grid-3">
+        ${timeTrialLeaderboardColumns(current)}
+      </div>
+      <script>setTimeout(()=>location.reload(),20000);</script>`}));
+  }
   res.send(pageShell({title:'Live',user:data?.user||null, bodyHtml:`
     <div class="live-tabs">
       <a class="live-tab active" href="/meet/${meet.id}/live">Live Board</a>
