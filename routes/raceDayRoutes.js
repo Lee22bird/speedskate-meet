@@ -605,7 +605,7 @@ router.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','j
               <span class="chip">${esc(current.distanceLabel || '100m')}</span>
             </div>
             <p class="note">This is a standalone queue event with manual time entry and live leaderboards.</p>
-            <a class="btn-orange" href="/portal/meet/${esc(meet.id)}/time-trials/${esc(current.id)}">Open Time Trial Event</a>
+            <a class="btn-orange" href="/portal/meet/${esc(meet.id)}/time-trials/${esc(current.id)}?mode=director">Open Time Trial Event</a>
           `:current?`
             <div class="action-row" style="margin-bottom:12px">
               <span class="chip">${esc(current.blockName||'Unassigned')}</span>
