@@ -105,6 +105,19 @@ function currentRaceInfo(meet) {
   };
 }
 
+function isRaceDayItemComplete(item) {
+  const status = String(item?.status || '').toLowerCase();
+  return status === 'closed' || status === 'complete' || status === 'completed';
+}
+
+function raceDayProgress(meet) {
+  const ordered = orderedRaces(meet);
+  return {
+    total: ordered.length,
+    completed: ordered.filter(isRaceDayItemComplete).length,
+  };
+}
+
 function ensureCurrentRace(meet) {
   const info = currentRaceInfo(meet);
 
@@ -163,6 +176,8 @@ function raceDisplayStage(race) {
 module.exports = {
   orderedRaces,
   currentRaceInfo,
+  isRaceDayItemComplete,
+  raceDayProgress,
   ensureCurrentRace,
   laneRowsForRace,
   recentClosedRaces,

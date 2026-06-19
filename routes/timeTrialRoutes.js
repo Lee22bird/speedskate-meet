@@ -55,6 +55,7 @@ module.exports = function createTimeTrialRoutes(deps = {}) {
     const backToRaceDayHref = `/portal/meet/${encodeURIComponent(meet.id)}/race-day/${encodeURIComponent(raceDayMode)}?fromTimeTrial=1`;
     const shouldAutoRefresh = !canManage && hasRole(req.user, 'announcer');
     const stats = timeTrialStats(event);
+    const missingTimes = (event.participants || []).filter(row => !String(row.time || '').trim()).length;
     const current = event.participants[Number(event.currentIndex || 0)] || event.participants.find(row => !String(row.time || '').trim()) || event.participants[0] || null;
     const results = timeTrialResults(event);
     res.send(pageShell({ title: 'Time Trial Event', user: req.user, bodyHtml: `
@@ -63,6 +64,12 @@ module.exports = function createTimeTrialRoutes(deps = {}) {
         ${canManage ? `<a class="btn-orange" href="${esc(backToRaceDayHref)}">Back To Race Day</a>` : ''}
         <a class="btn2" href="/portal/meet/${esc(meet.id)}/blocks">Back to Block Builder</a>
         <a class="btn2" href="/portal/meet/${esc(meet.id)}/time-trials/${esc(event.id)}/export.csv">Export CSV</a>
+        ${canManage ? `
+          <form method="POST" action="/portal/meet/${esc(meet.id)}/time-trials/${esc(event.id)}/complete" onsubmit="${missingTimes ? "return confirm('Some skaters do not have recorded times. Complete Time Trials anyway?')" : "return confirm('Complete this Time Trial Event and advance Race Day?')"}">
+            <input type="hidden" name="mode" value="${esc(raceDayMode)}" />
+            <button class="btn-good" type="submit">Complete Time Trial Event</button>
+          </form>
+        ` : ''}
       </div>
       <div class="stat-grid" style="margin-bottom:16px">
         <div class="stat-card navy"><div class="stat-label">Distance</div><div class="stat-value">${esc(event.distance || '100m')}</div></div>
@@ -133,6 +140,33 @@ module.exports = function createTimeTrialRoutes(deps = {}) {
       saveDb(req.db);
     }
     return res.redirect(`/portal/meet/${encodeURIComponent(meet.id)}/time-trials/${encodeURIComponent(req.params.eventId)}${modeQuery}`);
+  });
+
+  router.post('/portal/meet/:meetId/time-trials/:eventId/complete', requireRole('meet_director','judge','super_admin'), (req, res) => {
+    const meet = getMeetOr404(req.db, req.params.meetId);
+    if (!meet || (!canEditMeet(req.user, meet) && !hasRole(req.user, 'judge'))) return res.redirect('/portal');
+    const event = timeTrialEventForMeet(meet, req.params.eventId);
+    const mode = raceDayModeForTimeTrial(req, true);
+    if (!event) return res.redirect(`/portal/meet/${encodeURIComponent(meet.id)}/race-day/${encodeURIComponent(mode)}?fromTimeTrial=1`);
+
+    event.status = 'closed';
+    event.finalized = true;
+    event.completedAt = new Date().toISOString();
+    event.finalizedAt = event.completedAt;
+    event.finalizedByUserId = req.user?.id == null ? '' : String(req.user.id);
+
+    const { currentRaceInfo } = require('../services/raceDay');
+    const info = currentRaceInfo(meet);
+    if (info.current && String(info.current.id) === String(event.id)) {
+      const next = info.ordered[info.idx + 1];
+      if (next) {
+        meet.currentRaceId = next.id;
+        meet.currentRaceIndex = info.idx + 1;
+      }
+    }
+
+    saveDb(req.db);
+    return res.redirect(`/portal/meet/${encodeURIComponent(meet.id)}/race-day/${encodeURIComponent(mode)}?fromTimeTrial=1`);
   });
 
   router.get('/portal/meet/:meetId/time-trials/:eventId/export.csv', requireRole('meet_director','coach','super_admin'), (req, res) => {

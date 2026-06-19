@@ -12,6 +12,7 @@ const {
 const {
   orderedRaces, currentRaceInfo, ensureCurrentRace,
   laneRowsForRace, recentClosedRaces, raceDisplayStage,
+  raceDayProgress,
 } = require('../services/raceDay');
 const { fireRaceAlerts, fireResultAlerts } = require('../services/raceAlerts');
 const { skaterAvatarHtml } = require('../services/avatarDisplay');
@@ -545,6 +546,7 @@ router.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','j
   if (isTimeTrialItem(current) && (mode === 'judges' || mode === 'announcer') && !returningFromTimeTrial) {
     return res.redirect(`/portal/meet/${encodeURIComponent(meet.id)}/time-trials/${encodeURIComponent(current.id)}?mode=${encodeURIComponent(mode)}`);
   }
+  const progress = raceDayProgress(meet);
   const currentLanes=current && !isTimeTrialItem(current) ? laneRowsForRace(current,meet):[];
   const recent=recentClosedRaces(meet,5);
   const regMap=new Map((meet.registrations||[]).map(r=>[Number(r.id),r]));
@@ -564,7 +566,7 @@ router.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','j
       <div class="stat-grid" style="margin-bottom:16px">
         <div class="stat-card orange"><div class="stat-label">Current Event</div><div class="stat-value">${current?esc(current.groupLabel):'—'}</div><div class="stat-sub">${current?esc(raceDayItemSub(current)):''}</div></div>
         <div class="stat-card yellow"><div class="stat-label">In Staging</div><div class="stat-value">${info.next?esc(info.next.groupLabel):'—'}</div><div class="stat-sub">${info.next?esc(raceDayItemSub(info.next)):''}</div></div>
-        <div class="stat-card navy"><div class="stat-label">Progress</div><div class="stat-value">${Math.max(info.idx+1,0)} <span style="font-size:18px;opacity:.6">/ ${info.ordered.length}</span></div><div class="stat-sub">${meet.raceDayPaused?'⏸ Paused':'▶ Running'}</div></div>
+        <div class="stat-card navy"><div class="stat-label">Progress</div><div class="stat-value">${progress.completed} <span style="font-size:18px;opacity:.6">/ ${progress.total}</span></div><div class="stat-sub">${meet.raceDayPaused?'⏸ Paused':'▶ Running'}</div></div>
       </div>
       <div class="card" style="margin-bottom:16px">
         <div class="form-grid cols-3">
