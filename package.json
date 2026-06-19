@@ -4,7 +4,9 @@
   "main": "server.js",
   "type": "commonjs",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "desktop:start": "node -e \"console.log('SSM Desktop placeholder: Electron is not installed yet.')\"",
+    "desktop:dev": "node -e \"console.log('SSM Desktop dev placeholder: Electron is not installed yet.')\""
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.105.1",
