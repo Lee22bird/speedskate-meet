@@ -38,7 +38,7 @@ function raceDayModeForTimeTrial(req, canManage) {
   if (['director', 'judges', 'announcer'].includes(requested)) return requested;
   if (canManage && hasRole(req.user, 'judge') && !hasRole(req.user, 'meet_director') && !hasRole(req.user, 'super_admin')) return 'judges';
   if (canManage) return 'director';
-  return 'announcer';
+  return 'director';
 }
 
 module.exports = function createTimeTrialRoutes(deps = {}) {
@@ -52,7 +52,7 @@ module.exports = function createTimeTrialRoutes(deps = {}) {
     if (!event) return res.redirect(`/portal/meet/${encodeURIComponent(meet.id)}/blocks`);
     const canManage = canEditMeet(req.user, meet) || hasRole(req.user, 'judge');
     const raceDayMode = raceDayModeForTimeTrial(req, canManage);
-    const backToRaceDayHref = `/portal/meet/${encodeURIComponent(meet.id)}/race-day/${encodeURIComponent(raceDayMode)}`;
+    const backToRaceDayHref = `/portal/meet/${encodeURIComponent(meet.id)}/race-day/${encodeURIComponent(raceDayMode)}?fromTimeTrial=1`;
     const shouldAutoRefresh = !canManage && hasRole(req.user, 'announcer');
     const stats = timeTrialStats(event);
     const current = event.participants[Number(event.currentIndex || 0)] || event.participants.find(row => !String(row.time || '').trim()) || event.participants[0] || null;

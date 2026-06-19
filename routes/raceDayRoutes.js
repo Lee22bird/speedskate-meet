@@ -541,7 +541,8 @@ router.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','j
   rebuildTimeTrialRaceSafe(meet); saveDb(req.db);
   const mode=String(req.params.mode||'director');
   const info=currentRaceInfo(meet); const current=info.current;
-  if (isTimeTrialItem(current) && (mode === 'judges' || mode === 'announcer')) {
+  const returningFromTimeTrial = String(req.query.fromTimeTrial || '') === '1';
+  if (isTimeTrialItem(current) && (mode === 'judges' || mode === 'announcer') && !returningFromTimeTrial) {
     return res.redirect(`/portal/meet/${encodeURIComponent(meet.id)}/time-trials/${encodeURIComponent(current.id)}?mode=${encodeURIComponent(mode)}`);
   }
   const currentLanes=current && !isTimeTrialItem(current) ? laneRowsForRace(current,meet):[];
@@ -643,7 +644,18 @@ router.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','j
         <h2 style="margin:0">${current?`Race ${Math.max(info.idx+1,1)} — ${current.isTimeTrial?'Time Trial Session':esc(current.groupLabel)} — ${current.isTimeTrial?'100m':esc(cap(current.division))+' — '+esc(current.distanceLabel)}`:'No race selected'}</h2>
         <div class="note">Judges always land on the current race. Save, then close race when done.</div>
       </div>
-      ${current?(current.isTimeTrial?(()=>{
+      ${current?(isTimeTrialItem(current)?`
+        <div class="card">
+          <div class="action-row" style="margin-bottom:12px">
+            <span class="chip">${esc(current.blockName||'Unassigned')}</span>
+            <span class="chip chip-sky">⏱ Time Trial</span>
+            <span class="chip">${esc(current.distanceLabel || '100m')}</span>
+          </div>
+          <h2 style="margin-top:0">Time Trial Event</h2>
+          <p class="note">This standalone event uses the dedicated Time Trial screen for time entry, queue, and leaderboards.</p>
+          <a class="btn-orange" href="/portal/meet/${esc(meet.id)}/time-trials/${esc(current.id)}?mode=judges">Open Time Trial Event</a>
+        </div>
+      `:current.isTimeTrial?(()=>{
         const ttEntries=timeTrialEntriesForMeet(meet);
         const waiting=ttEntries.filter(e=>!String(e.time||'').trim());
         const posted=ttEntries.filter(e=>String(e.time||'').trim()).sort((a,b)=>parseFloat(a.time||'999')-parseFloat(b.time||'999'));
