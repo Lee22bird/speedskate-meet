@@ -15,7 +15,7 @@ const { calcRegistrationCost } = require('../services/pricing');
 const { rebuildRaceAssignmentsSafe } = require('../services/ttHelpers');
 const { ensureCurrentRace } = require('../services/raceDay');
 const { computeMeetStandings } = require('../services/standings');
-const { completedTimeTrialEvents, timeTrialResults } = require('../services/timeTrialEvents');
+const { completedTimeTrialEvents, timeNumber, timeTrialResults } = require('../services/timeTrialEvents');
 const { staffAssignmentsForMeet } = require('../services/staffAssignments');
 const { usarsPointsForPlace } = require('../services/usarsScoring');
 
@@ -884,6 +884,7 @@ function buildSsmResultsPackage(req, db, meet) {
       const identityPart = linkedToSsl
         ? sslSkaterId
         : safeResultKey(['unresolved', row.registrationId || reg.id || row.skater, row.team || reg.team]);
+      const timeSeconds = timeNumber(row.time);
       results.push({
         result_key: safeResultKey(['ssm', meet.id, identityPart, event.id, 'time_trial']),
         result_type: 'time_trial',
@@ -896,12 +897,16 @@ function buildSsmResultsPackage(req, db, meet) {
         group_label: eventTitle,
         class_type: 'time_trial',
         distance_label: event.distance || '100m',
+        distance: event.distance || '100m',
+        event_id: compactId(event.id),
         race_id: compactId(event.id),
         place: Number(row.rank || 0) || null,
         points: 0,
         overall_place: Number(row.rank || 0) || null,
         total_points: 0,
         time: row.time || '',
+        raw_time: row.time || '',
+        time_seconds: timeSeconds,
         gender: row.gender || '',
         scoring_system: 'TIME_TRIAL_FASTEST_TIME',
         tiebreaker_used: false,
