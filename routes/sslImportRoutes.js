@@ -15,6 +15,7 @@ const { calcRegistrationCost } = require('../services/pricing');
 const { rebuildRaceAssignmentsSafe } = require('../services/ttHelpers');
 const { ensureCurrentRace } = require('../services/raceDay');
 const { computeMeetStandings } = require('../services/standings');
+const { completedTimeTrialEvents, timeTrialResults } = require('../services/timeTrialEvents');
 const { staffAssignmentsForMeet } = require('../services/staffAssignments');
 const { usarsPointsForPlace } = require('../services/usarsScoring');
 
@@ -865,6 +866,46 @@ function buildSsmResultsPackage(req, db, meet) {
           tiebreaker_used: !!standing.tiebreakerUsed,
         });
       }
+    }
+  }
+
+  for (const event of completedTimeTrialEvents(meet)) {
+    const ttResults = timeTrialResults(event);
+    const eventTitle = `${event.distance || '100m'} Time Trials`;
+
+    for (const row of ttResults.overall || []) {
+      const reg = regMap.get(String(row.registrationId || '')) || regMap.get(String(Number(row.registrationId || ''))) || {};
+      const sslSkaterId = sslSkaterIdFromRegistration(reg);
+      const linkedToSsl = isValidSslSkaterId(sslSkaterId);
+      if (!linkedToSsl) {
+        unlinkedStandings.push(`${row.skater || reg.name || 'Unknown skater'} (${row.team || reg.team || 'No team'}, registration ${row.registrationId || reg.id || 'no registration id'})`);
+      }
+
+      const identityPart = linkedToSsl
+        ? sslSkaterId
+        : safeResultKey(['unresolved', row.registrationId || reg.id || row.skater, row.team || reg.team]);
+      results.push({
+        result_key: safeResultKey(['ssm', meet.id, identityPart, event.id, 'time_trial']),
+        result_type: 'time_trial',
+        ssl_skater_id: linkedToSsl ? sslSkaterId : '',
+        ssm_registration_id: compactId(row.registrationId || reg.id),
+        skater_name: row.skater || reg.name || '',
+        team: row.team || reg.team || '',
+        division_label: eventTitle,
+        group_id: '',
+        group_label: eventTitle,
+        class_type: 'time_trial',
+        distance_label: event.distance || '100m',
+        race_id: compactId(event.id),
+        place: Number(row.rank || 0) || null,
+        points: 0,
+        overall_place: Number(row.rank || 0) || null,
+        total_points: 0,
+        time: row.time || '',
+        gender: row.gender || '',
+        scoring_system: 'TIME_TRIAL_FASTEST_TIME',
+        tiebreaker_used: false,
+      });
     }
   }
 

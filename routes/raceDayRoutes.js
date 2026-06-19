@@ -28,7 +28,8 @@ const {
   timeTrialEntriesForMeet, timeTrialLeaderboards,
   rebuildRaceAssignmentsSafe,
 } = ttHelpers;
-const { ensureTimeTrialEvent, timeTrialResults } = require('../services/timeTrialEvents');
+const { completedTimeTrialEvents, ensureTimeTrialEvent, timeTrialEventTitle } = require('../services/timeTrialEvents');
+const { renderTimeTrialFinalResultsHtml } = require('../services/timeTrialResultsView');
 
 function raceDayItemLabel(item) {
   if (!item) return '—';
@@ -51,6 +52,182 @@ function rebuildTimeTrialRaceSafe(meet) {
   const fn = freshTtHelpers && freshTtHelpers.rebuildTimeTrialRace;
   if (typeof fn !== 'function') return null;
   return fn(meet);
+}
+
+function blockPrintHref(meetId, options = {}) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(options)) {
+    if (value !== undefined && value !== null && value !== '') params.set(key, String(value));
+  }
+  const query = params.toString();
+  return `/portal/meet/${esc(meetId)}/blocks/print${query ? '?' + esc(query) : ''}`;
+}
+
+function printableTimeTrialRows(event) {
+  const rows = Array.isArray(event?.participants) ? event.participants : [];
+  return rows.map((row, idx) => `
+    <tr>
+      <td>${idx + 1}</td>
+      <td>${esc(row.skaterName || row.skater || row.name || '')}</td>
+      <td>${esc(row.team || '')}</td>
+      <td>${esc(row.gender || '')}</td>
+      <td>${esc(row.time || '')}</td>
+    </tr>`).join('') || '<tr><td colspan="5">No registered Time Trial skaters.</td></tr>';
+}
+
+function renderBlockSchedulePrintPage({ req, meet, showNotes, pageBreaks, showEmpty }) {
+  const raceById = new Map((meet.races || []).map(race => [String(race.id), race]));
+  const timeTrialById = new Map((meet.timeTrialEvents || []).map(event => [String(event.id), event]));
+  const breakTypes = new Set(['break', 'lunch', 'awards', 'practice']);
+  let scheduleNo = 0;
+
+  const controlsBase = {
+    notes: showNotes ? '1' : '0',
+    breaks: pageBreaks ? '1' : '0',
+    empty: showEmpty ? '1' : '0',
+  };
+
+  const blocksHtml = (meet.blocks || []).map((block, blockIdx) => {
+    const isDivider = breakTypes.has(String(block.type || ''));
+    const blockTitle = block.name || (isDivider ? cap(block.type || 'Break') : `Block ${blockIdx + 1}`);
+    const header = `
+      <div class="block-heading">
+        <div>
+          <h2>${esc(blockTitle)}</h2>
+          <div class="meta-line">${esc(block.day || 'Day 1')}${block.notes ? ' • ' + esc(block.notes) : ''}</div>
+        </div>
+      </div>`;
+
+    if (isDivider) {
+      return `
+        <section class="block-section ${pageBreaks ? 'page-break' : ''}">
+          ${header}
+          ${showNotes ? '<div class="notes-box">Notes</div>' : ''}
+        </section>`;
+    }
+
+    const timeTrialSections = (block.timeTrialEventIds || []).map(eventId => {
+      const event = timeTrialById.get(String(eventId));
+      if (!event) return '';
+      scheduleNo += 1;
+      return `
+        <div class="print-subsection">
+          <h3>${scheduleNo}. ${esc(timeTrialEventTitle(event))}</h3>
+          <div class="meta-line">Time Trial Event • Distance: ${esc(event.distance || '100m')}</div>
+          <table>
+            <thead><tr><th>Order</th><th>Skater</th><th>Team</th><th>Gender</th><th>Time</th></tr></thead>
+            <tbody>${printableTimeTrialRows(event)}</tbody>
+          </table>
+        </div>`;
+    }).join('');
+
+    const raceSections = (block.raceIds || []).map(raceId => {
+      const race = raceById.get(String(raceId));
+      if (!race) return '';
+      const rawRows = laneRowsForRace(race, meet);
+      const lanes = (showEmpty ? rawRows : rawRows.filter(row =>
+        String(row.skaterName || '').trim() ||
+        String(row.team || '').trim() ||
+        String(row.helmetNumber || '').trim()
+      ));
+      if (!showEmpty && !lanes.length) return '';
+      scheduleNo += 1;
+      const tableRows = (lanes.length ? lanes : [{ lane: '', helmetNumber: '', skaterName: '', team: '' }]).map((lane, idx) => `
+        <tr>
+          <td>${idx === 0 ? scheduleNo : ''}</td>
+          <td>${esc(race.groupLabel || '')}</td>
+          <td>${esc(cap(race.division || ''))}</td>
+          <td>${esc(race.distanceLabel || '')}</td>
+          <td>${esc(raceDisplayStage(race))}</td>
+          <td>${esc(lane.lane || '')}</td>
+          <td>${lane.helmetNumber ? '#' + esc(lane.helmetNumber) : ''}</td>
+          <td>${esc(lane.skaterName || '')}</td>
+          <td>${esc(lane.team || '')}</td>
+        </tr>`).join('');
+      return `
+        <div class="print-subsection">
+          <table>
+            <thead><tr><th>Race</th><th>Division</th><th>Class</th><th>Distance</th><th>Heat</th><th>Lane</th><th>Helmet</th><th>Skater</th><th>Team</th></tr></thead>
+            <tbody>${tableRows}</tbody>
+          </table>
+        </div>`;
+    }).join('');
+
+    const content = `${timeTrialSections}${raceSections}` || '<div class="empty-line">No scheduled races in this block.</div>';
+    return `
+      <section class="block-section ${pageBreaks ? 'page-break' : ''}">
+        ${header}
+        ${content}
+        ${showNotes ? '<div class="notes-box">Notes</div>' : ''}
+      </section>`;
+  }).join('') || '<section class="block-section"><div class="empty-line">No blocks have been created.</div></section>';
+
+  const location = meetRinkLabel(req.db, meet);
+  const dateLine = meetDateLabel(meet);
+
+  return `<!doctype html>
+  <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      <meta name="apple-mobile-web-app-capable" content="yes">
+      <meta name="apple-mobile-web-app-status-bar-style" content="default">
+      <meta name="apple-mobile-web-app-title" content="SpeedSkateMeet">
+      <meta name="theme-color" content="#12284b">
+      <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+      <link rel="icon" href="/icons/apple-touch-icon.png">
+      <link rel="manifest" href="/manifest.json">
+      <title>Block Schedule - ${esc(meet.meetName || 'Meet')}</title>
+      <style>
+        *{box-sizing:border-box}
+        body{margin:0;background:#fff;color:#111;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:1.25}
+        .page{padding:16px;max-width:1120px;margin:0 auto}
+        .print-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px;padding:10px;border:1px solid #ddd;background:#f8fafc}
+        .print-controls a,.print-controls button{border:1px solid #bbb;background:#fff;color:#111;border-radius:4px;padding:6px 9px;text-decoration:none;font-size:12px;cursor:pointer}
+        h1{font-size:22px;margin:0 0 3px}
+        h2{font-size:15px;margin:0}
+        h3{font-size:12px;margin:8px 0 4px}
+        .meet-meta,.meta-line{color:#444}
+        .meet-header{border-bottom:2px solid #111;padding-bottom:8px;margin-bottom:12px}
+        .block-section{break-inside:avoid;margin-bottom:14px}
+        .block-heading{display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid #999;padding-bottom:4px;margin-bottom:5px}
+        .print-subsection{margin-bottom:8px}
+        table{width:100%;border-collapse:collapse;margin-top:4px}
+        th,td{border:1px solid #ccc;padding:3px 5px;text-align:left;vertical-align:top}
+        th{background:#f1f5f9;color:#111;font-size:9px;text-transform:uppercase;letter-spacing:.03em}
+        .notes-box{height:32px;margin-top:6px;border:1px dashed #999;color:#777;padding:5px}
+        .empty-line{border:1px solid #ddd;padding:8px;color:#555}
+        @media print{
+          @page{size:auto;margin:.35in}
+          body{font-size:10px}
+          .page{padding:0;max-width:none}
+          .no-print{display:none!important}
+          .block-section.page-break{break-before:page}
+          .block-section:first-of-type{break-before:auto}
+          th,td{padding:2px 4px}
+          h1{font-size:18px}
+          h2{font-size:13px}
+          h3{font-size:11px}
+        }
+      </style>
+    </head>
+    <body>
+      <main class="page">
+        <div class="print-controls no-print">
+          <button type="button" onclick="window.print()">Print</button>
+          <a href="${blockPrintHref(meet.id, { ...controlsBase, notes: showNotes ? '0' : '1' })}">${showNotes ? 'Hide Notes Space' : 'Show Notes Space'}</a>
+          <a href="${blockPrintHref(meet.id, { ...controlsBase, breaks: pageBreaks ? '0' : '1' })}">${pageBreaks ? 'No Page Breaks' : 'Page Break By Block'}</a>
+          <a href="${blockPrintHref(meet.id, { ...controlsBase, empty: showEmpty ? '0' : '1' })}">${showEmpty ? 'Hide Empty Lanes' : 'Show Empty Lanes'}</a>
+          <span class="meet-meta">Compact mode on</span>
+        </div>
+        <header class="meet-header">
+          <h1>${esc(meet.meetName || 'Meet')} - Block Schedule</h1>
+          <div class="meet-meta">${esc(dateLine || '')}${location ? ' • ' + esc(location) : ''}</div>
+        </header>
+        ${blocksHtml}
+      </main>
+    </body>
+  </html>`;
 }
 
 module.exports = function createRaceDayRoutes(deps = {}) {
@@ -404,6 +581,20 @@ router.get('/portal/meet/:meetId/blocks', requireRole('meet_director'), (req, re
     bodyHtml:renderBlockBuilderView({ meet }),
   }));
 });
+
+router.get('/portal/meet/:meetId/blocks/print', requireRole('meet_director'), (req, res) => {
+  const meet=getMeetOr404(req.db,req.params.meetId);
+  if(!meet) return res.redirect('/portal');
+  if(!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
+  ensureAtLeastOneBlock(meet);
+
+  const showNotes = String(req.query.notes || '1') !== '0';
+  const pageBreaks = String(req.query.breaks || '') === '1';
+  const showEmpty = String(req.query.empty || '') === '1';
+
+  res.send(renderBlockSchedulePrintPage({ req, meet, showNotes, pageBreaks, showEmpty }));
+});
+
 router.post('/api/meet/:meetId/blocks/add', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet||!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
@@ -1095,8 +1286,8 @@ router.get('/portal/meet/:meetId/results', requireRole('meet_director','judge','
   const sections=computeMeetStandings(meet);
   const openSections=computeOpenResults(meet);
   const quadSections=computeQuadStandings(meet);
-  const ttEvent=ensureTimeTrialEvent(meet);
-  const ttResults=ttEvent ? timeTrialResults(ttEvent) : null;
+  const ttEvents=completedTimeTrialEvents(meet);
+  const ttResultsHtml=renderTimeTrialFinalResultsHtml(ttEvents);
   const okMsg = req.query.ok ? String(req.query.ok) : '';
   const errorMsg = req.query.error ? String(req.query.error) : '';
   const canManageResults = hasRole(req.user,'super_admin') || canEditMeet(req.user,meet);
@@ -1113,12 +1304,12 @@ router.get('/portal/meet/:meetId/results', requireRole('meet_director','judge','
         <div class="action-row">
           ${canManageResults ? (meet.status==='complete'?`<form method="POST" action="/portal/meet/${meet.id}/reopen"><button class="btn2" type="submit">Reopen Meet</button></form><a class="btn2" href="/portal/meet/${meet.id}/clone-confirm">Clone Setup</a><a class="btn-orange" href="/portal/meet/${meet.id}/archive-confirm">Archive Meet</a>`:meet.status==='archived'?`<form method="POST" action="/portal/meet/${meet.id}/unarchive"><button class="btn2" type="submit">Unarchive Meet</button></form>`:`<form method="POST" action="/portal/meet/${meet.id}/finalize"><button class="btn-orange" type="submit">Finalize Meet</button></form>`):''}
           ${canManageResults ? `<form method="POST" action="/portal/meet/${meet.id}/results/send-to-ssl" onsubmit="return confirm('Send official results from this SSM meet to SSL career profiles?');"><button class="btn2" type="submit">Send Results to SSL</button></form>` : ''}
-          <a class="btn2" href="/portal/meet/${meet.id}/results/print" target="_blank">Print Results</a>
+          <a class="btn2" href="/portal/meet/${meet.id}/results/print" target="_blank">Print Final Results</a>
         </div>
       </div>
       ${meet.lastSslResultsSentAt ? `<div class="note" style="margin-top:10px">Last sent to SSL: ${esc(new Date(meet.lastSslResultsSentAt).toLocaleString())}</div>` : ''}
     </div>
-    ${sections.map(resultsSectionHtml).join('<div class="spacer"></div>')||`<div class="card"><div class="muted">No inline standings yet.</div></div>`}
+    ${sections.map(resultsSectionHtml).join('<div class="spacer"></div>') || (!ttResultsHtml ? `<div class="card"><div class="muted">No inline standings yet.</div></div>` : '')}
     ${openSections.length?`
       <div class="spacer"></div>
       <h2 style="color:var(--orange)">🏁 Open Race Results</h2>
@@ -1147,16 +1338,7 @@ router.get('/portal/meet/:meetId/results', requireRole('meet_director','judge','
             <tbody>${s.standings.map(r=>`<tr><td><strong>${r.overallPlace}</strong></td><td>${esc(r.skaterName||'')}${sponsorLineHtml(r.sponsor||'')}</td><td>${esc(r.team||'')}</td><td><strong>${Number(r.totalPoints||0)}</strong></td></tr>`).join('')||`<tr><td colspan="4" class="muted">No standings yet.</td></tr>`}</tbody>
           </table>
         </div>`).join('')}`:``}
-    ${ttResults && ttResults.overall.length?`
-      <div class="spacer"></div>
-      <h2 style="color:var(--sky2)">⏱ Time Trial Event Results</h2>
-      <div class="grid-3">
-        ${[['Fastest Male', ttResults.male], ['Fastest Female', ttResults.female], ['Overall', ttResults.overall]].map(([title, rows]) => `
-          <div class="card" style="border-left:4px solid var(--sky2)">
-            <h2 style="margin-top:0">${esc(title)}</h2>
-            <table class="table"><tbody>${rows.map(row => `<tr><td>${row.rank}</td><td><strong>${esc(row.skater)}</strong><div class="muted" style="font-size:12px">${esc(row.team || '')}</div></td><td>${esc(row.time)}</td></tr>`).join('')}</tbody></table>
-          </div>`).join('')}
-      </div>`:``}`}));
+    ${ttResultsHtml}`}));
 });
 
 router.post('/portal/meet/:meetId/finalize', requireRole('meet_director'), (req, res) => {

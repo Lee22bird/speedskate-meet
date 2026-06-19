@@ -131,6 +131,7 @@ function renderBlockBuilderView({ meet }) {
         <div class="sub">${esc(meet.meetName)} • ${esc(cap(meet.status || 'draft'))} • ${inlineRaceCount} Inline • ${openRaceCount} Open • ${quadRaceCount} Quad</div>
       </div>
       <div class="action-row">
+        <a class="btn2" href="/portal/meet/${meet.id}/blocks/print" target="_blank">Print Block Schedule</a>
         <a class="btn2" href="/portal/meet/${meet.id}/registered/print-race-list" target="_blank">Print Race List</a>
       </div>
     </div>

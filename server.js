@@ -40,7 +40,11 @@ const {
   buildCostWidget,
 } = require('./services/pricingUi');
 const { skaterAvatarHtml } = require('./services/avatarDisplay');
-const { timeTrialResults } = require('./services/timeTrialEvents');
+const { completedTimeTrialEvents, timeTrialResults } = require('./services/timeTrialEvents');
+const {
+  renderTimeTrialFinalResultsHtml,
+  renderTimeTrialFinalResultsPrintHtml,
+} = require('./services/timeTrialResultsView');
 const {
   defaultPricingFields,
   normalizeMeetPricingFields,
@@ -1495,6 +1499,7 @@ app.get('/meet/:meetId/results', (req, res) => {
   const db=loadDb(); const meet=getMeetOr404(db,req.params.meetId); const data=getSessionUser(req);
   if(!isPublicMeet(meet)) return res.redirect('/meets');
   const sections=computeMeetStandings(meet); const openSections=computeOpenResults(meet); const quadSections=computeQuadStandings(meet);
+  const ttResultsHtml=renderTimeTrialFinalResultsHtml(completedTimeTrialEvents(meet));
   res.send(pageShell({title:'Results',user:data?.user||null, bodyHtml:`
     <div class="page-header"><h1>${esc(meet.meetName)}</h1><div class="sub">Results</div></div>
     <div class="live-tabs">
@@ -1502,20 +1507,28 @@ app.get('/meet/:meetId/results', (req, res) => {
       <a class="live-tab active" href="/meet/${meet.id}/results">Results</a>
       <a class="live-tab" href="/meet/${meet.id}/alerts">📲 Text Alerts</a>
     </div>
-    ${sections.map(resultsSectionHtml).join('<div class="spacer"></div>')||`<div class="card"><div class="muted">No standings yet.</div></div>`}
+    ${sections.map(resultsSectionHtml).join('<div class="spacer"></div>') || (!ttResultsHtml ? `<div class="card"><div class="muted">No standings yet.</div></div>` : '')}
     ${openSections.length?`<div class="spacer"></div><h2 style="color:var(--orange)">🏁 Open Results</h2>${openSections.map(s=>`<div class="card" style="border-left:4px solid var(--orange);margin-bottom:14px"><h2>${esc(s.race.groupLabel)} — ${esc(s.race.distanceLabel)}</h2><table class="table"><thead><tr><th>Place</th><th>Skater</th><th>Team</th></tr></thead><tbody>${s.rows.map(r=>`<tr><td><strong>${esc(r.place)}</strong></td><td>${esc(r.skaterName||'')}</td><td>${esc(r.team||'')}</td></tr>`).join('')}</tbody></table></div>`).join('')}`:``}
-    ${quadSections.length?`<div class="spacer"></div><h2 style="color:var(--purple)">🛼 Quad Results</h2>${quadSections.map(s=>`<div class="card" style="border-left:4px solid var(--purple);margin-bottom:14px"><h2>${esc(s.groupLabel)} — ${esc(s.distanceLabel)}</h2><table class="table"><thead><tr><th>Place</th><th>Skater</th><th>Team</th><th>Points</th></tr></thead><tbody>${s.standings.map(r=>`<tr><td><strong>${r.overallPlace}</strong></td><td>${esc(r.skaterName||'')}</td><td>${esc(r.team||'')}</td><td><strong>${Number(r.totalPoints||0)}</strong></td></tr>`).join('')}</tbody></table></div>`).join('')}`:``}`}));
+    ${quadSections.length?`<div class="spacer"></div><h2 style="color:var(--purple)">🛼 Quad Results</h2>${quadSections.map(s=>`<div class="card" style="border-left:4px solid var(--purple);margin-bottom:14px"><h2>${esc(s.groupLabel)} — ${esc(s.distanceLabel)}</h2><table class="table"><thead><tr><th>Place</th><th>Skater</th><th>Team</th><th>Points</th></tr></thead><tbody>${s.standings.map(r=>`<tr><td><strong>${r.overallPlace}</strong></td><td>${esc(r.skaterName||'')}</td><td>${esc(r.team||'')}</td><td><strong>${Number(r.totalPoints||0)}</strong></td></tr>`).join('')}</tbody></table></div>`).join('')}`:``}
+    ${ttResultsHtml}`}));
 });
 
 app.get('/portal/meet/:meetId/results/print', requireRole('meet_director','judge','coach'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId); if(!meet) return res.redirect('/portal');
   const sections=computeMeetStandings(meet); const openSections=computeOpenResults(meet); const quadSections=computeQuadStandings(meet);
+  const ttPrintHtml=renderTimeTrialFinalResultsPrintHtml(completedTimeTrialEvents(meet));
+  const location = meetRinkLabel(req.db, meet);
+  const dateLine = meetDateLabel(meet);
+  const hasAnyResults = sections.length || openSections.length || quadSections.length || String(ttPrintHtml || '').trim();
   res.send(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="apple-mobile-web-app-title" content="SpeedSkateMeet"><meta name="theme-color" content="#12284b"><link rel="apple-touch-icon" href="/icons/apple-touch-icon.png"><link rel="icon" href="/icons/apple-touch-icon.png"><link rel="manifest" href="/manifest.json"><title>Results — ${esc(meet.meetName)}</title>
-    <style>body{font-family:Arial,sans-serif;padding:18px;color:#111;font-size:12px}h1,h2{margin:0 0 6px}
-    .meta{color:#555;margin-bottom:12px}.section{margin-bottom:26px}
-    table{width:100%;border-collapse:collapse;margin-top:8px}th,td{padding:6px 8px;border-bottom:1px solid #ddd;text-align:left}
-    th{font-size:11px;text-transform:uppercase;color:#666;letter-spacing:.05em}</style></head><body>
-    <h1>${esc(meet.meetName)} — Results</h1><div class="meta">${esc(meet.date||'')}${meet.startTime?` • ${esc(meet.startTime)}`:''}</div>
+    <style>*{box-sizing:border-box}body{margin:0;background:#fff;color:#111;font-family:Arial,sans-serif;font-size:11px;line-height:1.25}.page{padding:16px;max-width:1040px;margin:0 auto}
+    .print-controls{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;padding:10px;border:1px solid #ddd;background:#f8fafc}.print-controls button,.print-controls a{border:1px solid #bbb;background:#fff;color:#111;border-radius:4px;padding:6px 9px;text-decoration:none;font-size:12px;cursor:pointer}
+    .meet-header{border-bottom:2px solid #111;padding-bottom:8px;margin-bottom:12px}h1{font-size:22px;margin:0 0 3px}h2{font-size:14px;margin:0 0 5px}.meta{color:#444;margin-bottom:6px}.section{margin-bottom:18px;break-inside:avoid}
+    table{width:100%;border-collapse:collapse;margin-top:5px}th,td{padding:3px 5px;border:1px solid #ccc;text-align:left;vertical-align:top}
+    th{background:#f1f5f9;color:#111;font-size:9px;text-transform:uppercase;letter-spacing:.03em}.empty-line{border:1px solid #ddd;padding:8px;color:#555}
+    @media print{@page{size:auto;margin:.35in}.no-print{display:none!important}.page{padding:0;max-width:none}body{font-size:10px}h1{font-size:18px}h2{font-size:13px}th,td{padding:2px 4px}}</style></head><body><main class="page">
+    <div class="print-controls no-print"><button type="button" onclick="window.print()">Print</button><a href="/portal/meet/${esc(meet.id)}/results">Back To Results</a><span class="meta">Compact print view</span></div>
+    <header class="meet-header"><h1>${esc(meet.meetName)} — Final Results</h1><div class="meta">${esc(dateLine||'')}${meet.startTime?` • ${esc(meet.startTime)}`:''}${location?` • ${esc(location)}`:''}</div></header>
     ${sections.map(s=>`<div class="section"><h2>${esc(s.groupLabel)} — ${esc(cap(s.division))}</h2>
       <table><thead><tr><th>Place</th><th>Skater</th><th>Team</th><th>Points</th></tr></thead><tbody>
       ${s.standings.map(r=>`<tr><td>${r.overallPlace}</td><td>${esc(r.skaterName||'')}${r.sponsor?` (${esc(r.sponsor)})`:''}
@@ -1529,7 +1542,9 @@ app.get('/portal/meet/:meetId/results/print', requireRole('meet_director','judge
       <table><thead><tr><th>Place</th><th>Skater</th><th>Team</th><th>Points</th></tr></thead><tbody>
       ${s.standings.map(r=>`<tr><td>${r.overallPlace}</td><td>${esc(r.skaterName||'')}</td><td>${esc(r.team||'')}</td><td>${Number(r.totalPoints||0)}</td></tr>`).join('')||`<tr><td colspan="4">No standings.</td></tr>`}
       </tbody></table></div>`).join('')}`:``}
-  </body></html>`);
+    ${ttPrintHtml}
+    ${!hasAnyResults ? '<div class="empty-line">No final results yet.</div>' : ''}
+  </main></body></html>`);
 });
 
 // ── Public Live ───────────────────────────────────────────────────────────────

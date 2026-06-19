@@ -134,6 +134,17 @@ function timeTrialResults(event) {
   };
 }
 
+function timeTrialEventIsComplete(event) {
+  const status = String(event?.status || '').trim().toLowerCase();
+  return !!(event && (event.finalized || status === 'closed' || status === 'complete' || status === 'completed'));
+}
+
+function completedTimeTrialEvents(meet) {
+  return (Array.isArray(meet?.timeTrialEvents) ? meet.timeTrialEvents : [])
+    .filter(event => event && event.type === 'time_trial_event' && event.enabled !== false)
+    .filter(timeTrialEventIsComplete);
+}
+
 function timeTrialStats(event) {
   const total = (event?.participants || []).length;
   const completed = (event?.participants || []).filter(row => timeNumber(row.time) != null).length;
@@ -161,6 +172,8 @@ module.exports = {
   timeTrialEventTitle,
   timeTrialEventAvailable,
   registrationSelectedForTimeTrial,
+  timeTrialEventIsComplete,
+  completedTimeTrialEvents,
   timeTrialResults,
   timeTrialStats,
   saveTimeTrialTime,
