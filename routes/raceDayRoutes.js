@@ -75,17 +75,93 @@ function printableTimeTrialRows(event) {
     </tr>`).join('') || '<tr><td colspan="5">No registered Time Trial skaters.</td></tr>';
 }
 
-function renderBlockSchedulePrintPage({ req, meet, showNotes, pageBreaks, showEmpty }) {
+function renderBlockSchedulePrintPage({ req, meet, showNotes, pageBreaks, showEmpty, layout }) {
   const raceById = new Map((meet.races || []).map(race => [String(race.id), race]));
   const timeTrialById = new Map((meet.timeTrialEvents || []).map(event => [String(event.id), event]));
   const breakTypes = new Set(['break', 'lunch', 'awards', 'practice']);
+  const printLayout = ['compact', 'standard', 'official'].includes(layout) ? layout : 'compact';
   let scheduleNo = 0;
 
   const controlsBase = {
+    layout: printLayout,
     notes: showNotes ? '1' : '0',
     breaks: pageBreaks ? '1' : '0',
     empty: showEmpty ? '1' : '0',
   };
+
+  function printableRaceLanes(race) {
+    const rawRows = laneRowsForRace(race, meet);
+    return (showEmpty ? rawRows : rawRows.filter(row =>
+      String(row.skaterName || '').trim() ||
+      String(row.team || '').trim() ||
+      String(row.helmetNumber || '').trim()
+    ));
+  }
+
+  function raceLaneRowsHtml(lanes) {
+    return (lanes.length ? lanes : [{ lane: '', helmetNumber: '', skaterName: '', team: '' }]).map(lane => `
+      <div class="lane-line">
+        <span class="lane-num">Lane ${esc(lane.lane || '')}</span>
+        <span class="lane-skater">${lane.helmetNumber ? '#' + esc(lane.helmetNumber) + ' ' : ''}${esc(lane.skaterName || '')}</span>
+        <span class="lane-team">${esc(lane.team || '')}</span>
+      </div>`).join('');
+  }
+
+  function raceTableHtml(race, lanes, raceNo) {
+    const rows = (lanes.length ? lanes : [{ lane: '', helmetNumber: '', skaterName: '', team: '' }]).map((lane, idx) => `
+      <tr>
+        <td>${idx === 0 ? raceNo : ''}</td>
+        <td>${esc(race.groupLabel || '')}</td>
+        <td>${esc(cap(race.division || ''))}</td>
+        <td>${esc(race.distanceLabel || '')}</td>
+        <td>${esc(raceDisplayStage(race))}</td>
+        <td>${esc(lane.lane || '')}</td>
+        <td>${lane.helmetNumber ? '#' + esc(lane.helmetNumber) : ''}</td>
+        <td>${esc(lane.skaterName || '')}</td>
+        <td>${esc(lane.team || '')}</td>
+      </tr>`).join('');
+    return `
+      <table>
+        <thead><tr><th>Race</th><th>Division</th><th>Class</th><th>Distance</th><th>Heat</th><th>Lane</th><th>Helmet</th><th>Skater</th><th>Team</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  }
+
+  function raceCardHtml(race, lanes, raceNo) {
+    if (printLayout === 'standard') {
+      return `<article class="race-card">${raceTableHtml(race, lanes, raceNo)}</article>`;
+    }
+    return `
+      <article class="race-card">
+        <div class="race-card-head">
+          <div class="race-number">Race ${raceNo}</div>
+          <div>
+            <div class="race-title">${esc(race.groupLabel || '')}</div>
+            <div class="race-sub">${esc(cap(race.division || ''))} • ${esc(race.distanceLabel || '')} • ${esc(raceDisplayStage(race))}</div>
+          </div>
+        </div>
+        <div class="lane-list">${raceLaneRowsHtml(lanes)}</div>
+        ${printLayout === 'official' ? '<div class="official-notes">Official notes</div>' : ''}
+      </article>`;
+  }
+
+  function timeTrialCardHtml(event, eventNo) {
+    return `
+      <article class="race-card time-trial-card">
+        <div class="race-card-head">
+          <div class="race-number">Event ${eventNo}</div>
+          <div>
+            <div class="race-title">${esc(timeTrialEventTitle(event))}</div>
+            <div class="race-sub">Time Trial Event • Distance: ${esc(event.distance || '100m')}</div>
+          </div>
+        </div>
+        <table>
+          <thead><tr><th>Order</th><th>Skater</th><th>Team</th><th>Gender</th><th>Time</th></tr></thead>
+          <tbody>${printableTimeTrialRows(event)}</tbody>
+        </table>
+        ${printLayout === 'official' ? '<div class="official-notes">Official notes</div>' : ''}
+      </article>`;
+  }
 
   const blocksHtml = (meet.blocks || []).map((block, blockIdx) => {
     const isDivider = breakTypes.has(String(block.type || ''));
@@ -110,54 +186,23 @@ function renderBlockSchedulePrintPage({ req, meet, showNotes, pageBreaks, showEm
       const event = timeTrialById.get(String(eventId));
       if (!event) return '';
       scheduleNo += 1;
-      return `
-        <div class="print-subsection">
-          <h3>${scheduleNo}. ${esc(timeTrialEventTitle(event))}</h3>
-          <div class="meta-line">Time Trial Event • Distance: ${esc(event.distance || '100m')}</div>
-          <table>
-            <thead><tr><th>Order</th><th>Skater</th><th>Team</th><th>Gender</th><th>Time</th></tr></thead>
-            <tbody>${printableTimeTrialRows(event)}</tbody>
-          </table>
-        </div>`;
+      return timeTrialCardHtml(event, scheduleNo);
     }).join('');
 
     const raceSections = (block.raceIds || []).map(raceId => {
       const race = raceById.get(String(raceId));
       if (!race) return '';
-      const rawRows = laneRowsForRace(race, meet);
-      const lanes = (showEmpty ? rawRows : rawRows.filter(row =>
-        String(row.skaterName || '').trim() ||
-        String(row.team || '').trim() ||
-        String(row.helmetNumber || '').trim()
-      ));
+      const lanes = printableRaceLanes(race);
       if (!showEmpty && !lanes.length) return '';
       scheduleNo += 1;
-      const tableRows = (lanes.length ? lanes : [{ lane: '', helmetNumber: '', skaterName: '', team: '' }]).map((lane, idx) => `
-        <tr>
-          <td>${idx === 0 ? scheduleNo : ''}</td>
-          <td>${esc(race.groupLabel || '')}</td>
-          <td>${esc(cap(race.division || ''))}</td>
-          <td>${esc(race.distanceLabel || '')}</td>
-          <td>${esc(raceDisplayStage(race))}</td>
-          <td>${esc(lane.lane || '')}</td>
-          <td>${lane.helmetNumber ? '#' + esc(lane.helmetNumber) : ''}</td>
-          <td>${esc(lane.skaterName || '')}</td>
-          <td>${esc(lane.team || '')}</td>
-        </tr>`).join('');
-      return `
-        <div class="print-subsection">
-          <table>
-            <thead><tr><th>Race</th><th>Division</th><th>Class</th><th>Distance</th><th>Heat</th><th>Lane</th><th>Helmet</th><th>Skater</th><th>Team</th></tr></thead>
-            <tbody>${tableRows}</tbody>
-          </table>
-        </div>`;
+      return raceCardHtml(race, lanes, scheduleNo);
     }).join('');
 
     const content = `${timeTrialSections}${raceSections}` || '<div class="empty-line">No scheduled races in this block.</div>';
     return `
       <section class="block-section ${pageBreaks ? 'page-break' : ''}">
         ${header}
-        ${content}
+        <div class="race-print-grid">${content}</div>
         ${showNotes ? '<div class="notes-box">Notes</div>' : ''}
       </section>`;
   }).join('') || '<section class="block-section"><div class="empty-line">No blocks have been created.</div></section>';
@@ -181,9 +226,11 @@ function renderBlockSchedulePrintPage({ req, meet, showNotes, pageBreaks, showEm
       <style>
         *{box-sizing:border-box}
         body{margin:0;background:#fff;color:#111;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:1.25}
+        body.layout-official{font-size:12px}
         .page{padding:16px;max-width:1120px;margin:0 auto}
         .print-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px;padding:10px;border:1px solid #ddd;background:#f8fafc}
         .print-controls a,.print-controls button{border:1px solid #bbb;background:#fff;color:#111;border-radius:4px;padding:6px 9px;text-decoration:none;font-size:12px;cursor:pointer}
+        .print-controls a.active{background:#111;color:#fff;border-color:#111}
         h1{font-size:22px;margin:0 0 3px}
         h2{font-size:15px;margin:0}
         h3{font-size:12px;margin:8px 0 4px}
@@ -191,7 +238,23 @@ function renderBlockSchedulePrintPage({ req, meet, showNotes, pageBreaks, showEm
         .meet-header{border-bottom:2px solid #111;padding-bottom:8px;margin-bottom:12px}
         .block-section{break-inside:avoid;margin-bottom:14px}
         .block-heading{display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid #999;padding-bottom:4px;margin-bottom:5px}
-        .print-subsection{margin-bottom:8px}
+        .race-print-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:start}
+        body.layout-standard .race-print-grid,body.layout-official .race-print-grid{grid-template-columns:1fr}
+        .race-card{border:1px solid #999;padding:6px;break-inside:avoid;page-break-inside:avoid;background:#fff}
+        .time-trial-card{grid-column:1/-1}
+        .race-card-head{display:grid;grid-template-columns:auto 1fr;gap:8px;align-items:start;border-bottom:1px solid #ccc;padding-bottom:4px;margin-bottom:4px}
+        .race-number{font-weight:800;border:1px solid #111;padding:2px 5px;white-space:nowrap}
+        .race-title{font-weight:800;font-size:12px}
+        .race-sub{color:#444;font-size:10px}
+        .lane-list{display:grid;gap:2px}
+        .lane-line{display:grid;grid-template-columns:52px 1fr 1fr;gap:5px;align-items:baseline;border-bottom:1px dotted #ddd;padding:2px 0}
+        .lane-line:last-child{border-bottom:0}
+        .lane-num{font-weight:700;color:#333}
+        .lane-skater{font-weight:700}
+        .lane-team{color:#444}
+        .official-notes{height:56px;margin-top:7px;border:1px dashed #999;color:#777;padding:5px}
+        body.layout-official .race-card{padding:10px;margin-bottom:3px}
+        body.layout-official .official-notes{height:90px}
         table{width:100%;border-collapse:collapse;margin-top:4px}
         th,td{border:1px solid #ccc;padding:3px 5px;text-align:left;vertical-align:top}
         th{background:#f1f5f9;color:#111;font-size:9px;text-transform:uppercase;letter-spacing:.03em}
@@ -200,6 +263,7 @@ function renderBlockSchedulePrintPage({ req, meet, showNotes, pageBreaks, showEm
         @media print{
           @page{size:auto;margin:.35in}
           body{font-size:10px}
+          body.layout-official{font-size:11px}
           .page{padding:0;max-width:none}
           .no-print{display:none!important}
           .block-section.page-break{break-before:page}
@@ -211,14 +275,17 @@ function renderBlockSchedulePrintPage({ req, meet, showNotes, pageBreaks, showEm
         }
       </style>
     </head>
-    <body>
+    <body class="layout-${esc(printLayout)}">
       <main class="page">
         <div class="print-controls no-print">
           <button type="button" onclick="window.print()">Print</button>
+          <a class="${printLayout === 'compact' ? 'active' : ''}" href="${blockPrintHref(meet.id, { ...controlsBase, layout: 'compact' })}">Compact Two-Column</a>
+          <a class="${printLayout === 'standard' ? 'active' : ''}" href="${blockPrintHref(meet.id, { ...controlsBase, layout: 'standard' })}">Standard Layout</a>
+          <a class="${printLayout === 'official' ? 'active' : ''}" href="${blockPrintHref(meet.id, { ...controlsBase, layout: 'official' })}">Official Packet</a>
           <a href="${blockPrintHref(meet.id, { ...controlsBase, notes: showNotes ? '0' : '1' })}">${showNotes ? 'Hide Notes Space' : 'Show Notes Space'}</a>
           <a href="${blockPrintHref(meet.id, { ...controlsBase, breaks: pageBreaks ? '0' : '1' })}">${pageBreaks ? 'No Page Breaks' : 'Page Break By Block'}</a>
           <a href="${blockPrintHref(meet.id, { ...controlsBase, empty: showEmpty ? '0' : '1' })}">${showEmpty ? 'Hide Empty Lanes' : 'Show Empty Lanes'}</a>
-          <span class="meet-meta">Compact mode on</span>
+          <span class="meet-meta">${printLayout === 'compact' ? 'Compact two-column on' : printLayout === 'official' ? 'Official packet layout' : 'Standard layout'}</span>
         </div>
         <header class="meet-header">
           <h1>${esc(meet.meetName || 'Meet')} - Block Schedule</h1>
@@ -591,8 +658,9 @@ router.get('/portal/meet/:meetId/blocks/print', requireRole('meet_director'), (r
   const showNotes = String(req.query.notes || '1') !== '0';
   const pageBreaks = String(req.query.breaks || '') === '1';
   const showEmpty = String(req.query.empty || '') === '1';
+  const layout = String(req.query.layout || 'compact');
 
-  res.send(renderBlockSchedulePrintPage({ req, meet, showNotes, pageBreaks, showEmpty }));
+  res.send(renderBlockSchedulePrintPage({ req, meet, showNotes, pageBreaks, showEmpty, layout }));
 });
 
 router.post('/api/meet/:meetId/blocks/add', requireRole('meet_director'), (req, res) => {

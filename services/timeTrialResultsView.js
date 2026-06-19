@@ -49,23 +49,41 @@ function renderTimeTrialFinalResultsHtml(events = []) {
 }
 
 function renderTimeTrialFinalResultsPrintHtml(events = []) {
+  const printSections = [
+    { key: 'overall', title: 'Overall Results' },
+    { key: 'male', title: 'Male Results' },
+    { key: 'female', title: 'Female Results' },
+  ];
+  const resultRows = rows => {
+    if (!Array.isArray(rows) || !rows.length) return '<div class="tt-print-empty">No times recorded.</div>';
+    return `
+      <table class="tt-print-table">
+        <thead><tr><th>Place</th><th>Skater</th><th>Team</th><th>Time</th></tr></thead>
+        <tbody>${rows.map(row => `
+          <tr>
+            <td>${esc(row.rank)}</td>
+            <td>${esc(row.skater || '')}</td>
+            <td>${esc(row.team || '')}</td>
+            <td>${esc(row.time || '')}</td>
+          </tr>`).join('')}</tbody>
+      </table>`;
+  };
+
   return (Array.isArray(events) ? events : []).map(event => {
     const results = timeTrialResults(event);
     if (!results.overall.length) return '';
-    const section = (title, rows) => `
-      <div class="section">
-        <h2>${esc(timeTrialEventTitle(event))} — ${esc(title)}</h2>
+    return `
+      <div class="section tt-print-event">
+        <h2>${esc(timeTrialEventTitle(event))}</h2>
         <div class="meta">Distance: ${esc(event.distance || '100m')}</div>
-        <table>
-          <thead><tr><th>Place</th><th>Skater</th><th>Team</th><th>Gender</th><th>Time</th></tr></thead>
-          <tbody>${(rows || []).map(row => `<tr><td>${esc(row.rank)}</td><td>${esc(row.skater || '')}</td><td>${esc(row.team || '')}</td><td>${esc(row.gender || '')}</td><td>${esc(row.time || '')}</td></tr>`).join('') || '<tr><td colspan="5">No times.</td></tr>'}</tbody>
-        </table>
+        <div class="tt-print-grid">
+          ${printSections.map(section => `
+            <section class="tt-print-column">
+              <h3>${esc(section.title)}</h3>
+              ${resultRows(results[section.key])}
+            </section>`).join('')}
+        </div>
       </div>`;
-    return [
-      section('Overall Results', results.overall),
-      section('Male Results', results.male),
-      section('Female Results', results.female),
-    ].join('');
   }).filter(Boolean).join('');
 }
 
