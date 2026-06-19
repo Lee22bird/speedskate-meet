@@ -1069,6 +1069,22 @@ function pricingFieldsFromMeet(meet) {
   };
 }
 
+function hasValidRelayTemplate(template) {
+  if (!template || !template.enabled) return false;
+  return !!(
+    String(template.type || '').trim() ||
+    String(template.age || template.ageGroup || '').trim() ||
+    String(template.distance || '').trim()
+  );
+}
+
+function hasRelayEvents(meet) {
+  if (!meet) return false;
+  if (meet.relayEnabled === true || meet.relay_enabled === true || meet.relaysEnabled === true) return true;
+  if (Array.isArray(meet.relayTemplates) && meet.relayTemplates.some(hasValidRelayTemplate)) return true;
+  return Array.isArray(meet.races) && meet.races.some(r => r && r.isRelayRace === true);
+}
+
 function buildRegistrationPricingPreview(meet) {
   const fees = pricingFieldsFromMeet(meet || {});
   return buildCostWidget(
@@ -1300,6 +1316,7 @@ module.exports = {
   numericPlace,
   tryAdvanceTopThreeFromTwoHeats,
   pricingFieldsFromMeet,
+  hasRelayEvents,
   buildRegistrationPricingPreview,
   racingSoonLabel,
   isArchivedMeet,

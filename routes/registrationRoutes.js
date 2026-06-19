@@ -10,6 +10,7 @@ const {
   isRegistrationClosed, isPublicMeet,
   generateAdditionalRacesForMeet, ensureAtLeastOneBlock,
   buildRegistrationPricingPreview,
+  hasRelayEvents,
 } = require('../services/meetHelpers');
 const { calcRegistrationCost } = require('../services/pricing');
 const {
@@ -101,6 +102,7 @@ router.get('/meet/:meetId/register', (req, res) => {
   const staffList = renderMeetStaffList(meet, { compact: true });
   const timeTrialAvailable = timeTrialEventAvailable(meet);
   const timeTrialLabel = timeTrialAvailable ? timeTrialLabelForMeet(meet) : '';
+  const relayEventsAvailable = hasRelayEvents(meet);
   res.send(pageShell({title:'Register',user:data?.user||null, bodyHtml:`
     <div class="page-header"><h1>Register</h1><div class="sub">${esc(meet.meetName)}${meet.date?` • ${esc(meet.date)}`:''}</div></div>
     <div class="card">
@@ -132,7 +134,7 @@ router.get('/meet/:meetId/register', (req, res) => {
             <div class="toggle-row"><div><div class="toggle-row-label">Open</div></div>${toggleSwitch('open',false)}</div>
             ${(meet.quadGroups||[]).some(g=>g.enabled)?`<div class="toggle-row"><div><div class="toggle-row-label">Quad</div></div>${toggleSwitch('quad',false)}</div>`:''}
             ${timeTrialAvailable?`<div class="toggle-row"><div><div class="toggle-row-label">${esc(timeTrialLabel)}</div></div>${toggleSwitch('timeTrials',false)}</div>`:''}
-            ${meet.relayEnabled?`<div class="toggle-row"><div><div class="toggle-row-label">2 Person Relay</div></div>${toggleSwitch('relay2Person',false)}</div><div class="toggle-row"><div><div class="toggle-row-label">3 Person Relay</div></div>${toggleSwitch('relay3Person',false)}</div><div class="toggle-row"><div><div class="toggle-row-label">4 Person Relay</div></div>${toggleSwitch('relay4Person',false)}</div>`:''}
+            ${relayEventsAvailable?`<div class="toggle-row"><div><div class="toggle-row-label">2 Person Relay</div></div>${toggleSwitch('relay2Person',false)}</div><div class="toggle-row"><div><div class="toggle-row-label">3 Person Relay</div></div>${toggleSwitch('relay3Person',false)}</div><div class="toggle-row"><div><div class="toggle-row-label">4 Person Relay</div></div>${toggleSwitch('relay4Person',false)}</div>`:''}
             ${(meet.additionalGroups||meet.additionalRaceGroups||meet.additionalRaces||meet.skateabilityGroups||[]).length?`
               <div class="toggle-row"><div><div class="toggle-row-label">Additional Races</div><div class="toggle-row-desc">Extra race division — select your group below if enabled</div></div>${toggleSwitch('additional',false)}</div>
               <div id="additional-group-row" style="display:none">
@@ -226,6 +228,7 @@ function registrationForm(meet,reg,action,title) {
   const timeTrialAvailable = timeTrialEventAvailable(meet);
   const timeTrialLabel = timeTrialAvailable ? timeTrialLabelForMeet(meet) : '';
   const timeTrialSelected = timeTrialAvailable && registrationSelectedForTimeTrial(reg, ensureTimeTrialEvent(meet));
+  const relayEventsAvailable = hasRelayEvents(meet);
   return `
     <div style="max-width:760px">
       <div class="page-header"><h1>${esc(title)}</h1><div class="sub">${isAdd ? 'Manual late-entry / race-day add' : 'Update racer details and event selections'}</div></div>
@@ -268,7 +271,7 @@ function registrationForm(meet,reg,action,title) {
             <div class="toggle-row"><div><div class="toggle-row-label">Open</div></div>${toggleSwitch('open',!!reg.options?.open)}</div>
             ${(meet.quadGroups||[]).some(g=>g.enabled)?`<div class="toggle-row"><div><div class="toggle-row-label">Quad</div></div>${toggleSwitch('quad',!!reg.options?.quad)}</div>`:''}
             ${timeTrialAvailable?`<div class="toggle-row"><div><div class="toggle-row-label">${esc(timeTrialLabel)}</div></div>${toggleSwitch('timeTrials',timeTrialSelected)}</div>`:''}
-            ${meet.relayEnabled?`<div class="toggle-row"><div><div class="toggle-row-label">2 Person Relay</div></div>${toggleSwitch('relay2Person',!!reg.options?.relay2Person)}</div><div class="toggle-row"><div><div class="toggle-row-label">3 Person Relay</div></div>${toggleSwitch('relay3Person',!!reg.options?.relay3Person)}</div><div class="toggle-row"><div><div class="toggle-row-label">4 Person Relay</div></div>${toggleSwitch('relay4Person',!!reg.options?.relay4Person)}</div>`:''}
+            ${relayEventsAvailable?`<div class="toggle-row"><div><div class="toggle-row-label">2 Person Relay</div></div>${toggleSwitch('relay2Person',!!reg.options?.relay2Person)}</div><div class="toggle-row"><div><div class="toggle-row-label">3 Person Relay</div></div>${toggleSwitch('relay3Person',!!reg.options?.relay3Person)}</div><div class="toggle-row"><div><div class="toggle-row-label">4 Person Relay</div></div>${toggleSwitch('relay4Person',!!reg.options?.relay4Person)}</div>`:''}
             ${(meet.additionalGroups||meet.additionalRaceGroups||meet.additionalRaces||meet.skateabilityGroups||[]).length?`
               <div class="toggle-row"><div><div class="toggle-row-label">Additional Races</div><div class="toggle-row-desc">Extra race division</div></div>${toggleSwitch('additional',!!(reg.options?.additional||reg.options?.skateability))}</div>
               <div id="edit-additional-group-row" style="${(reg.options?.additional||reg.options?.skateability)?'':'display:none'}">
