@@ -15,6 +15,11 @@ const {
   normalizeMeetPricingFields,
 } = require('./pricingModel');
 const { normalizeMeetStaffAssignments } = require('./staffAssignments');
+const {
+  planNormalRaceSizing,
+  shouldSplitNormalRace,
+  distributeByTeam,
+} = require('./raceSizing');
 
 // USARS SR150.1: ages are reckoned as of January 1 of the competitive year.
 function usarsAge(birthdate, meetDate) {
@@ -690,27 +695,12 @@ function isOpenDivision(div) { return String(div||'').toLowerCase()==='open'; }
 
 function registrationSortKey(reg) { return [String(reg.team||''),String(reg.name||''),Number(reg.age||0),Number(reg.id||0)].join('|'); }
 
-function distributeByTeam(entries,heatCount) {
-  const buckets=Array.from({length:heatCount},()=>[]); const teamMap=new Map();
-  for(const entry of entries) { const team=String(entry.team||'Independent'); if(!teamMap.has(team)) teamMap.set(team,[]); teamMap.get(team).push(entry); }
-  for(const group of Array.from(teamMap.values()).sort((a,b)=>b.length-a.length)) {
-    for(const skater of group) {
-      let bestIdx=0,bestScore=Infinity;
-      for(let i=0;i<buckets.length;i++) {
-        const sameTeamCount=buckets[i].filter(x=>String(x.team||'Independent')===String(skater.team||'Independent')).length;
-        const score=sameTeamCount*100+buckets[i].length;
-        if(score<bestScore){bestScore=score;bestIdx=i;}
-      } buckets[bestIdx].push(skater);
-    }
-  } return buckets;
-}
-
 function buildHeatRaceShell(baseRace,stage,heatNumber,suffixOrder) {
   return {...baseRace,id:'r'+crypto.randomBytes(6).toString('hex'),orderHint:Number(baseRace.orderHint||0)+suffixOrder/100,stage,heatNumber:stage==='final'?0:heatNumber,isFinal:stage==='final',laneEntries:[],status:'open',closedAt:''};
 }
 
 function shouldSplitIntoHeats(baseRace,entryCount,laneCount) {
-  if(isOpenDivision(baseRace.division)) return false; if(baseRace.isOpenRace) return false; return entryCount>laneCount;
+  if(isOpenDivision(baseRace.division)) return false; if(baseRace.isOpenRace) return false; return shouldSplitNormalRace(entryCount);
 }
 
 function buildRaceSetForEntries(baseRace,regs,laneCount) {
@@ -721,10 +711,10 @@ function buildRaceSetForEntries(baseRace,regs,laneCount) {
   }
   if(!shouldSplitIntoHeats(baseRace,sorted.length,laneCount)) {
     return [{...baseRace,stage:'final',heatNumber:0,isFinal:true,startType:'standing',countsForOverall:true,
-      laneEntries:sorted.slice(0,laneCount).map((reg,idx)=>({lane:idx+1,registrationId:reg.id,helmetNumber:reg.helmetNumber,skaterName:reg.name,team:reg.team,place:'',time:'',status:''}))}];
+      laneEntries:sorted.map((reg,idx)=>({lane:idx+1,registrationId:reg.id,helmetNumber:reg.helmetNumber,skaterName:reg.name,team:reg.team,place:'',time:'',status:''}))}];
   }
-  const heatCount=Math.ceil(sorted.length/laneCount);
-  const buckets=distributeByTeam(sorted,heatCount).map(b=>b.slice(0,laneCount)); const raceSet=[];
+  const racePlan=planNormalRaceSizing(sorted.length);
+  const buckets=distributeByTeam(sorted,racePlan.heatSizes); const raceSet=[];
   buckets.forEach((bucket,idx)=>{
     const heatRace=buildHeatRaceShell(baseRace,'heat',idx+1,idx+1);
     heatRace.startType='standing'; heatRace.countsForOverall=false;

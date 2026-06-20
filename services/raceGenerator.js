@@ -1,4 +1,9 @@
 const crypto = require('crypto');
+const {
+  planNormalRaceSizing,
+  shouldSplitNormalRace,
+  distributeByTeam,
+} = require('./raceSizing');
 
 
 const CHALLENGE_TOWARD_SENIOR = {
@@ -167,41 +172,6 @@ function ensureCurrentRace(meet) {
   }
 }
 
-function distributeByTeam(entries, heatCount) {
-  const buckets = Array.from({ length: heatCount }, () => []);
-  const teamMap = new Map();
-
-  for (const entry of entries) {
-    const team = String(entry.team || 'Independent');
-    if (!teamMap.has(team)) teamMap.set(team, []);
-    teamMap.get(team).push(entry);
-  }
-
-  for (const group of Array.from(teamMap.values()).sort((a, b) => b.length - a.length)) {
-    for (const skater of group) {
-      let bestIdx = 0;
-      let bestScore = Infinity;
-
-      for (let i = 0; i < buckets.length; i++) {
-        const sameTeamCount = buckets[i].filter(
-          x => String(x.team || 'Independent') === String(skater.team || 'Independent')
-        ).length;
-
-        const score = sameTeamCount * 100 + buckets[i].length;
-
-        if (score < bestScore) {
-          bestScore = score;
-          bestIdx = i;
-        }
-      }
-
-      buckets[bestIdx].push(skater);
-    }
-  }
-
-  return buckets;
-}
-
 function buildHeatRaceShell(baseRace, stage, heatNumber, suffixOrder) {
   return {
     ...baseRace,
@@ -219,7 +189,7 @@ function buildHeatRaceShell(baseRace, stage, heatNumber, suffixOrder) {
 function shouldSplitIntoHeats(baseRace, entryCount, laneCount) {
   if (isOpenDivision(baseRace.division)) return false;
   if (baseRace.isOpenRace) return false;
-  return entryCount > laneCount;
+  return shouldSplitNormalRace(entryCount);
 }
 
 function buildRaceSetForEntries(baseRace, regs, laneCount) {
@@ -256,7 +226,7 @@ function buildRaceSetForEntries(baseRace, regs, laneCount) {
       isFinal: true,
       startType: 'standing',
       countsForOverall: true,
-      laneEntries: sorted.slice(0, laneCount).map((reg, idx) => ({
+      laneEntries: sorted.map((reg, idx) => ({
         lane: idx + 1,
         registrationId: reg.id,
         helmetNumber: reg.helmetNumber,
@@ -269,8 +239,8 @@ function buildRaceSetForEntries(baseRace, regs, laneCount) {
     }];
   }
 
-  const heatCount = Math.ceil(sorted.length / laneCount);
-  const buckets = distributeByTeam(sorted, heatCount).map(b => b.slice(0, laneCount));
+  const racePlan = planNormalRaceSizing(sorted.length);
+  const buckets = distributeByTeam(sorted, racePlan.heatSizes);
   const raceSet = [];
 
   buckets.forEach((bucket, idx) => {

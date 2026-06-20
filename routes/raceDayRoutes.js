@@ -1199,7 +1199,7 @@ router.post('/portal/meet/:meetId/race-day/judges/save', requireRole('judge','me
   }
 
   const existingLaneEntries = Array.isArray(race.laneEntries) ? [...race.laneEntries] : [];
-  const laneCount=(race.isOpenRace||isOpenDivision(race.division)||race.isRelayRace)?Math.max(existingLaneEntries.length,1):Math.max(1,Number(meet.lanes)||4);
+  const laneCount=(race.isOpenRace||isOpenDivision(race.division)||race.isRelayRace)?Math.max(existingLaneEntries.length,1):Math.max(existingLaneEntries.length,Number(meet.lanes)||4,1);
   race.laneEntries=[];
   for(let i=1;i<=laneCount;i++) {
     const existing=existingLaneEntries.find(x=>Number(x.lane)===i)||{};

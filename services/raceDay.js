@@ -133,7 +133,7 @@ function laneRowsForRace(race, meet) {
   const maxLanes =
     race.isOpenRace || String(race.division || '') === 'open'
       ? Math.max((race.laneEntries || []).length, 1)
-      : Math.max(1, Number(meet.lanes) || 4);
+      : Math.max((race.laneEntries || []).length, Number(meet.lanes) || 4, 1);
 
   for (let lane = 1; lane <= maxLanes; lane++) {
     const existing =
