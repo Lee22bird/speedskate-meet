@@ -135,6 +135,7 @@ const createRaceDayRoutes = require('./routes/raceDayRoutes');
 const createSslImportRoutes = require('./routes/sslImportRoutes');
 const createStaffRoutes = require('./routes/staffRoutes');
 const createTimeTrialRoutes = require('./routes/timeTrialRoutes');
+const createDesktopRoutes = require('./routes/desktopRoutes');
 const { renderMeetStaffList } = require('./services/staffAssignments');
 const {
   DEFAULT_SESSION_TTL_MS,
@@ -248,7 +249,7 @@ function defaultDb() {
   return { version:19, createdAt:nowIso(), updatedAt:nowIso(), sessions:[],
     users:[{ id:1, username:ADMIN_USERNAME, password:ADMIN_PASSWORD, displayName:'Lee Bird', roles:['super_admin','meet_director','judge','coach'], team:'Midwest Racing', active:true, createdAt:nowIso() }],
     rinks:[{ id:1, name:'Roller City', city:'Wichita', state:'KS', team:'', address:'3234 S. Meridian Ave, Wichita, KS 67217', phone:'316-942-4555', website:'rollercitywichitaks.com', notes:'' }],
-    meets:[], rosters:[], setupPresets:[],
+    meets:[], rosters:[], setupPresets:[], desktopLicenses:[],
   };
 }
 
@@ -288,6 +289,7 @@ function loadDb() {
   if(!Array.isArray(db.sessions)) db.sessions=[];
   if(!Array.isArray(db.rosters)) db.rosters=[];
   if(!Array.isArray(db.setupPresets)) db.setupPresets=[];
+  if(!Array.isArray(db.desktopLicenses)) db.desktopLicenses=[];
   ensureLeeSuperAdmin(db);
   sanitizeRinks(db);
   const fallbackOwnerId=(db.users[0]&&db.users[0].id)||1;
@@ -1777,6 +1779,7 @@ app.get('/portal/meet/:meetId/registered/print-race-list', requireRole('meet_dir
 
 
 app.use('/', createPublicRoutes({ getSessionUser, pageShell, hasRole }));
+app.use('/', createDesktopRoutes({ getSessionUser, pageShell, loadDb, saveDb }));
 
 // ── Extracted route modules ────────────────────────────────────────────────────
 const routeDeps = {
