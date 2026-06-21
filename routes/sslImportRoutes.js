@@ -18,6 +18,13 @@ const { computeMeetStandings } = require('../services/standings');
 const { completedTimeTrialEvents, timeNumber, timeTrialResults } = require('../services/timeTrialEvents');
 const { staffAssignmentsForMeet } = require('../services/staffAssignments');
 const { usarsPointsForPlace } = require('../services/usarsScoring');
+const { createBackup: createDesktopBackup } = require('../services/desktopBackupService');
+
+function createDesktopBackupIfActive(db, reason) {
+  if (process.env.SSM_DESKTOP !== '1') return;
+  try { createDesktopBackup({ db, reason }); }
+  catch (err) { console.warn(`Desktop backup skipped (${reason}):`, err.message); }
+}
 
 function ensurePackageStore(db) {
   if (!Array.isArray(db.sslRegistrationPackages)) db.sslRegistrationPackages = [];
@@ -1237,6 +1244,7 @@ module.exports = function createSslImportRoutes(deps = {}) {
   router.post('/portal/ssl-packages/import', requireRole('meet_director'), (req, res) => {
     try {
       const payload = parsePackage(req.body.packageJson);
+      createDesktopBackupIfActive(req.db, 'before_import');
       const result = upsertImportedPackage({
         db: req.db,
         payload,
@@ -1255,6 +1263,7 @@ module.exports = function createSslImportRoutes(deps = {}) {
       verifySslPackageApiKey(req);
       const payload = parseDirectPackageBody(req.body || {});
       const db = routeDb(req);
+      createDesktopBackupIfActive(db, 'before_import');
       const result = upsertImportedPackage({
         db,
         payload,
@@ -1328,6 +1337,7 @@ module.exports = function createSslImportRoutes(deps = {}) {
 
       if (pkg.status === 'deleted') throw new Error('This package was deleted and cannot be applied. Ask the coach to submit again if needed.');
       if (pkg.status === 'returned') throw new Error('This package was returned to the coach and cannot be applied unless the coach resubmits it.');
+      createDesktopBackupIfActive(req.db, 'before_import_apply');
       const result = applyPackageToMeet({ db: req.db, pkg, meet, user: req.user });
       saveDb(req.db);
       return res.redirect('/portal/ssl-packages?id=' + encodeURIComponent(pkg.id) + '&ok=' + encodeURIComponent(`Created ${result.created.length} registration${result.created.length === 1 ? '' : 's'} from SSL. Skipped ${result.skipped.length} duplicate${result.skipped.length === 1 ? '' : 's'}.`));

@@ -106,6 +106,14 @@ async function startLocalServer() {
   process.env.SSM_DESKTOP = '1';
   process.env.SSM_DATA_FILE = process.env.SSM_DATA_FILE || userDataPath('ssm_db.json');
 
+  try {
+    const { createBackup } = require('../services/desktopBackupService');
+    createBackup({ reason: 'desktop_startup' });
+    desktopLog('Desktop startup backup created');
+  } catch (err) {
+    desktopLog(`Desktop startup backup skipped: ${err && err.message ? err.message : err}`);
+  }
+
   desktopLog(`Starting local server on port ${port}`);
   require('../server');
   serverStarted = true;

@@ -138,6 +138,7 @@ const createTimeTrialRoutes = require('./routes/timeTrialRoutes');
 const createDesktopRoutes = require('./routes/desktopRoutes');
 const { renderMeetStaffList } = require('./services/staffAssignments');
 const { isDesktopMeetUnlocked } = require('./services/desktopMeetPinService');
+const { createBackup: createDesktopBackup } = require('./services/desktopBackupService');
 const {
   DEFAULT_SESSION_TTL_MS,
   nextUserId,
@@ -280,6 +281,18 @@ const TEAM_LIST = [
   "Weber's Racing","Weber's Skateway",'West Michigan Wolverines Speed Team',
 ].sort((a, b) => a.localeCompare(b));
 
+let desktopMigrationBackupCreated = false;
+
+function createDesktopBackupIfActive(db, reason) {
+  if (process.env.SSM_DESKTOP !== '1') return null;
+  try {
+    return createDesktopBackup({ db, reason });
+  } catch (err) {
+    console.warn(`Desktop backup skipped (${reason}):`, err.message);
+    return null;
+  }
+}
+
 function loadDb() {
   let db=safeReadJson(DATA_FILE);
   if(!db) { db=defaultDb(); writeJsonAtomic(DATA_FILE,db); return db; }
@@ -293,6 +306,10 @@ function loadDb() {
   if(!Array.isArray(db.desktopLicenses)) db.desktopLicenses=[];
   ensureLeeSuperAdmin(db);
   sanitizeRinks(db);
+  if (!desktopMigrationBackupCreated && process.env.SSM_DESKTOP === '1') {
+    desktopMigrationBackupCreated = true;
+    createDesktopBackupIfActive(db, 'before_migration');
+  }
   const fallbackOwnerId=(db.users[0]&&db.users[0].id)||1;
   db.meets.forEach(m=>migrateMeet(m,fallbackOwnerId));
   db.sessions=db.sessions.filter(s=>s.expiresAt&&new Date(s.expiresAt).getTime()>Date.now());

@@ -4,6 +4,7 @@ const { nowIso } = require('../utils/date');
 const { canEditMeet, canArchiveMeet, canDeleteMeet } = require('../utils/auth');
 const { sendSms } = require('../services/sms');
 const { postSsmUserMirrorToSsl } = require('../services/ssoService');
+const { createBackup: createDesktopBackup } = require('../services/desktopBackupService');
 const {
   getMeetOr404, meetRinkLabel, meetDateLabel, nextId,
   isArchivedMeet, cloneMeetSetup, defaultMeet, ensureAtLeastOneBlock, applyMeetOwner,
@@ -33,6 +34,12 @@ module.exports = function createAdminRoutes(deps = {}) {
       userName: user?.displayName || user?.username || '',
       details,
     });
+  }
+
+  function createDesktopBackupIfActive(db, reason) {
+    if (process.env.SSM_DESKTOP !== '1') return;
+    try { createDesktopBackup({ db, reason }); }
+    catch (err) { console.warn(`Desktop backup skipped (${reason}):`, err.message); }
   }
 
   async function syncUserMirrorBestEffort(db, user, label) {
@@ -374,6 +381,7 @@ router.post('/portal/meet/:meetId/delete', requireRole('meet_director'), (req, r
     if (meet) { auditMeetEvent(req.db, meet, req.user, 'delete_denied'); saveDb(req.db); }
     return res.redirect('/portal');
   }
+  createDesktopBackupIfActive(req.db, 'before_meet_delete');
   req.db.meets=req.db.meets.filter(m=>Number(m.id)!==Number(req.params.meetId));
   saveDb(req.db); res.redirect('/portal');
 });
