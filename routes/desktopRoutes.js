@@ -18,6 +18,10 @@ const {
   listBackups,
   restoreBackup,
 } = require('../services/desktopBackupService');
+const {
+  buildHealthReport,
+  runDiagnostics,
+} = require('../services/desktopHealthService');
 
 function dbStats(db) {
   const meets = Array.isArray(db?.meets) ? db.meets : [];
@@ -38,6 +42,34 @@ function backupAgeLabel(value) {
   if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
   const days = Math.floor(hours / 24);
   return `${days} day${days === 1 ? '' : 's'} ago`;
+}
+
+function bytesLabel(bytes) {
+  const n = Number(bytes || 0);
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function healthChip(level, label) {
+  const normalized = String(level || '').toLowerCase();
+  const cls = normalized === 'healthy' || normalized === 'pass' ? 'chip-good' : (normalized === 'error' || normalized === 'fail' ? 'chip-warn' : 'chip-orange');
+  return `<span class="chip ${cls}">${esc(label || level || 'Status')}</span>`;
+}
+
+function healthCard(title, level, value, detail, actions = '') {
+  return `
+    <div class="card" style="border-left:5px solid ${level === 'error' ? 'var(--red)' : (level === 'warning' ? 'var(--orange)' : 'var(--green)')}">
+      <div class="row between center" style="gap:12px;align-items:flex-start">
+        <div>
+          <h2 style="margin:0 0 8px">${esc(title)}</h2>
+          <div style="font-size:24px;font-weight:900;color:var(--navy);line-height:1.1">${esc(value)}</div>
+          <div class="note" style="margin-top:8px;line-height:1.5">${detail}</div>
+        </div>
+        ${healthChip(level, level === 'healthy' ? 'Healthy' : (level === 'error' ? 'Error' : 'Warning'))}
+      </div>
+      ${actions ? `<div class="action-row" style="margin-top:14px">${actions}</div>` : ''}
+    </div>`;
 }
 
 module.exports = function createDesktopRoutes(deps = {}) {
@@ -71,6 +103,7 @@ module.exports = function createDesktopRoutes(deps = {}) {
             <div class="action-row" style="margin:0">
               <span class="chip chip-green">Backups: ${backups.length}</span>
               <span class="chip">Last Backup: ${esc(backupAgeLabel(lastBackup?.createdAt))}</span>
+              <a class="btn-orange" href="/desktop/tools/health">Health Center</a>
               <a class="btn2" href="/desktop/tools/backups">Backup & Recovery</a>
             </div>
           </div>
@@ -89,6 +122,7 @@ module.exports = function createDesktopRoutes(deps = {}) {
             <h2>License Ready</h2>
             <p style="line-height:1.7;color:var(--text)">The SSM licensing foundation is in place for future desktop activation, validation, and update workflows.</p>
             <div class="action-row">
+              <a class="btn-orange" href="/desktop/tools/health">Health Center</a>
               <a class="btn-orange" href="/desktop/open-meet">Open Meet on Desktop</a>
               <a class="btn2" href="/desktop/tools/backups">Backup & Recovery</a>
               <a class="btn2" href="/desktop/download">Download Placeholder</a>
@@ -97,6 +131,121 @@ module.exports = function createDesktopRoutes(deps = {}) {
         </div>
       `,
     }));
+  });
+
+  router.get('/desktop/tools/health', (req, res) => {
+    const data = typeof getSessionUser === 'function' ? getSessionUser(req) : null;
+    const db = loadDb();
+    const report = buildHealthReport(db);
+    const app = report.application;
+    const license = report.license;
+    const backup = report.backup;
+    const database = report.database;
+    const pins = report.meetPins;
+    const offline = report.offline;
+    const backupActions = `
+      <form method="POST" action="/desktop/tools/backups/create" style="margin:0"><button class="btn-orange" type="submit">Create Backup</button></form>
+      <a class="btn2" href="/desktop/tools/backups">Open Backup Manager</a>`;
+    res.send(pageShell({
+      title: 'Desktop Health Center',
+      user: data?.user || null,
+      bodyHtml: `
+        <div class="page-header">
+          <h1>Desktop Health Center</h1>
+          <div class="sub">Pre-meet readiness for SSM Desktop.</div>
+        </div>
+        <div class="action-row" style="margin-bottom:16px">
+          <a class="btn-orange" href="/desktop/tools/health/run">Run Diagnostics</a>
+          <a class="btn2" href="/desktop/tools/health/report">Export Health Report</a>
+          <a class="btn2" href="/desktop/tools/backups">Backup & Recovery</a>
+          <a class="btn2" href="/desktop">Desktop Tools</a>
+        </div>
+        <div class="grid-2" style="margin-bottom:16px">
+          ${healthCard(
+            'Application Status',
+            app.level,
+            `SpeedSkateMeet ${app.version}`,
+            `Desktop Mode: ${app.desktopMode ? 'Active' : 'Inactive'}<br>Electron: ${esc(app.electronVersion || 'Browser Mode')}<br>Node: ${esc(app.nodeVersion || '')}<br>Startup: ${esc(app.startupTime || 'Not recorded')}`
+          )}
+          ${healthCard(
+            'License Status',
+            license.level,
+            license.status,
+            `License Type: ${esc(license.licenseType || 'Development Mode')}<br>Last Validation: ${esc(license.lastValidation || 'Not yet validated')}`
+          )}
+          ${healthCard(
+            'Backup Status',
+            backup.level,
+            `${backup.count} backup${backup.count === 1 ? '' : 's'}`,
+            `Newest Backup: ${esc(backup.newest ? backupAgeLabel(backup.newest.createdAt) : 'None')}<br>Folder: ${esc(backup.backupDir)}`,
+            backupActions
+          )}
+          ${healthCard(
+            'Database Status',
+            database.validation.valid ? (database.validation.warnings.length ? 'warning' : 'healthy') : 'error',
+            database.validation.valid ? 'Readable' : 'Needs Attention',
+            `Location: ${esc(database.location)}<br>Size: ${esc(bytesLabel(database.sizeBytes))}<br>Last Modified: ${esc(database.lastModified || 'Missing')}<br>Meets: ${database.counts.meets} • Registrations: ${database.counts.registrations} • Races: ${database.counts.races} • Results: ${database.counts.results}`
+          )}
+          ${healthCard(
+            'Meet PIN Status',
+            pins.level,
+            `${pins.protectedMeets}/${pins.totalMeets} protected`,
+            `Protected Meets: ${pins.protectedMeets}<br>Unprotected Meets: ${pins.unprotectedMeets}${pins.unprotectedMeets ? '<br><strong>Warning:</strong> at least one meet exists without a desktop PIN.' : ''}`
+          )}
+          ${healthCard(
+            'Offline Status',
+            offline.level,
+            offline.status,
+            `Last Successful Verification: ${esc(offline.lastSuccessfulVerification || 'Not yet tracked')}<br>Future Offline Grace Period: ${esc(offline.futureGracePeriod)}`
+          )}
+        </div>
+        <div class="card">
+          <h2 style="margin-top:0">System Diagnostics</h2>
+          <div class="note" style="margin-bottom:12px">Run this before meet day to verify local storage, backups, PIN support, licensing foundations, and database readability.</div>
+          <a class="btn-orange" href="/desktop/tools/health/run">Run Diagnostics</a>
+        </div>
+      `,
+    }));
+  });
+
+  router.get('/desktop/tools/health/run', (req, res) => {
+    const data = typeof getSessionUser === 'function' ? getSessionUser(req) : null;
+    const db = loadDb();
+    const checks = runDiagnostics(db);
+    const rows = checks.map(check => `
+      <tr>
+        <td><strong>${esc(check.name)}</strong></td>
+        <td>${healthChip(check.status, check.status === 'pass' ? 'Pass' : (check.status === 'fail' ? 'Fail' : 'Warning'))}</td>
+        <td>${esc(check.message || '')}</td>
+      </tr>`).join('');
+    res.send(pageShell({
+      title: 'Desktop Diagnostics',
+      user: data?.user || null,
+      bodyHtml: `
+        <div class="page-header">
+          <h1>Desktop Diagnostics</h1>
+          <div class="sub">Latest readiness check.</div>
+        </div>
+        <div class="action-row" style="margin-bottom:16px">
+          <a class="btn-orange" href="/desktop/tools/health/run">Run Again</a>
+          <a class="btn2" href="/desktop/tools/health">Health Center</a>
+          <a class="btn2" href="/desktop/tools/health/report">Export Health Report</a>
+        </div>
+        <div class="card">
+          <table class="table">
+            <thead><tr><th>Check</th><th>Status</th><th>Details</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      `,
+    }));
+  });
+
+  router.get('/desktop/tools/health/report', (req, res) => {
+    const report = buildHealthReport(loadDb());
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="ssm-health-report.json"');
+    res.send(JSON.stringify(report, null, 2));
   });
 
   router.get('/desktop/tools/backups', (req, res) => {

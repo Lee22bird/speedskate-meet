@@ -105,6 +105,7 @@ async function startLocalServer() {
   process.env.PORT = String(port);
   process.env.SSM_DESKTOP = '1';
   process.env.SSM_DATA_FILE = process.env.SSM_DATA_FILE || userDataPath('ssm_db.json');
+  process.env.SSM_DESKTOP_STARTED_AT = process.env.SSM_DESKTOP_STARTED_AT || new Date().toISOString();
 
   try {
     const { createBackup } = require('../services/desktopBackupService');
