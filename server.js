@@ -137,6 +137,7 @@ const createStaffRoutes = require('./routes/staffRoutes');
 const createTimeTrialRoutes = require('./routes/timeTrialRoutes');
 const createDesktopRoutes = require('./routes/desktopRoutes');
 const { renderMeetStaffList } = require('./services/staffAssignments');
+const { isDesktopMeetUnlocked } = require('./services/desktopMeetPinService');
 const {
   DEFAULT_SESSION_TTL_MS,
   nextUserId,
@@ -343,7 +344,26 @@ function staffRoleOptions(selectedRoles = []) {
 function requireRole(...roles) {
   return (req,res,next)=>{
     const data=getSessionUser(req);
-    if(!data) return res.redirect('/admin/login');
+    if(!data) {
+      if (process.env.SSM_DESKTOP === '1' && req.params && req.params.meetId) {
+        const db = loadDb();
+        const meet = getMeetOr404(db, req.params.meetId);
+        if (meet && isDesktopMeetUnlocked(req, meet)) {
+          req.db = db;
+          req.user = {
+            id: 'desktop-pin',
+            username: 'desktop-pin',
+            displayName: 'Desktop Meet PIN',
+            roles: ['judge', 'announcer', 'coach'],
+            desktopMeetUnlocked: true,
+            desktopPinMeetId: String(meet.id || ''),
+          };
+          req.sessionToken = '';
+          if (roles.some(role => hasRole(req.user, role))) return next();
+        }
+      }
+      return res.redirect('/admin/login');
+    }
     extendSession(data.db,data.token); saveDb(data.db);
     req.db=data.db; req.user=data.user; req.sessionToken=data.token;
     if(hasRole(data.user,'super_admin')||roles.some(role=>hasRole(data.user,role))) return next();

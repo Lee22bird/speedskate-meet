@@ -58,6 +58,13 @@ function makeAdditionalRaceSlots(raw) {
   });
 }
 
+function dateTimeLabel(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  const date = new Date(raw);
+  return Number.isFinite(date.getTime()) ? date.toLocaleString() : raw;
+}
+
 function renderMeetBuilderView({ db, meet, user = null, query = {} }) {
   const rinkInputValue = String(meet.customRinkName || '').trim() || (() => { const r = db.rinks.find(x => Number(x.id) === Number(meet.rinkId)); return r ? `${r.name} (${r.city || ''}${r.city && r.state ? ', ' : ''}${r.state || ''})` : ''; })();
   const rinkDataList=db.rinks.map(r=>`<option value="${esc(r.name)} (${esc(r.city||'')}${r.city&&r.state?', ':''}${esc(r.state||'')})" data-id="${r.id}"></option>`).join('');
@@ -73,6 +80,31 @@ function renderMeetBuilderView({ db, meet, user = null, query = {} }) {
   const canDeleteSetupPresets = hasRole(user || {}, 'super_admin');
   const superOverride = isSuperAdmin(user || {}) && !isMeetOwner(user || {}, meet);
   const staffPanel = renderMeetStaffManager({ meet, canManage: canManageMeetSettings(user || {}, meet) });
+  const desktopPinEnabled = !!String(meet.desktop_pin_hash || '').trim();
+  const desktopPinPanel = `
+    <div class="card" style="margin-bottom:16px;border-left:5px solid var(--orange)">
+      <div class="row between center" style="gap:12px;flex-wrap:wrap;align-items:flex-start">
+        <div>
+          <h2 style="margin:0 0 4px">Open Meet on Desktop</h2>
+          <div class="note">Generate a 6-digit meet-day PIN for SSM Desktop. The PIN unlocks this meet only and is shown once after reset.</div>
+          <div class="note" style="margin-top:8px">
+            Status: <strong>${desktopPinEnabled ? 'PIN set' : 'No PIN set'}</strong>
+            ${desktopPinEnabled && meet.desktop_pin_expires_at ? ` • Expires ${esc(dateTimeLabel(meet.desktop_pin_expires_at))}` : ''}
+          </div>
+        </div>
+        <div class="action-row" style="margin:0">
+          <form method="POST" action="/portal/meet/${esc(meet.id)}/desktop-pin/generate" style="margin:0">
+            <button class="btn-orange" type="submit">${desktopPinEnabled ? 'Reset PIN' : 'Generate PIN'}</button>
+          </form>
+          ${desktopPinEnabled ? `
+            <a class="btn2" href="/desktop/meet/${esc(meet.id)}/unlock">Open</a>
+            <form method="POST" action="/portal/meet/${esc(meet.id)}/desktop-pin/clear" style="margin:0" onsubmit="return confirm('Clear the desktop PIN for this meet? Existing desktop unlocks will stop working.');">
+              <button class="btn-danger" type="submit">Clear PIN</button>
+            </form>
+          ` : ''}
+        </div>
+      </div>
+    </div>`;
   const ownerName = String(meet.meet_owner_name || meet.createdByName || meet.createdBy || '').trim() || 'Unassigned';
   const ownerOptions = (db.users || [])
     .filter(u => u.active !== false && Array.isArray(u.roles) && (u.roles.includes('meet_director') || u.roles.includes('super_admin')))
@@ -160,6 +192,7 @@ function renderMeetBuilderView({ db, meet, user = null, query = {} }) {
     ${errorFlash}
     ${ownershipPanel}
     ${staffPanel}
+    ${desktopPinPanel}
     <div class="grid-2" style="margin-bottom:16px">
       <div class="card card-accent" style="border-left-color:var(--orange)">
         <div class="row between center">

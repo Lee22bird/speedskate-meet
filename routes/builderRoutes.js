@@ -25,6 +25,7 @@ const {
 } = require('../services/ttHelpers');
 const { ensureTimeTrialEvent, normalizeTimeTrialSettings } = require('../services/timeTrialEvents');
 const { raceDisplayStage, ensureCurrentRace } = require('../services/raceDay');
+const { generatePinForMeet, clearPinForMeet } = require('../services/desktopMeetPinService');
 
 
 function canManageSetupPresets(user) {
@@ -308,6 +309,42 @@ router.post('/portal/meet/:meetId/setup-presets/delete', requireRole('meet_direc
     return res.redirect(`/portal/meet/${meet.id}/builder?presetDeleted=1&clearPreset=1`);
   }
   res.redirect(`/portal/meet/${meet.id}/builder?error=${encodeURIComponent('Setup preset not found.')}`);
+});
+
+router.post('/portal/meet/:meetId/desktop-pin/generate', requireRole('meet_director'), (req, res) => {
+  const meet=getMeetOr404(req.db,req.params.meetId);
+  if(!meet) return res.redirect('/portal');
+  if(!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
+  const result = generatePinForMeet(meet);
+  saveDb(req.db);
+  res.send(pageShell({
+    title:'Desktop Meet PIN',
+    user:req.user,
+    meet,
+    activeTab:'builder',
+    bodyHtml:`
+      <div class="page-header"><h1>Desktop Meet PIN</h1><div class="sub">${esc(meet.meetName || '')}</div></div>
+      <div class="card" style="max-width:620px;border-left:5px solid var(--orange)">
+        <h2 style="margin-top:0">PIN Generated</h2>
+        <div class="note" style="margin-bottom:12px">This PIN is shown once. Share it only with meet-day staff who should open this meet on SSM Desktop.</div>
+        <div style="font-size:46px;font-weight:900;letter-spacing:.18em;color:var(--navy);line-height:1">${esc(result.pin)}</div>
+        <div class="note" style="margin-top:12px">Expires: ${esc(result.expiresAt ? new Date(result.expiresAt).toLocaleString() : 'Not set')}</div>
+        <div class="action-row" style="margin-top:18px">
+          <a class="btn-orange" href="/portal/meet/${esc(meet.id)}/builder">Back To Meet Builder</a>
+          <a class="btn2" href="/desktop/meet/${esc(meet.id)}/unlock">Open Meet On Desktop</a>
+        </div>
+      </div>
+    `,
+  }));
+});
+
+router.post('/portal/meet/:meetId/desktop-pin/clear', requireRole('meet_director'), (req, res) => {
+  const meet=getMeetOr404(req.db,req.params.meetId);
+  if(!meet) return res.redirect('/portal');
+  if(!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
+  clearPinForMeet(meet);
+  saveDb(req.db);
+  res.redirect(`/portal/meet/${meet.id}/builder?saved=1`);
 });
 
 // Save meet fields and sync configured races while preserving the manual Block Builder schedule.

@@ -183,6 +183,7 @@ function defaultMeet(ownerUser) {
     rinkId:1, customRinkName:'', trackLength:100, lanes:4,
     meet_staff_assignments:[], staffAssignments:[],
     timeTrialsEnabled:false, timeTrialEvent:{enabled:false,distance:'100m',runOrder:'youngest_oldest',countsForOverall:false}, timeTrialEvents:[], relayEnabled:false, judgesPanelRequired:true,
+    desktop_pin_hash:'', desktop_pin_created_at:'', desktop_pin_expires_at:'',
     notes:'', scheduleNotes:'', relayNotes:'', isPublic:false, status:'draft', tiebreaker:'d2',
     ...defaultPricingFields(),
     groups:baseGroups(), openGroups:makeOpenGroupsTemplate(), quadGroups:makeQuadGroupsTemplate(),
@@ -240,6 +241,9 @@ function migrateMeet(meet,fallbackOwnerId) {
   if(typeof meet.timeTrialsEnabled!=='boolean') meet.timeTrialsEnabled=false;
   if(typeof meet.relayEnabled!=='boolean') meet.relayEnabled=false;
   if(typeof meet.judgesPanelRequired!=='boolean') meet.judgesPanelRequired=true;
+  if(typeof meet.desktop_pin_hash!=='string') meet.desktop_pin_hash='';
+  if(typeof meet.desktop_pin_created_at!=='string') meet.desktop_pin_created_at='';
+  if(typeof meet.desktop_pin_expires_at!=='string') meet.desktop_pin_expires_at='';
   if(typeof meet.notes!=='string') meet.notes='';
   if(typeof meet.scheduleNotes!=='string') meet.scheduleNotes='';
   if(!meet.tiebreaker) meet.tiebreaker='d2';
