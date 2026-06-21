@@ -22,6 +22,15 @@ function userDataPath(...parts) {
   return path.join(app.getPath('userData'), ...parts);
 }
 
+function desktopLog(message) {
+  try {
+    fs.mkdirSync(app.getPath('userData'), { recursive: true });
+    fs.appendFileSync(userDataPath('desktop.log'), `[${new Date().toISOString()}] ${message}\n`, 'utf8');
+  } catch (err) {
+    // Logging should never prevent startup.
+  }
+}
+
 function readWindowState() {
   try {
     const filePath = userDataPath(WINDOW_STATE_FILE);
@@ -97,9 +106,11 @@ async function startLocalServer() {
   process.env.SSM_DESKTOP = '1';
   process.env.SSM_DATA_FILE = process.env.SSM_DATA_FILE || userDataPath('ssm_db.json');
 
+  desktopLog(`Starting local server on port ${port}`);
   require('../server');
   serverStarted = true;
   await waitForServer(`http://127.0.0.1:${port}/`);
+  desktopLog(`Local server ready on port ${port}`);
 
   return port;
 }
@@ -170,6 +181,7 @@ function createWindow() {
   });
 
   mainWindow.once('ready-to-show', () => {
+    desktopLog('Main window ready to show');
     mainWindow.show();
   });
 
@@ -188,12 +200,15 @@ app.setName('SpeedSkateMeet');
 app.setAppUserModelId('com.speedskateleague.speedskatemeet');
 
 app.whenReady().then(async () => {
+  desktopLog('Electron app ready');
   createWindow();
 
   try {
     const port = await startLocalServer();
+    desktopLog(`Loading app URL http://127.0.0.1:${port}/`);
     await mainWindow.loadURL(`http://127.0.0.1:${port}/`);
   } catch (err) {
+    desktopLog(`Startup error: ${err && err.stack ? err.stack : err}`);
     if (mainWindow && !mainWindow.isDestroyed()) {
       await mainWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(errorHtml({
         port: lastStartPort || process.env.PORT || '',
@@ -209,6 +224,7 @@ app.whenReady().then(async () => {
     }
   });
 }).catch(err => {
+  desktopLog(`Fatal startup error: ${err && err.stack ? err.stack : err}`);
   console.error('SpeedSkateMeet Desktop failed to start:', err);
   app.quit();
 });
