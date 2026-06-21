@@ -1,17 +1,30 @@
-# Desktop Foundation
+# SpeedSkateMeet Desktop
 
-This directory is reserved for a future SpeedSkateMeet Desktop Edition.
+This directory contains the Electron wrapper for SpeedSkateMeet Desktop.
 
-The desktop app is expected to use Electron initially, with:
+The desktop app starts the existing Express application locally and loads it in a native macOS window. Browser mode is unchanged: `npm start` still runs the same Express app for normal web use.
 
-- `main.js` as the Electron main process entry point.
-- `preload.js` as the safe bridge between the renderer and local desktop APIs.
-- The existing web application behavior preserved until desktop work is explicitly started.
+## Current Status
 
-Current status:
+- `desktop/main.js` starts SSM locally and opens an Electron `BrowserWindow`.
+- `desktop/preload.js` exposes only a tiny, read-only desktop marker.
+- The renderer loads `http://127.0.0.1:<port>/`.
+- Window size and position are remembered in Electron `userData`.
+- Desktop data defaults to `userData/ssm_db.json` through `SSM_DATA_FILE`.
 
-- Electron is not installed.
-- No desktop startup logic is implemented.
-- No web routes, race logic, registration logic, SSO, or SSL integration are changed by this foundation.
+## Security Posture
 
-Future work should keep desktop-specific code in this directory and move reusable meet logic into `src/core` only when that migration is planned and tested.
+- `nodeIntegration: false`
+- `contextIsolation: true`
+- `sandbox: true`
+- Remote module disabled
+- New windows are opened in the system browser instead of inside Electron
+
+## Future Integration Points
+
+- Offline database: replace or wrap the JSON data file with a desktop-safe local store.
+- SSL synchronization: add a sync service outside the renderer, then expose limited status through preload.
+- Desktop licensing validation: call `/api/license/validate` and `/api/license/activate` during startup.
+- Auto updates: add an updater in the main process after packaging and signing are defined.
+- HDMI graphics output: add secondary-display window management in `main.js`.
+- Timing system integration: add hardware bridges in the main process or a separate local service, never directly in the renderer.

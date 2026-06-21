@@ -1,6 +1,8 @@
 'use strict';
 
-// Placeholder for a future Electron preload bridge.
-// No desktop APIs are exposed yet.
+const { contextBridge } = require('electron');
 
-module.exports = {};
+contextBridge.exposeInMainWorld('SpeedSkateMeetDesktop', {
+  platform: process.platform,
+  desktop: true,
+});
