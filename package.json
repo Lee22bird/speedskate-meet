@@ -44,7 +44,7 @@
     },
     "mac": {
       "category": "public.app-category.sports",
-      "icon": "desktop/assets/icon.png",
+      "icon": "desktop/assets/icon.icns",
       "target": [
         {
           "target": "dir"
