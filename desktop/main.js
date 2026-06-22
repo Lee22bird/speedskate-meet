@@ -5,6 +5,7 @@ const http = require('http');
 const net = require('net');
 const path = require('path');
 const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { initAutoUpdateScaffold } = require('./updateService');
 
 const WINDOW_STATE_FILE = 'window-state.json';
 const DEFAULT_WIDTH = 1440;
@@ -210,6 +211,7 @@ app.setAppUserModelId('com.speedskateleague.speedskatemeet');
 
 app.whenReady().then(async () => {
   desktopLog('Electron app ready');
+  initAutoUpdateScaffold({ app, logger: desktopLog });
   createWindow();
 
   try {

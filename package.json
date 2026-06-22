@@ -8,49 +8,23 @@
     "desktop:start": "electron desktop/main.js",
     "desktop:dev": "SSM_DESKTOP_DEV=1 electron desktop/main.js",
     "desktop:icon": "node scripts/create-mac-icon.js",
-    "desktop:package": "npm run desktop:icon && electron-builder --mac dir && node scripts/desktop-alpha-output.js",
-    "desktop:build": "npm run desktop:package"
+    "desktop:package": "npm run package:mac",
+    "desktop:build": "npm run build:mac",
+    "build": "npm run build:mac",
+    "build:mac": "npm run desktop:icon && electron-builder --config electron-builder.yml --mac --arm64",
+    "build:mac:intel": "npm run desktop:icon && electron-builder --config electron-builder.yml --mac --x64",
+    "package:mac": "npm run desktop:icon && electron-builder --config electron-builder.yml --mac dir --arm64",
+    "package:mac:intel": "npm run desktop:icon && electron-builder --config electron-builder.yml --mac dir --x64",
+    "notarize": "node scripts/notarize-mac.js",
+    "release:mac": "npm run build:mac && npm run notarize"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.105.1",
     "express": "^4.19.2"
   },
   "devDependencies": {
+    "@electron/notarize": "2.5.0",
     "electron": "^42.4.1",
     "electron-builder": "^26.15.3"
-  },
-  "build": {
-    "appId": "com.speedskateleague.speedskatemeet",
-    "productName": "SpeedSkateMeet",
-    "copyright": "Copyright © 2026 SpeedSkateMeet",
-    "directories": {
-      "output": "dist"
-    },
-    "files": [
-      "server.js",
-      "desktop/**/*",
-      "routes/**/*",
-      "services/**/*",
-      "utils/**/*",
-      "views/**/*",
-      "public/**/*",
-      "data/**/*",
-      "migrations/**/*",
-      "src/**/*",
-      "package.json"
-    ],
-    "extraMetadata": {
-      "main": "desktop/main.js",
-      "version": "0.1.0-alpha"
-    },
-    "mac": {
-      "category": "public.app-category.sports",
-      "icon": "desktop/assets/icon.icns",
-      "target": [
-        {
-          "target": "dir"
-        }
-      ]
-    }
   }
 }

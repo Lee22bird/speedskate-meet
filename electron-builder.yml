@@ -1,0 +1,64 @@
+appId: com.speedskateleague.speedskatemeet
+productName: SpeedSkateMeet
+copyright: Copyright © 2026 SpeedSkateMeet
+
+directories:
+  output: release/mac
+
+asar: true
+
+files:
+  - server.js
+  - desktop/**/*
+  - routes/**/*
+  - services/**/*
+  - utils/**/*
+  - views/**/*
+  - public/**/*
+  - data/**/*
+  - migrations/**/*
+  - src/**/*
+  - package.json
+
+extraMetadata:
+  main: desktop/main.js
+  version: 0.1.0-alpha
+
+mac:
+  category: public.app-category.sports
+  icon: desktop/assets/icon.icns
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: desktop/entitlements.mac.plist
+  entitlementsInherit: desktop/entitlements.mac.plist
+  target:
+    - target: dmg
+      arch:
+        - arm64
+    - target: zip
+      arch:
+        - arm64
+
+dmg:
+  title: SSM Desktop
+  artifactName: SSM Desktop.${ext}
+  icon: desktop/assets/icon.icns
+  background: public/images/branding/ssm-logo.png
+  window:
+    width: 660
+    height: 420
+  contents:
+    - x: 170
+      y: 225
+      type: file
+    - x: 490
+      y: 225
+      type: link
+      path: /Applications
+
+afterSign: scripts/notarize-mac.js
+afterAllArtifactBuild: scripts/collect-mac-artifacts.js
+
+publish:
+  provider: generic
+  url: https://downloads.speedskateleague.com/ssm/
