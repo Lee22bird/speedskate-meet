@@ -25,7 +25,6 @@ if (!fs.existsSync(source)) {
 fs.mkdirSync(outDir, { recursive: true });
 fs.rmSync(iconset, { recursive: true, force: true });
 fs.rmSync(output, { force: true });
-fs.rmSync(fallbackPng, { force: true });
 fs.mkdirSync(iconset, { recursive: true });
 
 const sizes = [
@@ -52,6 +51,9 @@ if (iconutilResult.status !== 0) {
   console.warn('iconutil did not accept the generated iconset; copied desktop/assets/icon.png as the alpha packaging icon placeholder.');
 } else {
   fs.rmSync(iconset, { recursive: true, force: true });
+  if (!fs.existsSync(fallbackPng)) {
+    fs.copyFileSync(source, fallbackPng);
+  }
 }
 
 console.log(`Created ${fs.existsSync(output) ? path.relative(root, output) : path.relative(root, fallbackPng)}`);

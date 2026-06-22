@@ -56,6 +56,7 @@ dmg:
       type: link
       path: /Applications
 
+afterPack: scripts/clean-mac-xattrs.js
 afterSign: scripts/notarize-mac.js
 afterAllArtifactBuild: scripts/collect-mac-artifacts.js
 

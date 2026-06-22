@@ -1,6 +1,8 @@
 {
   "name": "speedskate-meet",
   "version": "7.2.0",
+  "description": "SpeedSkateMeet desktop meet operations app.",
+  "author": "Speed Skate League",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {
