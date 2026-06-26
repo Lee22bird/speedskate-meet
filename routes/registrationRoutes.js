@@ -94,9 +94,9 @@ module.exports = function createRegistrationRoutes(deps = {}) {
   const { requireRole, pageShell, saveDb, loadDb, getSessionUser, TEAM_LIST, toggleSwitch,
           renderCheckinView, renderRegisteredView } = deps;
 
-function createDesktopBackupIfActive(db, reason) {
+function createDesktopBackupIfActive(db, reason, meetId = '') {
   if (process.env.SSM_DESKTOP !== '1') return;
-  try { createDesktopBackup({ db, reason }); }
+  try { createDesktopBackup({ db, reason, meetId }); }
   catch (err) { console.warn(`Desktop backup skipped (${reason}):`, err.message); }
 }
 
@@ -441,8 +441,9 @@ router.post('/portal/meet/:meetId/dev/import-spring-fling', requireRole('super_a
   const previousRaces = JSON.parse(JSON.stringify(meet.races || []));
 
   if (String(req.body.action || '') === 'clear') {
-    createDesktopBackupIfActive(req.db, 'before_import_clear');
+    createDesktopBackupIfActive(req.db, 'before_import_clear', meet.id);
     meet.registrations = (meet.registrations || []).filter(r => r.importSource !== 'spring_fling_2026_test');
+    createDesktopBackupIfActive(req.db, 'before_race_generation', meet.id);
     generateConfiguredRacesForMeet(meet);
     rebuildRaceAssignmentsSafe(meet);
     restoreBlockAssignmentsBySignature(meet, previousBlocks, previousRaces);
@@ -452,7 +453,8 @@ router.post('/portal/meet/:meetId/dev/import-spring-fling', requireRole('super_a
     return res.redirect(`/portal/meet/${meet.id}/registered?devCleared=1`);
   }
 
-  createDesktopBackupIfActive(req.db, 'before_import');
+  createDesktopBackupIfActive(req.db, 'before_import', meet.id);
+  createDesktopBackupIfActive(req.db, 'before_race_generation', meet.id);
   const count = importSpringFlingTestRoster(meet, {
     replace: !!req.body.replace,
     checkedIn: !!req.body.checkedIn,

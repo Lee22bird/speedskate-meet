@@ -139,6 +139,7 @@ const createDesktopRoutes = require('./routes/desktopRoutes');
 const { renderMeetStaffList } = require('./services/staffAssignments');
 const { isDesktopMeetUnlocked } = require('./services/desktopMeetPinService');
 const { createBackup: createDesktopBackup } = require('./services/desktopBackupService');
+const { recordDesktopState } = require('./services/desktopCrashRecoveryService');
 const {
   DEFAULT_SESSION_TTL_MS,
   nextUserId,
@@ -319,6 +320,10 @@ function loadDb() {
 function saveDb(db) {
   if (Array.isArray(db.meets)) db.meets.forEach(m => migrateMeet(m));
   db.version=19; db.updatedAt=nowIso(); writeJsonAtomic(DATA_FILE,db);
+  if (process.env.SSM_DESKTOP === '1') {
+    try { recordDesktopState(db); }
+    catch (err) { console.warn('Desktop crash recovery state skipped:', err.message); }
+  }
 }
 
 function getSessionUser(req) {

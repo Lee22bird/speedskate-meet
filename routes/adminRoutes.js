@@ -534,6 +534,7 @@ async function deleteUserHandler(req, res) {
 }
 
 router.post('/admin/tools/sync-ssl-user-mirrors', requireRole('super_admin'), async (req, res) => {
+  createDesktopBackupIfActive(req.db, 'before_sync');
   const summary = await syncAllUserMirrors(req.db);
   res.status(summary.failed ? 207 : 200).json(summary);
 });

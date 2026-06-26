@@ -26,10 +26,17 @@ const {
 const { ensureTimeTrialEvent, normalizeTimeTrialSettings } = require('../services/timeTrialEvents');
 const { raceDisplayStage, ensureCurrentRace } = require('../services/raceDay');
 const { generatePinForMeet, clearPinForMeet } = require('../services/desktopMeetPinService');
+const { createBackup: createDesktopBackup } = require('../services/desktopBackupService');
 
 
 function canManageSetupPresets(user) {
   return hasRole(user, 'super_admin');
+}
+
+function createDesktopBackupIfActive(db, reason, meetId = '') {
+  if (process.env.SSM_DESKTOP !== '1') return;
+  try { createDesktopBackup({ db, reason, meetId }); }
+  catch (err) { console.warn(`Desktop backup skipped (${reason}):`, err.message); }
 }
 
 module.exports = function createBuilderRoutes(deps = {}) {
@@ -190,6 +197,7 @@ router.post('/portal/meet/:meetId/builder/save-preset', requireRole('meet_direct
   saveMeetFields(meet, req.body, req.db);
   const laneOrTrackChanged = Number(meet.lanes || 4) !== oldLaneCount || Number(meet.trackLength || 100) !== oldTrackLength;
   if (laneOrTrackChanged) {
+    createDesktopBackupIfActive(req.db, 'before_race_generation', meet.id);
     generateConfiguredRacesForMeet(meet);
     rebuildRaceAssignmentsSafe(meet);
   }
@@ -266,6 +274,7 @@ router.post('/portal/meet/:meetId/setup-presets/load', requireRole('meet_directo
   // Presets should restore the director's block layout, not erase it.
   // Rebuild race structure from the preset settings using the configured generator,
   // then map saved block raceIds onto the current meet's race IDs wherever possible.
+  createDesktopBackupIfActive(req.db, 'before_race_generation', meet.id);
   generateConfiguredRacesForMeet(meet);
   rebuildRaceAssignmentsSafe(meet);
   restorePresetBlocksIntoMeet(preset, meet);
@@ -357,6 +366,7 @@ router.post('/portal/meet/:meetId/builder/save-meet', requireRole('meet_director
   const oldTrackLength = Number(meet.trackLength || 100);
   saveMeetFields(meet, req.body, req.db);
   const laneOrTrackChanged = Number(meet.lanes || 4) !== oldLaneCount || Number(meet.trackLength || 100) !== oldTrackLength;
+  createDesktopBackupIfActive(req.db, 'before_race_generation', meet.id);
   generateConfiguredRacesForMeet(meet);
   // Lane count controls heat splitting and lane rows. If it changed, immediately rebuild
   // assignments safely so the Block Builder does not keep races built from the old lane count.
@@ -372,6 +382,7 @@ router.post('/portal/meet/:meetId/builder/save', requireRole('meet_director'), (
   if(!meet) return res.redirect('/portal');
   if(!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
   saveMeetFields(meet, req.body, req.db);
+  createDesktopBackupIfActive(req.db, 'before_race_generation', meet.id);
   generateConfiguredRacesForMeet(meet); rebuildRaceAssignmentsSafe(meet); ensureAtLeastOneBlock(meet); ensureCurrentRace(meet);
   saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/blocks`);
 });
@@ -500,6 +511,7 @@ router.post('/portal/meet/:meetId/open-builder/save', requireRole('meet_director
     og.ages=String(req.body[`og_${i}_ages`]||'').trim()||og.ages;
     og.distance=String(req.body[`og_${i}_distance`]||'').trim()||og.distance;
   });
+  createDesktopBackupIfActive(req.db, 'before_race_generation', meet.id);
   generateConfiguredRacesForMeet(meet); ensureAtLeastOneBlock(meet); ensureCurrentRace(meet);
   meet.updatedAt=nowIso();
   saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/open-builder?saved=1`);
@@ -536,6 +548,7 @@ router.post('/portal/meet/:meetId/quad-builder/save', requireRole('meet_director
     qg.distances[0]=String(req.body[`qg_${i}_d1`]||'').trim()||qg.distances[0];
     qg.distances[1]=String(req.body[`qg_${i}_d2`]||'').trim()||qg.distances[1];
   });
+  createDesktopBackupIfActive(req.db, 'before_race_generation', meet.id);
   generateConfiguredRacesForMeet(meet); ensureAtLeastOneBlock(meet); ensureCurrentRace(meet);
   saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/quad-builder?saved=1`);
 });

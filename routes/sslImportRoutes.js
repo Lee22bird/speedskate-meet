@@ -20,9 +20,9 @@ const { staffAssignmentsForMeet } = require('../services/staffAssignments');
 const { usarsPointsForPlace } = require('../services/usarsScoring');
 const { createBackup: createDesktopBackup } = require('../services/desktopBackupService');
 
-function createDesktopBackupIfActive(db, reason) {
+function createDesktopBackupIfActive(db, reason, meetId = '') {
   if (process.env.SSM_DESKTOP !== '1') return;
-  try { createDesktopBackup({ db, reason }); }
+  try { createDesktopBackup({ db, reason, meetId }); }
   catch (err) { console.warn(`Desktop backup skipped (${reason}):`, err.message); }
 }
 
@@ -1212,6 +1212,7 @@ module.exports = function createSslImportRoutes(deps = {}) {
       if (!payload.results.length) {
         throw new Error('No result rows found yet. Make sure races have posted results before sending to SSL.');
       }
+      createDesktopBackupIfActive(db, 'before_sync', meet.id);
       const result = await postResultsPackageToSsl(payload);
       meet.lastSslResultsSentAt = nowIso();
       meet.lastSslResultsPackageId = payload.package_id;
@@ -1337,7 +1338,7 @@ module.exports = function createSslImportRoutes(deps = {}) {
 
       if (pkg.status === 'deleted') throw new Error('This package was deleted and cannot be applied. Ask the coach to submit again if needed.');
       if (pkg.status === 'returned') throw new Error('This package was returned to the coach and cannot be applied unless the coach resubmits it.');
-      createDesktopBackupIfActive(req.db, 'before_import_apply');
+      createDesktopBackupIfActive(req.db, 'before_import_apply', meet.id);
       const result = applyPackageToMeet({ db: req.db, pkg, meet, user: req.user });
       saveDb(req.db);
       return res.redirect('/portal/ssl-packages?id=' + encodeURIComponent(pkg.id) + '&ok=' + encodeURIComponent(`Created ${result.created.length} registration${result.created.length === 1 ? '' : 's'} from SSL. Skipped ${result.skipped.length} duplicate${result.skipped.length === 1 ? '' : 's'}.`));

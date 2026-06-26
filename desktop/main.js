@@ -5,7 +5,11 @@ const http = require('http');
 const net = require('net');
 const path = require('path');
 const { app, BrowserWindow, ipcMain, shell } = require('electron');
-const { initAutoUpdateScaffold } = require('./updateService');
+const { initAutoUpdateService } = require('./updateService');
+const {
+  markCleanShutdown,
+  markDesktopStartup,
+} = require('../services/desktopCrashRecoveryService');
 
 const WINDOW_STATE_FILE = 'window-state.json';
 const DEFAULT_WIDTH = 1440;
@@ -18,6 +22,7 @@ const ICON_FILE = path.join(__dirname, 'assets', 'icon.icns');
 let mainWindow = null;
 let serverStarted = false;
 let lastStartPort = null;
+let isRelaunching = false;
 
 function userDataPath(...parts) {
   return path.join(app.getPath('userData'), ...parts);
@@ -106,11 +111,15 @@ async function startLocalServer() {
   process.env.PORT = String(port);
   process.env.SSM_DESKTOP = '1';
   process.env.SSM_DATA_FILE = process.env.SSM_DATA_FILE || userDataPath('ssm_db.json');
+  process.env.SSM_CRASH_STATE_FILE = process.env.SSM_CRASH_STATE_FILE || userDataPath('desktop-crash-recovery.json');
   process.env.SSM_DESKTOP_STARTED_AT = process.env.SSM_DESKTOP_STARTED_AT || new Date().toISOString();
 
   try {
-    const { createBackup } = require('../services/desktopBackupService');
+    const { createBackup, createDailyBackup, scheduleDailyBackups } = require('../services/desktopBackupService');
+    const daily = createDailyBackup();
+    desktopLog(daily.skipped ? 'Daily desktop backup already exists' : 'Daily desktop backup created');
     createBackup({ reason: 'desktop_startup' });
+    scheduleDailyBackups({ logger: desktopLog });
     desktopLog('Desktop startup backup created');
   } catch (err) {
     desktopLog(`Desktop startup backup skipped: ${err && err.message ? err.message : err}`);
@@ -211,13 +220,25 @@ app.setAppUserModelId('com.speedskateleague.speedskatemeet');
 
 app.whenReady().then(async () => {
   desktopLog('Electron app ready');
-  initAutoUpdateScaffold({ app, logger: desktopLog });
+  const recovery = markDesktopStartup({
+    stateFile: userDataPath('desktop-crash-recovery.json'),
+    processId: process.pid,
+  });
+  if (recovery.unexpected) desktopLog('Unexpected shutdown detected; recovery prompt will be shown');
   createWindow();
+  initAutoUpdateService({
+    app,
+    BrowserWindow,
+    ipcMain,
+    getMainWindow: () => mainWindow,
+    logger: desktopLog,
+  }).start();
 
   try {
     const port = await startLocalServer();
-    desktopLog(`Loading app URL http://127.0.0.1:${port}/`);
-    await mainWindow.loadURL(`http://127.0.0.1:${port}/`);
+    const targetPath = recovery.unexpected ? '/desktop/recovery' : '/';
+    desktopLog(`Loading app URL http://127.0.0.1:${port}${targetPath}`);
+    await mainWindow.loadURL(`http://127.0.0.1:${port}${targetPath}`);
   } catch (err) {
     desktopLog(`Startup error: ${err && err.stack ? err.stack : err}`);
     if (mainWindow && !mainWindow.isDestroyed()) {
@@ -244,7 +265,23 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
+app.on('before-quit', () => {
+  if (isRelaunching) return;
+  try {
+    markCleanShutdown({ stateFile: userDataPath('desktop-crash-recovery.json') });
+    desktopLog('Desktop shutdown marked clean');
+  } catch (err) {
+    desktopLog(`Could not mark clean shutdown: ${err && err.message ? err.message : err}`);
+  }
+});
+
 ipcMain.handle('desktop:restart', () => {
+  isRelaunching = true;
+  try {
+    markCleanShutdown({ stateFile: userDataPath('desktop-crash-recovery.json') });
+  } catch (err) {
+    desktopLog(`Could not mark clean restart: ${err && err.message ? err.message : err}`);
+  }
   app.relaunch();
   app.quit();
 });

@@ -1,4 +1,5 @@
 const express = require('express');
+const { spawn } = require('child_process');
 const { esc } = require('../utils/html');
 const {
   DEFAULT_PRODUCT,
@@ -22,6 +23,12 @@ const {
   buildHealthReport,
   runDiagnostics,
 } = require('../services/desktopHealthService');
+const {
+  clearPendingRecovery,
+  pendingRecovery,
+  recordDesktopState,
+  restorePreviousMeet,
+} = require('../services/desktopCrashRecoveryService');
 
 function dbStats(db) {
   const meets = Array.isArray(db?.meets) ? db.meets : [];
@@ -72,6 +79,20 @@ function healthCard(title, level, value, detail, actions = '') {
     </div>`;
 }
 
+function recoveryDetail(snapshot) {
+  const race = snapshot?.raceState || {};
+  const tab = snapshot?.tabulatorState || {};
+  return `
+    <div class="stat-grid" style="margin:16px 0">
+      <div class="stat-card navy"><div class="stat-label">Previous Meet</div><div class="stat-value" style="font-size:22px">${esc(snapshot?.currentMeetName || 'Unknown Meet')}</div><div class="stat-sub">${esc(snapshot?.meetDate || '')}</div></div>
+      <div class="stat-card orange"><div class="stat-label">Race Index</div><div class="stat-value">${esc(String((race.currentRaceIndex ?? -1) + 1))}</div><div class="stat-sub">${esc(race.currentRaceId || 'No current race')}</div></div>
+      <div class="stat-card green"><div class="stat-label">Tabulator State</div><div class="stat-value">${esc(String(tab.resultRaceCount || 0))}</div><div class="stat-sub">races with results</div></div>
+      <div class="stat-card sky"><div class="stat-label">Generated Heats</div><div class="stat-value">${esc(String((snapshot?.generatedHeats || []).length))}</div><div class="stat-sub">saved race structures</div></div>
+    </div>
+    <div class="note">Captured: ${esc(snapshot?.capturedAt ? new Date(snapshot.capturedAt).toLocaleString() : 'Unknown')}</div>
+  `;
+}
+
 module.exports = function createDesktopRoutes(deps = {}) {
   const router = express.Router();
   const { getSessionUser, pageShell, loadDb, saveDb } = deps;
@@ -79,6 +100,64 @@ module.exports = function createDesktopRoutes(deps = {}) {
   if (typeof pageShell !== 'function') throw new Error('desktopRoutes requires pageShell');
   if (typeof loadDb !== 'function') throw new Error('desktopRoutes requires loadDb');
   if (typeof saveDb !== 'function') throw new Error('desktopRoutes requires saveDb');
+
+  router.get('/desktop/recovery', (req, res) => {
+    const data = typeof getSessionUser === 'function' ? getSessionUser(req) : null;
+    const snapshot = pendingRecovery();
+    if (!snapshot) return res.redirect('/desktop');
+    const error = req.query.error ? `<div class="card" style="border-left:4px solid var(--red);margin-bottom:12px"><div class="danger">${esc(req.query.error)}</div></div>` : '';
+    res.send(pageShell({
+      title: 'Crash Recovery',
+      user: data?.user || null,
+      bodyHtml: `
+        <div style="max-width:860px;margin:36px auto">
+          <div class="page-header">
+            <h1>SSM detected an unexpected shutdown.</h1>
+            <div class="sub">Choose how you want to continue. Recovery works fully offline from local desktop data.</div>
+          </div>
+          ${error}
+          <div class="card" style="border-left:5px solid var(--orange)">
+            ${recoveryDetail(snapshot)}
+            <div class="action-row" style="margin-top:18px">
+              <form method="POST" action="/desktop/recovery/restore-previous" style="margin:0">
+                <button class="btn-orange" type="submit">Restore Previous Meet</button>
+              </form>
+              <form method="POST" action="/desktop/recovery/open-backup" style="margin:0">
+                <button class="btn2" type="submit">Open Backup</button>
+              </form>
+              <form method="POST" action="/desktop/recovery/start-fresh" style="margin:0" onsubmit="return confirm('Start fresh and dismiss this recovery prompt? Your backups will remain available.');">
+                <button class="btn2" type="submit">Start Fresh</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      `,
+    }));
+  });
+
+  router.post('/desktop/recovery/restore-previous', (req, res) => {
+    try {
+      const db = loadDb();
+      const snapshot = pendingRecovery();
+      try { createBackup({ db, reason: 'before_crash_recovery_restore', meetId: snapshot?.currentMeetId || '' }); }
+      catch (err) { console.warn('Crash recovery restore-point backup skipped:', err.message); }
+      const result = restorePreviousMeet(db);
+      saveDb(db);
+      return res.redirect(`/desktop/meet/${encodeURIComponent(result.meetId)}/unlock`);
+    } catch (err) {
+      return res.redirect('/desktop/recovery?error=' + encodeURIComponent(err.message));
+    }
+  });
+
+  router.post('/desktop/recovery/open-backup', (req, res) => {
+    clearPendingRecovery();
+    res.redirect('/desktop/settings/backups');
+  });
+
+  router.post('/desktop/recovery/start-fresh', (req, res) => {
+    clearPendingRecovery();
+    res.redirect('/desktop');
+  });
 
   router.get('/desktop', (req, res) => {
     const data = typeof getSessionUser === 'function' ? getSessionUser(req) : null;
@@ -104,7 +183,7 @@ module.exports = function createDesktopRoutes(deps = {}) {
               <span class="chip chip-green">Backups: ${backups.length}</span>
               <span class="chip">Last Backup: ${esc(backupAgeLabel(lastBackup?.createdAt))}</span>
               <a class="btn-orange" href="/desktop/tools/health">Health Center</a>
-              <a class="btn2" href="/desktop/tools/backups">Backup & Recovery</a>
+              <a class="btn2" href="/desktop/settings/backups">Settings → Backup Manager</a>
             </div>
           </div>
           <div class="note" style="margin-top:10px">Database Location: ${esc(process.env.SSM_DATA_FILE || 'ssm_db.json')}</div>
@@ -124,7 +203,7 @@ module.exports = function createDesktopRoutes(deps = {}) {
             <div class="action-row">
               <a class="btn-orange" href="/desktop/tools/health">Health Center</a>
               <a class="btn-orange" href="/desktop/open-meet">Open Meet on Desktop</a>
-              <a class="btn2" href="/desktop/tools/backups">Backup & Recovery</a>
+              <a class="btn2" href="/desktop/settings/backups">Settings → Backup Manager</a>
               <a class="btn2" href="/desktop/download">Download Placeholder</a>
             </div>
           </div>
@@ -145,7 +224,7 @@ module.exports = function createDesktopRoutes(deps = {}) {
     const offline = report.offline;
     const backupActions = `
       <form method="POST" action="/desktop/tools/backups/create" style="margin:0"><button class="btn-orange" type="submit">Create Backup</button></form>
-      <a class="btn2" href="/desktop/tools/backups">Open Backup Manager</a>`;
+      <a class="btn2" href="/desktop/settings/backups">Open Backup Manager</a>`;
     res.send(pageShell({
       title: 'Desktop Health Center',
       user: data?.user || null,
@@ -157,7 +236,7 @@ module.exports = function createDesktopRoutes(deps = {}) {
         <div class="action-row" style="margin-bottom:16px">
           <a class="btn-orange" href="/desktop/tools/health/run">Run Diagnostics</a>
           <a class="btn2" href="/desktop/tools/health/report">Export Health Report</a>
-          <a class="btn2" href="/desktop/tools/backups">Backup & Recovery</a>
+          <a class="btn2" href="/desktop/settings/backups">Settings → Backup Manager</a>
           <a class="btn2" href="/desktop">Desktop Tools</a>
         </div>
         <div class="grid-2" style="margin-bottom:16px">
@@ -248,7 +327,7 @@ module.exports = function createDesktopRoutes(deps = {}) {
     res.send(JSON.stringify(report, null, 2));
   });
 
-  router.get('/desktop/tools/backups', (req, res) => {
+  function renderBackupsPage(req, res) {
     const data = typeof getSessionUser === 'function' ? getSessionUser(req) : null;
     const db = loadDb();
     const backups = listBackups();
@@ -257,28 +336,32 @@ module.exports = function createDesktopRoutes(deps = {}) {
     const errorFlash = req.query.error ? `<div class="card" style="border-left:4px solid var(--red);margin-bottom:12px"><div class="danger">${esc(req.query.error)}</div></div>` : '';
     const rows = backups.map((backup, index) => `
       <tr>
-        <td><strong>${esc(backup.fileName)}</strong><div class="muted">${esc(backup.reason || 'manual')} • ${esc(new Date(backup.createdAt).toLocaleString())}</div></td>
+        <td><strong>${esc(backup.fileName)}</strong><div class="muted">${esc(backup.reason || 'manual')}</div></td>
+        <td>${esc(backup.meetName || 'All Data')}<div class="muted">${esc(backup.meetDate || '')}</div></td>
+        <td>${esc(new Date(backup.createdAt).toLocaleString())}</td>
+        <td>${esc(bytesLabel(backup.size))}</td>
         <td>${backup.valid ? '<span class="chip chip-good">Valid</span>' : `<span class="chip chip-warn">Invalid: ${esc(backup.reasonInvalid)}</span>`}</td>
         <td>${esc(String(backup.meetCount))}</td>
         <td>${esc(String(backup.registrationCount))}</td>
         <td style="text-align:right">
           <div class="action-row" style="justify-content:flex-end;margin:0">
-            <a class="btn2 btn-sm" href="/desktop/tools/backups/${encodeURIComponent(backup.fileName)}/download">Download</a>
+            <a class="btn2 btn-sm" href="/desktop/tools/backups/${encodeURIComponent(backup.fileName)}/download">Export</a>
             <a class="btn-orange btn-sm" href="/desktop/tools/backups/${encodeURIComponent(backup.fileName)}/restore">Restore</a>
+            <a class="btn2 btn-sm" href="/desktop/tools/backups/${encodeURIComponent(backup.fileName)}/reveal">Reveal</a>
             <form method="POST" action="/desktop/tools/backups/${encodeURIComponent(backup.fileName)}/delete" style="margin:0" onsubmit="return confirm('Delete this backup?');">
               <button class="btn-danger btn-sm" type="submit" ${index === 0 ? 'disabled title="Newest backup is protected"' : ''}>Delete</button>
             </form>
           </div>
         </td>
-      </tr>`).join('') || '<tr><td colspan="5" class="muted">No backups yet.</td></tr>';
+      </tr>`).join('') || '<tr><td colspan="8" class="muted">No backups yet.</td></tr>';
 
     res.send(pageShell({
-      title: 'Backup & Recovery',
+      title: 'Settings → Backup Manager',
       user: data?.user || null,
       bodyHtml: `
         <div class="page-header">
-          <h1>Backup & Recovery</h1>
-          <div class="sub">Protect local SpeedSkateMeet desktop data.</div>
+          <h1>Settings → Backup Manager</h1>
+          <div class="sub">Compressed ZIP backups protect local SpeedSkateMeet desktop data.</div>
         </div>
         ${okFlash}
         ${errorFlash}
@@ -293,17 +376,20 @@ module.exports = function createDesktopRoutes(deps = {}) {
             <a class="btn2" href="/desktop/tools/backups/emergency-export">Export Emergency Copy</a>
             <a class="btn2" href="/desktop">Back To Desktop</a>
           </div>
-          <div class="note" style="margin-top:10px">Database Location: ${esc(process.env.SSM_DATA_FILE || 'ssm_db.json')}</div>
+          <div class="note" style="margin-top:10px">Database Location: ${esc(process.env.SSM_SQLITE_FILE || process.env.SSM_DATA_FILE || 'ssm_db.json')} · Retention: latest 30 backups, plus the latest backup for each meet</div>
         </div>
         <div class="card">
           <table class="table">
-            <thead><tr><th>Backup</th><th>Health</th><th>Meets</th><th>Registrations</th><th></th></tr></thead>
+            <thead><tr><th>Backup</th><th>Meet</th><th>Created</th><th>Size</th><th>Health</th><th>Meets</th><th>Registrations</th><th></th></tr></thead>
             <tbody>${rows}</tbody>
           </table>
         </div>
       `,
     }));
-  });
+  }
+
+  router.get('/desktop/tools/backups', renderBackupsPage);
+  router.get('/desktop/settings/backups', renderBackupsPage);
 
   router.post('/desktop/tools/backups/create', (req, res) => {
     try {
@@ -327,6 +413,15 @@ module.exports = function createDesktopRoutes(deps = {}) {
     res.download(backup.filePath, backup.fileName);
   });
 
+  router.get('/desktop/tools/backups/:fileName/reveal', (req, res) => {
+    const backup = listBackups().find(row => row.fileName === String(req.params.fileName || ''));
+    if (!backup) return res.status(404).send('Backup not found');
+    if (process.platform === 'darwin') spawn('open', ['-R', backup.filePath], { detached: true, stdio: 'ignore' }).unref();
+    else if (process.platform === 'win32') spawn('explorer.exe', ['/select,', backup.filePath], { detached: true, stdio: 'ignore' }).unref();
+    else spawn('xdg-open', [backupDir()], { detached: true, stdio: 'ignore' }).unref();
+    res.redirect('/desktop/settings/backups');
+  });
+
   router.get('/desktop/tools/backups/:fileName/restore', (req, res) => {
     const data = typeof getSessionUser === 'function' ? getSessionUser(req) : null;
     const backup = listBackups().find(row => row.fileName === String(req.params.fileName || ''));
@@ -343,7 +438,9 @@ module.exports = function createDesktopRoutes(deps = {}) {
               <div class="stat-card navy"><div class="stat-label">Meet Count</div><div class="stat-value">${backup.meetCount}</div></div>
               <div class="stat-card green"><div class="stat-label">Registrations</div><div class="stat-value">${backup.registrationCount}</div></div>
               <div class="stat-card orange"><div class="stat-label">Backup Date</div><div class="stat-value" style="font-size:18px">${esc(new Date(backup.createdAt).toLocaleString())}</div></div>
+              <div class="stat-card sky"><div class="stat-label">Backup Size</div><div class="stat-value" style="font-size:20px">${esc(bytesLabel(backup.size))}</div></div>
             </div>
+            <div class="note" style="margin-bottom:14px">Meet: ${esc(backup.meetName || 'All Data')} · Blocks: ${esc(String(backup.blockCount || 0))} · Races: ${esc(String(backup.raceCount || 0))} · Lane Entries: ${esc(String(backup.laneEntryCount || 0))} · Results: ${esc(String(backup.resultCount || 0))} · Time Trials: ${esc(String(backup.timeTrialCount || 0))}</div>
             <form method="POST" action="/desktop/tools/backups/${encodeURIComponent(backup.fileName)}/restore" class="action-row" onsubmit="return confirm('Restore this backup now? A restore-point backup will be created first.');">
               <button class="btn-danger" type="submit">Restore This Backup</button>
               <a class="btn2" href="/desktop/tools/backups">Cancel</a>
@@ -359,7 +456,8 @@ module.exports = function createDesktopRoutes(deps = {}) {
       const backup = listBackups().find(row => row.fileName === String(req.params.fileName || ''));
       if (!backup) throw new Error('Backup not found.');
       const result = restoreBackup(backup.filePath);
-      return res.redirect('/desktop/tools/backups?ok=' + encodeURIComponent(`Restored ${result.restoredFrom.fileName}. Restore point: ${result.restorePoint.fileName}`));
+      const restorePointText = result.restorePoint?.fileName ? ` Restore point: ${result.restorePoint.fileName}` : '';
+      return res.redirect('/desktop/tools/backups?ok=' + encodeURIComponent(`Restored ${result.restoredFrom.fileName}.${restorePointText}`));
     } catch (err) {
       return res.redirect('/desktop/tools/backups?error=' + encodeURIComponent(err.message));
     }
@@ -460,6 +558,7 @@ module.exports = function createDesktopRoutes(deps = {}) {
       return res.redirect(`/desktop/meet/${encodeURIComponent(meet.id)}/unlock?error=${encodeURIComponent(message)}`);
     }
     setDesktopMeetUnlockCookie(res, meet);
+    recordDesktopState(db, { meetId: meet.id });
     return res.redirect(`/portal/meet/${encodeURIComponent(meet.id)}/race-day/judges`);
   });
 

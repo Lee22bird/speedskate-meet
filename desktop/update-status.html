@@ -1,0 +1,52 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>SSM Desktop Update</title>
+  <style>
+    :root{color-scheme:dark;--navy:#07101f;--panel:#0f1f3d;--orange:#f97316;--blue:#38bdf8;--text:#e5eefb;--muted:#9fb2c8}
+    *{box-sizing:border-box}
+    body{margin:0;min-height:100vh;display:grid;place-items:center;background:radial-gradient(circle at 80% 8%,rgba(56,189,248,.18),transparent 34%),linear-gradient(135deg,#07101f,#0f1f3d 64%,#111827);font-family:Arial,Helvetica,sans-serif;color:var(--text)}
+    main{width:min(420px,calc(100vw - 28px));border:1px solid rgba(148,163,184,.20);border-radius:22px;background:rgba(255,255,255,.055);padding:24px;box-shadow:0 24px 70px rgba(0,0,0,.35)}
+    .mark{width:54px;height:54px;border-radius:16px;display:grid;place-items:center;background:linear-gradient(135deg,#0ea5e9,#0f1f3d);border:1px solid rgba(255,255,255,.18);font-weight:950;letter-spacing:.05em;margin-bottom:18px}
+    h1{margin:0 0 8px;font-size:24px;line-height:1.1}
+    p{margin:0;color:var(--muted);font-size:15px;line-height:1.55}
+    .meta{margin:16px 0 0;padding:12px;border:1px solid rgba(148,163,184,.16);border-radius:14px;background:rgba(0,0,0,.18);color:#bfdbfe;font-size:13px;font-weight:800}
+    .actions{display:flex;gap:10px;margin-top:22px}
+    button{flex:1;border:0;border-radius:999px;padding:12px 14px;color:white;font-weight:950;cursor:pointer}
+    .primary{background:linear-gradient(135deg,var(--orange),#fb923c)}
+    .secondary{background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.14)}
+  </style>
+</head>
+<body>
+  <main>
+    <div class="mark">SSM</div>
+    <h1>A new version of SSM Desktop is ready.</h1>
+    <p>The update downloaded in the background. Install it now, or keep working and SSM Desktop will install it on the next restart.</p>
+    <div class="meta" id="meta">Ready to install</div>
+    <div class="actions">
+      <button class="primary" id="install">Install Now</button>
+      <button class="secondary" id="later">Later</button>
+    </div>
+  </main>
+  <script>
+    const meta = document.getElementById('meta');
+    function render(status) {
+      const version = status && status.updateInfo && status.updateInfo.version ? status.updateInfo.version : '';
+      const channel = status && status.channel ? status.channel : '';
+      meta.textContent = [version ? `Version ${version}` : '', channel ? `${channel} channel` : ''].filter(Boolean).join(' • ') || 'Ready to install';
+    }
+    if (window.SpeedSkateMeetDesktop && window.SpeedSkateMeetDesktop.updates) {
+      window.SpeedSkateMeetDesktop.updates.status().then(render).catch(() => {});
+      window.SpeedSkateMeetDesktop.updates.onStatus(render);
+      document.getElementById('install').addEventListener('click', () => {
+        window.SpeedSkateMeetDesktop.updates.installNow();
+      });
+      document.getElementById('later').addEventListener('click', () => {
+        window.SpeedSkateMeetDesktop.updates.later();
+      });
+    }
+  </script>
+</body>
+</html>

@@ -30,6 +30,13 @@ const {
 } = ttHelpers;
 const { completedTimeTrialEvents, ensureTimeTrialEvent, timeTrialEventTitle } = require('../services/timeTrialEvents');
 const { renderTimeTrialFinalResultsHtml } = require('../services/timeTrialResultsView');
+const { createBackup: createDesktopBackup } = require('../services/desktopBackupService');
+
+function createDesktopBackupIfActive(db, reason, meetId = '') {
+  if (process.env.SSM_DESKTOP !== '1') return;
+  try { createDesktopBackup({ db, reason, meetId }); }
+  catch (err) { console.warn(`Desktop backup skipped (${reason}):`, err.message); }
+}
 
 function raceDayItemLabel(item) {
   if (!item) return '—';
@@ -666,6 +673,7 @@ router.get('/portal/meet/:meetId/blocks/print', requireRole('meet_director'), (r
 router.post('/api/meet/:meetId/blocks/add', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet||!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
+  createDesktopBackupIfActive(req.db, 'before_block_generation', meet.id);
   const n=(meet.blocks||[]).length+1;
   meet.blocks.push({id:'b'+crypto.randomBytes(4).toString('hex'),name:'Block '+n,day:'Day 1',type:'race',notes:'',raceIds:[]});
   meet.updatedAt=nowIso(); saveDb(req.db); res.json({ok:true});
@@ -674,6 +682,7 @@ router.post('/api/meet/:meetId/blocks/add', requireRole('meet_director'), (req, 
 router.post('/api/meet/:meetId/blocks/add-divider', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet||!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
+  createDesktopBackupIfActive(req.db, 'before_block_generation', meet.id);
   const type=String(req.body.type||'break');
   const name=String(req.body.name||'Break').trim();
   meet.blocks.push({id:'b'+crypto.randomBytes(4).toString('hex'),name,day:'Day 1',type,notes:'',raceIds:[]});
@@ -697,6 +706,7 @@ router.post('/api/meet/:meetId/blocks/delete', requireRole('meet_director'), (re
   if(!meet||!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
   const blockId=String(req.body.blockId||'');
   if(!(meet.blocks||[]).find(b=>b.id===blockId)) return res.status(404).send('Block not found');
+  createDesktopBackupIfActive(req.db, 'before_block_generation', meet.id);
   meet.blocks=(meet.blocks||[]).filter(b=>b.id!==blockId);
   ensureAtLeastOneBlock(meet); ensureCurrentRace(meet); meet.updatedAt=nowIso(); saveDb(req.db); res.json({ok:true});
 });
@@ -713,6 +723,7 @@ router.post('/api/meet/:meetId/blocks/move', requireRole('meet_director'), (req,
   if(dir==='up') swapIdx = idx-1;
   else if(dir==='down') swapIdx = idx+1;
   if(swapIdx===null || swapIdx<0 || swapIdx>=blocks.length) return res.json({ok:false});
+  createDesktopBackupIfActive(req.db, 'before_block_generation', meet.id);
   // swap blocks
   const tmp = blocks[swapIdx]; blocks[swapIdx] = blocks[idx]; blocks[idx] = tmp;
   meet.blocks = blocks;
@@ -725,6 +736,7 @@ router.post('/portal/meet/:meetId/blocks/auto-flow', requireRole('meet_director'
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
 
+  createDesktopBackupIfActive(req.db, 'before_block_generation', meet.id);
   const changedBlocks = autoArrangeMeetHeatFinalFlow(meet);
   if (changedBlocks) saveDb(req.db);
   else saveDb(req.db);
@@ -747,6 +759,7 @@ router.post('/api/meet/:meetId/blocks/move-race', requireRole('meet_director'), 
 
   const ttEvent = ensureTimeTrialEvent(meet);
   if (ttEvent && String(ttEvent.id) === raceId) {
+    createDesktopBackupIfActive(req.db, 'before_block_generation', meet.id);
     for (const block of meet.blocks || []) {
       block.timeTrialEventIds = (block.timeTrialEventIds || []).map(String).filter(id => id !== raceId);
     }
@@ -764,6 +777,7 @@ router.post('/api/meet/:meetId/blocks/move-race', requireRole('meet_director'), 
   const race=(meet.races||[]).find(r=>String(r.id)===raceId);
   if(!race) return res.status(404).send('Race not found');
 
+  createDesktopBackupIfActive(req.db, 'before_block_generation', meet.id);
   for(const block of meet.blocks||[]) {
     block.raceIds=(block.raceIds||[]).map(String).filter(id=>id!==raceId);
   }
@@ -1331,6 +1345,7 @@ router.post('/api/meet/:meetId/race-day/step', requireRole('meet_director'), (re
 router.post('/api/meet/:meetId/race-day/toggle-pause', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet||!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
+  if (meet.raceDayPaused) createDesktopBackupIfActive(req.db, 'before_meet_start', meet.id);
   meet.raceDayPaused=!meet.raceDayPaused; saveDb(req.db); res.json({ok:true});
 });
 

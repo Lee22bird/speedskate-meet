@@ -29,6 +29,8 @@ mac:
   icon: desktop/assets/icon.icns
   hardenedRuntime: true
   gatekeeperAssess: false
+  detectUpdateChannel: true
+  generateUpdatesFilesForAllChannels: true
   entitlements: desktop/entitlements.mac.plist
   entitlementsInherit: desktop/entitlements.mac.plist
   target:
@@ -57,9 +59,9 @@ dmg:
       path: /Applications
 
 afterPack: scripts/clean-mac-xattrs.js
-afterSign: scripts/notarize-mac.js
 afterAllArtifactBuild: scripts/collect-mac-artifacts.js
 
 publish:
-  provider: generic
-  url: https://downloads.speedskateleague.com/ssm/
+  provider: github
+  owner: Lee22bird
+  repo: speedskate-meet

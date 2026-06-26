@@ -13,15 +13,16 @@
     "desktop:package": "npm run package:mac",
     "desktop:build": "npm run build:mac",
     "build": "npm run build:mac",
-    "build:mac": "npm run desktop:icon && electron-builder --config electron-builder.yml --mac --arm64",
-    "build:mac:intel": "npm run desktop:icon && electron-builder --config electron-builder.yml --mac --x64",
-    "package:mac": "npm run desktop:icon && electron-builder --config electron-builder.yml --mac dir --arm64",
-    "package:mac:intel": "npm run desktop:icon && electron-builder --config electron-builder.yml --mac dir --x64",
+    "build:mac": "npm run desktop:icon && electron-builder --config electron-builder.yml --config.directories.output=/private/tmp/ssm-desktop-release/mac --mac --arm64",
+    "build:mac:intel": "npm run desktop:icon && electron-builder --config electron-builder.yml --config.directories.output=/private/tmp/ssm-desktop-release/mac --mac --x64",
+    "package:mac": "npm run desktop:icon && electron-builder --config electron-builder.yml --config.directories.output=/private/tmp/ssm-desktop-release/mac --mac dir --arm64",
+    "package:mac:intel": "npm run desktop:icon && electron-builder --config electron-builder.yml --config.directories.output=/private/tmp/ssm-desktop-release/mac --mac dir --x64",
     "notarize": "node scripts/notarize-mac.js",
     "release:mac": "npm run build:mac && npm run notarize"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.105.1",
+    "electron-updater": "^6.8.9",
     "express": "^4.19.2"
   },
   "devDependencies": {

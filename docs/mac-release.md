@@ -41,6 +41,8 @@ Build Apple Silicon release artifacts:
 npm run build:mac
 ```
 
+The build stages app signing in `/private/tmp/ssm-desktop-release/mac` and then copies release artifacts back into `release/`. This avoids macOS file-provider extended attributes that can break Developer ID signing when the repo lives under synced folders.
+
 Optional Intel build:
 
 ```sh
@@ -100,7 +102,7 @@ spctl --assess --type open --context context:primary-signature --verbose "releas
 
 ## Notarization
 
-Electron Builder runs `scripts/notarize-mac.js` after app signing when all notarization environment variables are present.
+Electron Builder signs the app during `npm run build:mac`. The release workflow notarizes the final DMG with `npm run notarize`.
 
 `npm run notarize` submits the built DMG with `xcrun notarytool`, waits for the result, staples the ticket, and copies the stapled DMG to:
 
@@ -129,27 +131,46 @@ The current background uses existing SSM branding artwork. Before public release
 
 ## Auto Updates
 
-Auto-update architecture is scaffolded but disabled by default.
+Auto updates are production-ready for packaged macOS builds and use GitHub Releases through `electron-updater`.
 
-Future update feed:
+GitHub Releases source:
 
 ```text
-https://downloads.speedskateleague.com/ssm/
+Lee22bird/speedskate-meet
 ```
 
-The dormant hook lives in:
+Runtime behavior:
+
+- Check on startup.
+- Check again every 4 hours.
+- Download silently in the background.
+- Prompt after download:
+
+  ```text
+  A new version of SSM Desktop is ready.
+  [Install Now] [Later]
+  ```
+
+Supported channels:
+
+- `alpha`
+- `beta`
+- `stable`
+
+The implementation lives in:
 
 ```text
 desktop/updateService.js
+desktop/update-status.html
 ```
 
-Production update checks only start if:
+Development builds do not check for updates unless explicitly enabled:
 
 ```sh
 export SSM_ENABLE_AUTO_UPDATES=1
 ```
 
-Before enabling production updates, add `electron-updater` as a direct dependency and publish signed update metadata to the download feed.
+See `docs/desktop-updates.md` for channel and GitHub Release asset requirements.
 
 ## Release Workflow
 
@@ -226,6 +247,6 @@ xcrun stapler validate "release/mac/SSM Desktop.dmg"
 
 - Create and store an Apple app-specific password.
 - Provide notarization environment variables in the release shell or CI secret store.
-- Decide where release artifacts are hosted under `https://downloads.speedskateleague.com/ssm/`.
+- Upload release artifacts and update metadata to GitHub Releases for `Lee22bird/speedskate-meet`.
 - Replace the interim DMG background with final production artwork before public release.
 - Decide when to enable production auto-update checks.
