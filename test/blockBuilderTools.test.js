@@ -54,7 +54,7 @@ test('block builder create tools return the new block location', () => {
   assert.equal(meet.blocks[1].type, 'lunch');
 });
 
-test('block builder tools include progress, errors, and target highlighting', () => {
+test('block builder tools include progress, timeout recovery, duplicate protection, and target highlighting', () => {
   const meet = {
     id: 1,
     meetName: 'Test Meet',
@@ -66,6 +66,9 @@ test('block builder tools include progress, errors, and target highlighting', ()
   assert.match(html, /id="block-b1"/);
   assert.match(html, /onclick="addBlock\(this\)"/);
   assert.match(html, /button\.textContent='Adding…'/);
+  assert.match(html, /if\(blockCreatePending\) return/);
+  assert.match(html, /setTimeout\(\(\)=>controller\.abort\(\),15000\)/);
+  assert.match(html, /server took too long to respond/);
   assert.match(html, /Could not add this block/);
   assert.match(html, /blocks#block-/);
 

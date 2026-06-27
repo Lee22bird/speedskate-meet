@@ -336,7 +336,12 @@ function getSessionUser(req) {
 
 function extendSession(db,token) {
   const sess=db.sessions.find(s=>s.token===token);
-  if(sess) sess.expiresAt=new Date(Date.now()+SESSION_TTL_MS).toISOString();
+  if(!sess) return false;
+  const expiresAt=new Date(sess.expiresAt||0).getTime();
+  const renewAfterMs=Math.min(24*60*60*1000,Math.floor(SESSION_TTL_MS/4));
+  if(Number.isFinite(expiresAt)&&expiresAt-Date.now()>renewAfterMs) return false;
+  sess.expiresAt=new Date(Date.now()+SESSION_TTL_MS).toISOString();
+  return true;
 }
 
 function findUserByLogin(db, login) {
@@ -386,7 +391,7 @@ function requireRole(...roles) {
       }
       return res.redirect('/admin/login');
     }
-    extendSession(data.db,data.token); saveDb(data.db);
+    if(extendSession(data.db,data.token)) saveDb(data.db);
     req.db=data.db; req.user=data.user; req.sessionToken=data.token;
     if(hasRole(data.user,'super_admin')||roles.some(role=>hasRole(data.user,role))) return next();
     return res.status(403).send(pageShell({title:'Forbidden',user:data.user,

@@ -304,13 +304,27 @@ Continue?')">
           });
         });
       }
+      let blockCreatePending=false;
+      function setBlockToolBusy(busy,activeButton){
+        document.querySelectorAll('.block-tool-buttons button').forEach(toolButton=>{
+          toolButton.disabled=busy;
+          if(!busy&&toolButton!==activeButton&&toolButton.dataset.originalLabel){
+            toolButton.textContent=toolButton.dataset.originalLabel;
+          }
+        });
+      }
       async function createBlock(button,url,options){
+        if(blockCreatePending) return;
+        blockCreatePending=true;
         saveFilters();
         const original=button.textContent;
-        button.disabled=true;
+        button.dataset.originalLabel=original;
+        setBlockToolBusy(true,button);
         button.textContent='Adding…';
+        const controller=new AbortController();
+        const timeout=setTimeout(()=>controller.abort(),15000);
         try{
-          const response=await fetch(url,options);
+          const response=await fetch(url,{...options,signal:controller.signal});
           if(!response.ok){
             const message=(await response.text()).trim();
             throw new Error(message||('Request failed ('+response.status+')'));
@@ -320,9 +334,15 @@ Continue?')">
           location.assign('/portal/meet/'+encodeURIComponent(meetId)+'/blocks#block-'+encodeURIComponent(result.blockId));
         }catch(err){
           console.error(err);
-          alert('Could not add this block. '+(err&&err.message?err.message:'Please try again.'));
-          button.disabled=false;
+          const message=err&&err.name==='AbortError'
+            ? 'The server took too long to respond. No second request was sent. Please refresh and try once more.'
+            : (err&&err.message?err.message:'Please try again.');
+          alert('Could not add this block. '+message);
+          blockCreatePending=false;
+          setBlockToolBusy(false,button);
           button.textContent=original;
+        }finally{
+          clearTimeout(timeout);
         }
       }
       function addBlock(button){
