@@ -56,9 +56,9 @@ function renderCheckinView({ meet, query = {} }) {
   const rows = registrations.map(r => {
     const entryLabel = entryLabelForRegistration(r);
     const totalCost = Number(r.totalCost || 0);
-    const paidLabel = r.paid ? '✓ Paid' : (totalCost > 0 ? `Owes $${money(totalCost)}` : 'Not Paid');
+    const paidLabel = r.paid ? '✓ Paid' : (totalCost > 0 ? `Mark Paid · $${money(totalCost)} due` : 'Mark Paid');
     const paidClass = r.paid ? 'ci-pill ci-pill-good' : 'ci-pill ci-pill-owe';
-    const checkinLabel = r.checkedIn ? '✓ Checked In' : 'Not Checked In';
+    const checkinLabel = r.checkedIn ? '✓ Checked In' : 'Check In';
     const checkinClass = r.checkedIn ? 'ci-pill ci-pill-good' : 'ci-pill ci-pill-muted';
     const helmetDisplay = r.helmetNumber || '—';
 
@@ -72,25 +72,23 @@ function renderCheckinView({ meet, query = {} }) {
         data-checkin="${r.checkedIn ? 'checked' : 'not-checked'}">
         <div class="checkin-topline">
           <div class="checkin-person">
-            <div class="checkin-name-row">
+            <div class="checkin-person-heading">
+              <div class="checkin-reg-bubble">#${esc(r.meetNumber || '—')}</div>
               <div>
                 <div class="checkin-name">${esc(r.name)}</div>
                 ${sponsorLineHtml(r.sponsor || '')}
               </div>
-              <div class="checkin-helmet-badge">Helmet #${esc(helmetDisplay)}</div>
             </div>
-            <div class="checkin-meta">
-              <span>Reg #${esc(r.meetNumber || '—')}</span>
-              <span>${esc(r.team || 'Independent')}</span>
-              <span>${esc(r.divisionGroupLabel || 'Unassigned')}</span>
-            </div>
-            <div class="checkin-meta checkin-entry-line">
-              <span>${esc(entryLabel)}</span>
-              <span>$${esc(money(r.totalCost))} total</span>
+            <div class="checkin-detail-chips">
+              <span class="checkin-detail-chip ci-team-chip">${esc(r.team || 'Independent')}</span>
+              <span class="checkin-detail-chip">${esc(r.divisionGroupLabel || 'Unassigned')}</span>
+              <span class="checkin-detail-chip">${esc(entryLabel)}</span>
+              <span class="checkin-detail-chip ci-cost-chip">$${esc(money(r.totalCost))} total</span>
             </div>
           </div>
 
           <div class="checkin-side">
+            <div class="checkin-helmet-badge">Helmet #${esc(helmetDisplay)}</div>
             <form method="POST" action="/portal/meet/${esc(meet.id)}/checkin/helmet/${esc(r.id)}?returnTo=checkin" class="checkin-form helmet-form">
               <label>Helmet #</label>
               <div class="helmet-row">
@@ -99,16 +97,15 @@ function renderCheckinView({ meet, query = {} }) {
               </div>
             </form>
             <a class="btn2 btn-sm ci-edit-btn" href="/portal/meet/${esc(meet.id)}/registered/${esc(r.id)}/edit">Edit</a>
+            <div class="checkin-status-row">
+              <form method="POST" action="/portal/meet/${esc(meet.id)}/checkin/toggle-paid/${esc(r.id)}?returnTo=checkin" class="checkin-form">
+                <button class="${paidClass}" type="submit">${paidLabel}</button>
+              </form>
+              <form method="POST" action="/portal/meet/${esc(meet.id)}/checkin/toggle-checkin/${esc(r.id)}?returnTo=checkin" class="checkin-form">
+                <button class="${checkinClass}" type="submit">${checkinLabel}</button>
+              </form>
+            </div>
           </div>
-        </div>
-
-        <div class="checkin-status-row">
-          <form method="POST" action="/portal/meet/${esc(meet.id)}/checkin/toggle-paid/${esc(r.id)}?returnTo=checkin" class="checkin-form">
-            <button class="${paidClass}" type="submit">${paidLabel}</button>
-          </form>
-          <form method="POST" action="/portal/meet/${esc(meet.id)}/checkin/toggle-checkin/${esc(r.id)}?returnTo=checkin" class="checkin-form">
-            <button class="${checkinClass}" type="submit">${checkinLabel}</button>
-          </form>
         </div>
       </div>`;
   }).join('');
@@ -126,34 +123,55 @@ function renderCheckinView({ meet, query = {} }) {
       #ciCards{max-width:1120px;margin:0 auto;}
       .checkin-card{
         border:1px solid var(--border);
-        border-radius:18px;
-        padding:16px 18px;
-        margin:0 auto 12px;
+        border-radius:22px;
+        padding:18px;
+        margin:0 auto 14px;
         background:white;
-        box-shadow:0 1px 2px rgba(15,31,61,.04);
+        box-shadow:0 8px 24px rgba(15,31,61,.06);
       }
       .checkin-card.is-hidden{display:none;}
 
       .checkin-topline{
         display:grid;
-        grid-template-columns:minmax(0,1fr) 235px;
-        gap:18px;
-        align-items:start;
+        grid-template-columns:minmax(0,1fr) 310px;
+        gap:22px;
+        align-items:stretch;
       }
-      .checkin-name-row{
+      .checkin-person{
         display:flex;
-        align-items:flex-start;
-        justify-content:space-between;
-        gap:14px;
+        flex-direction:column;
+        justify-content:center;
+        min-width:0;
+        padding:8px 4px;
+      }
+      .checkin-person-heading{
+        display:flex;
+        align-items:center;
+        gap:12px;
+      }
+      .checkin-reg-bubble{
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        flex:0 0 48px;
+        width:48px;
+        height:48px;
+        border-radius:50%;
+        background:linear-gradient(145deg,#e0f2fe,#dbeafe);
+        border:1px solid #93c5fd;
+        color:#1d4ed8;
+        font-size:15px;
+        font-weight:900;
       }
       .checkin-name{
         font-size:23px;
         font-weight:900;
         color:var(--navy);
         line-height:1.12;
-        letter-spacing:-.02em;
+        letter-spacing:0;
       }
       .checkin-helmet-badge{
+        align-self:flex-start;
         background:#fff7ed;
         border:1px solid #fed7aa;
         color:var(--orange);
@@ -164,31 +182,37 @@ function renderCheckinView({ meet, query = {} }) {
         white-space:nowrap;
         line-height:1;
       }
-      .checkin-meta{
+      .checkin-detail-chips{
         display:flex;
         align-items:center;
         flex-wrap:wrap;
-        gap:6px 10px;
-        margin-top:6px;
-        color:var(--muted);
-        font-size:14px;
-        font-weight:650;
+        gap:8px;
+        margin-top:14px;
       }
-      .checkin-meta span:not(:last-child)::after{
-        content:"•";
-        color:#cbd5e1;
-        margin-left:10px;
+      .checkin-detail-chip{
+        display:inline-flex;
+        align-items:center;
+        min-height:32px;
+        padding:6px 11px;
+        border-radius:999px;
+        background:#f1f5f9;
+        border:1px solid #e2e8f0;
+        color:#475569;
+        font-size:13px;
+        font-weight:750;
       }
-      .checkin-entry-line{
-        margin-top:4px;
-        color:#334155;
-      }
+      .ci-team-chip{background:#eff6ff;border-color:#bfdbfe;color:#1e40af;}
+      .ci-cost-chip{background:#f8fafc;color:#0f1f3d;}
 
       .checkin-side{
         display:flex;
         flex-direction:column;
-        gap:8px;
+        gap:9px;
         align-items:stretch;
+        padding:14px;
+        border-radius:18px;
+        background:#f8fafc;
+        border:1px solid #e2e8f0;
       }
       .helmet-form label{
         margin-bottom:4px;
@@ -208,34 +232,35 @@ function renderCheckinView({ meet, query = {} }) {
       }
       .ci-edit-btn{
         width:100%;
-        min-height:36px;
+        min-height:40px;
+        border-radius:12px;
       }
 
       .checkin-status-row{
-        display:flex;
-        align-items:center;
+        display:grid;
+        grid-template-columns:1fr 1fr;
+        align-items:stretch;
         gap:8px;
-        flex-wrap:wrap;
-        margin-top:12px;
-        padding-top:12px;
-        border-top:1px solid rgba(15,31,61,.08);
+        margin-top:1px;
       }
       .checkin-status-row .checkin-form{
         margin:0;
+        min-width:0;
       }
       .ci-pill{
-        display:inline-flex;
+        display:flex;
         align-items:center;
         justify-content:center;
         gap:6px;
-        border-radius:999px;
-        padding:8px 13px;
-        min-height:36px;
+        width:100%;
+        border-radius:12px;
+        padding:8px 10px;
+        min-height:42px;
         border:1px solid transparent;
-        font-size:13px;
+        font-size:12px;
         font-weight:850;
         cursor:pointer;
-        white-space:nowrap;
+        line-height:1.15;
       }
       .ci-pill-good{
         background:#ecfdf5;
@@ -260,17 +285,18 @@ function renderCheckinView({ meet, query = {} }) {
         .ci-stat-grid{grid-template-columns:1fr;}
         #ciCards{max-width:none;}
         .checkin-topline{grid-template-columns:1fr;}
-        .checkin-name-row{flex-direction:column;align-items:flex-start;}
         .checkin-helmet-badge{font-size:14px;}
-        .checkin-side{max-width:260px;}
+        .checkin-side{max-width:none;}
         .checkin-name{font-size:21px;}
       }
       @media(max-width:560px){
         .checkin-card{padding:14px;}
         .checkin-side{max-width:none;}
         .helmet-row input{max-width:none;flex:1;}
-        .checkin-status-row{display:grid;grid-template-columns:1fr;align-items:stretch;}
+        .checkin-status-row{grid-template-columns:1fr;}
         .ci-pill{width:100%;}
+        .checkin-reg-bubble{flex-basis:42px;width:42px;height:42px;font-size:13px;}
+        .checkin-detail-chip{font-size:12px;}
       }
     </style>
 
