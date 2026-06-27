@@ -8,7 +8,7 @@ const {
   usarsAge, ageForReg, normalizeSkaterGender, displayGenderLabel, findAgeGroup, challengeAdjustedGroup, findChallengeUpGroup,
   nextId, nextHelmetNumber, ensureRegistrationTotalsAndNumbers,
   isRegistrationClosed, isPublicMeet,
-  generateAdditionalRacesForMeet, ensureAtLeastOneBlock,
+  generateAdditionalRacesForMeet, generateConfiguredRacesForMeet, ensureAtLeastOneBlock,
   buildRegistrationPricingPreview,
   hasRelayEvents,
 } = require('../services/meetHelpers');
