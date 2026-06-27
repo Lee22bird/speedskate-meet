@@ -124,7 +124,9 @@ function ensureCurrentRace(meet) {
   if (info.current && meet.currentRaceId !== info.current.id) {
     meet.currentRaceId = info.current.id;
     meet.currentRaceIndex = info.idx;
+    return true;
   }
+  return false;
 }
 
 function laneRowsForRace(race, meet) {

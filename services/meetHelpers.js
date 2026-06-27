@@ -504,8 +504,13 @@ function restorePresetBlocksIntoMeet(preset, meet) {
 }
 
 function ensureAtLeastOneBlock(meet) {
-  if(!Array.isArray(meet.blocks)) meet.blocks=[];
-  if(meet.blocks.length===0) meet.blocks.push({id:'b1',name:'Block 1',day:'Day 1',type:'race',notes:'',raceIds:[]});
+  let changed=false;
+  if(!Array.isArray(meet.blocks)) { meet.blocks=[]; changed=true; }
+  if(meet.blocks.length===0) {
+    meet.blocks.push({id:'b1',name:'Block 1',day:'Day 1',type:'race',notes:'',raceIds:[]});
+    changed=true;
+  }
+  return changed;
 }
 
 function combineDateTime(date,time) {

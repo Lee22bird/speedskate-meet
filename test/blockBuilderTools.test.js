@@ -54,6 +54,34 @@ test('block builder create tools return the new block location', () => {
   assert.equal(meet.blocks[1].type, 'lunch');
 });
 
+test('opening an initialized Block Builder does not rewrite the database', () => {
+  const meet = {
+    id: 1,
+    meetName: 'Test Meet',
+    ownerUserId: 1,
+    blocks: [{ id: 'b1', name: 'Block 1', type: 'race', day: 'Day 1', raceIds: [] }],
+    races: [],
+  };
+  const db = { meets: [meet] };
+  let saveCount = 0;
+  const router = createRaceDayRoutes({
+    requireRole: () => (req, res, next) => next(),
+    pageShell: value => value,
+    saveDb: () => { saveCount += 1; },
+    renderBlockBuilderView: () => 'builder',
+    resultsSectionHtml: () => '',
+    announcerBoxHtml: () => '',
+    meetTabs: () => '',
+  });
+  const layer = router.stack.find(item => item.route?.path === '/portal/meet/:meetId/blocks' && item.route.methods.get);
+  assert.ok(layer);
+  const handler = layer.route.stack[layer.route.stack.length - 1].handle;
+  const response = responseRecorder();
+  handler({ params: { meetId: '1' }, db, user: { id: 1, roles: ['super_admin'] } }, response);
+  assert.equal(response.body.bodyHtml, 'builder');
+  assert.equal(saveCount, 0);
+});
+
 test('block builder tools include progress, timeout recovery, duplicate protection, and target highlighting', () => {
   const meet = {
     id: 1,

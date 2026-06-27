@@ -646,7 +646,9 @@ router.get('/portal/meet/:meetId/blocks', requireRole('meet_director'), (req, re
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet) return res.redirect('/portal');
   if(!canEditMeet(req.user,meet)) return res.status(403).send(pageShell({title:'Forbidden',user:req.user,bodyHtml:`<div class="page-header"><h1>Forbidden</h1></div><div class="card"><div class="danger">Only the meet owner can edit this meet.</div></div>`}));
-  ensureAtLeastOneBlock(meet); ensureCurrentRace(meet); saveDb(req.db);
+  const initializedBlock = ensureAtLeastOneBlock(meet);
+  const initializedCurrentRace = ensureCurrentRace(meet);
+  if(initializedBlock||initializedCurrentRace) saveDb(req.db);
 
   res.send(pageShell({
     title:'Block Builder',
