@@ -98,7 +98,7 @@ test('block builder tools include progress, timeout recovery, duplicate protecti
   assert.match(html, /setTimeout\(\(\)=>controller\.abort\(\),15000\)/);
   assert.match(html, /server took too long to respond/);
   assert.match(html, /Could not add this block/);
-  assert.match(html, /blocks#block-/);
+  assert.match(html, /blocks\?created='\+createdId\+'#block-'/);
 
   const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(match => match[1]).join('\n');
   assert.doesNotThrow(() => new Function(script));

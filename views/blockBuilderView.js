@@ -331,7 +331,8 @@ Continue?')">
           }
           const result=await response.json();
           if(!result||!result.blockId) throw new Error('The block was created but its location was not returned.');
-          location.assign('/portal/meet/'+encodeURIComponent(meetId)+'/blocks#block-'+encodeURIComponent(result.blockId));
+          const createdId=encodeURIComponent(result.blockId);
+          location.replace('/portal/meet/'+encodeURIComponent(meetId)+'/blocks?created='+createdId+'#block-'+createdId);
         }catch(err){
           console.error(err);
           const message=err&&err.name==='AbortError'
