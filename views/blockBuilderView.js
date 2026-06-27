@@ -67,7 +67,7 @@ function renderBlockBuilderView({ meet }) {
     if (isBreak) {
       const icon = breakIcons[block.type] || '📌';
       return `
-        <div class="divider-card">
+        <div class="divider-card" id="block-${esc(block.id)}">
           <div class="divider-card-inner">
             <div class="divider-icon">${icon}</div>
             <div class="divider-info">
@@ -88,7 +88,7 @@ function renderBlockBuilderView({ meet }) {
 
     const displayNum = blockNumber[block.id] || '';
     return `
-      <div class="block-card">
+      <div class="block-card" id="block-${esc(block.id)}">
         <div class="block-head" style="margin-bottom:12px">
           <div>
             <div style="font-weight:700;font-size:17px;color:var(--navy)">Block ${displayNum}</div>
@@ -162,11 +162,11 @@ function renderBlockBuilderView({ meet }) {
           <div class="setup-mini-title">Block Tools</div>
           <p class="note" style="margin-bottom:12px">Add race blocks or divider blocks, then drag races into the schedule.</p>
           <div class="block-tool-buttons">
-            <button class="btn2" onclick="addBlock()">+ Race Block</button>
-            <button class="btn2 btn-sm" onclick="addDivider('break','☕ Break')">☕ Break</button>
-            <button class="btn2 btn-sm" onclick="addDivider('lunch','🍽️ Lunch')">🍽️ Lunch</button>
-            <button class="btn2 btn-sm" onclick="addDivider('awards','🏆 Awards')">🏆 Awards</button>
-            <button class="btn2 btn-sm" onclick="addDivider('practice','⛸️ Practice')">⛸️ Practice</button>
+            <button class="btn2" type="button" onclick="addBlock(this)">+ Race Block</button>
+            <button class="btn2 btn-sm" type="button" onclick="addDivider(this,'break','☕ Break')">☕ Break</button>
+            <button class="btn2 btn-sm" type="button" onclick="addDivider(this,'lunch','🍽️ Lunch')">🍽️ Lunch</button>
+            <button class="btn2 btn-sm" type="button" onclick="addDivider(this,'awards','🏆 Awards')">🏆 Awards</button>
+            <button class="btn2 btn-sm" type="button" onclick="addDivider(this,'practice','⛸️ Practice')">⛸️ Practice</button>
           </div>
         </section>
 
@@ -209,6 +209,9 @@ Continue?')">
       .block-summary-grid span{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);}
       .block-summary-grid strong{font-size:20px;color:var(--navy);}
       .block-tool-buttons{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+      .block-tool-buttons button:disabled{opacity:.62;cursor:wait;transform:none;}
+      .block-card:target,.divider-card:target{outline:3px solid rgba(56,189,248,.75);box-shadow:0 0 0 7px rgba(56,189,248,.14),var(--shadow-lg);animation:block-created-pulse .8s ease-out;}
+      @keyframes block-created-pulse{from{transform:scale(.985);background:#e0f2fe}to{transform:scale(1)}}
       .block-action-stack{display:grid;gap:8px;}
       .block-danger-zone{border-color:rgba(249,115,22,.22);background:linear-gradient(180deg,#fff,#fff7ed);}
       @media(max-width:1000px){.block-control-grid{grid-template-columns:1fr}.block-builder-hero{align-items:flex-start}.block-builder-control-card{padding:18px}.block-control-head{flex-direction:column}.block-summary-grid{grid-template-columns:1fr 1fr}}
@@ -258,8 +261,13 @@ Continue?')">
       function restoreBuilderScroll(){
         const left=document.querySelector('.bb-left');
         if(left){
-          const val=sessionStorage.getItem(scrollStorageKey());
-          if(val!==null) left.scrollTop=parseInt(val,10)||0;
+          const target=location.hash ? document.getElementById(decodeURIComponent(location.hash.slice(1))) : null;
+          if(target){
+            target.scrollIntoView({block:'center'});
+          }else{
+            const val=sessionStorage.getItem(scrollStorageKey());
+            if(val!==null) left.scrollTop=parseInt(val,10)||0;
+          }
         }
         const unassigned=document.querySelector('.unassigned-list');
         if(unassigned){
@@ -296,8 +304,33 @@ Continue?')">
           });
         });
       }
-      async function addBlock(){saveFilters();const r=await fetch('/api/meet/'+meetId+'/blocks/add',{method:'POST'});if(r.ok) location.reload();}
-      async function addDivider(type,name){saveFilters();const r=await fetch('/api/meet/'+meetId+'/blocks/add-divider',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type,name})});if(r.ok) location.reload();}
+      async function createBlock(button,url,options){
+        saveFilters();
+        const original=button.textContent;
+        button.disabled=true;
+        button.textContent='Adding…';
+        try{
+          const response=await fetch(url,options);
+          if(!response.ok){
+            const message=(await response.text()).trim();
+            throw new Error(message||('Request failed ('+response.status+')'));
+          }
+          const result=await response.json();
+          if(!result||!result.blockId) throw new Error('The block was created but its location was not returned.');
+          location.assign('/portal/meet/'+encodeURIComponent(meetId)+'/blocks#block-'+encodeURIComponent(result.blockId));
+        }catch(err){
+          console.error(err);
+          alert('Could not add this block. '+(err&&err.message?err.message:'Please try again.'));
+          button.disabled=false;
+          button.textContent=original;
+        }
+      }
+      function addBlock(button){
+        return createBlock(button,'/api/meet/'+meetId+'/blocks/add',{method:'POST'});
+      }
+      function addDivider(button,type,name){
+        return createBlock(button,'/api/meet/'+meetId+'/blocks/add-divider',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type,name})});
+      }
       async function renameBlock(id){const name=prompt('Name:');if(!name) return;saveFilters();const r=await fetch('/api/meet/'+meetId+'/blocks/update-meta',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({blockId:id,name})});if(r.ok) location.reload();}
       async function deleteBlock(id){if(!confirm('Remove this?')) return;saveFilters();const r=await fetch('/api/meet/'+meetId+'/blocks/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({blockId:id})});if(r.ok) location.reload();}
       async function moveBlock(id,dir){

@@ -1,4 +1,5 @@
 const express = require('express');
+const crypto = require('crypto');
 const { esc, cap } = require('../utils/html');
 const { nowIso } = require('../utils/date');
 const { canEditMeet, canJudgeMeet, hasRole } = require('../utils/auth');
@@ -675,8 +676,9 @@ router.post('/api/meet/:meetId/blocks/add', requireRole('meet_director'), (req, 
   if(!meet||!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
   createDesktopBackupIfActive(req.db, 'before_block_generation', meet.id);
   const n=(meet.blocks||[]).length+1;
-  meet.blocks.push({id:'b'+crypto.randomBytes(4).toString('hex'),name:'Block '+n,day:'Day 1',type:'race',notes:'',raceIds:[]});
-  meet.updatedAt=nowIso(); saveDb(req.db); res.json({ok:true});
+  const block={id:'b'+crypto.randomBytes(4).toString('hex'),name:'Block '+n,day:'Day 1',type:'race',notes:'',raceIds:[]};
+  meet.blocks.push(block);
+  meet.updatedAt=nowIso(); saveDb(req.db); res.json({ok:true,blockId:block.id});
 });
 
 router.post('/api/meet/:meetId/blocks/add-divider', requireRole('meet_director'), (req, res) => {
@@ -685,8 +687,9 @@ router.post('/api/meet/:meetId/blocks/add-divider', requireRole('meet_director')
   createDesktopBackupIfActive(req.db, 'before_block_generation', meet.id);
   const type=String(req.body.type||'break');
   const name=String(req.body.name||'Break').trim();
-  meet.blocks.push({id:'b'+crypto.randomBytes(4).toString('hex'),name,day:'Day 1',type,notes:'',raceIds:[]});
-  meet.updatedAt=nowIso(); saveDb(req.db); res.json({ok:true});
+  const block={id:'b'+crypto.randomBytes(4).toString('hex'),name,day:'Day 1',type,notes:'',raceIds:[]};
+  meet.blocks.push(block);
+  meet.updatedAt=nowIso(); saveDb(req.db); res.json({ok:true,blockId:block.id});
 });
 
 router.post('/api/meet/:meetId/blocks/update-meta', requireRole('meet_director'), (req, res) => {
