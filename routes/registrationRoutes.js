@@ -18,7 +18,11 @@ const {
   relayRaceExists,
   makeRelayRace,
 } = require('../services/relayHelpers');
-const SPRING_FLING_TEST_ROSTER = require('../data/springFlingRoster.json');
+const savedDevelopmentRoster = require('../data/springFlingRoster.json');
+const { buildDevelopmentTestRoster } = require('../services/devTestRoster');
+const SPRING_FLING_TEST_ROSTER = Array.isArray(savedDevelopmentRoster) && savedDevelopmentRoster.length
+  ? savedDevelopmentRoster
+  : buildDevelopmentTestRoster();
 const {
   rebuildRaceAssignmentsSafe, restoreBlockAssignmentsBySignature,
   raceImportSignature, raceFamilySignature, raceStageRankForRestore,
@@ -312,7 +316,7 @@ function registrationForm(meet,reg,action,title) {
 
 
 
-// ── Dev Import: Wichita Spring Fling realistic stress-test roster ───────────
+// ── Dev Import: deterministic race-sizing stress-test roster ────────────────
 // Super-admin only. This is intentionally server-side so production users never see it.
 function testRosterGenderForAge(row) {
   const age = Number(row.age || 0);
@@ -408,10 +412,10 @@ router.get('/portal/meet/:meetId/dev/import-spring-fling', requireRole('super_ad
   if (!canEditMeet(req.user, meet)) return res.status(403).send('Forbidden');
   const testCount = (meet.registrations || []).filter(r => r.importSource === 'spring_fling_2026_test').length;
   res.send(pageShell({ title: 'Dev Import', user: req.user, meet, activeTab: 'registered', bodyHtml: `
-    <div class="page-header"><h1>Dev Import Mode</h1><div class="sub">${esc(meet.meetName)} • Wichita Spring Fling test roster</div></div>
+    <div class="page-header"><h1>Dev Import Mode</h1><div class="sub">${esc(meet.meetName)} • SSM race-generation test roster</div></div>
     <div class="card card-accent">
       <h2>Load realistic test registrations</h2>
-      <p class="note">Imports ${SPRING_FLING_TEST_ROSTER.length} skaters from the Spring Fling screenshots. This preserves your saved blocks/templates, then rebuilds race lane entries for testing.</p>
+      <p class="note">Imports ${SPRING_FLING_TEST_ROSTER.length} deterministic test skaters, including 6, 7, 8, 12, and 14-skater cohorts. This preserves saved blocks/templates, then rebuilds race lane entries for testing.</p>
       <div class="stat-grid" style="margin:18px 0">
         <div class="stat-card navy"><div class="stat-label">Current registrations</div><div class="stat-value">${(meet.registrations || []).length}</div></div>
         <div class="stat-card sky"><div class="stat-label">Existing test rows</div><div class="stat-value">${testCount}</div></div>
