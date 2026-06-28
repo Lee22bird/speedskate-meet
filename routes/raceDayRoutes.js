@@ -1037,18 +1037,36 @@ router.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','j
               ${current.isOpenRace?`<span class="chip chip-orange">🏁 Open</span>`:''}
               ${current.isQuadRace?`<span class="chip chip-purple">🛼 Quad</span>`:''}
             </div>
-            <table class="table">
-              <thead><tr><th>Lane</th><th>Helmet</th><th>Skater</th><th>Team</th><th>Result</th><th>Status</th></tr></thead>
-              <tbody>${currentLanes.map(l=>{const reg=regMap.get(Number(l.registrationId));return`<tr><td>${l.lane}</td><td>${l.helmetNumber?'#'+esc(l.helmetNumber):''}</td><td><div style="display:flex;align-items:center;gap:10px">${skaterAvatarHtml(l, reg, 'small')}<div><strong>${esc(l.skaterName||'')}</strong>${sponsorLineHtml(reg?.sponsor||'')}</div></div></td><td>${esc(l.team||'')}</td><td>${esc(current.resultsMode==='times'?l.time:l.place)}</td><td>${esc(raceStatusLabel(l.status))}</td></tr>`;}).join('')}</tbody>
-            </table>`:
+            <div class="live-lane-list">
+              ${currentLanes.map(l=>{
+                const reg=regMap.get(Number(l.registrationId));
+                const result=esc(current.resultsMode==='times'?l.time:l.place);
+                const statusText=l.status?esc(raceStatusLabel(l.status)):'';
+                const detail=[l.helmetNumber?'#'+esc(l.helmetNumber):'',esc(l.team||'')].filter(Boolean).join(' · ');
+                return `<div class="live-lane-card">
+                  <div class="live-lane-number">${esc(l.lane)}</div>
+                  <div class="live-lane-info">
+                    <div class="live-lane-name">${esc(l.skaterName||'')}</div>
+                    ${detail?`<div class="live-lane-detail">${detail}</div>`:''}
+                    ${sponsorLineHtml(reg?.sponsor||'').replace('sponsor-line','live-lane-sponsor')}
+                  </div>
+                  ${statusText?`<div class="live-lane-status">${statusText}</div>`:(result?`<div class="live-lane-result">${result}</div>`:'')}
+                </div>`;
+              }).join('') || '<div class="muted">No skaters entered yet.</div>'}
+            </div>`:
           `<div class="muted">No race selected yet.</div>`}
         </div>
         <div class="card">
           <h2>Coming Up</h2>
-          <table class="table">
-            <thead><tr><th>Race</th><th>Division</th><th>Class</th><th>Distance</th></tr></thead>
-            <tbody>${info.coming.map((r,i)=>`<tr><td>${info.idx+i+3}</td><td>${esc(r.groupLabel)}</td><td>${isTimeTrialItem(r)?'Time Trial':esc(cap(r.division))}</td><td>${esc(r.distanceLabel)}</td></tr>`).join('')||`<tr><td colspan="4" class="muted">Nothing queued.</td></tr>`}</tbody>
-          </table>
+          <div class="queue-list">
+            ${info.coming.map((r,i)=>`<div class="queue-row">
+              <div class="queue-num">${info.idx+i+3}</div>
+              <div class="queue-info">
+                <div class="queue-title">${esc(r.groupLabel)}</div>
+                <div class="queue-meta">${isTimeTrialItem(r)?'Time Trial':esc(cap(r.division))} • ${esc(r.distanceLabel)}</div>
+              </div>
+            </div>`).join('') || '<div class="muted">Nothing queued.</div>'}
+          </div>
         </div>
       </div>
       <script>

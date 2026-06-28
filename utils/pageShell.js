@@ -608,6 +608,15 @@ function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
     .live-results-name { flex: 1 1 auto; min-width: 0; font-weight: 600; font-size: 15px; color: var(--navy); }
     .live-results-team { flex: 0 0 auto; font-size: 13px; color: var(--muted); }
 
+    /* Queue rows — "Coming Up" style lists, e.g. director race day */
+    .queue-list { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+    .queue-row { display: flex; align-items: center; gap: 14px; padding: 12px 14px; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); }
+    .queue-row:nth-child(even) { background: var(--card); }
+    .queue-num { flex: 0 0 auto; width: 30px; font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; font-weight: 700; color: var(--muted); font-size: 15px; }
+    .queue-info { flex: 1 1 auto; min-width: 0; }
+    .queue-title { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; font-weight: 700; font-size: 17px; color: var(--navy); }
+    .queue-meta { font-size: 14px; color: var(--muted); margin-top: 2px; }
+
     /* ── Homepage hero ────────────────────────────────────────────── */
     /* ── Home Hero ────────────────────────────────────────────────── */
     .home-hero {
