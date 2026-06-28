@@ -462,10 +462,10 @@ function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
     .podium-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; }
     @media(max-width:700px){.podium-grid{grid-template-columns:1fr;}}
     .podium-card { border: 1.5px solid var(--border); border-radius: var(--radius); padding: 16px; background: #fff; }
-    .podium-place { font-family: 'Barlow Condensed',sans-serif; font-size: 40px; font-weight: 900; color: var(--orange); line-height: 1; }
+    .podium-place { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; font-size: 36px; font-weight: 800; color: var(--orange); line-height: 1; }
     .podium-name  { font-weight: 700; font-size: 17px; margin-top: 4px; color: var(--navy); }
     .podium-team  { font-size: 13px; color: var(--muted); }
-    .podium-pts   { font-family: 'Barlow Condensed',sans-serif; font-size: 22px; font-weight: 700; color: var(--green); margin-top: 6px; }
+    .podium-pts   { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; font-size: 21px; font-weight: 700; color: var(--green); margin-top: 6px; }
 
     /* ── Announcer ────────────────────────────────────────────────────────
        Redesigned for continuous reading during an 8+ hour live meet: large
@@ -564,11 +564,49 @@ function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
     .announcer-lane-team   { font-size: 14px; opacity: .85; }
     .announcer-empty { font-size: 15px; opacity: .6; padding-top: 10px; }
 
-    /* ── Live board ───────────────────────────────────────────────── */
-    .live-hero { background: linear-gradient(135deg, var(--navy) 0%, var(--navy2) 100%); border-radius: var(--radius-lg); padding: 36px; margin-bottom: 24px; color: #fff; box-shadow: 0 4px 20px rgba(15,31,61,.25); }
-    .live-meet-name { font-family: 'Barlow Condensed',sans-serif; font-size: 36px; font-weight: 900; }
-    .live-race-label{ font-size: 13px; opacity: .7; text-transform: uppercase; letter-spacing: .1em; margin-bottom: 4px; }
-    .live-race-name { font-family: 'Barlow Condensed',sans-serif; font-size: 28px; font-weight: 700; }
+    /* ── Live board ──────────────────────────────────────────────────────
+       Public page, mostly viewed on phones — mobile-first sizing, Inter
+       instead of condensed type, and card rows instead of dense tables. ── */
+    .live-hero { background: linear-gradient(135deg, var(--navy) 0%, var(--navy2) 100%); border-radius: var(--radius-lg); padding: 28px 26px; margin-bottom: 20px; color: #fff; box-shadow: 0 4px 20px rgba(15,31,61,.25); }
+    .live-meet-name { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; font-size: 30px; font-weight: 800; letter-spacing: -.015em; line-height: 1.15; }
+    .live-hero-races { display: flex; gap: 20px; margin-top: 18px; flex-wrap: wrap; }
+    @media(max-width:640px){ .live-hero-races{ flex-direction: column; gap: 16px; } .live-hero-divider{ display:none; } }
+    .live-hero-divider { width: 1px; background: rgba(255,255,255,.15); }
+    .live-race-label{ font-size: 13px; font-weight: 700; opacity: .75; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 6px; }
+    .live-race-name { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; font-size: 24px; font-weight: 700; letter-spacing: -.01em; line-height: 1.25; }
+    .live-race-meta { opacity: .8; font-size: 14px; font-weight: 500; margin-top: 4px; }
+
+    .live-board-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); padding: 22px; }
+    .live-board-card h2 { font-size: 21px; }
+
+    .live-lane-list { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
+    .live-lane-card {
+      display: flex; align-items: center; gap: 14px;
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 14px 16px;
+    }
+    .live-lane-card:nth-child(even) { background: var(--card); }
+    .live-lane-number {
+      flex: 0 0 auto; width: 38px; height: 38px; border-radius: 50%;
+      background: var(--navy); color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px; font-weight: 700; font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+    }
+    .live-lane-info { flex: 1 1 auto; min-width: 0; }
+    .live-lane-name { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; font-size: 19px; font-weight: 700; color: var(--navy); line-height: 1.3; }
+    .live-lane-detail { font-size: 14px; color: var(--muted); margin-top: 2px; }
+    .live-lane-sponsor { font-size: 13px; font-weight: 600; color: var(--sky2); margin-top: 4px; }
+    .live-lane-result { flex: 0 0 auto; text-align: right; font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; font-size: 20px; font-weight: 700; color: var(--navy); }
+    .live-lane-status { flex: 0 0 auto; font-size: 13px; font-weight: 700; color: var(--red); text-transform: uppercase; letter-spacing: .04em; }
+
+    .live-results-race { margin-bottom: 18px; }
+    .live-results-race-title { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; font-weight: 700; font-size: 16px; color: var(--navy); }
+    .live-results-race-meta { font-size: 13px; color: var(--muted); margin-top: 1px; margin-bottom: 8px; }
+    .live-results-row { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+    .live-results-row:last-child { border-bottom: 0; }
+    .live-results-place { flex: 0 0 auto; width: 28px; font-weight: 700; color: var(--navy); font-size: 15px; }
+    .live-results-name { flex: 1 1 auto; min-width: 0; font-weight: 600; font-size: 15px; color: var(--navy); }
+    .live-results-team { flex: 0 0 auto; font-size: 13px; color: var(--muted); }
 
     /* ── Homepage hero ────────────────────────────────────────────── */
     /* ── Home Hero ────────────────────────────────────────────────── */

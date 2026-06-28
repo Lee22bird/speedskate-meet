@@ -1717,24 +1717,24 @@ app.get('/meet/:meetId/live', (req, res) => {
       <style>
         .tt-live-header{background:linear-gradient(135deg,#0f1f3d,#172f55);border-radius:8px;padding:18px 20px;margin:0 0 16px;color:#fff;box-shadow:0 10px 26px rgba(15,31,61,.18)}
         .tt-live-kicker{font-size:12px;text-transform:uppercase;letter-spacing:.12em;font-weight:900;color:#7dd3fc}
-        .tt-live-title{font-family:Barlow Condensed,sans-serif;font-size:42px;font-weight:900;line-height:1;margin-top:4px}
+        .tt-live-title{font-family:'Inter',ui-sans-serif,system-ui,sans-serif;font-size:38px;font-weight:800;letter-spacing:-.01em;line-height:1.1;margin-top:4px}
         .tt-live-meta{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
-        .tt-live-chip{border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.08);border-radius:999px;padding:7px 10px;font-weight:800;font-size:13px}
+        .tt-live-chip{border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.08);border-radius:999px;padding:7px 10px;font-weight:700;font-size:13px}
         .tt-live-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:start}
         .tt-live-card{background:#fff;border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 22px rgba(15,31,61,.08);overflow:hidden}
-        .tt-live-card-title{font-family:Barlow Condensed,sans-serif;font-size:28px;font-weight:900;color:var(--navy);padding:14px 16px;border-bottom:3px solid var(--sky2);background:#f8fafc}
-        .tt-live-row{display:grid;grid-template-columns:38px auto minmax(0,1fr) auto;gap:10px;align-items:center;padding:12px 14px;border-bottom:1px solid #e2e8f0}
+        .tt-live-card-title{font-family:'Inter',ui-sans-serif,system-ui,sans-serif;font-size:24px;font-weight:800;color:var(--navy);padding:14px 16px;border-bottom:3px solid var(--sky2);background:#f8fafc}
+        .tt-live-row{display:grid;grid-template-columns:38px auto minmax(0,1fr) auto;gap:10px;align-items:center;padding:14px;border-bottom:1px solid #e2e8f0}
         .tt-live-row:last-child{border-bottom:none}
         .tt-live-row.rank-top{background:linear-gradient(90deg,#f8fafc,#fff)}
         .tt-live-row.rank-1{background:linear-gradient(90deg,#fff7ed,#fff)}
-        .tt-live-rank{font-family:Barlow Condensed,sans-serif;font-size:27px;font-weight:900;color:var(--navy);text-align:center}
+        .tt-live-rank{font-family:'Inter',ui-sans-serif,system-ui,sans-serif;font-size:22px;font-weight:700;color:var(--navy);text-align:center}
         .tt-live-person{min-width:0}
-        .tt-live-name{font-family:Barlow Condensed,sans-serif;font-size:23px;font-weight:900;color:var(--navy);line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-        .tt-live-team{font-size:12px;color:#64748b;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-        .tt-live-time{font-family:Barlow Condensed,sans-serif;font-size:30px;font-weight:900;color:var(--sky2);text-align:right}
-        .tt-live-empty{padding:28px 16px;color:#64748b;font-weight:800;text-align:center}
+        .tt-live-name{font-family:'Inter',ui-sans-serif,system-ui,sans-serif;font-size:21px;font-weight:700;color:var(--navy);line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .tt-live-team{font-size:14px;color:#64748b;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .tt-live-time{font-family:'Inter',ui-sans-serif,system-ui,sans-serif;font-size:26px;font-weight:700;color:var(--sky2);text-align:right}
+        .tt-live-empty{padding:28px 16px;color:#64748b;font-weight:700;text-align:center}
         @media(max-width:1100px){.tt-live-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.tt-live-card:last-child{grid-column:1/-1}}
-        @media(max-width:720px){.tt-live-grid{grid-template-columns:1fr}.tt-live-card:last-child{grid-column:auto}.tt-live-title{font-size:34px}.tt-live-row{grid-template-columns:34px auto minmax(0,1fr);}.tt-live-time{grid-column:3;text-align:left;font-size:27px}.tt-live-name{font-size:21px}}
+        @media(max-width:720px){.tt-live-grid{grid-template-columns:1fr}.tt-live-card:last-child{grid-column:auto}.tt-live-title{font-size:30px}.tt-live-row{grid-template-columns:34px auto minmax(0,1fr);}.tt-live-time{grid-column:3;text-align:left;font-size:24px}.tt-live-name{font-size:19px}}
       </style>
       <div class="live-tabs">
         <a class="live-tab active" href="/meet/${meet.id}/live">Live Board</a>
@@ -1759,30 +1759,48 @@ app.get('/meet/:meetId/live', (req, res) => {
     </div>
     <div class="live-hero">
       <div class="live-meet-name">${esc(meet.meetName)}</div>
-      <div style="display:flex;gap:16px;margin-top:16px;flex-wrap:wrap">
-        <div><div class="live-race-label">Current Race</div><div class="live-race-name">${current?esc(current.groupLabel):'—'}</div>${current?`<div style="opacity:.75;font-size:14px">${esc(cap(current.division))} • ${esc(current.distanceLabel)} • Race ${Math.max(info.idx+1,1)} of ${info.ordered.length}</div>`:''}</div>
-        <div style="width:1px;background:rgba(255,255,255,.15)"></div>
-        <div><div class="live-race-label">In Staging</div><div class="live-race-name">${info.next?esc(info.next.groupLabel):'—'}</div>${info.next?`<div style="opacity:.75;font-size:14px">${esc(cap(info.next.division))} • ${esc(info.next.distanceLabel)}</div>`:''}</div>
+      <div class="live-hero-races">
+        <div><div class="live-race-label">Current Race</div><div class="live-race-name">${current?esc(current.groupLabel):'—'}</div>${current?`<div class="live-race-meta">${esc(cap(current.division))} • ${esc(current.distanceLabel)} • Race ${Math.max(info.idx+1,1)} of ${info.ordered.length}</div>`:''}</div>
+        <div class="live-hero-divider"></div>
+        <div><div class="live-race-label">In Staging</div><div class="live-race-name">${info.next?esc(info.next.groupLabel):'—'}</div>${info.next?`<div class="live-race-meta">${esc(cap(info.next.division))} • ${esc(info.next.distanceLabel)}</div>`:''}</div>
       </div>
     </div>
     <div class="grid-2">
-      <div class="card">
+      <div class="live-board-card">
         ${current?`
           <h2>${esc(current.groupLabel)} — ${esc(cap(current.division))} — ${esc(current.distanceLabel)}</h2>
-          <table class="table">
-            <thead><tr><th>Lane</th><th>Helmet</th><th>Skater</th><th>Team</th><th>Result</th><th>Status</th></tr></thead>
-            <tbody>${lanes.map(l=>{const reg=regMap.get(Number(l.registrationId));return`<tr><td>${l.lane}</td><td>${l.helmetNumber?'#'+esc(l.helmetNumber):''}</td><td><div style="display:flex;align-items:center;gap:10px">${skaterAvatarHtml(l, reg, 'small')}<div><strong>${esc(l.skaterName)}</strong>${sponsorLineHtml(reg?.sponsor||'')}</div></div></td><td>${esc(l.team)}</td><td>${esc(current.resultsMode==='times'?l.time:l.place)}</td><td>${esc(raceStatusLabel(l.status))}</td></tr>`;}).join('')}</tbody>
-          </table>`:
+          <div class="live-lane-list">
+            ${lanes.filter(l=>l.skaterName).map(l=>{
+              const reg=regMap.get(Number(l.registrationId));
+              const result=esc(current.resultsMode==='times'?l.time:l.place);
+              const statusText=l.status?esc(raceStatusLabel(l.status)):'';
+              const detail=[l.helmetNumber?'#'+esc(l.helmetNumber):'',esc(l.team||'')].filter(Boolean).join(' · ');
+              return `<div class="live-lane-card">
+                <div class="live-lane-number">${esc(l.lane)}</div>
+                <div class="live-lane-info">
+                  <div class="live-lane-name">${esc(l.skaterName)}</div>
+                  ${detail?`<div class="live-lane-detail">${detail}</div>`:''}
+                  ${sponsorLineHtml(reg?.sponsor||'').replace('sponsor-line','live-lane-sponsor')}
+                </div>
+                ${statusText?`<div class="live-lane-status">${statusText}</div>`:(result?`<div class="live-lane-result">${result}</div>`:'')}
+              </div>`;
+            }).join('') || '<div class="muted">No skaters entered yet.</div>'}
+          </div>`:
         `<div class="muted">No race selected.</div>`}
       </div>
-      <div class="card">
+      <div class="live-board-card">
         <h2>Recent Results</h2>
         ${recent.map(r=>`
-          <div style="margin-bottom:14px">
-            <div class="bold">${esc(r.groupLabel)} — ${esc(cap(r.division))} — ${esc(r.distanceLabel)}</div>
-            <table class="table"><thead><tr><th>Place</th><th>Skater</th><th>Team</th></tr></thead><tbody>
-            ${(r.laneEntries||[]).filter(x=>String(x.place||x.status||'').trim()).sort((a,b)=>Number(a.place||999)-Number(b.place||999)).slice(0,4).map(x=>{const reg=regMap.get(Number(x.registrationId));return`<tr><td>${esc(x.status?raceStatusLabel(x.status):x.place)}</td><td>${esc(x.skaterName||'')}${sponsorLineHtml(reg?.sponsor||'')}</td><td>${esc(x.team||'')}</td></tr>`;}).join('')||`<tr><td colspan="3" class="muted">No results yet.</td></tr>`}
-            </tbody></table>
+          <div class="live-results-race">
+            <div class="live-results-race-title">${esc(r.groupLabel)} — ${esc(cap(r.division))}</div>
+            <div class="live-results-race-meta">${esc(r.distanceLabel)}</div>
+            ${(r.laneEntries||[]).filter(x=>String(x.place||x.status||'').trim()).sort((a,b)=>Number(a.place||999)-Number(b.place||999)).slice(0,4).map(x=>{
+              return `<div class="live-results-row">
+                <div class="live-results-place">${esc(x.status?raceStatusLabel(x.status):x.place)}</div>
+                <div class="live-results-name">${esc(x.skaterName||'')}</div>
+                <div class="live-results-team">${esc(x.team||'')}</div>
+              </div>`;
+            }).join('') || '<div class="muted">No results yet.</div>'}
           </div>`).join('')||`<div class="muted">No recent results yet.</div>`}
       </div>
     </div>
@@ -1797,7 +1815,7 @@ app.get('/meet/:meetId/live', (req, res) => {
           <div class="podium-place">${['🥇','🥈','🥉'][i]}</div>
           <div class="podium-name">${esc(e.skaterName||'')}</div>
           <div class="podium-team">${esc(e.team||'')}</div>
-          <div style="font-family:Barlow Condensed,sans-serif;font-size:32px;font-weight:900;color:var(--sky2);margin-top:6px">${esc(e.time||'')}</div>
+          <div style="font-family:'Inter',ui-sans-serif,system-ui,sans-serif;font-size:26px;font-weight:700;color:var(--sky2);margin-top:6px">${esc(e.time||'')}</div>
         </div>`).join('')||'<div class="muted">No times posted yet.</div>'}</div></div>`;
       return `<div class="spacer"></div>
         <div class="grid-2">
