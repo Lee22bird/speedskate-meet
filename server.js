@@ -1877,7 +1877,7 @@ app.get('/portal/meet/:meetId/registered/print-race-list', requireRole('meet_dir
 
 
 app.use('/', createPublicRoutes({ getSessionUser, pageShell, hasRole }));
-app.use('/', createDesktopRoutes({ getSessionUser, pageShell, loadDb, saveDb }));
+app.use('/', createDesktopRoutes({ getSessionUser, pageShell, loadDb, saveDb, requireRole, getMeetOr404, nextId }));
 
 // ── Extracted route modules ────────────────────────────────────────────────────
 const routeDeps = {

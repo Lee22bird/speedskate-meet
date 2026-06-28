@@ -1,6 +1,7 @@
 const express = require('express');
 const { spawn } = require('child_process');
 const { esc } = require('../utils/html');
+const { nowIso } = require('../utils/date');
 const {
   DEFAULT_PRODUCT,
   validateLicense,
@@ -93,9 +94,14 @@ function recoveryDetail(snapshot) {
   `;
 }
 
+// In-memory only, never written to disk — desktop is a single-user app, so a
+// simple module-level session is enough to carry the hosted-site login cookie
+// between the login/pick/confirm steps of "Download Meet to Desktop".
+let importSession = null; // { baseUrl, cookie }
+
 module.exports = function createDesktopRoutes(deps = {}) {
   const router = express.Router();
-  const { getSessionUser, pageShell, loadDb, saveDb } = deps;
+  const { getSessionUser, pageShell, loadDb, saveDb, nextId } = deps;
 
   if (typeof pageShell !== 'function') throw new Error('desktopRoutes requires pageShell');
   if (typeof loadDb !== 'function') throw new Error('desktopRoutes requires loadDb');
@@ -604,6 +610,135 @@ module.exports = function createDesktopRoutes(deps = {}) {
     });
     if (result.activated) saveDb(db);
     return res.status(result.activated ? 200 : 400).json(result);
+  });
+
+  // ── Download Meet to Desktop ──────────────────────────────────────────────
+  // Pulls a meet down from the hosted SpeedSkateMeet.com site over the
+  // internet (when available) and saves it as a new local meet that then
+  // runs fully offline, same as any meet created directly on desktop.
+
+  router.get('/desktop/import-meet', (req, res) => {
+    const data = typeof getSessionUser === 'function' ? getSessionUser(req) : null;
+    const error = req.query.error ? `<div class="card" style="border-left:4px solid var(--red);margin-bottom:12px"><div class="danger">${esc(req.query.error)}</div></div>` : '';
+    res.send(pageShell({
+      title: 'Import Meet',
+      user: data?.user || null,
+      bodyHtml: `
+        <div style="max-width:560px;margin:36px auto">
+          <div class="page-header">
+            <h1>Import Meet From SpeedSkateMeet.com</h1>
+            <div class="sub">Download a meet you manage online so it runs fully offline on this computer. Requires an internet connection for this one step only.</div>
+          </div>
+          ${error}
+          <div class="card">
+            <form method="POST" action="/desktop/import-meet/login" class="stack">
+              <div><label>Site URL</label><input name="baseUrl" value="https://speedskatemeet.com" required /></div>
+              <div><label>Email / Username</label><input name="username" required autocomplete="username" /></div>
+              <div><label>Password</label><input type="password" name="password" required autocomplete="current-password" /></div>
+              <button class="btn-orange" type="submit">Log In &amp; Continue</button>
+            </form>
+          </div>
+        </div>
+      `,
+    }));
+  });
+
+  router.post('/desktop/import-meet/login', async (req, res) => {
+    const baseUrl = String(req.body.baseUrl || '').trim().replace(/\/+$/, '');
+    const username = String(req.body.username || '').trim();
+    const password = String(req.body.password || '').trim();
+    if (!baseUrl || !username || !password) {
+      return res.redirect('/desktop/import-meet?error=' + encodeURIComponent('Site URL, email, and password are all required.'));
+    }
+    try {
+      const loginRes = await fetch(`${baseUrl}/admin/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ email: username, password }).toString(),
+        redirect: 'manual',
+      });
+      const setCookie = loginRes.headers.get('set-cookie') || '';
+      const match = setCookie.match(/ssm_sess=[^;]+/);
+      if (!match) {
+        return res.redirect('/desktop/import-meet?error=' + encodeURIComponent('Login failed. Check your email and password.'));
+      }
+      importSession = { baseUrl, cookie: match[0] };
+      return res.redirect('/desktop/import-meet/pick');
+    } catch (err) {
+      return res.redirect('/desktop/import-meet?error=' + encodeURIComponent('Could not reach that site. Check the URL and your internet connection.'));
+    }
+  });
+
+  router.get('/desktop/import-meet/pick', async (req, res) => {
+    const data = typeof getSessionUser === 'function' ? getSessionUser(req) : null;
+    if (!importSession) return res.redirect('/desktop/import-meet?error=' + encodeURIComponent('Log in first.'));
+    const error = req.query.error ? `<div class="card" style="border-left:4px solid var(--red);margin-bottom:12px"><div class="danger">${esc(req.query.error)}</div></div>` : '';
+    try {
+      const listRes = await fetch(`${importSession.baseUrl}/api/my-meets`, { headers: { Cookie: importSession.cookie } });
+      const payload = await listRes.json();
+      if (!listRes.ok || !payload.ok) {
+        return res.redirect('/desktop/import-meet?error=' + encodeURIComponent(payload.error || 'Could not load your meets. Please log in again.'));
+      }
+      const rows = (payload.meets || []).map(m => `
+        <tr>
+          <td><strong>${esc(m.meetName)}</strong><div class="muted">${esc(m.date || 'No date set')} • ${esc(String(m.registrationCount))} registered</div></td>
+          <td style="text-align:right">
+            <form method="POST" action="/desktop/import-meet/confirm" style="margin:0">
+              <input type="hidden" name="meetId" value="${esc(m.id)}" />
+              <button class="btn-orange btn-sm" type="submit">Download</button>
+            </form>
+          </td>
+        </tr>`).join('') || '<tr><td colspan="2" class="muted">No meets found for this account.</td></tr>';
+      res.send(pageShell({
+        title: 'Import Meet',
+        user: data?.user || null,
+        bodyHtml: `
+          <div class="page-header"><h1>Choose a Meet to Download</h1><div class="sub">From ${esc(importSession.baseUrl)}</div></div>
+          ${error}
+          <div class="card">
+            <table class="table"><thead><tr><th>Meet</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+          </div>
+        `,
+      }));
+    } catch (err) {
+      return res.redirect('/desktop/import-meet?error=' + encodeURIComponent('Could not load your meets.'));
+    }
+  });
+
+  router.post('/desktop/import-meet/confirm', async (req, res) => {
+    const data = typeof getSessionUser === 'function' ? getSessionUser(req) : null;
+    if (!data?.user) return res.redirect('/admin/login');
+    if (process.env.SSM_DESKTOP !== '1') {
+      return res.status(400).send('Importing a meet is only available in SpeedSkateMeet Desktop.');
+    }
+    if (!importSession) return res.redirect('/desktop/import-meet?error=' + encodeURIComponent('Log in first.'));
+    const meetId = String(req.body.meetId || '').trim();
+    try {
+      const exportRes = await fetch(`${importSession.baseUrl}/portal/meet/${encodeURIComponent(meetId)}/desktop-export`, { headers: { Cookie: importSession.cookie } });
+      const payload = await exportRes.json();
+      if (!exportRes.ok || !payload.ok || !payload.meet) {
+        return res.redirect('/desktop/import-meet/pick?error=' + encodeURIComponent(payload.error || 'Could not download that meet.'));
+      }
+
+      const db = loadDb();
+      const importedMeet = {
+        ...payload.meet,
+        id: nextId(db.meets),
+        meet_owner_user_id: data.user.id,
+        meet_owner_ssl_id: '',
+        meet_owner_name: data.user.displayName || data.user.username || '',
+        ownership_locked: true,
+        importedFromHostedMeetId: payload.meet.id,
+        importedFromUrl: importSession.baseUrl,
+        importedAt: nowIso(),
+      };
+      db.meets.push(importedMeet);
+      saveDb(db);
+      importSession = null;
+      return res.redirect(`/portal/meet/${importedMeet.id}/builder?imported=1`);
+    } catch (err) {
+      return res.redirect('/desktop/import-meet/pick?error=' + encodeURIComponent('Could not download that meet.'));
+    }
   });
 
   return router;

@@ -99,6 +99,7 @@ function renderPortalHome({ db, user, visibleMeets }) {
     <div class="action-row" style="margin-bottom:20px">
       ${hasRole(user, 'super_admin') || hasRole(user, 'meet_director') || hasRole(user, 'judge') ? `
         <form method="POST" action="/portal/create-meet"><button class="btn-orange" type="submit">+ New Meet</button></form>
+        ${process.env.SSM_DESKTOP === '1' ? `<a class="btn2" href="/desktop/import-meet">📥 Import Meet</a>` : ''}
         <a class="btn2" href="/portal/rinks">Manage Rinks</a>
         <a class="btn2" href="/portal/archived-meets">Archived Meets</a>` : ''}
       ${hasRole(user, 'coach') || hasRole(user, 'super_admin') || hasRole(user, 'meet_director') ? `<a class="btn2" href="/portal/coach">Coach Portal</a>` : ''}

@@ -12,6 +12,7 @@ const {
   restoreBlockAssignmentsAfterRaceSync,
   combineDateTime,
   OPEN_GROUP_DEFAULTS, QUAD_GROUP_DEFAULTS,
+  coachVisibleMeets,
 } = require('../services/meetHelpers');
 const {
   normalizeRelayEligibleGroupIds, normalizeRelayAgeRange,
@@ -354,6 +355,32 @@ router.post('/portal/meet/:meetId/desktop-pin/clear', requireRole('meet_director
   clearPinForMeet(meet);
   saveDb(req.db);
   res.redirect(`/portal/meet/${meet.id}/builder?saved=1`);
+});
+
+// ── Download Meet to Desktop ────────────────────────────────────────────────
+// Two endpoints that let SSM Desktop pull a meet down from this hosted site
+// over the internet, then run it fully offline from then on. Display/data
+// export only — these never modify the meet on this server.
+
+router.get('/api/my-meets', requireRole('meet_director','judge','super_admin'), (req, res) => {
+  const meets = coachVisibleMeets(req.db, req.user);
+  res.json({
+    ok: true,
+    meets: meets.map(m => ({
+      id: m.id,
+      meetName: m.meetName || 'Untitled Meet',
+      date: m.date || '',
+      status: m.status || 'draft',
+      registrationCount: Array.isArray(m.registrations) ? m.registrations.length : 0,
+    })),
+  });
+});
+
+router.get('/portal/meet/:meetId/desktop-export', requireRole('meet_director','judge','super_admin'), (req, res) => {
+  const meet = getMeetOr404(req.db, req.params.meetId);
+  if (!meet) return res.status(404).json({ ok:false, error:'Meet not found.' });
+  if (!canEditMeet(req.user, meet)) return res.status(403).json({ ok:false, error:'You do not have access to this meet.' });
+  res.json({ ok:true, exportedAt: nowIso(), meet });
 });
 
 // Save meet fields and sync configured races while preserving the manual Block Builder schedule.

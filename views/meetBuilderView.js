@@ -105,6 +105,17 @@ function renderMeetBuilderView({ db, meet, user = null, query = {} }) {
         </div>
       </div>
     </div>`;
+  const desktopImportPanel = process.env.SSM_DESKTOP === '1' ? '' : `
+    <div class="card" style="margin-bottom:16px;border-left:5px solid var(--sky)">
+      <h2 style="margin:0 0 4px">📥 Run This Meet Offline</h2>
+      <div class="note" style="margin-bottom:10px">To run this entire meet without internet at the rink, download it into SpeedSkateMeet Desktop:</div>
+      <ol style="line-height:1.8;color:var(--text);padding-left:20px;margin:0">
+        <li>Open <strong>SpeedSkateMeet Desktop</strong> on your Mac.</li>
+        <li>Go to <strong>Portal → Import Meet</strong>.</li>
+        <li>Log in with this same account, then select <strong>${esc(meet.meetName || 'this meet')}</strong> to download it.</li>
+      </ol>
+      <div class="note" style="margin-top:10px">This is a one-time download — the desktop copy then works fully offline and is separate from this online meet.</div>
+    </div>`;
   const ownerName = String(meet.meet_owner_name || meet.createdByName || meet.createdBy || '').trim() || 'Unassigned';
   const ownerOptions = (db.users || [])
     .filter(u => u.active !== false && Array.isArray(u.roles) && (u.roles.includes('meet_director') || u.roles.includes('super_admin')))
@@ -193,6 +204,7 @@ function renderMeetBuilderView({ db, meet, user = null, query = {} }) {
     ${ownershipPanel}
     ${staffPanel}
     ${desktopPinPanel}
+    ${desktopImportPanel}
     <div class="grid-2" style="margin-bottom:16px">
       <div class="card card-accent" style="border-left-color:var(--orange)">
         <div class="row between center">
