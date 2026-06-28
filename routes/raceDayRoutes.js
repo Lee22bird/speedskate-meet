@@ -187,6 +187,25 @@ function createDesktopBackupIfActive(db, reason, meetId = '') {
   catch (err) { console.warn(`Desktop backup skipped (${reason}):`, err.message); }
 }
 
+// Shared lane-assignment card list — used on the Live View tab so a back judge
+// can read lane numbers to skaters before a race starts (no result/status yet).
+function laneAssignmentListHtml(lanes, regMap) {
+  const entered = (lanes || []).filter(l => l.skaterName);
+  if (!entered.length) return '<div class="muted">No skaters assigned yet.</div>';
+  return `<div class="live-lane-list">${entered.map(l => {
+    const reg = regMap.get(Number(l.registrationId));
+    const detail = [l.helmetNumber ? '#' + esc(l.helmetNumber) : '', esc(l.team || '')].filter(Boolean).join(' · ');
+    return `<div class="live-lane-card">
+      <div class="live-lane-number">${esc(l.lane)}</div>
+      <div class="live-lane-info">
+        <div class="live-lane-name">${esc(l.skaterName)}</div>
+        ${detail ? `<div class="live-lane-detail">${detail}</div>` : ''}
+        ${sponsorLineHtml(reg?.sponsor || '').replace('sponsor-line', 'live-lane-sponsor')}
+      </div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
 function raceDayItemLabel(item) {
   if (!item) return '—';
   if (item.type === 'time_trial') return item.groupLabel || 'Time Trial Event';
@@ -966,6 +985,7 @@ router.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','j
   }
   const progress = raceDayProgress(meet);
   const currentLanes=current && !isTimeTrialItem(current) ? laneRowsForRace(current,meet):[];
+  const nextLanes=info.next && !isTimeTrialItem(info.next) ? laneRowsForRace(info.next,meet):[];
   const recent=recentClosedRaces(meet,5);
   const regMap=new Map((meet.registrations||[]).map(r=>[Number(r.id),r]));
 
@@ -1280,6 +1300,16 @@ router.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','j
         <div class="stat-card orange"><div class="stat-label">Current Race</div><div class="stat-value">${current?esc(current.groupLabel):'—'}</div><div class="stat-sub">${current?`${esc(cap(current.division))} • Race ${Math.max(info.idx+1,1)} of ${info.ordered.length}`:''}</div></div>
         <div class="stat-card yellow"><div class="stat-label">In Staging</div><div class="stat-value">${info.next?esc(info.next.groupLabel):'—'}</div><div class="stat-sub">${info.next?`${esc(cap(info.next.division))} • ${esc(info.next.distanceLabel)}`:''}</div></div>
         <div class="stat-card green"><div class="stat-label">Last Result</div><div class="stat-value">${recent[0]?esc(recent[0].groupLabel):'Waiting'}</div><div class="stat-sub">${recent[0]?`${esc(cap(recent[0].division))} • ${esc(recent[0].distanceLabel)}`:''}</div></div>
+      </div>
+      <div class="grid-2">
+        <div class="live-board-card">
+          <h2>Current Race — Lane Assignments</h2>
+          ${current && !isTimeTrialItem(current) ? laneAssignmentListHtml(currentLanes, regMap) : `<div class="muted">${isTimeTrialItem(current)?'Time trial — no lane assignments.':'No race selected yet.'}</div>`}
+        </div>
+        <div class="live-board-card">
+          <h2>In Staging — Lane Assignments</h2>
+          ${info.next && !isTimeTrialItem(info.next) ? laneAssignmentListHtml(nextLanes, regMap) : `<div class="muted">${info.next&&isTimeTrialItem(info.next)?'Time trial — no lane assignments.':'Nothing staged yet.'}</div>`}
+        </div>
       </div>`;
   }
   res.send(pageShell({title:'Race Day',user:req.user,meet,activeTab:'race-day', bodyHtml:body}));
