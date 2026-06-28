@@ -70,6 +70,8 @@ const {
   safeReadJson,
   writeJsonAtomic,
 } = require('./utils/db');
+const logger = require('./utils/logger');
+const { asyncHandler } = require('./utils/asyncHandler');
 
 const {
   hasRole,
@@ -295,34 +297,44 @@ function createDesktopBackupIfActive(db, reason) {
 }
 
 function loadDb() {
-  let db=safeReadJson(DATA_FILE);
-  if(!db) { db=defaultDb(); writeJsonAtomic(DATA_FILE,db); return db; }
-  if(!Array.isArray(db.users)||db.users.length===0) db.users=defaultDb().users;
-  if(!db.users.some(u=>u.username===ADMIN_USERNAME)) db.users.unshift(defaultDb().users[0]);
-  if(!Array.isArray(db.rinks)) db.rinks=defaultDb().rinks;
-  if(!Array.isArray(db.meets)) db.meets=[];
-  if(!Array.isArray(db.sessions)) db.sessions=[];
-  if(!Array.isArray(db.rosters)) db.rosters=[];
-  if(!Array.isArray(db.setupPresets)) db.setupPresets=[];
-  if(!Array.isArray(db.desktopLicenses)) db.desktopLicenses=[];
-  ensureLeeSuperAdmin(db);
-  sanitizeRinks(db);
-  if (!desktopMigrationBackupCreated && process.env.SSM_DESKTOP === '1') {
-    desktopMigrationBackupCreated = true;
-    createDesktopBackupIfActive(db, 'before_migration');
+  try {
+    let db=safeReadJson(DATA_FILE);
+    if(!db) { db=defaultDb(); writeJsonAtomic(DATA_FILE,db); return db; }
+    if(!Array.isArray(db.users)||db.users.length===0) db.users=defaultDb().users;
+    if(!db.users.some(u=>u.username===ADMIN_USERNAME)) db.users.unshift(defaultDb().users[0]);
+    if(!Array.isArray(db.rinks)) db.rinks=defaultDb().rinks;
+    if(!Array.isArray(db.meets)) db.meets=[];
+    if(!Array.isArray(db.sessions)) db.sessions=[];
+    if(!Array.isArray(db.rosters)) db.rosters=[];
+    if(!Array.isArray(db.setupPresets)) db.setupPresets=[];
+    if(!Array.isArray(db.desktopLicenses)) db.desktopLicenses=[];
+    ensureLeeSuperAdmin(db);
+    sanitizeRinks(db);
+    if (!desktopMigrationBackupCreated && process.env.SSM_DESKTOP === '1') {
+      desktopMigrationBackupCreated = true;
+      createDesktopBackupIfActive(db, 'before_migration');
+    }
+    const fallbackOwnerId=(db.users[0]&&db.users[0].id)||1;
+    db.meets.forEach(m=>migrateMeet(m,fallbackOwnerId));
+    db.sessions=db.sessions.filter(s=>s.expiresAt&&new Date(s.expiresAt).getTime()>Date.now());
+    db.version=19; db.updatedAt=nowIso(); return db;
+  } catch (err) {
+    logger.error('Failed to load data file', DATA_FILE, err && err.message ? err.message : err);
+    throw err;
   }
-  const fallbackOwnerId=(db.users[0]&&db.users[0].id)||1;
-  db.meets.forEach(m=>migrateMeet(m,fallbackOwnerId));
-  db.sessions=db.sessions.filter(s=>s.expiresAt&&new Date(s.expiresAt).getTime()>Date.now());
-  db.version=19; db.updatedAt=nowIso(); return db;
 }
 
 function saveDb(db) {
-  if (Array.isArray(db.meets)) db.meets.forEach(m => migrateMeet(m));
-  db.version=19; db.updatedAt=nowIso(); writeJsonAtomic(DATA_FILE,db);
-  if (process.env.SSM_DESKTOP === '1') {
-    try { recordDesktopState(db); }
-    catch (err) { console.warn('Desktop crash recovery state skipped:', err.message); }
+  try {
+    if (Array.isArray(db.meets)) db.meets.forEach(m => migrateMeet(m));
+    db.version=19; db.updatedAt=nowIso(); writeJsonAtomic(DATA_FILE,db);
+    if (process.env.SSM_DESKTOP === '1') {
+      try { recordDesktopState(db); }
+      catch (err) { console.warn('Desktop crash recovery state skipped:', err.message); }
+    }
+  } catch (err) {
+    logger.error('Failed to save data file', DATA_FILE, err && err.message ? err.message : err);
+    throw err;
   }
 }
 
@@ -954,8 +966,8 @@ async function handleSslSsoCallback(req, res) {
   return res.redirect(ssmRedirectForUser(user));
 }
 
-app.get('/sso/ssl/callback', handleSslSsoCallback);
-app.get('/ssl-sso', handleSslSsoCallback);
+app.get('/sso/ssl/callback', asyncHandler(handleSslSsoCallback));
+app.get('/ssl-sso', asyncHandler(handleSslSsoCallback));
 
 async function syncSsmUserMirrorBestEffort(db, user, label) {
   try {
@@ -1060,7 +1072,7 @@ app.post('/admin/login', (req, res) => {
   return res.redirect(ssmRedirectForUser(user));
 });
 
-app.post('/admin/register', async (req, res) => {
+app.post('/admin/register', asyncHandler(async (req, res) => {
   res.status(403).send(pageShell({title:'Create Account',user:null, bodyHtml:`
     <div style="max-width:620px;margin:40px auto">
       <div class="page-header"><h1>Create Your SpeedSkateLeague Account</h1></div>
@@ -1069,7 +1081,7 @@ app.post('/admin/register', async (req, res) => {
         <div class="danger">Direct SpeedSkateMeet account creation is closed. Please create your SpeedSkateLeague profile first.</div>
       </div>
     </div>`}));
-});
+}));
 
 app.get('/admin/logout', (req, res) => {
   const db=loadDb(); const token=parseCookies(req)[SESSION_COOKIE];
@@ -1849,9 +1861,40 @@ app.use('/', createStaffRoutes(routeDeps));
 app.use('/', createTimeTrialRoutes(routeDeps));
 app.use('/', createSslImportRoutes(routeDeps));
 
+// ── Global error handling ──────────────────────────────────────────────────────
+// Catches synchronous throws from any route above (Express does this automatically)
+// plus rejected promises from routes wrapped in asyncHandler. Stack traces are only
+// ever written to the log, never sent to the client.
+app.use((err, req, res, next) => {
+  logger.error(`Unhandled error on ${req.method} ${req.originalUrl}:`, err && err.stack ? err.stack : err);
+  if (res.headersSent) return next(err);
+  const wantsJson = req.path.startsWith('/api/') || String(req.get('accept') || '').includes('application/json');
+  if (wantsJson) {
+    return res.status(500).json({ ok: false, error: 'Something went wrong. Please try again.' });
+  }
+  res.status(500).send(pageShell({
+    title: 'Error',
+    user: null,
+    bodyHtml: `<div style="max-width:520px;margin:40px auto">
+      <div class="page-header"><h1>Something went wrong</h1></div>
+      <div class="card">
+        <div class="danger" style="margin-bottom:14px">SpeedSkateMeet hit an unexpected error. Your data was not changed.</div>
+        <a class="btn2" href="/">Back to Home</a>
+      </div>
+    </div>`,
+  }));
+});
+
+process.on('uncaughtException', err => {
+  logger.error('Uncaught exception:', err && err.stack ? err.stack : err);
+});
+process.on('unhandledRejection', err => {
+  logger.error('Unhandled promise rejection:', err && err.stack ? err.stack : err);
+});
+
 // ── Start server ──────────────────────────────────────────────────────────────
 
 app.listen(PORT, HOST, () => {
-  console.log(`SpeedSkateMeet v19 listening on ${HOST}:${PORT}`);
-  console.log(`Data file: ${DATA_FILE}`);
+  logger.info(`SpeedSkateMeet v19 listening on ${HOST}:${PORT}`);
+  logger.info(`Data file: ${DATA_FILE}`);
 });

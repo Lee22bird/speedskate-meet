@@ -9,8 +9,43 @@ const releaseMacDir = path.join(root, 'release', 'mac');
 const releaseDmgDir = path.join(root, 'release', 'dmg');
 const notarizedDir = path.join(root, 'release', 'notarized');
 
-function envReady() {
+// Preferred: App Store Connect API key (.p8). Does not expire like an app-specific
+// password and is the credential strategy Apple recommends for CI/automated builds.
+function apiKeyEnvReady() {
+  return Boolean(process.env.APPLE_API_KEY && process.env.APPLE_API_KEY_ID && process.env.APPLE_API_ISSUER);
+}
+
+// Fallback: Apple ID + app-specific password + team ID.
+function passwordEnvReady() {
   return Boolean(process.env.APPLE_ID && process.env.APPLE_APP_SPECIFIC_PASSWORD && process.env.APPLE_TEAM_ID);
+}
+
+function envReady() {
+  return apiKeyEnvReady() || passwordEnvReady();
+}
+
+function notarizeCredentials() {
+  if (apiKeyEnvReady()) {
+    return {
+      tool: 'notarytool',
+      appleApiKey: process.env.APPLE_API_KEY,
+      appleApiKeyId: process.env.APPLE_API_KEY_ID,
+      appleApiIssuer: process.env.APPLE_API_ISSUER,
+    };
+  }
+  return {
+    tool: 'notarytool',
+    appleId: process.env.APPLE_ID,
+    appleIdPassword: process.env.APPLE_APP_SPECIFIC_PASSWORD,
+    teamId: process.env.APPLE_TEAM_ID,
+  };
+}
+
+function notarytoolCliAuthArgs() {
+  if (apiKeyEnvReady()) {
+    return ['--key', process.env.APPLE_API_KEY, '--key-id', process.env.APPLE_API_KEY_ID, '--issuer', process.env.APPLE_API_ISSUER];
+  }
+  return ['--apple-id', process.env.APPLE_ID, '--password', process.env.APPLE_APP_SPECIFIC_PASSWORD, '--team-id', process.env.APPLE_TEAM_ID];
 }
 
 function shouldSkip() {
@@ -48,7 +83,7 @@ async function notarizeAppFromBuilder(context) {
     return;
   }
   if (!envReady()) {
-    console.log('Skipping macOS notarization because APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, or APPLE_TEAM_ID is missing.');
+    console.log('Skipping macOS notarization: set APPLE_API_KEY/APPLE_API_KEY_ID/APPLE_API_ISSUER (preferred) or APPLE_ID/APPLE_APP_SPECIFIC_PASSWORD/APPLE_TEAM_ID.');
     return;
   }
 
@@ -59,13 +94,10 @@ async function notarizeAppFromBuilder(context) {
     throw new Error(`App bundle not found for notarization: ${appPath}`);
   }
 
-  console.log(`Submitting ${appName}.app for Apple notarization...`);
+  console.log(`Submitting ${appName}.app for Apple notarization (${apiKeyEnvReady() ? 'API key' : 'Apple ID password'} credentials)...`);
   await notarize({
-    tool: 'notarytool',
     appPath,
-    appleId: process.env.APPLE_ID,
-    appleIdPassword: process.env.APPLE_APP_SPECIFIC_PASSWORD,
-    teamId: process.env.APPLE_TEAM_ID,
+    ...notarizeCredentials(),
   });
 }
 
@@ -74,7 +106,7 @@ function notarizeBuiltDmg() {
     throw new Error('macOS notarization must run on macOS.');
   }
   if (!envReady()) {
-    throw new Error('Set APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, and APPLE_TEAM_ID before running notarization.');
+    throw new Error('Set APPLE_API_KEY, APPLE_API_KEY_ID, and APPLE_API_ISSUER (preferred), or APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, and APPLE_TEAM_ID before running notarization.');
   }
 
   const dmg = process.env.SSM_DMG_PATH || newestArtifact('.dmg');
@@ -86,17 +118,12 @@ function notarizeBuiltDmg() {
   fs.mkdirSync(notarizedDir, { recursive: true });
   copyIfExists(dmg, releaseDmgDir);
 
-  console.log(`Submitting ${path.basename(dmg)} to Apple notary service...`);
+  console.log(`Submitting ${path.basename(dmg)} to Apple notary service (${apiKeyEnvReady() ? 'API key' : 'Apple ID password'} credentials)...`);
   run('xcrun', [
     'notarytool',
     'submit',
     dmg,
-    '--apple-id',
-    process.env.APPLE_ID,
-    '--password',
-    process.env.APPLE_APP_SPECIFIC_PASSWORD,
-    '--team-id',
-    process.env.APPLE_TEAM_ID,
+    ...notarytoolCliAuthArgs(),
     '--wait',
   ]);
 

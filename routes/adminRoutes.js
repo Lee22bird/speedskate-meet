@@ -2,6 +2,7 @@ const express = require('express');
 const { esc } = require('../utils/html');
 const { nowIso } = require('../utils/date');
 const { canEditMeet, canArchiveMeet, canDeleteMeet } = require('../utils/auth');
+const { asyncHandler } = require('../utils/asyncHandler');
 const { sendSms } = require('../services/sms');
 const { postSsmUserMirrorToSsl } = require('../services/ssoService');
 const { createBackup: createDesktopBackup } = require('../services/desktopBackupService');
@@ -428,7 +429,7 @@ router.get('/portal/users', requireRole('super_admin'), (req, res) => {
   }));
 });
 
-router.post('/portal/users/new', requireRole('super_admin'), async (req, res) => {
+router.post('/portal/users/new', requireRole('super_admin'), asyncHandler(async (req, res) => {
   const rolesRaw=req.body.roles; const roles=Array.isArray(rolesRaw)?rolesRaw:(rolesRaw?[rolesRaw]:[]);
   const email=String(req.body.email||req.body.username||'').trim().toLowerCase();
   const user = {
@@ -448,9 +449,9 @@ router.post('/portal/users/new', requireRole('super_admin'), async (req, res) =>
   saveDb(req.db);
   await syncUserMirrorBestEffort(req.db, user, 'admin create user');
   res.redirect('/portal/users');
-});
+}));
 
-router.post('/portal/users/:userId/update', requireRole('super_admin'), async (req, res) => {
+router.post('/portal/users/:userId/update', requireRole('super_admin'), asyncHandler(async (req, res) => {
   const user=(req.db.users||[]).find(u=>Number(u.id)===Number(req.params.userId));
   if(!user) return res.redirect('/portal/users');
   const rolesRaw=req.body.roles; const roles=Array.isArray(rolesRaw)?rolesRaw:(rolesRaw?[rolesRaw]:[]);
@@ -464,7 +465,7 @@ router.post('/portal/users/:userId/update', requireRole('super_admin'), async (r
   saveDb(req.db);
   await syncUserMirrorBestEffort(req.db, user, 'admin update user');
   res.redirect('/portal/users');
-});
+}));
 
 async function disableUserHandler(req, res) {
   const targetId = Number(req.params.userId);
@@ -533,16 +534,16 @@ async function deleteUserHandler(req, res) {
   return res.redirect('/portal/users?ok=' + encodeURIComponent(`Deleted ${userDisplayName(target)}. No local references were found.`));
 }
 
-router.post('/admin/tools/sync-ssl-user-mirrors', requireRole('super_admin'), async (req, res) => {
+router.post('/admin/tools/sync-ssl-user-mirrors', requireRole('super_admin'), asyncHandler(async (req, res) => {
   createDesktopBackupIfActive(req.db, 'before_sync');
   const summary = await syncAllUserMirrors(req.db);
   res.status(summary.failed ? 207 : 200).json(summary);
-});
+}));
 
-router.post('/admin/users/:userId/disable', requireRole('super_admin'), disableUserHandler);
-router.post('/portal/users/:userId/disable', requireRole('super_admin'), disableUserHandler);
-router.post('/admin/users/:userId/delete', requireRole('super_admin'), deleteUserHandler);
-router.post('/portal/users/:userId/delete', requireRole('super_admin'), deleteUserHandler);
+router.post('/admin/users/:userId/disable', requireRole('super_admin'), asyncHandler(disableUserHandler));
+router.post('/portal/users/:userId/disable', requireRole('super_admin'), asyncHandler(disableUserHandler));
+router.post('/admin/users/:userId/delete', requireRole('super_admin'), asyncHandler(deleteUserHandler));
+router.post('/portal/users/:userId/delete', requireRole('super_admin'), asyncHandler(deleteUserHandler));
 
 // ── Rinks ─────────────────────────────────────────────────────────────────────
 

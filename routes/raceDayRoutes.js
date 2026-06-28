@@ -32,6 +32,17 @@ const {
 const { completedTimeTrialEvents, ensureTimeTrialEvent, timeTrialEventTitle } = require('../services/timeTrialEvents');
 const { renderTimeTrialFinalResultsHtml } = require('../services/timeTrialResultsView');
 const { createBackup: createDesktopBackup } = require('../services/desktopBackupService');
+const { invalidLaneStatus, sendIfInvalid } = require('../utils/validate');
+
+function invalidLaneStatusFields(body) {
+  const problems = [];
+  for (const key of Object.keys(body || {})) {
+    if (key.startsWith('status_') && invalidLaneStatus(body[key])) {
+      problems.push(`${key} must be blank, DNS, DQ, or Scratch.`);
+    }
+  }
+  return problems;
+}
 
 function createDesktopBackupIfActive(db, reason, meetId = '') {
   if (process.env.SSM_DESKTOP !== '1') return;
@@ -1175,6 +1186,9 @@ router.post('/portal/meet/:meetId/race-day/correction/save', requireRole('meet_d
   const reason=correctionAuditReason(req.body.reason);
   if(!reason) return res.redirect(`/portal/meet/${encodeURIComponent(meet.id)}/race-day/correction?raceId=${encodeURIComponent(race.id)}&error=${encodeURIComponent('Correction reason is required.')}`);
 
+  const statusProblems = invalidLaneStatusFields(req.body);
+  if (sendIfInvalid(req, res, statusProblems, `/portal/meet/${encodeURIComponent(meet.id)}/race-day/correction?raceId=${encodeURIComponent(race.id)}`)) return;
+
   const before=raceCorrectionSnapshot(race);
   applyRaceCorrectionFromBody(meet,race,req.body||{});
   const after=raceCorrectionSnapshot(race);
@@ -1197,6 +1211,9 @@ router.post('/portal/meet/:meetId/race-day/judges/save', requireRole('judge','me
   const judgeUrl = `/portal/meet/${meet.id}/race-day/judges`;
   const race=(meet.races||[]).find(r=>r.id===String(req.body.raceId||''));
   if(!race) return wantsJson ? res.status(404).json({ ok:false, error:'Race not found' }) : res.redirect(judgeUrl);
+
+  const statusProblems = invalidLaneStatusFields(req.body);
+  if (sendIfInvalid(req, res, statusProblems, judgeUrl)) return;
 
   // Time Trials use the dedicated tt-post / tt-remove flow.
   // Never rebuild laneEntries here, or one saved TT result can wipe earlier posted times.

@@ -39,6 +39,12 @@ const {
   timeTrialEventTitle,
   registrationSelectedForTimeTrial,
 } = require('../services/timeTrialEvents');
+const {
+  missingRequiredFields,
+  invalidGender,
+  invalidBirthdate,
+  sendIfInvalid,
+} = require('../utils/validate');
 
 function timeTrialLabelForMeet(meet) {
   const event = ensureTimeTrialEvent(meet);
@@ -173,6 +179,14 @@ router.get('/meet/:meetId/register', (req, res) => {
 router.post('/meet/:meetId/register', (req, res) => {
   const db=loadDb(); const meet=getMeetOr404(db,req.params.meetId);
   if(!isPublicMeet(meet)||isRegistrationClosed(meet)) return res.redirect(`/meet/${req.params.meetId}/register`);
+
+  const problems = [
+    ...missingRequiredFields(req.body, ['name', 'birthdate', 'gender']),
+  ];
+  if (invalidGender(req.body.gender)) problems.push('gender must be male or female.');
+  if (invalidBirthdate(req.body.birthdate)) problems.push('birthdate must be a valid past date (YYYY-MM-DD).');
+  if (sendIfInvalid(req, res, problems, `/meet/${req.params.meetId}/register`)) return;
+
   const gender=normalizeSkaterGender(req.body.gender)||'male';
   const birthdate=String(req.body.birthdate||'').trim();
   const compAge=usarsAge(birthdate,meet.date)||Number(req.body.age||0);
@@ -562,6 +576,12 @@ router.get('/portal/meet/:meetId/registered/add', requireRole('meet_director'), 
 router.post('/portal/meet/:meetId/registered/add', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
+
+  const problems = [...missingRequiredFields(req.body, ['name'])];
+  if (invalidGender(req.body.gender)) problems.push('gender must be male or female.');
+  if (invalidBirthdate(req.body.birthdate)) problems.push('birthdate must be a valid past date (YYYY-MM-DD).');
+  if (sendIfInvalid(req, res, problems, `/portal/meet/${meet.id}/registered/add`)) return;
+
   const gender=normalizeSkaterGender(req.body.gender)||'male';
   const birthdate=String(req.body.birthdate||'').trim();
   const compAge=usarsAge(birthdate,meet.date)||Number(req.body.age||0);
@@ -619,6 +639,12 @@ router.post('/portal/meet/:meetId/registered/:regId/edit', requireRole('meet_dir
   if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
   const reg=(meet.registrations||[]).find(r=>Number(r.id)===Number(req.params.regId));
   if(!reg) return res.redirect(`/portal/meet/${meet.id}/registered`);
+
+  const problems = [...missingRequiredFields(req.body, ['name'])];
+  if (invalidGender(req.body.gender)) problems.push('gender must be male or female.');
+  if (invalidBirthdate(req.body.birthdate)) problems.push('birthdate must be a valid past date (YYYY-MM-DD).');
+  if (sendIfInvalid(req, res, problems, `/portal/meet/${meet.id}/registered/${reg.id}/edit`)) return;
+
   const gender=normalizeSkaterGender(req.body.gender)||'male';
   const birthdate=String(req.body.birthdate||'').trim()||reg.birthdate||'';
   const compAge=usarsAge(birthdate,meet.date)||Number(reg.age||0);

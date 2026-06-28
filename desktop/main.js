@@ -10,6 +10,10 @@ const {
   markCleanShutdown,
   markDesktopStartup,
 } = require('../services/desktopCrashRecoveryService');
+const log = require('electron-log');
+
+log.transports.file.level = 'info';
+log.transports.console.level = 'info';
 
 const WINDOW_STATE_FILE = 'window-state.json';
 const DEFAULT_WIDTH = 1440;
@@ -29,6 +33,7 @@ function userDataPath(...parts) {
 }
 
 function desktopLog(message) {
+  log.info(message);
   try {
     fs.mkdirSync(app.getPath('userData'), { recursive: true });
     fs.appendFileSync(userDataPath('desktop.log'), `[${new Date().toISOString()}] ${message}\n`, 'utf8');
@@ -218,7 +223,24 @@ function createWindow() {
 app.setName('SpeedSkateMeet');
 app.setAppUserModelId('com.speedskateleague.speedskatemeet');
 
-app.whenReady().then(async () => {
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+
+if (!gotSingleInstanceLock) {
+  // Another SpeedSkateMeet instance already owns the local server and data file.
+  // Quit immediately rather than risk two processes writing ssm_db.json at once.
+  desktopLog('Second instance launch blocked by single-instance lock');
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    desktopLog('Second instance launch detected; focusing existing window');
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+
+  app.whenReady().then(async () => {
   desktopLog('Electron app ready');
   const recovery = markDesktopStartup({
     stateFile: userDataPath('desktop-crash-recovery.json'),
@@ -285,3 +307,4 @@ ipcMain.handle('desktop:restart', () => {
   app.relaunch();
   app.quit();
 });
+} // end gotSingleInstanceLock
