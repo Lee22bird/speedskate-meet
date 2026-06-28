@@ -12,7 +12,7 @@ const {
 } = require('../services/meetHelpers');
 const {
   orderedRaces, currentRaceInfo, ensureCurrentRace,
-  laneRowsForRace, recentClosedRaces, raceDisplayStage,
+  laneRowsForRace, raceDisplayStage,
   raceDayProgress,
 } = require('../services/raceDay');
 const { fireRaceAlerts, fireResultAlerts } = require('../services/raceAlerts');
@@ -986,7 +986,6 @@ router.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','j
   const progress = raceDayProgress(meet);
   const currentLanes=current && !isTimeTrialItem(current) ? laneRowsForRace(current,meet):[];
   const nextLanes=info.next && !isTimeTrialItem(info.next) ? laneRowsForRace(info.next,meet):[];
-  const recent=recentClosedRaces(meet,5);
   const regMap=new Map((meet.registrations||[]).map(r=>[Number(r.id),r]));
 
   let body=`<div class="page-header"><h1>Race Day</h1><div class="sub">${esc(meet.meetName)}</div></div>${raceDaySubTabs(meet,mode)}`;
@@ -1313,10 +1312,9 @@ router.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','j
       </div>`;
   } else {
     body+=`
-      <div class="stat-grid" style="margin-bottom:16px">
+      <div class="stat-grid" style="margin-bottom:16px;grid-template-columns:repeat(2,1fr)">
         <div class="stat-card orange"><div class="stat-label">Current Race</div><div class="stat-value">${current?esc(current.groupLabel):'—'}</div><div class="stat-sub">${current?`${esc(cap(current.division))} • Race ${Math.max(info.idx+1,1)} of ${info.ordered.length}`:''}</div></div>
         <div class="stat-card yellow"><div class="stat-label">In Staging</div><div class="stat-value">${info.next?esc(info.next.groupLabel):'—'}</div><div class="stat-sub">${info.next?`${esc(cap(info.next.division))} • ${esc(info.next.distanceLabel)}`:''}</div></div>
-        <div class="stat-card green"><div class="stat-label">Last Result</div><div class="stat-value">${recent[0]?esc(recent[0].groupLabel):'Waiting'}</div><div class="stat-sub">${recent[0]?`${esc(cap(recent[0].division))} • ${esc(recent[0].distanceLabel)}`:''}</div></div>
       </div>
       <div class="grid-2">
         <div class="live-board-card">
