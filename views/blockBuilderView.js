@@ -22,7 +22,7 @@ function renderBlockBuilderView({ meet }) {
   const relayRaceCount = (meet.races || []).filter(r => r.isRelayRace).length;
   const additionalRaceCount = (meet.races || []).filter(r => r.isAdditionalRace || String(r.division || '').toLowerCase() === 'additional').length;
   const breakTypes = ['break', 'lunch', 'awards', 'practice'];
-  const breakIcons = { break: '☕', lunch: '🍽️', awards: '🏆', practice: '⛸️' };
+  const breakIcons = { break: '☕', lunch: '🍽️', awards: '🏆', practice: '🛼' };
 
   function raceItemHtml(race, isCurrent, draggable = true) {
     const tag = race.isTimeTrial ? '⏱ ' : race.isRelayRace ? '🔄 ' : race.isOpenRace ? '🏁 ' : race.isQuadRace ? '🛼 ' : (race.isAdditionalRace ? '➕ ' : '');
@@ -121,7 +121,15 @@ function renderBlockBuilderView({ meet }) {
           }).join('') || `<div class="note" style="padding:8px">Drop races here…</div>`}
         </div>
       </div>`;
-  }).join('');
+  }).join('') || `
+    <div class="block-schedule-empty">
+      <div class="block-empty-icon">＋</div>
+      <h2>Your schedule is empty.</h2>
+      <p>Start by creating a race block, then drag races into it.</p>
+      <div class="block-tool-buttons block-empty-action">
+        <button class="btn-orange" type="button" onclick="addBlock(this)">Create First Race Block</button>
+      </div>
+    </div>`;
 
   return `
     <div class="page-header block-builder-hero">
@@ -145,6 +153,13 @@ function renderBlockBuilderView({ meet }) {
         <span class="chip chip-orange">Unassigned: <strong id="unassignedChip">${unassigned.length}</strong></span>
       </div>
 
+      <div class="block-how-it-works">
+        <strong>How it works:</strong>
+        <span>1) Add a race block</span>
+        <span>2) Drag races into the block</span>
+        <span>3) Add breaks, lunch, awards, or practice as needed.</span>
+      </div>
+
       <div class="block-control-grid">
         <section class="setup-mini-card block-control-mini">
           <div class="setup-mini-title">Race Summary</div>
@@ -158,15 +173,25 @@ function renderBlockBuilderView({ meet }) {
           </div>
         </section>
 
-        <section class="setup-mini-card block-control-mini">
-          <div class="setup-mini-title">Block Tools</div>
-          <p class="note" style="margin-bottom:12px">Add race blocks or divider blocks, then drag races into the schedule.</p>
-          <div class="block-tool-buttons">
-            <button class="btn2" type="button" onclick="addBlock(this)">+ Race Block</button>
-            <button class="btn2 btn-sm" type="button" onclick="addDivider(this,'break','☕ Break')">☕ Break</button>
-            <button class="btn2 btn-sm" type="button" onclick="addDivider(this,'lunch','🍽️ Lunch')">🍽️ Lunch</button>
-            <button class="btn2 btn-sm" type="button" onclick="addDivider(this,'awards','🏆 Awards')">🏆 Awards</button>
-            <button class="btn2 btn-sm" type="button" onclick="addDivider(this,'practice','⛸️ Practice')">⛸️ Practice</button>
+        <section class="setup-mini-card block-control-mini block-add-schedule-panel">
+          <div class="setup-mini-title">Add To Schedule</div>
+          <p class="note block-add-helper">Build your race day by adding blocks, breaks, lunch, awards, or practice sessions.</p>
+          <div class="block-tool-buttons schedule-add-grid">
+            <button class="schedule-add-card schedule-add-primary" type="button" onclick="addBlock(this)">
+              <span class="schedule-add-icon">＋</span><span><strong>+ New Race Block</strong><small>Create a block for a group of races.</small></span>
+            </button>
+            <button class="schedule-add-card" type="button" onclick="addDivider(this,'break','☕ Break')">
+              <span class="schedule-add-icon">☕</span><span><strong>Break</strong><small>Insert a short intermission.</small></span>
+            </button>
+            <button class="schedule-add-card" type="button" onclick="addDivider(this,'lunch','🍽 Lunch')">
+              <span class="schedule-add-icon">🍽</span><span><strong>Lunch</strong><small>Insert a meal break.</small></span>
+            </button>
+            <button class="schedule-add-card" type="button" onclick="addDivider(this,'awards','🏆 Awards')">
+              <span class="schedule-add-icon">🏆</span><span><strong>Awards</strong><small>Add an awards presentation.</small></span>
+            </button>
+            <button class="schedule-add-card" type="button" onclick="addDivider(this,'practice','🛼 Practice')">
+              <span class="schedule-add-icon">🛼</span><span><strong>Practice</strong><small>Add warm-up or practice time.</small></span>
+            </button>
           </div>
         </section>
 
@@ -202,20 +227,39 @@ Continue?')">
       .block-builder-hero{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;}
       .block-builder-control-card{padding:28px;border-radius:22px;}
       .block-control-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid var(--border);}
-      .block-control-grid{display:grid;grid-template-columns:1fr 1.1fr 1fr;gap:16px;align-items:stretch;}
+      .block-how-it-works{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:-2px 0 18px;padding:12px 14px;border:1px solid #bae6fd;border-radius:14px;background:#f0f9ff;color:#334155;font-size:13px;}
+      .block-how-it-works strong{color:var(--navy);}
+      .block-how-it-works span{display:inline-flex;align-items:center;gap:5px;}
+      .block-how-it-works span+span:before{content:'›';color:#0ea5e9;font-weight:900;margin-right:5px;}
+      .block-control-grid{display:grid;grid-template-columns:.9fr 1.4fr .95fr;gap:16px;align-items:stretch;}
       .block-control-mini{margin:0;min-height:100%;}
       .block-summary-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
       .block-summary-grid div{background:#fff;border:1px solid var(--border);border-radius:14px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:12px;}
       .block-summary-grid span{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);}
       .block-summary-grid strong{font-size:20px;color:var(--navy);}
+      .block-add-helper{margin:6px 0 14px;line-height:1.5;}
       .block-tool-buttons{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+      .schedule-add-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:stretch;}
+      .schedule-add-card{appearance:none;width:100%;min-height:78px;border:1px solid #cbd5e1;border-radius:15px;background:#fff;color:var(--navy);padding:13px;text-align:left;display:flex;align-items:center;gap:11px;cursor:pointer;box-shadow:0 3px 9px rgba(15,23,42,.06);transition:transform .15s ease,border-color .15s ease,box-shadow .15s ease;}
+      .schedule-add-card:hover{transform:translateY(-1px);border-color:#7dd3fc;box-shadow:0 7px 16px rgba(15,23,42,.10);}
+      .schedule-add-card strong{display:block;font-size:14px;line-height:1.2;}
+      .schedule-add-card small{display:block;margin-top:4px;color:var(--muted);font-size:11px;line-height:1.3;font-weight:650;}
+      .schedule-add-icon{width:36px;height:36px;flex:0 0 36px;display:grid;place-items:center;border-radius:11px;background:#f1f5f9;font-size:19px;}
+      .schedule-add-primary{grid-column:1/-1;min-height:88px;border-color:#fb923c;background:linear-gradient(135deg,#fff7ed,#ffedd5);box-shadow:0 8px 18px rgba(249,115,22,.14);}
+      .schedule-add-primary strong{font-size:16px;color:#c2410c;}
+      .schedule-add-primary .schedule-add-icon{background:#f97316;color:#fff;font-size:24px;}
       .block-tool-buttons button:disabled{opacity:.62;cursor:wait;transform:none;}
+      .block-schedule-empty{min-height:310px;padding:42px 24px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;border:2px dashed #bae6fd;border-radius:22px;background:linear-gradient(180deg,#f8fcff,#eff8ff);}
+      .block-schedule-empty h2{margin:12px 0 6px;color:var(--navy);}
+      .block-schedule-empty p{margin:0 0 18px;color:var(--muted);font-weight:650;}
+      .block-empty-icon{width:58px;height:58px;display:grid;place-items:center;border-radius:18px;background:#e0f2fe;color:#0284c7;font-size:34px;font-weight:800;}
+      .block-empty-action{justify-content:center;}
       .block-card:target,.divider-card:target{outline:3px solid rgba(56,189,248,.75);box-shadow:0 0 0 7px rgba(56,189,248,.14),var(--shadow-lg);animation:block-created-pulse .8s ease-out;}
       @keyframes block-created-pulse{from{transform:scale(.985);background:#e0f2fe}to{transform:scale(1)}}
       .block-action-stack{display:grid;gap:8px;}
       .block-danger-zone{border-color:rgba(249,115,22,.22);background:linear-gradient(180deg,#fff,#fff7ed);}
       @media(max-width:1000px){.block-control-grid{grid-template-columns:1fr}.block-builder-hero{align-items:flex-start}.block-builder-control-card{padding:18px}.block-control-head{flex-direction:column}.block-summary-grid{grid-template-columns:1fr 1fr}}
-      @media(max-width:640px){.block-summary-grid{grid-template-columns:1fr}.block-tool-buttons .btn2,.block-tool-buttons .btn-sm,.block-action-stack .btn2,.block-action-stack .btn-good{width:100%;justify-content:center}}
+      @media(max-width:640px){.block-summary-grid,.schedule-add-grid{grid-template-columns:1fr}.schedule-add-primary{grid-column:auto}.block-how-it-works{align-items:flex-start;flex-direction:column}.block-how-it-works span+span:before{content:'↓';margin-right:5px}.block-tool-buttons .btn2,.block-tool-buttons .btn-sm,.block-action-stack .btn2,.block-action-stack .btn-good{width:100%;justify-content:center}}
     </style>
     <div class="bb-grid">
       <div class="bb-left">${blocksHtml}</div>
@@ -308,8 +352,8 @@ Continue?')">
       function setBlockToolBusy(busy,activeButton){
         document.querySelectorAll('.block-tool-buttons button').forEach(toolButton=>{
           toolButton.disabled=busy;
-          if(!busy&&toolButton!==activeButton&&toolButton.dataset.originalLabel){
-            toolButton.textContent=toolButton.dataset.originalLabel;
+          if(!busy&&toolButton.dataset.originalHtml){
+            toolButton.innerHTML=toolButton.dataset.originalHtml;
           }
         });
       }
@@ -317,10 +361,10 @@ Continue?')">
         if(blockCreatePending) return;
         blockCreatePending=true;
         saveFilters();
-        const original=button.textContent;
-        button.dataset.originalLabel=original;
+        const original=button.innerHTML;
+        button.dataset.originalHtml=original;
         setBlockToolBusy(true,button);
-        button.textContent='Adding…';
+        button.innerHTML='<span class="schedule-adding-label">Adding…</span>';
         const controller=new AbortController();
         const timeout=setTimeout(()=>controller.abort(),15000);
         try{
@@ -341,7 +385,7 @@ Continue?')">
           alert('Could not add this block. '+message);
           blockCreatePending=false;
           setBlockToolBusy(false,button);
-          button.textContent=original;
+          button.innerHTML=original;
         }finally{
           clearTimeout(timeout);
         }

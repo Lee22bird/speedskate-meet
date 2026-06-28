@@ -44,14 +44,22 @@ test('block builder create tools return the new block location', () => {
   assert.equal(addResponse.body.blockId, meet.blocks[0].id);
   assert.equal(meet.blocks[0].type, 'race');
 
-  const dividerResponse = responseRecorder();
-  routeHandler(router, '/api/meet/:meetId/blocks/add-divider')({
-    ...reqBase,
-    body: { type: 'lunch', name: 'Lunch' },
-  }, dividerResponse);
-  assert.equal(dividerResponse.body.ok, true);
-  assert.equal(dividerResponse.body.blockId, meet.blocks[1].id);
-  assert.equal(meet.blocks[1].type, 'lunch');
+  for (const [type, name] of [
+    ['break', 'Break'],
+    ['lunch', 'Lunch'],
+    ['awards', 'Awards'],
+    ['practice', 'Practice'],
+  ]) {
+    const dividerResponse = responseRecorder();
+    routeHandler(router, '/api/meet/:meetId/blocks/add-divider')({
+      ...reqBase,
+      body: { type, name },
+    }, dividerResponse);
+    const created = meet.blocks[meet.blocks.length - 1];
+    assert.equal(dividerResponse.body.ok, true);
+    assert.equal(dividerResponse.body.blockId, created.id);
+    assert.equal(created.type, type);
+  }
 });
 
 test('opening an initialized Block Builder does not rewrite the database', () => {
@@ -93,7 +101,7 @@ test('block builder tools include progress, timeout recovery, duplicate protecti
   const html = renderBlockBuilderView({ meet });
   assert.match(html, /id="block-b1"/);
   assert.match(html, /onclick="addBlock\(this\)"/);
-  assert.match(html, /button\.textContent='Adding…'/);
+  assert.match(html, /button\.innerHTML='<span class="schedule-adding-label">Adding…<\/span>'/);
   assert.match(html, /if\(blockCreatePending\) return/);
   assert.match(html, /setTimeout\(\(\)=>controller\.abort\(\),15000\)/);
   assert.match(html, /server took too long to respond/);
@@ -102,4 +110,23 @@ test('block builder tools include progress, timeout recovery, duplicate protecti
 
   const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(match => match[1]).join('\n');
   assert.doesNotThrow(() => new Function(script));
+});
+
+test('block builder explains schedule creation and empty state uses addBlock', () => {
+  const html = renderBlockBuilderView({
+    meet: { id: 1, meetName: 'Empty Meet', status: 'draft', blocks: [], races: [] },
+  });
+
+  assert.match(html, /Add To Schedule/);
+  assert.match(html, /Build your race day by adding blocks, breaks, lunch, awards, or practice sessions\./);
+  assert.match(html, /How it works:<\/strong>/);
+  assert.match(html, /\+ New Race Block/);
+  assert.match(html, /Create a block for a group of races\./);
+  assert.match(html, /Insert a short intermission\./);
+  assert.match(html, /Insert a meal break\./);
+  assert.match(html, /Add an awards presentation\./);
+  assert.match(html, /Add warm-up or practice time\./);
+  assert.match(html, /Your schedule is empty\./);
+  assert.match(html, /Start by creating a race block, then drag races into it\./);
+  assert.match(html, /onclick="addBlock\(this\)">Create First Race Block<\/button>/);
 });
