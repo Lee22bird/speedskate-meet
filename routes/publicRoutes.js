@@ -63,6 +63,58 @@ module.exports = function createPublicRoutes(deps = {}) {
     `}));
   });
 
+  // ── Download (SSM Desktop) ──────────────────────────────────────────────────
+  // Unlisted on purpose — not in main nav yet. Direct-link only during the
+  // alpha rollout. Update DOWNLOAD_URL/DOWNLOAD_VERSION when cutting a new
+  // GitHub Release (see RELEASE.md).
+  router.get('/download', (req, res) => {
+    const data = getSessionUser(req);
+    const DOWNLOAD_URL = 'https://github.com/Lee22bird/speedskate-meet/releases/download/v0.1.0-alpha/SSM.Desktop.dmg';
+    const DOWNLOAD_VERSION = '0.1.0-alpha';
+    res.send(pageShell({ title: 'Download SSM Desktop', description: 'Download SpeedSkateMeet Desktop for macOS — signed and notarized, runs your meet fully offline.', user: data?.user || null, bodyHtml: `
+      <div class="page-header">
+        <h1>SpeedSkateMeet Desktop</h1>
+        <div class="sub">Run your entire meet offline — no internet required on race day.</div>
+      </div>
+
+      <div class="card card-accent" style="margin-bottom:20px">
+        <div class="row between center" style="flex-wrap:wrap;gap:16px">
+          <div>
+            <h2 style="margin:0 0 4px">macOS (Apple Silicon)</h2>
+            <div class="note">Version ${DOWNLOAD_VERSION} • Signed &amp; notarized by Apple • ~132 MB</div>
+          </div>
+          <a class="btn-orange" href="${DOWNLOAD_URL}" style="font-size:16px;padding:14px 28px">⬇ Download for Mac</a>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:16px;border-left:4px solid var(--orange)">
+        <div class="danger" style="font-weight:700">Early alpha build</div>
+        <p style="line-height:1.6;color:var(--text);margin-top:6px">This is an early release for testing. Expect rough edges. If something breaks, email <a href="mailto:LBird@speedskatemeet.com" style="color:var(--orange);font-weight:700">LBird@speedskatemeet.com</a>.</p>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <h2>Installing</h2>
+          <ol style="line-height:1.9;color:var(--text);padding-left:20px">
+            <li>Click <strong>Download for Mac</strong> above.</li>
+            <li>Open the downloaded <strong>SSM Desktop.dmg</strong> file.</li>
+            <li>Drag <strong>SpeedSkateMeet</strong> into your <strong>Applications</strong> folder.</li>
+            <li>Eject the DMG, then launch SpeedSkateMeet from Applications (not from the mounted DMG).</li>
+          </ol>
+          <p class="note" style="margin-top:8px">This build is signed and notarized by Apple, so it opens normally — no "unidentified developer" warning.</p>
+        </div>
+        <div class="card">
+          <h2>What you get offline</h2>
+          <div class="stack">
+            <div class="toggle-row"><div><div class="toggle-row-label">🏗️ Full meet setup</div><div class="toggle-row-desc">Build divisions, registrations, and the race schedule with no internet connection.</div></div></div>
+            <div class="toggle-row"><div><div class="toggle-row-label">🏁 Race day</div><div class="toggle-row-desc">Director, tabulator, announcer, and referee panels — all run locally on your laptop.</div></div></div>
+            <div class="toggle-row"><div><div class="toggle-row-label">💾 Local data</div><div class="toggle-row-desc">Everything is saved to your Mac automatically, with daily backups.</div></div></div>
+          </div>
+        </div>
+      </div>
+    `}));
+  });
+
   // ── Help & FAQ Page ───────────────────────────────────────────────────────────
   router.get('/help', (req, res) => {
     const data=getSessionUser(req);
