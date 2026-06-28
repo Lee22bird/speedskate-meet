@@ -4,6 +4,7 @@ const {
   computeMeetStandings,
 } = require('./standings');
 const { cap } = require('../utils/html');
+const { raceStatusLabel } = require('./raceStatus');
 
 // Fire alerts when race advances — check 2-away and on-deck subscriptions.
 async function fireRaceAlerts(meet, newIdx, ordered) {
@@ -46,7 +47,7 @@ async function fireResultAlerts(meet, race) {
   const section = standings.find(s => s.key === bucketKey);
 
   for (const entry of race.laneEntries || []) {
-    if (!entry.place || !entry.registrationId) continue;
+    if ((!entry.place && !entry.status) || !entry.registrationId) continue;
 
     const regId = String(entry.registrationId || '');
     const matched = subs.filter(s => String(s.registrationId || '') === regId);
@@ -59,7 +60,9 @@ async function fireResultAlerts(meet, race) {
     const totalPts = skaterRow?.totalPoints;
 
     let msg;
-    if (race.isTimeTrial) {
+    if (entry.status) {
+      msg = `✅ ${entry.skaterName} - ${raceStatusLabel(entry.status)}\n${race.groupLabel} • ${cap(race.division)} • ${race.distanceLabel}\n${meet.meetName} 🏁`;
+    } else if (race.isTimeTrial) {
       const sorted = [...(race.laneEntries || [])].sort(
         (a, b) => parseFloat(a.time || '999') - parseFloat(b.time || '999')
       );

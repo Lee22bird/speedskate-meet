@@ -97,8 +97,9 @@ const {
   isArchivedMeet, activeMeets, archivedMeetsForUser, cloneMeetSetup,
   applyMeetOwner,
   coachVisibleMeets, coachTeamRegistrations, coachUpcomingForMeet,
-  coachRecentResultsForMeet, coachStandingsForMeet, isPublicMeet, resultsSectionHtml,
+  coachRecentResultsForMeet, coachStandingsForMeet, isPublicMeet, resultsSectionHtml, raceStatusResultsHtml,
 } = require('./services/meetHelpers');
+const { raceStatusLabel, statusRowsForMeet } = require('./services/raceStatus');
 
 const {
   RELAY_TEMPLATE_ROWS,
@@ -1239,9 +1240,9 @@ app.get('/portal/meet/:meetId/coach', requireRole('coach','meet_director','super
 
   // Build recent results cards
   const recentCards=recent.map(item=>{
-    const rows=item.skaters.filter(s=>s.place).sort((a,b)=>Number(a.place||99)-Number(b.place||99)).map(s=>{
-      const place=Number(s.place); const pts=item.race.countsForOverall&&!item.race.isOpenRace&&!item.race.isTimeTrial?STANDARD_POINTS[place]:null;
-      const medal=place===1?'🥇':place===2?'🥈':place===3?'🥉':`${place}th`;
+    const rows=item.skaters.filter(s=>s.place||s.status).sort((a,b)=>Number(a.place||99)-Number(b.place||99)).map(s=>{
+      const place=Number(s.place); const pts=!s.status&&item.race.countsForOverall&&!item.race.isOpenRace&&!item.race.isTimeTrial?STANDARD_POINTS[place]:null;
+      const medal=s.status?raceStatusLabel(s.status):(place===1?'🥇':place===2?'🥈':place===3?'🥉':`${place}th`);
       return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
         <div style="font-size:22px">${medal}</div>
         <div style="font-weight:700;font-size:15px;flex:1">${esc(s.skaterName||'')}</div>
@@ -1337,7 +1338,7 @@ app.get('/meet/:meetId/tv', (req, res) => {
   const tvRegMap=new Map((meet.registrations||[]).map(r=>[Number(r.id),r]));
   const recent=recentClosedRaces(meet,4);
   const lastRace=recent[0];
-  const lastResults=lastRace?(lastRace.laneEntries||[]).filter(x=>x.place).sort((a,b)=>Number(a.place||999)-Number(b.place||999)).slice(0,3):[];
+  const lastResults=lastRace?(lastRace.laneEntries||[]).filter(x=>x.place||x.status).sort((a,b)=>Number(a.place||999)-Number(b.place||999)).slice(0,4):[];
   const isStandaloneTT = isStandaloneTimeTrialItem(current);
   const isTT=!!(current&&current.isTimeTrial);
   const ttSorted=isTT?[...(current.laneEntries||[])].sort((a,b)=>parseFloat(a.time||'999')-parseFloat(b.time||'999')):[];
@@ -1364,7 +1365,7 @@ app.get('/meet/:meetId/tv', (req, res) => {
 
   const lastResultHtml = lastResults.map(e=>
     '<div class="tv-footer-place">' +
-    '<span class="tv-footer-medal">'+(e.place==='1'?'🥇':e.place==='2'?'🥈':e.place==='3'?'🥉':e.place+'.')+'</span>' +
+    '<span class="tv-footer-medal">'+(e.status?esc(raceStatusLabel(e.status)):(e.place==='1'?'🥇':e.place==='2'?'🥈':e.place==='3'?'🥉':esc(e.place)+'.'))+'</span>' +
     '<span class="tv-footer-name">'+esc(e.skaterName||'')+'</span>' +
     (e.time?'<span style="color:#38BDF8;font-weight:700">'+esc(e.time)+'</span>':'') +
     '</div>'
@@ -1376,12 +1377,12 @@ app.get('/meet/:meetId/tv', (req, res) => {
     '<div class="tv-sidebar-label">Recent Results</div>' +
     recent.slice(0,3).map(race => {
       const podium = (race.laneEntries || [])
-        .filter(x => x.place)
+        .filter(x => x.place || x.status)
         .sort((a,b) => Number(a.place || 999) - Number(b.place || 999))
         .slice(0,3);
       const podiumHtml = podium.map(e =>
         '<div class="tv-recent-podium-row">' +
-        '<span class="tv-recent-medal">'+(String(e.place)==='1'?'🥇':String(e.place)==='2'?'🥈':String(e.place)==='3'?'🥉':esc(e.place)+'.')+'</span>' +
+        '<span class="tv-recent-medal">'+(e.status?esc(raceStatusLabel(e.status)):(String(e.place)==='1'?'🥇':String(e.place)==='2'?'🥈':String(e.place)==='3'?'🥉':esc(e.place)+'.'))+'</span>' +
         '<span class="tv-recent-name">'+esc(e.skaterName || '')+'</span>' +
         '</div>'
       ).join('') || '<div class="tv-recent-empty">No places yet</div>';
@@ -1500,7 +1501,7 @@ app.get('/meet/:meetId/tv', (req, res) => {
     '.tv-recent-race-meta{font-size:13px;color:rgba(255,255,255,.58);margin-top:2px;margin-bottom:7px;}' +
     '.tv-recent-podium{display:flex;flex-direction:column;gap:5px;}' +
     '.tv-recent-podium-row{display:flex;align-items:center;gap:8px;font-size:17px;}' +
-    '.tv-recent-medal{width:28px;font-size:19px;}' +
+    '.tv-recent-medal{min-width:28px;width:auto;font-size:19px;white-space:nowrap;}' +
     '.tv-recent-name{font-weight:800;color:rgba(255,255,255,.88);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
     '.tv-recent-empty{font-size:14px;opacity:.45;}' +
     '.tv-podium{display:flex;flex-direction:column;gap:8px;}' +
@@ -1571,6 +1572,7 @@ app.get('/meet/:meetId/results', (req, res) => {
     ${sections.map(resultsSectionHtml).join('<div class="spacer"></div>') || (!ttResultsHtml ? `<div class="card"><div class="muted">No standings yet.</div></div>` : '')}
     ${openSections.length?`<div class="spacer"></div><h2 style="color:var(--orange)">🏁 Open Results</h2>${openSections.map(s=>`<div class="card" style="border-left:4px solid var(--orange);margin-bottom:14px"><h2>${esc(s.race.groupLabel)} — ${esc(s.race.distanceLabel)}</h2><table class="table"><thead><tr><th>Place</th><th>Skater</th><th>Team</th></tr></thead><tbody>${s.rows.map(r=>`<tr><td><strong>${esc(r.place)}</strong></td><td>${esc(r.skaterName||'')}</td><td>${esc(r.team||'')}</td></tr>`).join('')}</tbody></table></div>`).join('')}`:``}
     ${quadSections.length?`<div class="spacer"></div><h2 style="color:var(--purple)">🛼 Quad Results</h2>${quadSections.map(s=>`<div class="card" style="border-left:4px solid var(--purple);margin-bottom:14px"><h2>${esc(s.groupLabel)} — ${esc(s.distanceLabel)}</h2><table class="table"><thead><tr><th>Place</th><th>Skater</th><th>Team</th><th>Points</th></tr></thead><tbody>${s.standings.map(r=>`<tr><td><strong>${r.overallPlace}</strong></td><td>${esc(r.skaterName||'')}</td><td>${esc(r.team||'')}</td><td><strong>${Number(r.totalPoints||0)}</strong></td></tr>`).join('')}</tbody></table></div>`).join('')}`:``}
+    ${raceStatusResultsHtml(meet)}
     ${ttResultsHtml}`}));
 });
 
@@ -1580,7 +1582,7 @@ app.get('/portal/meet/:meetId/results/print', requireRole('meet_director','judge
   const ttPrintHtml=renderTimeTrialFinalResultsPrintHtml(completedTimeTrialEvents(meet));
   const location = meetRinkLabel(req.db, meet);
   const dateLine = meetDateLabel(meet);
-  const hasAnyResults = sections.length || openSections.length || quadSections.length || String(ttPrintHtml || '').trim();
+  const hasAnyResults = sections.length || openSections.length || quadSections.length || statusRowsForMeet(meet).length || String(ttPrintHtml || '').trim();
   res.send(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="apple-mobile-web-app-title" content="SpeedSkateMeet"><meta name="theme-color" content="#12284b"><link rel="apple-touch-icon" href="/icons/apple-touch-icon.png"><link rel="icon" href="/icons/apple-touch-icon.png"><link rel="manifest" href="/manifest.json"><title>Results — ${esc(meet.meetName)}</title>
     <style>*{box-sizing:border-box}body{margin:0;background:#fff;color:#111;font-family:Arial,sans-serif;font-size:11px;line-height:1.25}.page{padding:16px;max-width:1040px;margin:0 auto}
     .print-controls{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;padding:10px;border:1px solid #ddd;background:#f8fafc}.print-controls button,.print-controls a{border:1px solid #bbb;background:#fff;color:#111;border-radius:4px;padding:6px 9px;text-decoration:none;font-size:12px;cursor:pointer}
@@ -1605,12 +1607,29 @@ app.get('/portal/meet/:meetId/results/print', requireRole('meet_director','judge
       <table><thead><tr><th>Place</th><th>Skater</th><th>Team</th><th>Points</th></tr></thead><tbody>
       ${s.standings.map(r=>`<tr><td>${r.overallPlace}</td><td>${esc(r.skaterName||'')}</td><td>${esc(r.team||'')}</td><td>${Number(r.totalPoints||0)}</td></tr>`).join('')||`<tr><td colspan="4">No standings.</td></tr>`}
       </tbody></table></div>`).join('')}`:``}
+    ${raceStatusResultsHtml(meet,{print:true})}
     ${ttPrintHtml}
     ${!hasAnyResults ? '<div class="empty-line">No final results yet.</div>' : ''}
   </main></body></html>`);
 });
 
 // ── Public Live ───────────────────────────────────────────────────────────────
+
+app.get('/portal/meet/:meetId/results/dq-report', requireRole('meet_director','judge'), (req, res) => {
+  const meet = getMeetOr404(req.db, req.params.meetId);
+  if (!meet) return res.redirect('/portal');
+  const rows = statusRowsForMeet(meet, { onlyDisqualifications: true });
+  const location = meetRinkLabel(req.db, meet);
+  const dateLine = meetDateLabel(meet);
+  res.send(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Officials DQ Report - ${esc(meet.meetName)}</title>
+    <style>*{box-sizing:border-box}body{margin:0;background:#fff;color:#111;font-family:Arial,sans-serif;font-size:11px;line-height:1.35}.page{padding:18px;max-width:1100px;margin:0 auto}.controls{display:flex;gap:8px;margin-bottom:14px}.controls button,.controls a{border:1px solid #aaa;background:#fff;color:#111;border-radius:4px;padding:7px 10px;text-decoration:none;cursor:pointer}.header{border-bottom:2px solid #111;padding-bottom:9px;margin-bottom:14px}h1{font-size:22px;margin:0 0 4px}.meta{color:#444}table{width:100%;border-collapse:collapse}th,td{border:1px solid #bbb;padding:6px;text-align:left;vertical-align:top}th{background:#f1f5f9;font-size:9px;text-transform:uppercase;letter-spacing:.04em}.notes{white-space:pre-wrap;min-width:180px}@media print{@page{margin:.4in}.controls{display:none}.page{padding:0}}</style></head><body><main class="page">
+    <div class="controls"><button type="button" onclick="window.print()">Print</button><a href="/portal/meet/${esc(meet.id)}/results">Back To Results</a></div>
+    <header class="header"><h1>${esc(meet.meetName)} - Officials Disqualification Report</h1><div class="meta">${esc(dateLine || '')}${location ? ` - ${esc(location)}` : ''}</div></header>
+    <table><thead><tr><th>Race</th><th>Skater</th><th>Team</th><th>DQ Category</th><th>Rule Reference</th><th>Official Notes</th><th>Timestamp</th><th>Recorded By</th></tr></thead><tbody>
+      ${rows.map(row => `<tr><td>${esc(row.raceLabel)}</td><td>${esc(row.skaterName)}</td><td>${esc(row.team)}</td><td><strong>${esc(row.statusLabel)}</strong></td><td>${esc(row.dqRuleReference)}</td><td class="notes">${esc(row.dqOfficialNotes)}</td><td>${esc(row.dqTimestamp ? new Date(row.dqTimestamp).toLocaleString() : '')}</td><td>${esc(row.dqRecordedBy)}</td></tr>`).join('') || '<tr><td colspan="8">No disqualifications recorded.</td></tr>'}
+    </tbody></table>
+  </main></body></html>`);
+});
 
 app.get('/meet/:meetId/alerts', (req, res) => {
   const db=loadDb(); const meet=getMeetOr404(db,req.params.meetId);
@@ -1752,7 +1771,7 @@ app.get('/meet/:meetId/live', (req, res) => {
           <h2>${esc(current.groupLabel)} — ${esc(cap(current.division))} — ${esc(current.distanceLabel)}</h2>
           <table class="table">
             <thead><tr><th>Lane</th><th>Helmet</th><th>Skater</th><th>Team</th><th>Result</th><th>Status</th></tr></thead>
-            <tbody>${lanes.map(l=>{const reg=regMap.get(Number(l.registrationId));return`<tr><td>${l.lane}</td><td>${l.helmetNumber?'#'+esc(l.helmetNumber):''}</td><td><div style="display:flex;align-items:center;gap:10px">${skaterAvatarHtml(l, reg, 'small')}<div><strong>${esc(l.skaterName)}</strong>${sponsorLineHtml(reg?.sponsor||'')}</div></div></td><td>${esc(l.team)}</td><td>${esc(current.resultsMode==='times'?l.time:l.place)}</td><td>${esc(l.status)}</td></tr>`;}).join('')}</tbody>
+            <tbody>${lanes.map(l=>{const reg=regMap.get(Number(l.registrationId));return`<tr><td>${l.lane}</td><td>${l.helmetNumber?'#'+esc(l.helmetNumber):''}</td><td><div style="display:flex;align-items:center;gap:10px">${skaterAvatarHtml(l, reg, 'small')}<div><strong>${esc(l.skaterName)}</strong>${sponsorLineHtml(reg?.sponsor||'')}</div></div></td><td>${esc(l.team)}</td><td>${esc(current.resultsMode==='times'?l.time:l.place)}</td><td>${esc(raceStatusLabel(l.status))}</td></tr>`;}).join('')}</tbody>
           </table>`:
         `<div class="muted">No race selected.</div>`}
       </div>
@@ -1762,7 +1781,7 @@ app.get('/meet/:meetId/live', (req, res) => {
           <div style="margin-bottom:14px">
             <div class="bold">${esc(r.groupLabel)} — ${esc(cap(r.division))} — ${esc(r.distanceLabel)}</div>
             <table class="table"><thead><tr><th>Place</th><th>Skater</th><th>Team</th></tr></thead><tbody>
-            ${(r.laneEntries||[]).filter(x=>String(x.place||'').trim()).sort((a,b)=>Number(a.place||999)-Number(b.place||999)).slice(0,4).map(x=>{const reg=regMap.get(Number(x.registrationId));return`<tr><td>${esc(x.place)}</td><td>${esc(x.skaterName||'')}${sponsorLineHtml(reg?.sponsor||'')}</td><td>${esc(x.team||'')}</td></tr>`;}).join('')||`<tr><td colspan="3" class="muted">No results yet.</td></tr>`}
+            ${(r.laneEntries||[]).filter(x=>String(x.place||x.status||'').trim()).sort((a,b)=>Number(a.place||999)-Number(b.place||999)).slice(0,4).map(x=>{const reg=regMap.get(Number(x.registrationId));return`<tr><td>${esc(x.status?raceStatusLabel(x.status):x.place)}</td><td>${esc(x.skaterName||'')}${sponsorLineHtml(reg?.sponsor||'')}</td><td>${esc(x.team||'')}</td></tr>`;}).join('')||`<tr><td colspan="3" class="muted">No results yet.</td></tr>`}
             </tbody></table>
           </div>`).join('')||`<div class="muted">No recent results yet.</div>`}
       </div>

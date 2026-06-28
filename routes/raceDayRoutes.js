@@ -8,7 +8,7 @@ const {
   getMeetOr404, meetRinkLabel, meetDateLabel, nextId,
   isArchivedMeet, orderedRaces: _ord, ensureAtLeastOneBlock,
   tryAdvanceTopThreeFromTwoHeats, isAdvancementRace, isOpenDivision,
-  numericPlace, computeMeetStandings: _cms, sponsorLineHtml,
+  numericPlace, computeMeetStandings: _cms, sponsorLineHtml, raceStatusResultsHtml,
 } = require('../services/meetHelpers');
 const {
   orderedRaces, currentRaceInfo, ensureCurrentRace,
@@ -33,15 +33,152 @@ const { completedTimeTrialEvents, ensureTimeTrialEvent, timeTrialEventTitle } = 
 const { renderTimeTrialFinalResultsHtml } = require('../services/timeTrialResultsView');
 const { createBackup: createDesktopBackup } = require('../services/desktopBackupService');
 const { invalidLaneStatus, sendIfInvalid } = require('../utils/validate');
+const {
+  RACE_STATUS_OPTIONS,
+  dqStatusOptions,
+  isDisqualification,
+  raceStatusLabel,
+} = require('../services/raceStatus');
 
 function invalidLaneStatusFields(body) {
   const problems = [];
   for (const key of Object.keys(body || {})) {
     if (key.startsWith('status_') && invalidLaneStatus(body[key])) {
-      problems.push(`${key} must be blank, DNS, DQ, or Scratch.`);
+      problems.push(`${key} contains an unsupported race status.`);
     }
   }
   return problems;
+}
+
+function raceStatusOptionsHtml(currentStatus) {
+  const current = String(currentStatus || '').trim();
+  const legacyOption = current === 'DQ'
+    ? '<option value="DQ" selected>DQ – Other</option>'
+    : '';
+  return RACE_STATUS_OPTIONS.map(option =>
+    `<option value="${esc(option.value)}" ${current === option.value ? 'selected' : ''}>${esc(option.label)}</option>`
+  ).join('') + legacyOption;
+}
+
+function dqMetadataFields(entry, lane) {
+  return `
+    <input type="hidden" id="dqCategory_${esc(lane)}" name="dqCategory_${esc(lane)}" value="${esc(entry.dqCategory || '')}" />
+    <input type="hidden" id="dqRuleReference_${esc(lane)}" name="dqRuleReference_${esc(lane)}" value="${esc(entry.dqRuleReference || '')}" />
+    <input type="hidden" id="dqOfficialNotes_${esc(lane)}" name="dqOfficialNotes_${esc(lane)}" value="${esc(entry.dqOfficialNotes || '')}" />
+    <input type="hidden" id="dqTimestamp_${esc(lane)}" name="dqTimestamp_${esc(lane)}" value="${esc(entry.dqTimestamp || '')}" />
+    ${isDisqualification(entry.status) ? `<button type="button" class="btn2 btn-sm dq-edit-button" data-lane="${esc(lane)}" style="margin-top:6px">Edit DQ Details</button>` : ''}`;
+}
+
+function dqDialogHtml(user) {
+  const recordedBy = user?.displayName || user?.username || 'Current official';
+  return `
+    <dialog id="dqDetailsDialog" class="dq-dialog">
+      <form method="dialog" class="dq-dialog-card" onsubmit="return false">
+        <div class="row between center"><div><div class="dq-kicker">Race Status</div><h2 style="margin:2px 0 0">Record Disqualification</h2></div><button type="button" class="btn2 btn-sm" id="dqDialogClose" aria-label="Close">Close</button></div>
+        <div class="form-grid cols-2" style="margin-top:16px">
+          <div><label>DQ Category</label><select id="dqDialogCategory">${dqStatusOptions().map(option => `<option value="${esc(option.value)}">${esc(option.label)}</option>`).join('')}</select></div>
+          <div><label>Optional Rule Reference</label><input id="dqDialogRule" maxlength="200" placeholder="Example: SR 7.3" /></div>
+        </div>
+        <div style="margin-top:14px"><label>Optional Official Notes</label><textarea id="dqDialogNotes" maxlength="2000" placeholder="Internal officials-only notes. These will not appear publicly."></textarea></div>
+        <div class="dq-audit-grid">
+          <div><span>Timestamp</span><strong id="dqDialogTimestamp">Recorded when saved</strong></div>
+          <div><span>Recorded By</span><strong>${esc(recordedBy)}</strong></div>
+        </div>
+        <div class="action-row" style="margin-top:16px"><button type="button" class="btn-orange" id="dqDialogSave">Save DQ</button><button type="button" class="btn2" id="dqDialogCancel">Cancel</button></div>
+      </form>
+    </dialog>
+    <style>
+      .dq-dialog{border:0;padding:0;border-radius:8px;width:min(680px,calc(100vw - 28px));box-shadow:0 24px 80px rgba(15,31,61,.35);color:var(--text)}
+      .dq-dialog::backdrop{background:rgba(15,31,61,.72);backdrop-filter:blur(3px)}
+      .dq-dialog-card{padding:22px;background:#fff}
+      .dq-kicker{font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:var(--orange)}
+      .dq-audit-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+      .dq-audit-grid>div{border:1px solid var(--border);background:#f8fafc;border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;gap:3px}
+      .dq-audit-grid span{font-size:10px;font-weight:900;text-transform:uppercase;color:var(--muted)}
+      @media(max-width:620px){.dq-audit-grid{grid-template-columns:1fr}.dq-dialog-card{padding:17px}}
+    </style>
+    <script>
+      (function(){
+        var dialog=document.getElementById('dqDetailsDialog');
+        if(!dialog) return;
+        var activeSelect=null;
+        var activeLane='';
+        var category=document.getElementById('dqDialogCategory');
+        var rule=document.getElementById('dqDialogRule');
+        var notes=document.getElementById('dqDialogNotes');
+        var timestamp=document.getElementById('dqDialogTimestamp');
+        function isDQ(value){return value==='DQ'||String(value||'').indexOf('DQ_')===0;}
+        function field(prefix){return document.getElementById(prefix+'_'+activeLane);}
+        function closeDialog(restore){
+          if(restore&&activeSelect) activeSelect.value=activeSelect.dataset.previousStatus||'';
+          if(dialog.open) dialog.close(); else dialog.removeAttribute('open');
+          activeSelect=null;activeLane='';
+        }
+        document.querySelectorAll('.race-status-select').forEach(function(select){
+          select.dataset.previousStatus=select.value||'';
+          select.addEventListener('focus',function(){this.dataset.previousStatus=this.value||'';});
+          select.addEventListener('change',function(){
+            if(!isDQ(this.value)){
+              ['dqCategory','dqRuleReference','dqOfficialNotes','dqTimestamp'].forEach(function(prefix){var el=document.getElementById(prefix+'_'+select.dataset.lane);if(el)el.value='';});
+              this.dataset.previousStatus=this.value||'';
+              return;
+            }
+            activeSelect=this;activeLane=this.dataset.lane;
+            var savedCategory=field('dqCategory');
+            category.value=(this.value==='DQ'?'DQ_OTHER':this.value)||(savedCategory&&savedCategory.value)||'DQ_OTHER';
+            rule.value=(field('dqRuleReference')&&field('dqRuleReference').value)||'';
+            notes.value=(field('dqOfficialNotes')&&field('dqOfficialNotes').value)||'';
+            var savedTime=(field('dqTimestamp')&&field('dqTimestamp').value)||new Date().toISOString();
+            timestamp.textContent=new Date(savedTime).toLocaleString();
+            dialog.dataset.pendingTimestamp=savedTime;
+            if(typeof dialog.showModal==='function') dialog.showModal(); else dialog.setAttribute('open','');
+          });
+        });
+        document.querySelectorAll('.dq-edit-button').forEach(function(button){
+          button.addEventListener('click',function(){
+            var select=document.querySelector('.race-status-select[data-lane="'+this.dataset.lane+'"]');
+            if(!select) return;
+            select.dataset.previousStatus=select.value||'';
+            select.dispatchEvent(new Event('change'));
+          });
+        });
+        document.getElementById('dqDialogSave').addEventListener('click',function(){
+          if(!activeSelect) return closeDialog(false);
+          activeSelect.value=category.value;
+          activeSelect.dataset.previousStatus=category.value;
+          field('dqCategory').value=category.value;
+          field('dqRuleReference').value=rule.value.trim();
+          field('dqOfficialNotes').value=notes.value.trim();
+          field('dqTimestamp').value=dialog.dataset.pendingTimestamp||new Date().toISOString();
+          closeDialog(false);
+        });
+        document.getElementById('dqDialogCancel').addEventListener('click',function(){closeDialog(true);});
+        document.getElementById('dqDialogClose').addEventListener('click',function(){closeDialog(true);});
+        dialog.addEventListener('cancel',function(event){event.preventDefault();closeDialog(true);});
+      })();
+    </script>`;
+}
+
+function laneResultFromBody(existing, lane, body, user) {
+  const status = String(body[`status_${lane}`] ?? existing.status ?? '').trim();
+  const result = {
+    lane,
+    registrationId: existing.registrationId || '',
+    helmetNumber: existing.helmetNumber || '',
+    skaterName: String(body[`skaterName_${lane}`] ?? existing.skaterName ?? '').trim(),
+    team: String(body[`team_${lane}`] ?? existing.team ?? '').trim(),
+    place: String(body[`place_${lane}`] ?? existing.place ?? '').trim(),
+    time: String(body[`time_${lane}`] ?? existing.time ?? '').trim(),
+    status,
+  };
+  if (!isDisqualification(status)) return result;
+  result.dqCategory = status === 'DQ' ? (existing.dqCategory || 'DQ_OTHER') : status;
+  result.dqRuleReference = String(body[`dqRuleReference_${lane}`] ?? existing.dqRuleReference ?? '').trim().slice(0, 200);
+  result.dqOfficialNotes = String(body[`dqOfficialNotes_${lane}`] ?? existing.dqOfficialNotes ?? '').trim().slice(0, 2000);
+  result.dqTimestamp = String(body[`dqTimestamp_${lane}`] || existing.dqTimestamp || nowIso());
+  result.dqRecordedBy = user?.displayName || user?.username || existing.dqRecordedBy || 'Official';
+  result.dqRecordedByUserId = user?.id || existing.dqRecordedByUserId || '';
+  return result;
 }
 
 function createDesktopBackupIfActive(db, reason, meetId = '') {
@@ -517,6 +654,12 @@ function laneEntrySnapshot(entry) {
     place: String(entry?.place || ''),
     time: String(entry?.time || ''),
     status: String(entry?.status || ''),
+    dqCategory: String(entry?.dqCategory || ''),
+    dqRuleReference: String(entry?.dqRuleReference || ''),
+    dqOfficialNotes: String(entry?.dqOfficialNotes || ''),
+    dqTimestamp: String(entry?.dqTimestamp || ''),
+    dqRecordedBy: String(entry?.dqRecordedBy || ''),
+    dqRecordedByUserId: String(entry?.dqRecordedByUserId || ''),
   };
 }
 
@@ -536,23 +679,14 @@ function laneCountForCorrection(meet, race, existingLaneEntries) {
   return Math.max(existingLaneEntries.length, Number(meet?.lanes || 0), 1);
 }
 
-function applyRaceCorrectionFromBody(meet, race, body) {
+function applyRaceCorrectionFromBody(meet, race, body, user) {
   const existingLaneEntries = Array.isArray(race.laneEntries) ? [...race.laneEntries] : [];
   const laneCount = laneCountForCorrection(meet, race, existingLaneEntries);
   const nextLaneEntries = [];
 
   for (let i = 1; i <= laneCount; i++) {
     const existing = existingLaneEntries.find(x => Number(x.lane) === i) || {};
-    nextLaneEntries.push({
-      lane: i,
-      registrationId: existing.registrationId || '',
-      helmetNumber: existing.helmetNumber || '',
-      skaterName: String(body[`skaterName_${i}`] ?? existing.skaterName ?? '').trim(),
-      team: String(body[`team_${i}`] ?? existing.team ?? '').trim(),
-      place: String(body[`place_${i}`] ?? existing.place ?? '').trim(),
-      time: String(body[`time_${i}`] ?? existing.time ?? '').trim(),
-      status: String(body[`status_${i}`] ?? existing.status ?? '').trim(),
-    });
+    nextLaneEntries.push(laneResultFromBody(existing, i, body, user));
   }
 
   race.laneEntries = nextLaneEntries;
@@ -595,7 +729,7 @@ function correctionWarningHtml(race) {
     </div>`;
 }
 
-function renderCorrectionRaceForm(meet, race, regMap, error = '', ok = '') {
+function renderCorrectionRaceForm(meet, race, regMap, user, error = '', ok = '') {
   const lanes = laneRowsForRace(race, meet);
   const raceNo = raceListNumber(meet, race);
   const correctionHistory = (Array.isArray(meet.raceCorrections) ? meet.raceCorrections : [])
@@ -633,12 +767,7 @@ function renderCorrectionRaceForm(meet, race, regMap, error = '', ok = '') {
               <td><input name="team_${esc(l.lane)}" value="${esc(l.team)}" /></td>
               <td><input name="place_${esc(l.lane)}" value="${esc(l.place)}" /></td>
               <td><input name="time_${esc(l.lane)}" value="${esc(l.time)}" /></td>
-              <td><select name="status_${esc(l.lane)}">
-                <option value="" ${!l.status ? 'selected' : ''}>—</option>
-                <option value="DNS" ${l.status === 'DNS' ? 'selected' : ''}>DNS</option>
-                <option value="DQ" ${l.status === 'DQ' ? 'selected' : ''}>DQ</option>
-                <option value="Scratch" ${l.status === 'Scratch' ? 'selected' : ''}>Scratch</option>
-              </select></td>
+              <td><select class="race-status-select" data-lane="${esc(l.lane)}" name="status_${esc(l.lane)}">${raceStatusOptionsHtml(l.status)}</select>${dqMetadataFields(l, l.lane)}</td>
             </tr>`; }).join('')}</tbody>
           </table>
         </div>
@@ -649,6 +778,7 @@ function renderCorrectionRaceForm(meet, race, regMap, error = '', ok = '') {
           <a class="btn2" href="/portal/meet/${esc(meet.id)}/race-day/director">Cancel</a>
         </div>
       </form>
+      ${dqDialogHtml(user)}
     </div>
     ${correctionHistory.length ? `<div class="card" style="margin-top:16px"><h2>Recent Corrections for This Race</h2><table class="table"><thead><tr><th>Time</th><th>By</th><th>Reason</th></tr></thead><tbody>${correctionHistory.map(row => `<tr><td>${esc(new Date(row.correctedAt || '').toLocaleString())}</td><td>${esc(row.correctedBy || '')}</td><td>${esc(row.reason || '')}</td></tr>`).join('')}</tbody></table></div>` : ''}`;
 }
@@ -909,7 +1039,7 @@ router.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','j
             </div>
             <table class="table">
               <thead><tr><th>Lane</th><th>Helmet</th><th>Skater</th><th>Team</th><th>Result</th><th>Status</th></tr></thead>
-              <tbody>${currentLanes.map(l=>{const reg=regMap.get(Number(l.registrationId));return`<tr><td>${l.lane}</td><td>${l.helmetNumber?'#'+esc(l.helmetNumber):''}</td><td><div style="display:flex;align-items:center;gap:10px">${skaterAvatarHtml(l, reg, 'small')}<div><strong>${esc(l.skaterName||'')}</strong>${sponsorLineHtml(reg?.sponsor||'')}</div></div></td><td>${esc(l.team||'')}</td><td>${esc(current.resultsMode==='times'?l.time:l.place)}</td><td>${esc(l.status||'')}</td></tr>`;}).join('')}</tbody>
+              <tbody>${currentLanes.map(l=>{const reg=regMap.get(Number(l.registrationId));return`<tr><td>${l.lane}</td><td>${l.helmetNumber?'#'+esc(l.helmetNumber):''}</td><td><div style="display:flex;align-items:center;gap:10px">${skaterAvatarHtml(l, reg, 'small')}<div><strong>${esc(l.skaterName||'')}</strong>${sponsorLineHtml(reg?.sponsor||'')}</div></div></td><td>${esc(l.team||'')}</td><td>${esc(current.resultsMode==='times'?l.time:l.place)}</td><td>${esc(raceStatusLabel(l.status))}</td></tr>`;}).join('')}</tbody>
             </table>`:
           `<div class="muted">No race selected yet.</div>`}
         </div>
@@ -1066,12 +1196,7 @@ router.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','j
                   <td><input name="team_${l.lane}"       value="${esc(l.team)}"       /></td>
                   <td><input name="place_${l.lane}"      value="${esc(l.place)}"      /></td>
                   <td><input name="time_${l.lane}"       value="${esc(l.time)}"       /></td>
-                  <td><select name="status_${l.lane}">
-                    <option value="" ${!l.status?'selected':''}>—</option>
-                    <option value="DNS" ${l.status==='DNS'?'selected':''}>DNS</option>
-                    <option value="DQ"  ${l.status==='DQ' ?'selected':''}>DQ</option>
-                    <option value="Scratch" ${l.status==='Scratch'?'selected':''}>Scratch</option>
-                  </select></td>
+                  <td><select class="race-status-select" data-lane="${esc(l.lane)}" name="status_${esc(l.lane)}">${raceStatusOptionsHtml(l.status)}</select>${dqMetadataFields(l, l.lane)}</td>
                 </tr>`;}).join('')}</tbody>
               </table>
             </div>
@@ -1081,6 +1206,7 @@ router.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','j
               <button class="btn-orange" type="submit" name="action" value="close">Close Race</button>
             </div>
           </form>
+          ${dqDialogHtml(req.user)}
           <div id="judgeSaveToast" class="judge-save-toast" role="status" aria-live="polite">✓ Race Saved</div>
           <style>
             .judge-save-toast{position:fixed;right:22px;bottom:22px;background:#10b981;color:#fff;font-weight:800;border-radius:999px;padding:12px 18px;box-shadow:0 10px 30px rgba(16,185,129,.35);opacity:0;transform:translateY(12px);pointer-events:none;transition:opacity .18s ease,transform .18s ease;z-index:9999}
@@ -1157,7 +1283,7 @@ router.get('/portal/meet/:meetId/race-day/correction', requireRole('meet_directo
       user:req.user,
       meet,
       activeTab:'race-day',
-      bodyHtml:renderCorrectionRaceForm(meet,race,regMap,req.query.error||'',req.query.ok||''),
+      bodyHtml:renderCorrectionRaceForm(meet,race,regMap,req.user,req.query.error||'',req.query.ok||''),
     }));
   }
 
@@ -1189,7 +1315,7 @@ router.post('/portal/meet/:meetId/race-day/correction/save', requireRole('meet_d
   if (sendIfInvalid(req, res, statusProblems, `/portal/meet/${encodeURIComponent(meet.id)}/race-day/correction?raceId=${encodeURIComponent(race.id)}`)) return;
 
   const before=raceCorrectionSnapshot(race);
-  applyRaceCorrectionFromBody(meet,race,req.body||{});
+  applyRaceCorrectionFromBody(meet,race,req.body||{},req.user);
   const after=raceCorrectionSnapshot(race);
   recordRaceCorrection(meet,race,req.user,before,after,reason);
 
@@ -1238,7 +1364,7 @@ router.post('/portal/meet/:meetId/race-day/judges/save', requireRole('judge','me
   race.laneEntries=[];
   for(let i=1;i<=laneCount;i++) {
     const existing=existingLaneEntries.find(x=>Number(x.lane)===i)||{};
-    race.laneEntries.push({lane:i,registrationId:existing.registrationId||'',helmetNumber:existing.helmetNumber||'',skaterName:String(req.body[`skaterName_${i}`]||'').trim(),team:String(req.body[`team_${i}`]||'').trim(),place:String(req.body[`place_${i}`]||'').trim(),time:String(req.body[`time_${i}`]||'').trim(),status:String(req.body[`status_${i}`]||'').trim()});
+    race.laneEntries.push(laneResultFromBody(existing, i, req.body, req.user));
   }
   race.resultsMode=String(req.body.resultsMode||'places')==='times'?'times':'places';
   race.notes=String(req.body.notes||''); race.status=req.body.action==='close'?'closed':'open';
@@ -1395,6 +1521,7 @@ router.get('/portal/meet/:meetId/results', requireRole('meet_director','judge','
   const okMsg = req.query.ok ? String(req.query.ok) : '';
   const errorMsg = req.query.error ? String(req.query.error) : '';
   const canManageResults = hasRole(req.user,'super_admin') || canEditMeet(req.user,meet);
+  const canViewOfficialReport = canManageResults || hasRole(req.user,'judge');
   res.send(pageShell({title:'Results',user:req.user,meet,activeTab:'results', bodyHtml:`
     <div class="page-header"><h1>Results</h1><div class="sub">${esc(meet.meetName)}</div></div>
     ${okMsg ? `<div class="good" style="margin-bottom:16px">${esc(okMsg)}</div>` : ''}
@@ -1408,6 +1535,7 @@ router.get('/portal/meet/:meetId/results', requireRole('meet_director','judge','
         <div class="action-row">
           ${canManageResults ? (meet.status==='complete'?`<form method="POST" action="/portal/meet/${meet.id}/reopen"><button class="btn2" type="submit">Reopen Meet</button></form><a class="btn2" href="/portal/meet/${meet.id}/clone-confirm">Clone Setup</a><a class="btn-orange" href="/portal/meet/${meet.id}/archive-confirm">Archive Meet</a>`:meet.status==='archived'?`<form method="POST" action="/portal/meet/${meet.id}/unarchive"><button class="btn2" type="submit">Unarchive Meet</button></form>`:`<form method="POST" action="/portal/meet/${meet.id}/finalize"><button class="btn-orange" type="submit">Finalize Meet</button></form>`):''}
           ${canManageResults ? `<form method="POST" action="/portal/meet/${meet.id}/results/send-to-ssl" onsubmit="return confirm('Send official results from this SSM meet to SSL career profiles?');"><button class="btn2" type="submit">Send Results to SSL</button></form>` : ''}
+          ${canViewOfficialReport ? `<a class="btn2" href="/portal/meet/${meet.id}/results/dq-report" target="_blank">Print Officials DQ Report</a>` : ''}
           <a class="btn2" href="/portal/meet/${meet.id}/results/print" target="_blank">Print Final Results</a>
         </div>
       </div>
@@ -1442,6 +1570,7 @@ router.get('/portal/meet/:meetId/results', requireRole('meet_director','judge','
             <tbody>${s.standings.map(r=>`<tr><td><strong>${r.overallPlace}</strong></td><td>${esc(r.skaterName||'')}${sponsorLineHtml(r.sponsor||'')}</td><td>${esc(r.team||'')}</td><td><strong>${Number(r.totalPoints||0)}</strong></td></tr>`).join('')||`<tr><td colspan="4" class="muted">No standings yet.</td></tr>`}</tbody>
           </table>
         </div>`).join('')}`:``}
+    ${raceStatusResultsHtml(meet)}
     ${ttResultsHtml}`}));
 });
 

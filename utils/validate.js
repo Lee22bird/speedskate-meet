@@ -1,5 +1,7 @@
 'use strict';
 
+const { isValidRaceStatus } = require('../services/raceStatus');
+
 // Lightweight, dependency-free form validation helpers for route handlers.
 // These return a list of human-readable problems; they never throw.
 
@@ -27,14 +29,12 @@ function invalidNumericFields(body, fields) {
 }
 
 const VALID_GENDERS = ['male', 'female'];
-const VALID_LANE_STATUSES = ['', 'DNS', 'DQ', 'Scratch'];
-
 function invalidGender(value) {
   return value !== undefined && value !== null && String(value).trim() !== '' && !VALID_GENDERS.includes(String(value).trim().toLowerCase());
 }
 
 function invalidLaneStatus(value) {
-  return value !== undefined && value !== null && !VALID_LANE_STATUSES.includes(String(value).trim());
+  return value !== undefined && value !== null && !isValidRaceStatus(value);
 }
 
 function invalidBirthdate(value) {

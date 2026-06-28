@@ -15,6 +15,7 @@ const {
   normalizeMeetPricingFields,
 } = require('./pricingModel');
 const { normalizeMeetStaffAssignments } = require('./staffAssignments');
+const { statusRowsForMeet } = require('./raceStatus');
 const {
   planNormalRaceSizing,
   shouldSplitNormalRace,
@@ -1252,6 +1253,19 @@ function resultsSectionHtml(section) {
     </div>`;
 }
 
+function raceStatusResultsHtml(meet, options = {}) {
+  const rows = statusRowsForMeet(meet);
+  if (!rows.length) return '';
+  const print = options.print === true;
+  const content = `
+    <h2>${print ? 'Race Status Results' : '🏁 Race Status Results'}</h2>
+    <table${print ? '' : ' class="table"'}>
+      <thead><tr><th>Race</th><th>Skater</th><th>Team</th><th>Status</th></tr></thead>
+      <tbody>${rows.map(row => `<tr><td>${esc(row.raceLabel)}</td><td>${esc(row.skaterName)}</td><td>${esc(row.team)}</td><td><strong>${esc(row.statusLabel)}</strong></td></tr>`).join('')}</tbody>
+    </table>`;
+  return print ? `<div class="section">${content}</div>` : `<div class="card" style="margin-top:16px;border-left:4px solid var(--orange)">${content}</div>`;
+}
+
 function isPublicMeet(meet) {
   if (isArchivedMeet(meet)) return false;
   return !!(meet && (meet.isPublic || String(meet.status || '').toLowerCase() === 'published'));
@@ -1331,6 +1345,7 @@ module.exports = {
   isPublicMeet,
   sponsorLineHtml,
   resultsSectionHtml,
+  raceStatusResultsHtml,
   OPEN_GROUP_DEFAULTS,
   QUAD_GROUP_DEFAULTS,
 };

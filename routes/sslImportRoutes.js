@@ -19,6 +19,7 @@ const { completedTimeTrialEvents, timeNumber, timeTrialResults } = require('../s
 const { staffAssignmentsForMeet } = require('../services/staffAssignments');
 const { usarsPointsForPlace } = require('../services/usarsScoring');
 const { createBackup: createDesktopBackup } = require('../services/desktopBackupService');
+const { statusRowsForMeet } = require('../services/raceStatus');
 
 function createDesktopBackupIfActive(db, reason, meetId = '') {
   if (process.env.SSM_DESKTOP !== '1') return;
@@ -183,6 +184,19 @@ function regOptionsFromSslRow(row, meet) {
   const firstAdditional = (meet.additionalGroups || meet.additionalRaceGroups || meet.additionalRaces || meet.skateabilityGroups || []).find(g => g && g.enabled);
   const wantsRelays = opts.has('relays') || opts.has('relay') || opts.has('relay2person') || opts.has('relay3person') || opts.has('relay4person');
   const wantsAdditional = opts.has('additional') || opts.has('skateability') || opts.has('diaperdash') || opts.has('diaper_dash');
+
+  const officialDisqualifications = statusRowsForMeet(meet, { onlyDisqualifications: true }).map(row => ({
+    race_id: compactId(row.raceId),
+    ssm_registration_id: compactId(row.registrationId),
+    skater_name: row.skaterName,
+    team: row.team,
+    dq_category: row.dqCategory || row.status,
+    dq_category_label: row.dqCategoryLabel,
+    rule_reference: row.dqRuleReference,
+    official_notes: row.dqOfficialNotes,
+    recorded_at: row.dqTimestamp,
+    recorded_by: row.dqRecordedBy,
+  }));
 
   return {
     challengeUp: opts.has('challengeup') || opts.has('challenge_up'),
@@ -943,11 +957,13 @@ function buildSsmResultsPackage(req, db, meet) {
       linked_skaters: new Set(results.map(r => r.ssl_skater_id).filter(Boolean)).size,
       divisions: new Set(results.map(r => `${r.division_label}|${r.class_type}`)).size,
       unlinked_standings: unlinkedStandings.length,
+      disqualifications: officialDisqualifications.length,
     },
     warnings: {
       unlinked_standings: unlinkedStandings.slice(0, 25),
     },
     results,
+    official_disqualifications: officialDisqualifications,
   };
 }
 

@@ -150,6 +150,12 @@ function laneRowsForRace(race, meet) {
       place: existing.place || '',
       time: existing.time || '',
       status: existing.status || '',
+      dqCategory: existing.dqCategory || '',
+      dqRuleReference: existing.dqRuleReference || '',
+      dqOfficialNotes: existing.dqOfficialNotes || '',
+      dqTimestamp: existing.dqTimestamp || '',
+      dqRecordedBy: existing.dqRecordedBy || '',
+      dqRecordedByUserId: existing.dqRecordedByUserId || '',
     });
   }
 

@@ -1,4 +1,5 @@
 const STANDARD_POINTS = { 1: 30, 2: 20, 3: 10, 4: 5 };
+const { isDisqualification } = require('./raceStatus');
 
 // USARS SR832 tiebreaker point weights: [short, middle, long].
 const SR832_WEIGHTS = {
@@ -29,6 +30,7 @@ function scoreRaceByStandardPoints(race) {
   const results = [];
 
   for (const entry of race.laneEntries || []) {
+    if (isDisqualification(entry.status)) continue;
     const place = normalizePlaceValue(entry.place);
     if (place == null || place > 4) continue;
 
