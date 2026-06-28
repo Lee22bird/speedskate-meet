@@ -1807,7 +1807,7 @@ router.get('/portal/meet/:meetId/results', requireRole('meet_director','judge','
       </div>
       ${meet.lastSslResultsSentAt ? `<div class="note" style="margin-top:10px">Last sent to SSL: ${esc(new Date(meet.lastSslResultsSentAt).toLocaleString())}</div>` : ''}
     </div>
-    ${sections.map(resultsSectionHtml).join('<div class="spacer"></div>') || (!ttResultsHtml ? `<div class="card"><div class="muted">No inline standings yet.</div></div>` : '')}
+    ${sections.map(s=>resultsSectionHtml(s,meet)).join('<div class="spacer"></div>') || (!ttResultsHtml ? `<div class="card"><div class="muted">No inline standings yet.</div></div>` : '')}
     ${openSections.length?`
       <div class="spacer"></div>
       <h2 style="color:var(--orange)">🏁 Open Race Results</h2>
@@ -1825,7 +1825,7 @@ router.get('/portal/meet/:meetId/results', requireRole('meet_director','judge','
     ${quadSections.length?`
       <div class="spacer"></div>
       <h2 style="color:var(--purple)">🛼 Quad Results</h2>
-      ${quadSections.map(s=>quadResultsSectionHtml(s)).join('<div class="spacer"></div>')}`:``}
+      ${quadSections.map(s=>quadResultsSectionHtml(s,meet)).join('<div class="spacer"></div>')}`:``}
     ${raceStatusResultsHtml(meet)}
     ${ttResultsHtml}`}));
 });

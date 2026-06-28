@@ -1225,6 +1225,52 @@ function formatAuditPoints(points) {
   return Number.isInteger(n) ? String(n) : n.toFixed(1);
 }
 
+// Heats never carry points (see buildHeatRaceShell/buildRaceSetForEntries —
+// countsForOverall is always false on a heat), so computeMeetStandings()
+// never includes them in section.races. For audit purposes we still want to
+// show who raced in each qualifying heat, matched to its final by the same
+// parentRaceKey/baseRaceKey the scoring code already uses to group races.
+function heatRacesForFinal(meet, finalRace) {
+  const key = finalRace.parentRaceKey || baseRaceKey(finalRace.groupId, finalRace.division, finalRace.dayIndex, finalRace.distanceLabel);
+  return (meet?.races || [])
+    .filter(r => ['heat', 'semi'].includes(String(r.stage || '')))
+    .filter(r => (r.parentRaceKey || baseRaceKey(r.groupId, r.division, r.dayIndex, r.distanceLabel)) === key)
+    .sort((a, b) => Number(a.heatNumber || 0) - Number(b.heatNumber || 0));
+}
+
+function heatAuditTableHtml(heatRace, options = {}) {
+  const print = options.print === true;
+  const rows = (heatRace.laneEntries || [])
+    .filter(e => String(e.skaterName || '').trim())
+    .slice()
+    .sort((a, b) => {
+      const ap = Number(a.place || 0);
+      const bp = Number(b.place || 0);
+      if (ap && bp) return ap - bp;
+      if (ap) return -1;
+      if (bp) return 1;
+      return Number(a.lane || 0) - Number(b.lane || 0);
+    });
+
+  const tableRows = rows.map(e => `
+    <tr>
+      <td>${esc(e.place || '—')}</td>
+      <td>${esc(e.skaterName || '')}</td>
+      <td>${esc(e.team || '')}</td>
+    </tr>`).join('');
+
+  const stageLabel = String(heatRace.stage || '').toLowerCase() === 'semi' ? 'Semi' : 'Heat';
+
+  return `
+    <div class="audit-race audit-heat">
+      <h3 class="audit-race-title">${esc(heatRace.distanceLabel || '')} — ${stageLabel} ${esc(heatRace.heatNumber || '')} <span class="audit-heat-note">(qualifying — no points awarded)</span></h3>
+      <table${print ? '' : ' class="table"'}>
+        <thead><tr><th>Place</th><th>Skater</th><th>Team</th></tr></thead>
+        <tbody>${tableRows || `<tr><td colspan="3" class="muted">No results recorded for this heat.</td></tr>`}</tbody>
+      </table>
+    </div>`;
+}
+
 function raceAuditTableHtml(race, standingsRows, options = {}) {
   const print = options.print === true;
   const rows = (standingsRows || [])
@@ -1250,7 +1296,7 @@ function raceAuditTableHtml(race, standingsRows, options = {}) {
     </div>`;
 }
 
-function resultsSectionHtml(section, options = {}) {
+function resultsSectionHtml(section, meet, options = {}) {
   const print = options.print === true;
   const tbMode = section.tbMode || 'd2';
   const tbLabel = tbMode==='sr832' ? 'SR832 Formula' : 'D2 Middle Race';
@@ -1282,7 +1328,11 @@ function resultsSectionHtml(section, options = {}) {
     </tr>`).join('');
 
   const raceBreakdownHtml = (section.races || [])
-    .map(race => raceAuditTableHtml(race, section.standings, { print }))
+    .map(race => {
+      const heats = heatRacesForFinal(meet, race);
+      const heatsHtml = heats.map(h => heatAuditTableHtml(h, { print })).join('');
+      return heatsHtml + raceAuditTableHtml(race, section.standings, { print });
+    })
     .join('');
 
   if (print) {
@@ -1322,8 +1372,8 @@ function resultsSectionHtml(section, options = {}) {
     </details>`;
 }
 
-function quadResultsSectionHtml(section, options = {}) {
-  return resultsSectionHtml(section, {
+function quadResultsSectionHtml(section, meet, options = {}) {
+  return resultsSectionHtml(section, meet, {
     ...options,
     title: `${esc(section.groupLabel)} <span class="text-orange">—</span> ${esc(section.distanceLabel || '')}`,
     printTitle: `${esc(section.groupLabel)} — ${esc(section.distanceLabel || '')}`,

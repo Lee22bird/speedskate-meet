@@ -486,6 +486,9 @@ function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
     .audit-race-title { font-size: 16px; font-weight: 700; color: var(--navy); margin-bottom: 6px; }
     .audit-overall { margin-top: 6px; padding-top: 18px; border-top: 2px solid var(--border); }
     .audit-overall .audit-race-title { font-size: 18px; }
+    .audit-heat { opacity: .85; }
+    .audit-heat .audit-race-title { font-size: 14px; font-weight: 600; }
+    .audit-heat-note { font-size: 12px; font-weight: 500; font-style: italic; color: var(--muted); text-transform: none; letter-spacing: 0; margin-left: 6px; }
 
     /* ── Announcer ────────────────────────────────────────────────────────
        Redesigned for continuous reading during an 8+ hour live meet: large

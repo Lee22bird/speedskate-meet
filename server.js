@@ -1309,7 +1309,7 @@ app.get('/portal/meet/:meetId/coach', requireRole('coach','meet_director','super
         </table>
       </div>
     </div>
-    ${standings.length?`<h2 style="margin-bottom:12px">📊 Team Standings</h2>${standings.map(section=>resultsSectionHtml(section)).join('<div class="spacer"></div>')}
+    ${standings.length?`<h2 style="margin-bottom:12px">📊 Team Standings</h2>${standings.map(section=>resultsSectionHtml(section,meet)).join('<div class="spacer"></div>')}
     `:''}
     <script>setTimeout(()=>location.reload(),8000);</script>`}));
 });
@@ -1569,9 +1569,9 @@ app.get('/meet/:meetId/results', (req, res) => {
       <a class="live-tab active" href="/meet/${meet.id}/results">Results</a>
       <a class="live-tab" href="/meet/${meet.id}/alerts">📲 Text Alerts</a>
     </div>
-    ${sections.map(resultsSectionHtml).join('<div class="spacer"></div>') || (!ttResultsHtml ? `<div class="card"><div class="muted">No standings yet.</div></div>` : '')}
+    ${sections.map(s=>resultsSectionHtml(s,meet)).join('<div class="spacer"></div>') || (!ttResultsHtml ? `<div class="card"><div class="muted">No standings yet.</div></div>` : '')}
     ${openSections.length?`<div class="spacer"></div><h2 style="color:var(--orange)">🏁 Open Results</h2>${openSections.map(s=>`<div class="card" style="border-left:4px solid var(--orange);margin-bottom:14px"><h2>${esc(s.race.groupLabel)} — ${esc(s.race.distanceLabel)}</h2><table class="table"><thead><tr><th>Place</th><th>Skater</th><th>Team</th></tr></thead><tbody>${s.rows.map(r=>`<tr><td><strong>${esc(r.place)}</strong></td><td>${esc(r.skaterName||'')}</td><td>${esc(r.team||'')}</td></tr>`).join('')}</tbody></table></div>`).join('')}`:``}
-    ${quadSections.length?`<div class="spacer"></div><h2 style="color:var(--purple)">🛼 Quad Results</h2>${quadSections.map(s=>quadResultsSectionHtml(s)).join('<div class="spacer"></div>')}`:``}
+    ${quadSections.length?`<div class="spacer"></div><h2 style="color:var(--purple)">🛼 Quad Results</h2>${quadSections.map(s=>quadResultsSectionHtml(s,meet)).join('<div class="spacer"></div>')}`:``}
     ${raceStatusResultsHtml(meet)}
     ${ttResultsHtml}`}));
 });
@@ -1588,6 +1588,7 @@ app.get('/portal/meet/:meetId/results/print', requireRole('meet_director','judge
     .print-controls{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;padding:10px;border:1px solid #ddd;background:#f8fafc}.print-controls button,.print-controls a{border:1px solid #bbb;background:#fff;color:#111;border-radius:4px;padding:6px 9px;text-decoration:none;font-size:12px;cursor:pointer}
     .meet-header{border-bottom:2px solid #111;padding-bottom:8px;margin-bottom:12px}h1{font-size:22px;margin:0 0 3px}h2{font-size:14px;margin:0 0 5px}.meta{color:#444;margin-bottom:6px}.section{margin-bottom:18px;break-inside:avoid}
     .audit-race{margin-bottom:10px;break-inside:avoid}.audit-race-title{font-size:11px;font-weight:700;margin:0 0 3px;text-transform:uppercase;letter-spacing:.03em;color:#444}
+    .audit-heat .audit-race-title{font-weight:600;color:#666}.audit-heat-note{font-style:italic;font-weight:400;text-transform:none;letter-spacing:0}
     table{width:100%;border-collapse:collapse;margin-top:5px}th,td{padding:3px 5px;border:1px solid #ccc;text-align:left;vertical-align:top}
     th{background:#f1f5f9;color:#111;font-size:9px;text-transform:uppercase;letter-spacing:.03em}.empty-line{border:1px solid #ddd;padding:8px;color:#555}
     .tt-print-event{break-inside:auto}.tt-print-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;align-items:start}.tt-print-column{break-inside:avoid}.tt-print-column h3{font-size:11px;margin:0 0 4px;padding-bottom:3px;border-bottom:1px solid #999}.tt-print-table{font-size:10px;margin-top:0}.tt-print-table th,.tt-print-table td{padding:2px 3px}.tt-print-table tr{break-inside:avoid}.tt-print-empty{border:1px solid #ddd;color:#555;padding:5px;font-size:10px}
@@ -1595,12 +1596,12 @@ app.get('/portal/meet/:meetId/results/print', requireRole('meet_director','judge
     @media print{@page{size:auto;margin:.35in}.no-print{display:none!important}.page{padding:0;max-width:none}body{font-size:10px}h1{font-size:18px}h2{font-size:13px}th,td{padding:2px 4px}.tt-print-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.tt-print-table{font-size:9.5px}.tt-print-column h3{font-size:10px}}</style></head><body><main class="page">
     <div class="print-controls no-print"><button type="button" onclick="window.print()">Print</button><a href="/portal/meet/${esc(meet.id)}/results">Back To Results</a><span class="meta">Compact print view</span></div>
     <header class="meet-header"><h1>${esc(meet.meetName)} — Final Results</h1><div class="meta">${esc(dateLine||'')}${meet.startTime?` • ${esc(meet.startTime)}`:''}${location?` • ${esc(location)}`:''}</div></header>
-    ${sections.map(s=>resultsSectionHtml(s,{print:true})).join('')}
+    ${sections.map(s=>resultsSectionHtml(s,meet,{print:true})).join('')}
     ${openSections.length?`<h1>Open Results</h1>${openSections.map(s=>`<div class="section"><h2>${esc(s.race.groupLabel)} — ${esc(s.race.distanceLabel)}</h2>
       <table><thead><tr><th>Place</th><th>Skater</th><th>Team</th></tr></thead><tbody>
       ${s.rows.map(r=>`<tr><td>${esc(r.place)}</td><td>${esc(r.skaterName||'')}</td><td>${esc(r.team||'')}</td></tr>`).join('')||`<tr><td colspan="3">No results.</td></tr>`}
       </tbody></table></div>`).join('')}`:``}
-    ${quadSections.length?`<h1>Quad Results</h1>${quadSections.map(s=>quadResultsSectionHtml(s,{print:true})).join('')}`:``}
+    ${quadSections.length?`<h1>Quad Results</h1>${quadSections.map(s=>quadResultsSectionHtml(s,meet,{print:true})).join('')}`:``}
     ${raceStatusResultsHtml(meet,{print:true})}
     ${ttPrintHtml}
     ${!hasAnyResults ? '<div class="empty-line">No final results yet.</div>' : ''}
