@@ -475,7 +475,7 @@ function renderBlockSchedulePrintPage({ req, meet, showNotes, pageBreaks, showEm
 module.exports = function createRaceDayRoutes(deps = {}) {
   const router = express.Router();
   const { requireRole, pageShell, saveDb,
-          renderBlockBuilderView, resultsSectionHtml,
+          renderBlockBuilderView, resultsSectionHtml, quadResultsSectionHtml,
           announcerBoxHtml, meetTabs } = deps;
 
 // ── Block race-flow auto-arranger ────────────────────────────────────────────
@@ -1637,17 +1637,7 @@ router.get('/portal/meet/:meetId/results', requireRole('meet_director','judge','
     ${quadSections.length?`
       <div class="spacer"></div>
       <h2 style="color:var(--purple)">🛼 Quad Results</h2>
-      ${quadSections.map(s=>`
-        <div class="card" style="border-left:4px solid var(--purple);margin-bottom:14px">
-          <div class="row between" style="margin-bottom:12px">
-            <div><h2 style="margin:0">${esc(s.groupLabel)} — ${esc(s.distanceLabel)}</h2><div class="note">30 / 20 / 10 / 5 points • Quad Division</div></div>
-            ${s.standings[0]?`<div class="chip chip-purple">🛼 ${esc(s.standings[0].skaterName)}</div>`:''}
-          </div>
-          <table class="table">
-            <thead><tr><th>Place</th><th>Skater</th><th>Team</th><th>Points</th></tr></thead>
-            <tbody>${s.standings.map(r=>`<tr><td><strong>${r.overallPlace}</strong></td><td>${esc(r.skaterName||'')}${sponsorLineHtml(r.sponsor||'')}</td><td>${esc(r.team||'')}</td><td><strong>${Number(r.totalPoints||0)}</strong></td></tr>`).join('')||`<tr><td colspan="4" class="muted">No standings yet.</td></tr>`}</tbody>
-          </table>
-        </div>`).join('')}`:``}
+      ${quadSections.map(s=>quadResultsSectionHtml(s)).join('<div class="spacer"></div>')}`:``}
     ${raceStatusResultsHtml(meet)}
     ${ttResultsHtml}`}));
 });

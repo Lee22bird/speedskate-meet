@@ -467,6 +467,26 @@ function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
     .podium-team  { font-size: 13px; color: var(--muted); }
     .podium-pts   { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; font-size: 21px; font-weight: 700; color: var(--green); margin-top: 6px; }
 
+    /* ── Scoring Audit (collapsible per-race breakdown on Results pages) ── */
+    .audit-card { padding: 0; overflow: hidden; }
+    .audit-card > summary {
+      list-style: none; cursor: pointer; padding: 20px 24px;
+      display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+    }
+    .audit-card > summary::-webkit-details-marker { display: none; }
+    .audit-card > summary::before {
+      content: '▶'; display: inline-block; margin-right: 10px; font-size: 12px; color: var(--muted);
+      transition: transform .15s ease;
+    }
+    .audit-card[open] > summary::before { transform: rotate(90deg); }
+    .audit-summary-title { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; font-size: 22px; font-weight: 800; letter-spacing: -.02em; color: var(--navy); }
+    .audit-body { padding: 0 24px 24px; }
+    .audit-race { margin-bottom: 18px; }
+    .audit-race:last-child { margin-bottom: 0; }
+    .audit-race-title { font-size: 16px; font-weight: 700; color: var(--navy); margin-bottom: 6px; }
+    .audit-overall { margin-top: 6px; padding-top: 18px; border-top: 2px solid var(--border); }
+    .audit-overall .audit-race-title { font-size: 18px; }
+
     /* ── Announcer ────────────────────────────────────────────────────────
        Redesigned for continuous reading during an 8+ hour live meet: large
        Inter type throughout (no condensed/all-caps body text), generous

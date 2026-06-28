@@ -1214,10 +1214,51 @@ function sponsorLineHtml(sponsor) {
   return `<div class="sponsor-line">Sponsored by ${esc(s)}</div>`;
 }
 
-function resultsSectionHtml(section) {
+// ── Scoring Audit helpers ───────────────────────────────────────────────────
+// Display-only: these read the raceScores/totalPoints/overallPlace that
+// computeMeetStandings()/computeQuadStandings() already calculated. They do
+// not recompute, re-rank, or alter any scoring, tiebreaker, or placement
+// value — they only pivot the existing per-skater raceScores array into a
+// per-race table so a coach can see exactly how each total was reached.
+function formatAuditPoints(points) {
+  const n = Number(points || 0);
+  return Number.isInteger(n) ? String(n) : n.toFixed(1);
+}
+
+function raceAuditTableHtml(race, standingsRows, options = {}) {
+  const print = options.print === true;
+  const rows = (standingsRows || [])
+    .map(row => ({ row, score: (row.raceScores || []).find(s => s.raceId === race.id) }))
+    .filter(({ score }) => score && Number(score.place) > 0)
+    .sort((a, b) => Number(a.score.place) - Number(b.score.place));
+
+  const tableRows = rows.map(({ row, score }) => `
+    <tr>
+      <td><strong>${score.place}</strong></td>
+      <td>${esc(row.skaterName || '')}${print ? '' : sponsorLineHtml(row.sponsor)}</td>
+      <td>${esc(row.team || '')}</td>
+      <td><strong>${formatAuditPoints(score.points)}</strong></td>
+    </tr>`).join('');
+
+  return `
+    <div class="audit-race">
+      <h3 class="audit-race-title">${esc(race.distanceLabel || race.groupLabel || 'Race')}</h3>
+      <table${print ? '' : ' class="table"'}>
+        <thead><tr><th>Place</th><th>Skater</th><th>Team</th><th>Points Earned</th></tr></thead>
+        <tbody>${tableRows || `<tr><td colspan="4" class="muted">No scored results for this race yet.</td></tr>`}</tbody>
+      </table>
+    </div>`;
+}
+
+function resultsSectionHtml(section, options = {}) {
+  const print = options.print === true;
   const tbMode = section.tbMode || 'd2';
   const tbLabel = tbMode==='sr832' ? 'SR832 Formula' : 'D2 Middle Race';
-  const hasTiebreaker = section.standings.some(r=>r.tiebreakerUsed||r.runoffNeeded);
+  const title = options.title || `${esc(section.groupLabel)} <span class="text-orange">—</span> ${esc(cap(section.division))}`;
+  const printTitle = options.printTitle || `${esc(section.groupLabel)} — ${esc(cap(section.division))}`;
+  const subtitle = options.subtitle || 'Finals-only scoring • 30 / 20 / 10 / 5 pts';
+  const leaderIcon = options.leaderIcon || '🏆';
+
   const podium = section.standings.slice(0,3).map((row,i) => `
     <div class="podium-card">
       <div class="podium-place">${['🥇','🥈','🥉'][i]||row.overallPlace}</div>
@@ -1233,28 +1274,62 @@ function resultsSectionHtml(section) {
         ${esc(row.skaterName||'')}
         ${row.tiebreakerUsed?`<span class="tb-badge">TB ${tbLabel}</span>`:''}
         ${row.runoffNeeded?`<span class="tb-badge tb-runoff">⚠️ Run-off required</span>`:''}
-        ${sponsorLineHtml(row.sponsor)}
+        ${print ? '' : sponsorLineHtml(row.sponsor)}
       </td>
       <td>${esc(row.team||'')}</td>
       <td><strong>${Number(row.totalPoints||0)}</strong>${row.tiebreakerScore!=null?`<div class="note">TB: ${row.tiebreakerScore.toFixed(2)}</div>`:''}
       </td>
     </tr>`).join('');
-  return `
-    <div class="card">
-      <div class="row between" style="margin-bottom:14px">
-        <div>
-          <h2 style="margin:0">${esc(section.groupLabel)} <span class="text-orange">—</span> ${esc(cap(section.division))}</h2>
-          <div class="note">Finals-only scoring • 30 / 20 / 10 / 5 pts</div>
+
+  const raceBreakdownHtml = (section.races || [])
+    .map(race => raceAuditTableHtml(race, section.standings, { print }))
+    .join('');
+
+  if (print) {
+    return `
+      <div class="section">
+        <h2>${printTitle}</h2>
+        ${raceBreakdownHtml}
+        <div class="audit-race">
+          <h3 class="audit-race-title">Overall Championship Results</h3>
+          <table>
+            <thead><tr><th>Place</th><th>Skater</th><th>Team</th><th>Total Points</th></tr></thead>
+            <tbody>${standingsRows||`<tr><td colspan="4">No standings.</td></tr>`}</tbody>
+          </table>
         </div>
-        ${section.standings[0]?`<div class="chip chip-orange">🏆 ${esc(section.standings[0].skaterName)}</div>`:''}
+      </div>`;
+  }
+
+  return `
+    <details class="card audit-card" open>
+      <summary class="audit-summary">
+        <span class="audit-summary-title">${title}</span>
+        ${section.standings[0]?`<span class="chip chip-orange">${leaderIcon} ${esc(section.standings[0].skaterName)}</span>`:''}
+      </summary>
+      <div class="audit-body">
+        <div class="note" style="margin-bottom:10px">${subtitle}</div>
+        ${raceBreakdownHtml}
+        <div class="audit-race audit-overall">
+          <h3 class="audit-race-title">Overall Results</h3>
+          <div class="podium-grid">${podium||`<div class="muted">No scored finals yet.</div>`}</div>
+          <div class="hr"></div>
+          <table class="table">
+            <thead><tr><th>Place</th><th>Skater</th><th>Team</th><th>Total Points</th></tr></thead>
+            <tbody>${standingsRows||`<tr><td colspan="4" class="muted">No standings yet.</td></tr>`}</tbody>
+          </table>
+        </div>
       </div>
-      <div class="podium-grid">${podium||`<div class="muted">No scored finals yet.</div>`}</div>
-      <div class="hr"></div>
-      <table class="table">
-        <thead><tr><th>Place</th><th>Skater</th><th>Team</th><th>Points</th></tr></thead>
-        <tbody>${standingsRows||`<tr><td colspan="4" class="muted">No standings yet.</td></tr>`}</tbody>
-      </table>
-    </div>`;
+    </details>`;
+}
+
+function quadResultsSectionHtml(section, options = {}) {
+  return resultsSectionHtml(section, {
+    ...options,
+    title: `${esc(section.groupLabel)} <span class="text-orange">—</span> ${esc(section.distanceLabel || '')}`,
+    printTitle: `${esc(section.groupLabel)} — ${esc(section.distanceLabel || '')}`,
+    subtitle: '30 / 20 / 10 / 5 points • Quad Division',
+    leaderIcon: '🛼',
+  });
 }
 
 function raceStatusResultsHtml(meet, options = {}) {
@@ -1349,6 +1424,7 @@ module.exports = {
   isPublicMeet,
   sponsorLineHtml,
   resultsSectionHtml,
+  quadResultsSectionHtml,
   raceStatusResultsHtml,
   OPEN_GROUP_DEFAULTS,
   QUAD_GROUP_DEFAULTS,
