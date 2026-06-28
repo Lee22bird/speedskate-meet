@@ -18,23 +18,41 @@ function toggleSwitch(name, checked, label='', value='on') {
 }
 
 // ── Announcer box ────────────────────────────────────────────────────────────
+// Redesigned for continuous reading during a live meet: the race title is the
+// single most prominent thing on screen, and each lane is its own spaced-out
+// card rather than a dense line of text. See utils/pageShell.js CSS above
+// (".announcer-*" rules) for the typography/spacing this renders into.
 function announcerBoxHtml(current,lanes) {
-  if(!current) return `<div class="muted">No race selected.</div>`;
-  const laneLines=lanes.filter(l=>l.skaterName).map(l=>`
-    <div class="announcer-lane">
-      <div class="announcer-lane-name">LANE ${esc(l.lane)} — ${l.helmetNumber?'#'+esc(l.helmetNumber)+' ':''}${esc(l.skaterName)}</div>
-      <div class="announcer-lane-team">${esc(l.team||'')}</div>
-      ${l.sponsor?`<div class="announcer-lane-sponsor">Sponsored by ${esc(l.sponsor)}</div>`:''
-    }</div>`).join('');
+  if(!current) return `<div class="announcer-empty-state">No race selected.</div>`;
+
+  const laneCards = lanes.filter(l=>l.skaterName).map(l=>{
+    const details = [
+      l.helmetNumber ? `Helmet #${esc(l.helmetNumber)}` : '',
+      l.team ? esc(l.team) : '',
+    ].filter(Boolean).join(' · ');
+    return `
+      <div class="announcer-lane-card">
+        <div class="announcer-lane-number">${esc(l.lane)}</div>
+        <div class="announcer-lane-info">
+          <div class="announcer-lane-name">${esc(l.skaterName)}</div>
+          ${details ? `<div class="announcer-lane-detail">${details}</div>` : ''}
+          ${l.sponsor ? `<div class="announcer-lane-sponsor">Sponsored by ${esc(l.sponsor)}</div>` : ''}
+        </div>
+      </div>`;
+  }).join('');
+
   return `
-    <div class="announcer-box">
-      <div class="announcer-label">Now Racing</div>
-      <div class="announcer-group">${esc(current.groupLabel)}</div>
-      <div class="announcer-meta">${esc(cap(current.division))} • ${esc(current.distanceLabel)} • ${esc(raceDisplayStage(current))}</div>
-      <div class="announcer-start">${esc(cap(current.startType))} Start</div>
-      <div class="announcer-divider"></div>
-      <div class="announcer-lanes-label">Lanes</div>
-      ${laneLines||`<div class="announcer-empty">No skaters entered yet.</div>`}
+    <div class="announcer-hero">
+      <div class="announcer-hero-label">Now Racing</div>
+      <div class="announcer-hero-title">${esc(current.groupLabel)}</div>
+      <div class="announcer-hero-meta">${esc(cap(current.division))} &nbsp;•&nbsp; ${esc(current.distanceLabel)} &nbsp;•&nbsp; ${esc(raceDisplayStage(current))}</div>
+      <div class="announcer-hero-start">${esc(cap(current.startType))} Start</div>
+    </div>
+    <div class="announcer-lanes">
+      <div class="announcer-lanes-heading">Lanes</div>
+      <div class="announcer-lane-list">
+        ${laneCards || `<div class="announcer-empty-state">No skaters entered yet.</div>`}
+      </div>
     </div>`;
 }
 
@@ -449,18 +467,101 @@ function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
     .podium-team  { font-size: 13px; color: var(--muted); }
     .podium-pts   { font-family: 'Barlow Condensed',sans-serif; font-size: 22px; font-weight: 700; color: var(--green); margin-top: 6px; }
 
-    /* ── Announcer ────────────────────────────────────────────────── */
+    /* ── Announcer ────────────────────────────────────────────────────────
+       Redesigned for continuous reading during an 8+ hour live meet: large
+       Inter type throughout (no condensed/all-caps body text), generous
+       spacing, and a wider stage on big announcer-table monitors. ────────── */
+    .wrap:has(.announcer-view) { max-width: 1600px; }
+
+    .announcer-view { display: flex; flex-direction: column; gap: 22px; }
+
+    /* Current / In Staging / After That deck */
+    .announcer-deck { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; }
+    @media(max-width:900px){ .announcer-deck{ grid-template-columns:1fr; } }
+    .announcer-deck-card {
+      border-radius: var(--radius-lg); padding: 22px 24px; color: #fff;
+      box-shadow: var(--shadow-lg);
+    }
+    .announcer-deck-card.is-current { background: linear-gradient(135deg, var(--orange2), var(--orange)); }
+    .announcer-deck-card.is-next    { background: linear-gradient(135deg, #d97706, var(--yellow)); }
+    .announcer-deck-card.is-after   { background: linear-gradient(135deg, var(--sky2), var(--sky)); }
+    .announcer-deck-label {
+      font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em;
+      opacity: .92;
+    }
+    .announcer-deck-title {
+      font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+      font-size: 26px; font-weight: 800; letter-spacing: -.01em; line-height: 1.25;
+      margin-top: 8px; word-break: break-word;
+    }
+    .announcer-deck-meta { font-size: 15px; font-weight: 500; opacity: .92; margin-top: 6px; line-height: 1.4; }
+
+    /* Now Racing hero — the most important thing on the screen */
+    .announcer-hero {
+      background: var(--navy); color: #fff; border-radius: var(--radius-lg);
+      padding: 40px 44px; box-shadow: var(--shadow-lg);
+    }
+    .announcer-hero-label {
+      font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em;
+      color: var(--orange);
+    }
+    .announcer-hero-title {
+      font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+      font-size: 56px; font-weight: 800; letter-spacing: -.02em; line-height: 1.12;
+      margin-top: 10px;
+    }
+    .announcer-hero-meta {
+      font-size: 24px; font-weight: 500; color: rgba(255,255,255,.88);
+      margin-top: 12px; line-height: 1.5;
+    }
+    .announcer-hero-start {
+      display: inline-flex; align-items: center; margin-top: 16px;
+      font-size: 16px; font-weight: 700; color: var(--navy);
+      background: var(--sky); border-radius: 999px; padding: 7px 18px;
+    }
+
+    /* Lane list */
+    .announcer-lanes { display: flex; flex-direction: column; gap: 4px; }
+    .announcer-lanes-heading {
+      font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em;
+      color: var(--muted); margin: 4px 2px 4px;
+    }
+    .announcer-lane-list { display: flex; flex-direction: column; gap: 10px; }
+    .announcer-lane-card {
+      display: flex; align-items: flex-start; gap: 18px;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 18px 22px;
+      box-shadow: var(--shadow-sm);
+    }
+    .announcer-lane-card:nth-child(even) { background: var(--panel); }
+    .announcer-lane-number {
+      flex: 0 0 auto; width: 48px; height: 48px; border-radius: 50%;
+      background: var(--navy); color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px; font-weight: 800; font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+    }
+    .announcer-lane-info { flex: 1 1 auto; min-width: 0; }
+    .announcer-lane-name {
+      font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+      font-size: 26px; font-weight: 700; letter-spacing: -.01em; color: var(--navy);
+      line-height: 1.3;
+    }
+    .announcer-lane-detail { font-size: 17px; font-weight: 500; color: var(--muted); margin-top: 4px; }
+    .announcer-lane-sponsor { font-size: 15px; font-weight: 600; color: var(--sky2); margin-top: 6px; }
+    .announcer-empty-state {
+      font-size: 17px; color: var(--muted); padding: 20px 4px;
+    }
+
+    /* Legacy class names kept so older saved/cached pages still render sanely. */
     .announcer-box { background: var(--navy); color: #fff; border-radius: var(--radius-lg); padding: 24px; }
     .announcer-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; color: var(--orange); }
-    .announcer-group { font-family: 'Barlow Condensed',sans-serif; font-size: 40px; font-weight: 900; line-height: 1.05; margin-top: 6px; }
+    .announcer-group { font-size: 40px; font-weight: 800; line-height: 1.15; margin-top: 6px; }
     .announcer-meta  { font-size: 20px; opacity: .9; margin-top: 6px; }
     .announcer-start { font-size: 14px; opacity: .70; margin-top: 4px; }
     .announcer-divider { height: 1px; background: rgba(255,255,255,.15); margin: 16px 0; }
     .announcer-lanes-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--sky); margin-bottom: 8px; }
     .announcer-lane { padding: 10px 0; border-top: 1px solid rgba(255,255,255,.10); }
-    .announcer-lane-name   { font-size: 20px; font-weight: 900; font-family: 'Barlow Condensed',sans-serif; }
     .announcer-lane-team   { font-size: 14px; opacity: .85; }
-    .announcer-lane-sponsor{ font-size: 13px; color: var(--sky); }
     .announcer-empty { font-size: 15px; opacity: .6; padding-top: 10px; }
 
     /* ── Live board ───────────────────────────────────────────────── */

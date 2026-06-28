@@ -1248,12 +1248,14 @@ router.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','j
 
   } else if(mode==='announcer') {
     body+=`
-      <div class="stat-grid" style="margin-bottom:16px">
-        <div class="stat-card orange"><div class="stat-label">Current Race</div><div class="stat-value">${current?esc(current.groupLabel):'—'}</div><div class="stat-sub">${current?`${esc(cap(current.division))} • ${esc(current.distanceLabel)}`:''}</div></div>
-        <div class="stat-card yellow"><div class="stat-label">In Staging</div><div class="stat-value">${info.next?esc(info.next.groupLabel):'—'}</div><div class="stat-sub">${info.next?`${esc(cap(info.next.division))} • ${esc(info.next.distanceLabel)}`:''}</div></div>
-        <div class="stat-card sky"><div class="stat-label">After That</div><div class="stat-value">${info.coming[0]?esc(info.coming[0].groupLabel):'—'}</div><div class="stat-sub">${info.coming[0]?`${esc(cap(info.coming[0].division))} • ${esc(info.coming[0].distanceLabel)}`:''}</div></div>
-      </div>
-      ${announcerBoxHtml(current,currentLanes.map(l=>{const reg=regMap.get(Number(l.registrationId));return{...l,sponsor:reg?.sponsor||''};}))}`; 
+      <div class="announcer-view">
+        <div class="announcer-deck">
+          <div class="announcer-deck-card is-current"><div class="announcer-deck-label">Current Race</div><div class="announcer-deck-title">${current?esc(current.groupLabel):'—'}</div><div class="announcer-deck-meta">${current?`${esc(cap(current.division))} • ${esc(current.distanceLabel)}`:''}</div></div>
+          <div class="announcer-deck-card is-next"><div class="announcer-deck-label">In Staging</div><div class="announcer-deck-title">${info.next?esc(info.next.groupLabel):'—'}</div><div class="announcer-deck-meta">${info.next?`${esc(cap(info.next.division))} • ${esc(info.next.distanceLabel)}`:''}</div></div>
+          <div class="announcer-deck-card is-after"><div class="announcer-deck-label">After That</div><div class="announcer-deck-title">${info.coming[0]?esc(info.coming[0].groupLabel):'—'}</div><div class="announcer-deck-meta">${info.coming[0]?`${esc(cap(info.coming[0].division))} • ${esc(info.coming[0].distanceLabel)}`:''}</div></div>
+        </div>
+        ${announcerBoxHtml(current,currentLanes.map(l=>{const reg=regMap.get(Number(l.registrationId));return{...l,sponsor:reg?.sponsor||''};}))}
+      </div>`;
   } else {
     body+=`
       <div class="stat-grid" style="margin-bottom:16px">
