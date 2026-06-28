@@ -472,6 +472,149 @@ function renderBlockSchedulePrintPage({ req, meet, showNotes, pageBreaks, showEm
   </html>`;
 }
 
+// ── Race Score Sheets (printable paper worksheets) ───────────────────────────
+// Display/print only — this never reads or writes places, points, or status.
+// It exists so officials have a paper backup for manual scoring during a meet.
+
+function scoreSheetRaceTypeLabel(race) {
+  if (race.type === 'time_trial' || race.isTimeTrial) return 'Time Trial';
+  if (race.isRelayRace) return 'Relay';
+  if (race.isOpenRace) return 'Open';
+  if (race.isQuadRace) return 'Quad';
+  if (race.isAdditionalRace || String(race.division || '').toLowerCase() === 'additional') return 'Additional';
+  return cap(race.division || 'Standard');
+}
+
+function scoreSheetLaneRows(item, meet) {
+  // orderedRaces() represents time-trial events as a placeholder with no
+  // laneEntries — resolve the real race object so the sheet shows actual entries.
+  let actualRace = item;
+  if (item.type === 'time_trial' || item.isTimeTrial) {
+    actualRace = (meet.races || []).find(r => r.isTimeTrial && String(r.id) === String(item.id)) || item;
+  }
+  return laneRowsForRace(actualRace, meet);
+}
+
+function scoreSheetPageHtml(item, meet, raceNumber) {
+  const lanes = scoreSheetLaneRows(item, meet);
+  const laneRowsHtml = lanes.map(l => `
+    <tr>
+      <td class="ss-lane-num">${esc(l.lane)}</td>
+      <td>${l.helmetNumber ? '#' + esc(l.helmetNumber) : ''}</td>
+      <td>${esc(l.skaterName || '')}</td>
+      <td>${esc(l.team || '')}</td>
+      <td class="ss-blank"></td>
+      <td class="ss-blank"></td>
+      <td class="ss-blank"></td>
+      <td class="ss-blank ss-notes"></td>
+    </tr>`).join('');
+
+  return `
+    <section class="ss-page">
+      <div class="ss-header">
+        <div class="ss-header-main">
+          <div class="ss-meet-name">${esc(meet.meetName || 'Meet')}</div>
+          <div class="ss-field-grid">
+            <div><span class="ss-field-label">Date</span><span class="ss-field-value">${esc(meet.date || '')}</span></div>
+            <div><span class="ss-field-label">Race #</span><span class="ss-field-value">${esc(raceNumber)}</span></div>
+            <div><span class="ss-field-label">Division</span><span class="ss-field-value">${esc(item.groupLabel || '')}</span></div>
+            <div><span class="ss-field-label">Distance</span><span class="ss-field-value">${esc(item.distanceLabel || '')}</span></div>
+            <div><span class="ss-field-label">Heat / Final</span><span class="ss-field-value">${esc(raceDisplayStage(item))}</span></div>
+            <div><span class="ss-field-label">Race Type</span><span class="ss-field-value">${esc(scoreSheetRaceTypeLabel(item))}</span></div>
+            <div><span class="ss-field-label">Start</span><span class="ss-field-value">${esc(cap(item.startType || ''))}</span></div>
+          </div>
+        </div>
+        <div class="ss-qr" title="Reserved for a future race QR/barcode"></div>
+      </div>
+
+      <table class="ss-lane-table">
+        <thead><tr><th>Lane</th><th>Helmet</th><th>Skater Name</th><th>Team</th><th>Place</th><th>Status</th><th>Points</th><th>Notes</th></tr></thead>
+        <tbody>${laneRowsHtml || `<tr><td colspan="8" class="ss-empty">No skaters assigned yet.</td></tr>`}</tbody>
+      </table>
+
+      <div class="ss-status-key">
+        <strong>Status key:</strong> DNS = Did Not Start &nbsp;•&nbsp; DNF = Did Not Finish &nbsp;•&nbsp; Scratch &nbsp;•&nbsp; DQ = Disqualified
+      </div>
+
+      <div class="ss-checkboxes">
+        <span class="ss-checkbox">☐ Photo Finish Used</span>
+        <span class="ss-checkbox">☐ Protest Filed</span>
+        <span class="ss-checkbox">☐ Rerace</span>
+        <span class="ss-checkbox">☐ Official Review</span>
+      </div>
+
+      <div class="ss-signatures">
+        <div class="ss-sig"><span class="ss-sig-line"></span><span class="ss-sig-label">Chief Referee Signature</span></div>
+        <div class="ss-sig"><span class="ss-sig-line"></span><span class="ss-sig-label">Assistant Referee</span></div>
+        <div class="ss-sig"><span class="ss-sig-line"></span><span class="ss-sig-label">Starter</span></div>
+        <div class="ss-sig ss-sig-time"><span class="ss-sig-line"></span><span class="ss-sig-label">Time</span></div>
+      </div>
+    </section>`;
+}
+
+function renderScoreSheetsPrintPage({ req, meet, items, scopeLabel }) {
+  const location = meetRinkLabel(req.db, meet);
+  const orderedAll = orderedRaces(meet);
+  const numberById = new Map(orderedAll.map((r, idx) => [String(r.id), idx + 1]));
+
+  const pagesHtml = items.map(item => scoreSheetPageHtml(item, meet, numberById.get(String(item.id)) || '')).join('');
+
+  return `<!doctype html>
+  <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      <title>Score Sheets - ${esc(meet.meetName || 'Meet')}</title>
+      <style>
+        *{box-sizing:border-box}
+        body{margin:0;background:#fff;color:#111;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.3}
+        .page{padding:18px;max-width:980px;margin:0 auto}
+        .print-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:16px;padding:10px;border:1px solid #ddd;background:#f8fafc}
+        .print-controls a,.print-controls button{border:1px solid #999;background:#fff;color:#111;border-radius:4px;padding:7px 12px;text-decoration:none;font-size:13px;cursor:pointer}
+        .ss-page{border:2px solid #111;padding:18px;margin-bottom:22px;break-inside:avoid;page-break-after:always}
+        .ss-page:last-child{page-break-after:auto}
+        .ss-header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;border-bottom:2px solid #111;padding-bottom:10px;margin-bottom:12px}
+        .ss-meet-name{font-size:20px;font-weight:700;margin-bottom:8px}
+        .ss-field-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px 16px}
+        .ss-field-label{display:block;font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:#555}
+        .ss-field-value{display:block;font-size:14px;font-weight:700;border-bottom:1px solid #999;min-height:20px}
+        .ss-qr{flex:0 0 auto;width:84px;height:84px;border:1px dashed #999;display:flex;align-items:center;justify-content:center}
+        .ss-lane-table{width:100%;border-collapse:collapse;margin-bottom:12px}
+        .ss-lane-table th,.ss-lane-table td{border:1px solid #111;padding:8px 6px;text-align:left;vertical-align:top}
+        .ss-lane-table th{background:#fff;font-size:10px;text-transform:uppercase;letter-spacing:.04em}
+        .ss-lane-table td{height:34px;font-size:13px}
+        .ss-lane-num{font-weight:700;text-align:center;width:36px}
+        .ss-blank{min-width:54px}
+        .ss-notes{min-width:120px}
+        .ss-empty{text-align:center;color:#666;padding:14px}
+        .ss-status-key{font-size:11px;color:#333;margin-bottom:10px}
+        .ss-checkboxes{display:flex;gap:18px;flex-wrap:wrap;font-size:13px;margin-bottom:18px}
+        .ss-signatures{display:flex;gap:18px;flex-wrap:wrap;margin-top:10px}
+        .ss-sig{flex:1 1 160px;display:flex;flex-direction:column;gap:4px}
+        .ss-sig-time{flex:0 0 110px}
+        .ss-sig-line{border-bottom:1px solid #111;height:30px}
+        .ss-sig-label{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#555}
+        @media print{
+          @page{size:auto;margin:.4in}
+          .no-print{display:none!important}
+          .page{padding:0;max-width:none}
+          .ss-page{border:none;page-break-after:always}
+        }
+      </style>
+    </head>
+    <body>
+      <main class="page">
+        <div class="print-controls no-print">
+          <button type="button" onclick="window.print()">Print</button>
+          <a href="/portal/meet/${esc(meet.id)}/blocks">Back to Block Builder</a>
+          <span>${esc(scopeLabel)} • ${items.length} page${items.length===1?'':'s'}</span>
+        </div>
+        ${pagesHtml || '<div class="ss-empty">No races to print for this selection.</div>'}
+      </main>
+    </body>
+  </html>`;
+}
+
 module.exports = function createRaceDayRoutes(deps = {}) {
   const router = express.Router();
   const { requireRole, pageShell, saveDb,
@@ -832,6 +975,32 @@ router.get('/portal/meet/:meetId/blocks/print', requireRole('meet_director'), (r
   res.send(renderBlockSchedulePrintPage({ req, meet, showNotes, pageBreaks, showEmpty, layout }));
 });
 
+router.get('/portal/meet/:meetId/score-sheets/print', requireRole('meet_director','judge','super_admin'), (req, res) => {
+  const meet=getMeetOr404(req.db,req.params.meetId);
+  if(!meet) return res.redirect('/portal');
+  ensureAtLeastOneBlock(meet);
+
+  const scope=String(req.query.scope||'meet');
+  const ordered=orderedRaces(meet);
+  let items=[];
+  let scopeLabel='Entire Meet';
+
+  if(scope==='race') {
+    const raceId=String(req.query.raceId||'');
+    items=ordered.filter(r=>String(r.id)===raceId);
+    scopeLabel=items[0]?`${items[0].groupLabel} — ${items[0].distanceLabel}`:'Selected Race';
+  } else if(scope==='block') {
+    const blockId=String(req.query.blockId||'');
+    const block=(meet.blocks||[]).find(b=>String(b.id)===blockId);
+    items=ordered.filter(r=>String(r.blockId||'')===blockId);
+    scopeLabel=block?`Block: ${block.name||'Block'}`:'Selected Block';
+  } else {
+    items=ordered;
+  }
+
+  res.send(renderScoreSheetsPrintPage({ req, meet, items, scopeLabel }));
+});
+
 router.post('/api/meet/:meetId/blocks/add', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet||!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
@@ -1050,6 +1219,25 @@ router.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','j
             </select>
             <button class="btn-sky" type="submit">🎲 Re-Randomize Lanes</button>
           </form>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:16px;border-left:5px solid var(--navy)">
+        <div class="row between center">
+          <div>
+            <h2 style="margin:0">🖨 Race Score Sheets</h2>
+            <div class="note">Printable paper worksheets for judges, referees, and tabulators — blank Place/Status/Points/Notes for manual scoring.</div>
+          </div>
+          <form method="GET" action="/portal/meet/${meet.id}/score-sheets/print" target="_blank" class="action-row" style="margin:0">
+            <select name="raceId">
+              <option value="">Select race…</option>
+              ${info.ordered.map((r,idx)=>`<option value="${esc(r.id)}">Race ${idx+1} — ${esc(r.groupLabel)} — ${esc(cap(r.division))} — ${esc(r.distanceLabel)} — ${esc(raceDisplayStage(r))}</option>`).join('')}
+            </select>
+            <input type="hidden" name="scope" value="race" />
+            <button class="btn2" type="submit">Print Selected Race</button>
+          </form>
+        </div>
+        <div class="action-row" style="margin-top:10px">
+          <a class="btn2" href="/portal/meet/${meet.id}/score-sheets/print?scope=meet" target="_blank">Print Entire Meet</a>
         </div>
       </div>
       <div class="grid-2">

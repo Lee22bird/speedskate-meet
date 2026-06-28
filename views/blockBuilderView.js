@@ -95,6 +95,7 @@ function renderBlockBuilderView({ meet }) {
             <div class="note">${esc(block.day || 'Day 1')}</div>
           </div>
           <div class="action-row">
+            <a class="btn2 btn-sm" href="/portal/meet/${meet.id}/score-sheets/print?scope=block&blockId=${esc(block.id)}" target="_blank">🖨 Score Sheets</a>
             <button class="btn2 btn-sm" onclick="moveBlockUp('${esc(block.id)}')">↑ Move Up</button>
             <button class="btn2 btn-sm" onclick="moveBlockDown('${esc(block.id)}')">↓ Move Down</button>
             <button class="btn2 btn-sm" onclick="renameBlock('${esc(block.id)}')">Rename</button>
@@ -141,6 +142,7 @@ function renderBlockBuilderView({ meet }) {
       <div class="action-row">
         <a class="btn2" href="/portal/meet/${meet.id}/blocks/print" target="_blank">Print Block Schedule</a>
         <a class="btn2" href="/portal/meet/${meet.id}/registered/print-race-list" target="_blank">Print Race List</a>
+        <a class="btn2" href="/portal/meet/${meet.id}/score-sheets/print?scope=meet" target="_blank">🖨 Print All Score Sheets</a>
       </div>
     </div>
 
