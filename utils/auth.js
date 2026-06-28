@@ -2,6 +2,11 @@ function hasRole(user, role) {
   const roles = Array.isArray(user.roles) ? user.roles : [];
   if (roles.includes(role)) return true;
   if (roles.includes('league_director') && ['meet_director', 'judge', 'coach'].includes(role)) return true;
+  // Tabulators (the "judge" role) carry the same trust as a meet director —
+  // every requireRole('meet_director', ...) gate and hasRole(user,'meet_director')
+  // check passes for them too. Ownership is bypassed separately in canEditMeet,
+  // matching how canJudgeMeet already lets any judge judge any meet.
+  if (roles.includes('judge') && role === 'meet_director') return true;
   return false;
 }
 
@@ -130,6 +135,10 @@ function isMeetOwner(user, meet) {
 function canEditMeet(user, meet) {
   if (isSuperAdmin(user)) return true;
   if (isLeagueDirectorForMeet(user, meet)) return true;
+  // Tabulators get full meet-director access on any meet, not just ones they
+  // own — same as canJudgeMeet already grants any judge access to any meet.
+  const roles = Array.isArray(user?.roles) ? user.roles : [];
+  if (roles.includes('judge')) return true;
   if (!hasRole(user, 'meet_director')) return false;
   return isMeetOwner(user, meet);
 }
