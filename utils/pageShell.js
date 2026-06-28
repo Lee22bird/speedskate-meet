@@ -128,9 +128,9 @@ function meetTabs(meet, active) {
 function raceDaySubTabs(meet,active) {
   return `<div class="sub-tabs">${[
     ['director','Director',`/portal/meet/${meet.id}/race-day/director`],
-    ['judges','Judges',`/portal/meet/${meet.id}/race-day/judges`],
+    ['judges','Tabulator',`/portal/meet/${meet.id}/race-day/judges`],
     ['announcer','Announcer',`/portal/meet/${meet.id}/race-day/announcer`],
-    ['live','Live View',`/portal/meet/${meet.id}/race-day/live`],
+    ['live','Referee',`/portal/meet/${meet.id}/race-day/live`],
   ].map(([k,label,href])=>`<a class="sub-tab ${active===k?'active':''}" href="${href}">${label}</a>`).join('')}</div>`;
 }
 

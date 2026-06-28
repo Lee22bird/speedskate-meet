@@ -187,7 +187,7 @@ function createDesktopBackupIfActive(db, reason, meetId = '') {
   catch (err) { console.warn(`Desktop backup skipped (${reason}):`, err.message); }
 }
 
-// Shared lane-assignment card list — used on the Live View tab so a back judge
+// Shared lane-assignment card list — used on the Referee tab so a back judge
 // can read lane numbers to skaters before a race starts (no result/status yet).
 function laneAssignmentListHtml(lanes, regMap) {
   const entered = (lanes || []).filter(l => l.skaterName);

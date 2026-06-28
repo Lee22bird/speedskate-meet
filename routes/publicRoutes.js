@@ -163,11 +163,11 @@ module.exports = function createPublicRoutes(deps = {}) {
           <div class="hr"></div>
           <div><h3>How does USARS age work?</h3><p style="line-height:1.7;color:var(--text)">The system uses the USARS SR150.1 rule — a skater's competitive age is calculated as the meet year minus their birth year (January 1 cutoff). So a skater born in 2015 competing in a 2026 meet is age 11, regardless of whether they've had their birthday yet.</p></div>
           <div class="hr"></div>
-          <div><h3>Do I have to use Check-In?</h3><p style="line-height:1.7;color:var(--text)">No — Check-In is completely optional. You can go straight from Block Builder to Race Day and everything works fine. All registered skaters appear in the judges panel regardless. Check-In is only useful if you want to Rebuild heats after no-shows — it lets the system rebalance with only skaters who actually showed up. If you skip it, empty lanes just get skipped by the judge on race day.</p></div>
+          <div><h3>Do I have to use Check-In?</h3><p style="line-height:1.7;color:var(--text)">No — Check-In is completely optional. You can go straight from Block Builder to Race Day and everything works fine. All registered skaters appear in the tabulator panel regardless. Check-In is only useful if you want to Rebuild heats after no-shows — it lets the system rebalance with only skaters who actually showed up. If you skip it, empty lanes just get skipped by the judge on race day.</p></div>
           <div class="hr"></div>
           <div><h3>How do I check in skaters on race day?</h3><p style="line-height:1.7;color:var(--text)">Go to the Check-In tab. Find each skater as they arrive and toggle them as checked in. After check-in closes, go to Block Builder and hit Rebuild to rebalance heats with actual attendees.</p></div>
           <div class="hr"></div>
-          <div><h3>How do helmet numbers work?</h3><p style="line-height:1.7;color:var(--text)">Helmet numbers are assigned in the Registered tab. You can assign them individually or use the auto-assign button which numbers skaters sequentially. Numbers show on the judges panel, live board, coach panel, and text alerts.</p></div>
+          <div><h3>How do helmet numbers work?</h3><p style="line-height:1.7;color:var(--text)">Helmet numbers are assigned in the Registered tab. You can assign them individually or use the auto-assign button which numbers skaters sequentially. Numbers show on the tabulator panel, live board, coach panel, and text alerts.</p></div>
         </div>
       </div>
 
@@ -178,15 +178,15 @@ module.exports = function createPublicRoutes(deps = {}) {
           <div><h3>What are the Race Day sub-tabs?</h3>
             <ul style="line-height:2;color:var(--text);padding-left:20px">
               <li><strong>Director</strong> — advance races, set current race, pause/resume, open TV display</li>
-              <li><strong>Judges</strong> — post times and places, close races</li>
+              <li><strong>Tabulator</strong> — post times and places, close races</li>
               <li><strong>Announcer</strong> — clean view of current race with full skater info for the PA</li>
-              <li><strong>Live View</strong> — public scoreboard, same as what parents see</li>
+              <li><strong>Referee</strong> — public scoreboard, same as what parents see</li>
             </ul>
           </div>
           <div class="hr"></div>
-          <div><h3>How do I advance to the next race?</h3><p style="line-height:1.7;color:var(--text)">On the Director panel, click "Next →" to move to the next race. You can also use the dropdown to jump to any race directly. The judges panel always shows the current race automatically.</p></div>
+          <div><h3>How do I advance to the next race?</h3><p style="line-height:1.7;color:var(--text)">On the Director panel, click "Next →" to move to the next race. You can also use the dropdown to jump to any race directly. The tabulator panel always shows the current race automatically.</p></div>
           <div class="hr"></div>
-          <div><h3>How do judges post results?</h3><p style="line-height:1.7;color:var(--text)">On the Judges panel, enter places (and times for TT) for each lane. Click "Save" to save without closing, or "Close Race" to finalize the result and trigger text alerts to parents.</p></div>
+          <div><h3>How do judges post results?</h3><p style="line-height:1.7;color:var(--text)">On the Tabulator panel, enter places (and times for TT) for each lane. Click "Save" to save without closing, or "Close Race" to finalize the result and trigger text alerts to parents.</p></div>
           <div class="hr"></div>
           <div><h3>How do I set up the TV display?</h3><p style="line-height:1.7;color:var(--text)">On the Director panel, click "📺 TV Display" to open the full-screen scoreboard in a new tab. On your iPad or Mac, use AirPlay to mirror that tab to your Apple TV. The display auto-refreshes every 4 seconds.</p></div>
           <div class="hr"></div>
