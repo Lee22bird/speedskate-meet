@@ -128,9 +128,32 @@ test('relay races are preserved by safe rebuild', () => {
 });
 
 test('race day renders all 7 final entries on a 6-lane track', () => {
-  const race = buildRaceSetForEntries(baseRace(), registrations(7), 6)[0];
+  const regs = registrations(7);
+  const race = buildRaceSetForEntries(baseRace(), regs, 6)[0];
   const rows = laneRowsForRace(race, { lanes: 6 });
 
   assert.equal(rows.length, 7);
-  assert.equal(rows[6].skaterName, 'Skater 07');
+  // Lane order is randomized (see services/laneAssignment.js), so assert
+  // every skater appears exactly once across the 7 lanes rather than
+  // pinning a specific skater to a specific lane.
+  const names = rows.map(r => r.skaterName).sort();
+  assert.deepEqual(names, regs.map(r => r.name).sort());
+});
+
+test('lane assignment is a random permutation, not registration order', () => {
+  const regs = registrations(6);
+  const laneIds = race => buildRaceSetForEntries(baseRace(), race, 6)[0].laneEntries.map(e => e.registrationId);
+
+  const sequential = regs.map(r => r.id);
+  const samples = Array.from({ length: 25 }, () => laneIds(regs));
+
+  // Every sample must contain exactly the same registrations (no one dropped or duplicated).
+  for (const sample of samples) {
+    assert.deepEqual([...sample].sort(), [...sequential].sort());
+  }
+
+  // With 25 independent shuffles of 8 items, at least one should differ from
+  // strict registration order — this would only fail by astronomical chance
+  // if shuffling were broken (e.g. accidentally returning the input order).
+  assert.ok(samples.some(sample => sample.join(',') !== sequential.join(',')));
 });

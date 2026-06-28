@@ -4,6 +4,7 @@ const {
   shouldSplitNormalRace,
   distributeByTeam,
 } = require('./raceSizing');
+const { assignRandomLaneEntries } = require('./laneAssignment');
 
 
 const CHALLENGE_TOWARD_SENIOR = {
@@ -193,6 +194,10 @@ function shouldSplitIntoHeats(baseRace, entryCount, laneCount) {
 }
 
 function buildRaceSetForEntries(baseRace, regs, laneCount) {
+  // Sorting here only feeds team-balanced heat grouping below (distributeByTeam)
+  // — it does not determine lane numbers. Lane numbers are assigned by an
+  // independent random shuffle (assignRandomLaneEntries) so every skater in a
+  // race has an equal chance at any lane, instead of inheriting this order.
   const sorted = [...regs].sort((a, b) =>
     registrationSortKey(a).localeCompare(registrationSortKey(b))
   );
@@ -205,16 +210,7 @@ function buildRaceSetForEntries(baseRace, regs, laneCount) {
       isFinal: true,
       startType: 'rolling',
       countsForOverall: false,
-      laneEntries: sorted.map((reg, idx) => ({
-        lane: idx + 1,
-        registrationId: reg.id,
-        helmetNumber: reg.helmetNumber,
-        skaterName: reg.name,
-        team: reg.team,
-        place: '',
-        time: '',
-        status: '',
-      })),
+      laneEntries: assignRandomLaneEntries(sorted),
     }];
   }
 
@@ -226,16 +222,7 @@ function buildRaceSetForEntries(baseRace, regs, laneCount) {
       isFinal: true,
       startType: 'standing',
       countsForOverall: true,
-      laneEntries: sorted.map((reg, idx) => ({
-        lane: idx + 1,
-        registrationId: reg.id,
-        helmetNumber: reg.helmetNumber,
-        skaterName: reg.name,
-        team: reg.team,
-        place: '',
-        time: '',
-        status: '',
-      })),
+      laneEntries: assignRandomLaneEntries(sorted),
     }];
   }
 
@@ -247,16 +234,7 @@ function buildRaceSetForEntries(baseRace, regs, laneCount) {
     const heatRace = buildHeatRaceShell(baseRace, 'heat', idx + 1, idx + 1);
     heatRace.startType = 'standing';
     heatRace.countsForOverall = false;
-    heatRace.laneEntries = bucket.map((reg, laneIdx) => ({
-      lane: laneIdx + 1,
-      registrationId: reg.id,
-      helmetNumber: reg.helmetNumber,
-      skaterName: reg.name,
-      team: reg.team,
-      place: '',
-      time: '',
-      status: '',
-    }));
+    heatRace.laneEntries = assignRandomLaneEntries(bucket);
 
     raceSet.push(heatRace);
   });

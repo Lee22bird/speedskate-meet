@@ -21,6 +21,7 @@ const {
   shouldSplitNormalRace,
   distributeByTeam,
 } = require('./raceSizing');
+const { assignRandomLaneEntries } = require('./laneAssignment');
 
 // USARS SR150.1: ages are reckoned as of January 1 of the competitive year.
 function usarsAge(birthdate, meetDate) {
@@ -714,21 +715,24 @@ function shouldSplitIntoHeats(baseRace,entryCount,laneCount) {
 }
 
 function buildRaceSetForEntries(baseRace,regs,laneCount) {
+  // Sorting only feeds team-balanced heat grouping (distributeByTeam) below —
+  // lane numbers come from an independent random shuffle (assignRandomLaneEntries)
+  // so every skater has an equal chance at any lane in the race.
   const sorted=[...regs].sort((a,b)=>registrationSortKey(a).localeCompare(registrationSortKey(b)));
   if(isOpenDivision(baseRace.division)||baseRace.isOpenRace) {
     return [{...baseRace,stage:'final',heatNumber:0,isFinal:true,startType:'rolling',countsForOverall:false,
-      laneEntries:sorted.map((reg,idx)=>({lane:idx+1,registrationId:reg.id,helmetNumber:reg.helmetNumber,skaterName:reg.name,team:reg.team,place:'',time:'',status:''}))}];
+      laneEntries:assignRandomLaneEntries(sorted)}];
   }
   if(!shouldSplitIntoHeats(baseRace,sorted.length,laneCount)) {
     return [{...baseRace,stage:'final',heatNumber:0,isFinal:true,startType:'standing',countsForOverall:true,
-      laneEntries:sorted.map((reg,idx)=>({lane:idx+1,registrationId:reg.id,helmetNumber:reg.helmetNumber,skaterName:reg.name,team:reg.team,place:'',time:'',status:''}))}];
+      laneEntries:assignRandomLaneEntries(sorted)}];
   }
   const racePlan=planNormalRaceSizing(sorted.length);
   const buckets=distributeByTeam(sorted,racePlan.heatSizes); const raceSet=[];
   buckets.forEach((bucket,idx)=>{
     const heatRace=buildHeatRaceShell(baseRace,'heat',idx+1,idx+1);
     heatRace.startType='standing'; heatRace.countsForOverall=false;
-    heatRace.laneEntries=bucket.map((reg,laneIdx)=>({lane:laneIdx+1,registrationId:reg.id,helmetNumber:reg.helmetNumber,skaterName:reg.name,team:reg.team,place:'',time:'',status:''}));
+    heatRace.laneEntries=assignRandomLaneEntries(bucket);
     raceSet.push(heatRace);
   });
   const finalRace=buildHeatRaceShell(baseRace,'final',0,99);

@@ -27,7 +27,7 @@ const ttHelpers = require('../services/ttHelpers');
 const {
   genderBucket, openGroupForTimeTrialReg, timeTrialRaceForMeet,
   timeTrialEntriesForMeet, timeTrialLeaderboards,
-  rebuildRaceAssignmentsSafe,
+  rebuildRaceAssignmentsSafe, reRandomizeRaceLanes,
 } = ttHelpers;
 const { completedTimeTrialEvents, ensureTimeTrialEvent, timeTrialEventTitle } = require('../services/timeTrialEvents');
 const { renderTimeTrialFinalResultsHtml } = require('../services/timeTrialResultsView');
@@ -1036,6 +1036,23 @@ router.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','j
         </div>
         <div class="note" style="margin-top:10px">Judges remain locked to the live current race. Corrections are director-only in Phase 1.</div>
       </div>
+      ${req.query.lanesRandomized ? `<div class="good" style="margin-bottom:16px">🎲 Lanes re-randomized for that race. Heats, race order, and blocks were not changed.</div>` : ''}
+      ${req.query.error ? `<div class="bad" style="margin-bottom:16px">${esc(req.query.error)}</div>` : ''}
+      <div class="card" style="margin-bottom:16px;border-left:5px solid var(--sky)">
+        <div class="row between center">
+          <div>
+            <h2 style="margin:0">🎲 Re-Randomize Lanes</h2>
+            <div class="note">Redraw lane assignments for one race only. Heats, race order, and block placement are untouched.</div>
+          </div>
+          <form method="POST" action="/portal/meet/${meet.id}/race-day/re-randomize-lanes" class="action-row" style="margin:0" onsubmit="return confirm('Re-randomize lanes for this race? This only changes lane numbers — heats, order, and blocks stay the same.');">
+            <select name="raceId" required>
+              <option value="">Select race…</option>
+              ${info.ordered.filter(r=>!isTimeTrialItem(r)&&!r.isRelayRace).map((r,idx)=>`<option value="${esc(r.id)}">Race ${idx+1} — ${esc(r.groupLabel)} — ${esc(cap(r.division))} — ${esc(r.distanceLabel)} — ${esc(raceDisplayStage(r))}</option>`).join('')}
+            </select>
+            <button class="btn-sky" type="submit">🎲 Re-Randomize Lanes</button>
+          </form>
+        </div>
+      </div>
       <div class="grid-2">
         <div class="card">
           <h2>Current Event</h2>
@@ -1556,6 +1573,19 @@ router.post('/api/meet/:meetId/race-day/unlock-race', requireRole('meet_director
   // deliberately if the director is truly moving race-day operations.
   meet.updatedAt=nowIso();
   saveDb(req.db); res.json({ok:true});
+});
+
+router.post('/portal/meet/:meetId/race-day/re-randomize-lanes', requireRole('meet_director'), (req, res) => {
+  const meet=getMeetOr404(req.db,req.params.meetId);
+  if(!meet) return res.redirect('/portal');
+  if(!canEditMeet(req.user,meet)) return res.status(403).send(pageShell({title:'Forbidden',user:req.user,bodyHtml:`<div class="page-header"><h1>Forbidden</h1></div><div class="card"><div class="danger">Only the meet owner can re-randomize lanes.</div></div>`}));
+  const raceId=String(req.body.raceId||'');
+  // Only shuffles laneEntries for this one race — does not rebuild heats,
+  // change race order, move races between blocks, or touch scheduling.
+  const result=reRandomizeRaceLanes(meet,raceId);
+  if(!result.ok) return res.redirect(`/portal/meet/${encodeURIComponent(meet.id)}/race-day/director?error=${encodeURIComponent(result.error)}`);
+  saveDb(req.db);
+  return res.redirect(`/portal/meet/${encodeURIComponent(meet.id)}/race-day/director?lanesRandomized=${encodeURIComponent(raceId)}`);
 });
 
 // ── Results ───────────────────────────────────────────────────────────────────

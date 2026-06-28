@@ -3,6 +3,7 @@ const { nowIso } = require('../utils/date');
 const { ageForReg, ageMatch, ensureRegistrationTotalsAndNumbers, buildRaceSetForEntries,
         divisionEnabledForRegistration, registrationMatchesStandardRace, baseRaceKey, ensureAtLeastOneBlock } = require('./meetHelpers');
 const { ensureCurrentRace } = require('./raceDay');
+const { assignRandomLaneEntries, reRandomizeLaneEntries } = require('./laneAssignment');
 
 function genderBucket(value) {
   const v=String(value||'').trim().toLowerCase();
@@ -168,8 +169,10 @@ function raceMatchesRegAgeGender(race, reg, meet) {
   return !raceBucket||!regBucket||raceBucket===regBucket;
 }
 
+// Kept as a named export for backward compatibility — now assigns lanes via a
+// random shuffle (see services/laneAssignment.js) rather than registration order.
 function assignSequentialLaneEntries(regs) {
-  return regs.map((reg,idx)=>({lane:idx+1,registrationId:reg.id,helmetNumber:reg.helmetNumber||'',skaterName:reg.name||'',team:reg.team||'',place:'',time:'',status:''}));
+  return assignRandomLaneEntries(regs);
 }
 
 function restoreBlockAssignmentsBySignature(meet, previousBlocks, previousRaces) {
@@ -209,6 +212,20 @@ function restoreBlockAssignmentsBySignature(meet, previousBlocks, previousRaces)
     }
     return{...block,raceIds:nextIds};
   });
+}
+
+// Re-randomizes lane numbers for a single already-built race in place.
+// Does NOT touch heat membership, race order, blocks, or scheduling — only
+// which lane each currently-entered skater holds. Used by the "Re-Randomize
+// Lanes" race action so officials can redraw lanes without rebuilding the meet.
+function reRandomizeRaceLanes(meet, raceId) {
+  const race = (meet.races || []).find(r => String(r.id) === String(raceId));
+  if (!race) return { ok: false, error: 'Race not found.' };
+  if (race.isRelayRace) return { ok: false, error: 'Relay lane assignments are not randomized.' };
+  if (race.isTimeTrial) return { ok: false, error: 'Time trial entries do not use fixed lanes.' };
+  race.laneEntries = reRandomizeLaneEntries(race.laneEntries);
+  meet.updatedAt = nowIso();
+  return { ok: true, race };
 }
 
 function rebuildRaceAssignmentsSafe(meet) {
@@ -268,4 +285,5 @@ module.exports = {
   assignSequentialLaneEntries,
   restoreBlockAssignmentsBySignature,
   rebuildRaceAssignmentsSafe,
+  reRandomizeRaceLanes,
 };
