@@ -20,9 +20,11 @@ const {
 } = require('../services/relayHelpers');
 const savedDevelopmentRoster = require('../data/springFlingRoster.json');
 const { buildDevelopmentTestRoster } = require('../services/devTestRoster');
+const { TRAINING_ROSTER_SOURCE, buildTrainingRoster115 } = require('../services/trainingRoster');
 const SPRING_FLING_TEST_ROSTER = Array.isArray(savedDevelopmentRoster) && savedDevelopmentRoster.length
   ? savedDevelopmentRoster
   : buildDevelopmentTestRoster();
+const TRAINING_ROSTER_115 = buildTrainingRoster115();
 const {
   rebuildRaceAssignmentsSafe, restoreBlockAssignmentsBySignature,
   raceImportSignature, raceFamilySignature, raceStageRankForRestore,
@@ -420,13 +422,91 @@ function importSpringFlingTestRoster(meet, { replace = true, checkedIn = true, p
   return meet.registrations.filter(r => r.importSource === 'spring_fling_2026_test').length;
 }
 
+function trainingRosterOptionObject(row, meet) {
+  const source = row.options || {};
+  const firstAdditional = (meet.additionalGroups || meet.additionalRaceGroups || meet.additionalRaces || meet.skateabilityGroups || []).find(group => group && group.enabled);
+  const relays = !!source.relays;
+  const additional = !!source.additional;
+  return {
+    challengeUp: !!source.challengeUp,
+    novice: !!source.novice,
+    elite: !!source.elite,
+    open: !!source.open,
+    quad: !!source.quad,
+    timeTrials: false,
+    relay2Person: relays,
+    relay3Person: relays,
+    relay4Person: relays,
+    relays,
+    additional,
+    additionalGroupId: additional && firstAdditional ? String(firstAdditional.id || '') : '',
+    skateability: additional,
+    skateabilityGroupId: additional && firstAdditional ? String(firstAdditional.id || '') : '',
+  };
+}
+
+function importTrainingRoster115(meet, { replace = true, checkedIn = true, paid = true } = {}) {
+  const previousBlocks = JSON.parse(JSON.stringify(meet.blocks || []));
+  const previousRaces = JSON.parse(JSON.stringify(meet.races || []));
+
+  if (replace) {
+    meet.registrations = [];
+  } else {
+    meet.registrations = (meet.registrations || []).filter(reg => reg.importSource !== TRAINING_ROSTER_SOURCE);
+  }
+
+  let nextRegId = nextId(meet.registrations || []);
+  let nextMeetNumber = (meet.registrations || []).reduce((max, reg) => Math.max(max, Number(reg.meetNumber) || 0), 0) + 1;
+
+  for (const row of TRAINING_ROSTER_115) {
+    const age = Number(row.age || 0);
+    const gender = testRosterGenderForAge(row);
+    const baseGroup = findAgeGroup(meet.groups || [], age, gender);
+    const options = trainingRosterOptionObject(row, meet);
+    const reg = {
+      id: nextRegId++,
+      createdAt: nowIso(),
+      importSource: TRAINING_ROSTER_SOURCE,
+      name: String(row.name || '').trim(),
+      age,
+      gender,
+      team: String(row.team || 'Independent').trim() || 'Independent',
+      sponsor: String(row.sponsor || '').trim(),
+      divisionGroupId: baseGroup?.id || '',
+      divisionGroupLabel: baseGroup?.label || String(row.ageGroup || 'Unassigned'),
+      originalDivisionGroupId: baseGroup?.id || '',
+      originalDivisionGroupLabel: baseGroup?.label || String(row.ageGroup || ''),
+      meetNumber: nextMeetNumber++,
+      birthdate: String(row.birthdate || ''),
+      email: String(row.email || ''),
+      helmetNumber: Number(row.helmetNumber || 0) || '',
+      paid: !!paid,
+      checkedIn: !!checkedIn,
+      totalCost: 0,
+      notes: String(row.notes || ''),
+      options,
+    };
+    reg.totalCost = calcRegistrationCost(meet, reg.options);
+    meet.registrations.push(reg);
+  }
+
+  generateConfiguredRacesForMeet(meet);
+  rebuildRaceAssignmentsSafe(meet);
+  restoreBlockAssignmentsBySignature(meet, previousBlocks, previousRaces);
+  ensureAtLeastOneBlock(meet);
+  ensureCurrentRace(meet);
+  meet.updatedAt = nowIso();
+  return meet.registrations.filter(reg => reg.importSource === TRAINING_ROSTER_SOURCE).length;
+}
+
 router.get('/portal/meet/:meetId/dev/import-spring-fling', requireRole('super_admin'), (req, res) => {
   const meet = getMeetOr404(req.db, req.params.meetId);
   if (!meet) return res.redirect('/portal');
   if (!canEditMeet(req.user, meet)) return res.status(403).send('Forbidden');
   const testCount = (meet.registrations || []).filter(r => r.importSource === 'spring_fling_2026_test').length;
+  const trainingCount = (meet.registrations || []).filter(r => r.importSource === TRAINING_ROSTER_SOURCE).length;
   res.send(pageShell({ title: 'Dev Import', user: req.user, meet, activeTab: 'registered', bodyHtml: `
-    <div class="page-header"><h1>Dev Import Mode</h1><div class="sub">${esc(meet.meetName)} • SSM race-generation test roster</div></div>
+    <div class="page-header"><h1>Dev Import Mode</h1><div class="sub">${esc(meet.meetName)} • Training and race-generation rosters</div></div>
     <div class="card card-accent">
       <h2>Load realistic test registrations</h2>
       <p class="note">Imports ${SPRING_FLING_TEST_ROSTER.length} deterministic test skaters, including 6, 7, 8, 12, and 14-skater cohorts. This preserves saved blocks/templates, then rebuilds race lane entries for testing.</p>
@@ -444,6 +524,30 @@ router.get('/portal/meet/:meetId/dev/import-spring-fling', requireRole('super_ad
         <div class="action-row">
           <button class="btn-orange" type="submit" name="action" value="import">Import Test Roster</button>
           <button class="btn-danger" type="submit" name="action" value="clear" onclick="return confirm('Clear only Spring Fling test registrations?')">Clear Test Rows</button>
+          <a class="btn2" href="/portal/meet/${meet.id}/registered">Back to Registered</a>
+        </div>
+      </form>
+    </div>
+    <div class="card" style="margin-top:18px;border-left:5px solid var(--sky2)">
+      <div class="row between center" style="gap:16px;flex-wrap:wrap">
+        <div><div class="chip chip-sky" style="margin-bottom:8px">Full Meet Training Kit</div><h2 style="margin:0">115-Skater Normal Meet</h2></div>
+        <div class="chip chip-orange">Large Training Roster</div>
+      </div>
+      <p class="note" style="margin-top:10px">Build and score a full simulated meet with 115 skaters across normal age groups, teams, novice and elite divisions, open races, quad, relays, and additional races.</p>
+      <div class="stat-grid" style="margin:18px 0">
+        <div class="stat-card navy"><div class="stat-label">Import size</div><div class="stat-value">${TRAINING_ROSTER_115.length}</div></div>
+        <div class="stat-card sky"><div class="stat-label">Existing training rows</div><div class="stat-value">${trainingCount}</div></div>
+        <div class="stat-card orange"><div class="stat-label">Teams</div><div class="stat-value">${new Set(TRAINING_ROSTER_115.map(row => row.team)).size}</div></div>
+      </div>
+      <form method="POST" action="/portal/meet/${meet.id}/dev/import-training-115" class="stack" onsubmit="return confirm('Import the 115-skater training roster? This can replace current registrations, but it will preserve your block layout.');">
+        <div class="toggle-group">
+          <div class="toggle-row"><div><div class="toggle-row-label">Replace current registrations</div><div class="toggle-row-desc">Recommended when practicing the complete meet workflow from check-in through final results.</div></div>${toggleSwitch('replace', true)}</div>
+          <div class="toggle-row"><div><div class="toggle-row-label">Mark skaters paid</div></div>${toggleSwitch('paid', true)}</div>
+          <div class="toggle-row"><div><div class="toggle-row-label">Mark skaters checked in</div></div>${toggleSwitch('checkedIn', true)}</div>
+        </div>
+        <div class="action-row">
+          <button class="btn-orange" type="submit" name="action" value="import">Import 115-Skater Training Roster</button>
+          <button class="btn-danger" type="submit" name="action" value="clear" onclick="return confirm('Clear only the 115-skater training registrations?')">Clear Training Rows</button>
           <a class="btn2" href="/portal/meet/${meet.id}/registered">Back to Registered</a>
         </div>
       </form>
@@ -474,6 +578,38 @@ router.post('/portal/meet/:meetId/dev/import-spring-fling', requireRole('super_a
   createDesktopBackupIfActive(req.db, 'before_import', meet.id);
   createDesktopBackupIfActive(req.db, 'before_race_generation', meet.id);
   const count = importSpringFlingTestRoster(meet, {
+    replace: !!req.body.replace,
+    checkedIn: !!req.body.checkedIn,
+    paid: !!req.body.paid,
+  });
+  saveDb(req.db);
+  return res.redirect(`/portal/meet/${meet.id}/registered?devImported=${count}`);
+});
+
+router.post('/portal/meet/:meetId/dev/import-training-115', requireRole('super_admin'), (req, res) => {
+  const meet = getMeetOr404(req.db, req.params.meetId);
+  if (!meet) return res.redirect('/portal');
+  if (!canEditMeet(req.user, meet)) return res.status(403).send('Forbidden');
+
+  const previousBlocks = JSON.parse(JSON.stringify(meet.blocks || []));
+  const previousRaces = JSON.parse(JSON.stringify(meet.races || []));
+
+  if (String(req.body.action || '') === 'clear') {
+    createDesktopBackupIfActive(req.db, 'before_import_clear', meet.id);
+    meet.registrations = (meet.registrations || []).filter(reg => reg.importSource !== TRAINING_ROSTER_SOURCE);
+    createDesktopBackupIfActive(req.db, 'before_race_generation', meet.id);
+    generateConfiguredRacesForMeet(meet);
+    rebuildRaceAssignmentsSafe(meet);
+    restoreBlockAssignmentsBySignature(meet, previousBlocks, previousRaces);
+    ensureAtLeastOneBlock(meet);
+    ensureCurrentRace(meet);
+    saveDb(req.db);
+    return res.redirect(`/portal/meet/${meet.id}/registered?devCleared=1`);
+  }
+
+  createDesktopBackupIfActive(req.db, 'before_import', meet.id);
+  createDesktopBackupIfActive(req.db, 'before_race_generation', meet.id);
+  const count = importTrainingRoster115(meet, {
     replace: !!req.body.replace,
     checkedIn: !!req.body.checkedIn,
     paid: !!req.body.paid,
