@@ -407,6 +407,13 @@ function requireRole(...roles) {
     if(extendSession(data.db,data.token)) saveDb(data.db);
     req.db=data.db; req.user=data.user; req.sessionToken=data.token;
     if(hasRole(data.user,'super_admin')||roles.some(role=>hasRole(data.user,role))) return next();
+    // A tabulator (judge role) only gets meet_director-gated routes on a meet
+    // they created or were specifically assigned to tabulate — never every
+    // meet in the system. canEditMeet() enforces that per-meet scoping.
+    if (roles.includes('meet_director') && hasRole(data.user,'judge') && req.params && req.params.meetId) {
+      const meet = getMeetOr404(data.db, req.params.meetId);
+      if (meet && canEditMeet(data.user, meet)) return next();
+    }
     return res.status(403).send(pageShell({title:'Forbidden',user:data.user,
       bodyHtml:`<div class="page-header"><h1>Forbidden</h1></div><div class="card"><div class="danger">You do not have access to this page.</div></div>`}));
   };

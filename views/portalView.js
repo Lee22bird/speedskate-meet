@@ -97,7 +97,7 @@ function renderPortalHome({ db, user, visibleMeets }) {
       <div class="sub">Welcome back, ${esc(user.displayName || user.username)}.</div>
     </div>
     <div class="action-row" style="margin-bottom:20px">
-      ${hasRole(user, 'super_admin') || hasRole(user, 'meet_director') ? `
+      ${hasRole(user, 'super_admin') || hasRole(user, 'meet_director') || hasRole(user, 'judge') ? `
         <form method="POST" action="/portal/create-meet"><button class="btn-orange" type="submit">+ New Meet</button></form>
         <a class="btn2" href="/portal/rinks">Manage Rinks</a>
         <a class="btn2" href="/portal/archived-meets">Archived Meets</a>` : ''}

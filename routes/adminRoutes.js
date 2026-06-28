@@ -353,7 +353,7 @@ router.post('/portal/meet/:meetId/clone', requireRole('meet_director'), (req, re
 
 // ── Meet CRUD ─────────────────────────────────────────────────────────────────
 
-router.post('/portal/create-meet', requireRole('meet_director'), (req, res) => {
+router.post('/portal/create-meet', requireRole('meet_director','judge'), (req, res) => {
   const meet=defaultMeet(req.user); meet.id=nextId(req.db.meets);
   req.db.meets.push(meet); saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/builder`);
 });

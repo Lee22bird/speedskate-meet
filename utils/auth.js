@@ -2,11 +2,6 @@ function hasRole(user, role) {
   const roles = Array.isArray(user.roles) ? user.roles : [];
   if (roles.includes(role)) return true;
   if (roles.includes('league_director') && ['meet_director', 'judge', 'coach'].includes(role)) return true;
-  // Tabulators (the "judge" role) carry the same trust as a meet director —
-  // every requireRole('meet_director', ...) gate and hasRole(user,'meet_director')
-  // check passes for them too. Ownership is bypassed separately in canEditMeet,
-  // matching how canJudgeMeet already lets any judge judge any meet.
-  if (roles.includes('judge') && role === 'meet_director') return true;
   return false;
 }
 
@@ -132,13 +127,35 @@ function isMeetOwner(user, meet) {
   return !!ownerSslId && !!sslId && ownerSslId === sslId;
 }
 
+// Tabulators get meet-director-level access on a meet only if they created/own
+// it, or were specifically assigned as the tabulator for that meet — never
+// system-wide across every meet in the database.
+function isAssignedTabulatorForMeet(user, meet) {
+  if (!user || !meet) return false;
+  const roles = Array.isArray(user.roles) ? user.roles : [];
+  if (!roles.includes('judge')) return false;
+
+  const rows = Array.isArray(meet.meet_staff_assignments)
+    ? meet.meet_staff_assignments
+    : (Array.isArray(meet.staffAssignments) ? meet.staffAssignments : []);
+  const assignment = rows.find(row => String(row?.staff_role || '') === 'tabulator');
+  if (!assignment) return false;
+
+  const userId = user.id == null ? '' : String(user.id);
+  const sslId = userSslId(user);
+  if (userId && String(assignment.staff_user_id || '') === userId) return true;
+  if (sslId && String(assignment.staff_ssl_id || '') === sslId) return true;
+  return false;
+}
+
 function canEditMeet(user, meet) {
   if (isSuperAdmin(user)) return true;
   if (isLeagueDirectorForMeet(user, meet)) return true;
-  // Tabulators get full meet-director access on any meet, not just ones they
-  // own — same as canJudgeMeet already grants any judge access to any meet.
-  const roles = Array.isArray(user?.roles) ? user.roles : [];
-  if (roles.includes('judge')) return true;
+  // A tabulator who created this meet, or who was assigned as the tabulator
+  // for this specific meet, gets the same access a meet director would have
+  // on it — scoped to that one meet, not every meet in the system.
+  if (isMeetOwner(user, meet) && hasRole(user, 'judge')) return true;
+  if (isAssignedTabulatorForMeet(user, meet)) return true;
   if (!hasRole(user, 'meet_director')) return false;
   return isMeetOwner(user, meet);
 }
@@ -172,6 +189,7 @@ module.exports = {
   ensureMeetOwnership,
   isMeetOwner,
   isLeagueDirectorForMeet,
+  isAssignedTabulatorForMeet,
   canEditMeet,
   canJudgeMeet,
   canDeleteMeet,

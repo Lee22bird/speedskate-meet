@@ -1170,6 +1170,9 @@ function coachVisibleMeets(db,user) {
   const meets = activeMeets(db.meets);
   if(hasRole(user,'super_admin')) return meets;
   if(hasRole(user,'meet_director')) return meets.filter(m=>canEditMeet(user,m));
+  // A tabulator only sees meets they created or were specifically assigned
+  // to tabulate — canEditMeet() already scopes to exactly that.
+  if(hasRole(user,'judge')) return meets.filter(m=>canEditMeet(user,m));
   if(hasRole(user,'coach')) return meets.filter(m=>(m.registrations||[]).some(r=>String(r.team||'').trim().toLowerCase()===String(user.team||'').trim().toLowerCase()));
   return [];
 }
