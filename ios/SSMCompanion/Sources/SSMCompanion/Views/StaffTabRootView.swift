@@ -28,11 +28,11 @@ struct StaffLoginView: View {
         ScrollView {
             VStack(spacing: 16) {
                 Image(systemName: "person.badge.shield.checkmark")
-                    .font(.system(size: 44))
+                    .font(.system(size: 48))
                     .foregroundStyle(SSMTheme.orange)
                     .padding(.top, 40)
                 Text("Race-Day Staff Login")
-                    .font(.title3.bold())
+                    .font(.ssmRounded(22, weight: .heavy))
                     .foregroundStyle(SSMTheme.navy)
                 Text("Log in with your SpeedSkateMeet account to access race-day controls for meets you're assigned to.")
                     .font(.subheadline)
@@ -57,13 +57,12 @@ struct StaffLoginView: View {
                             Task { await auth.login(email: email, password: password) }
                         } label: {
                             if auth.isLoading {
-                                ProgressView().frame(maxWidth: .infinity)
+                                ProgressView().tint(.white)
                             } else {
-                                Text("Log In").frame(maxWidth: .infinity)
+                                Text("Log In")
                             }
                         }
-                        .buttonStyle(.borderedProminent)
-                        .tint(SSMTheme.orange)
+                        .buttonStyle(.ssmPill)
                         .disabled(email.isEmpty || password.isEmpty || auth.isLoading)
                     }
                 }

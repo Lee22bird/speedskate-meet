@@ -24,6 +24,7 @@ public struct LiveRaceDayView: View {
                     ForEach(DisplayMode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
                 }
                 .pickerStyle(.segmented)
+                .tint(SSMTheme.orange)
                 .padding(.horizontal)
 
                 if viewModel.isLoading && viewModel.data == nil {
@@ -123,7 +124,7 @@ private struct LiveBoardContent: View {
                         .foregroundStyle(SSMTheme.orange)
                     if let current = data.current {
                         Text(current.groupLabel)
-                            .font(.system(size: 34, weight: .bold))
+                            .font(.ssmRounded(36, weight: .heavy))
                             .foregroundStyle(.white)
                         Text("\(current.division.map { $0.capitalized } ?? "") • \(current.distanceLabel) • \(current.stage)")
                             .font(.subheadline)
@@ -132,14 +133,14 @@ private struct LiveBoardContent: View {
                             VStack(alignment: .leading, spacing: 4) {
                                 ForEach(current.lanes) { lane in
                                     Text("\(lane.lane). \(lane.skaterName)")
-                                        .font(.title3.bold())
+                                        .font(.ssmRounded(20, weight: .bold))
                                         .foregroundStyle(.white)
                                 }
                             }
                             .padding(.top, 6)
                         }
                     } else {
-                        Text("Stand By").font(.system(size: 34, weight: .bold)).foregroundStyle(.white.opacity(0.6))
+                        Text("Stand By").font(.ssmRounded(36, weight: .heavy)).foregroundStyle(.white.opacity(0.6))
                     }
                 }
                 .padding(24)
@@ -169,13 +170,13 @@ private struct BoardTile: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(label.uppercased()).font(.caption.bold()).foregroundStyle(.white.opacity(0.85))
-            Text(text).font(.headline).foregroundStyle(.white).lineLimit(2)
+            Text(label.uppercased()).font(.ssmRounded(11, weight: .bold)).foregroundStyle(.white.opacity(0.85))
+            Text(text).font(.ssmRounded(17, weight: .bold)).foregroundStyle(.white).lineLimit(2)
         }
-        .padding()
+        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(gradient)
-        .cornerRadius(SSMTheme.cornerRadius)
+        .background(gradient, in: RoundedRectangle(cornerRadius: SSMTheme.cornerRadius, style: .continuous))
+        .shadow(color: .black.opacity(0.12), radius: 8, x: 0, y: 4)
     }
 }
 
@@ -186,17 +187,17 @@ struct RaceHeroCard: View {
     let color: LinearGradient
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(label.uppercased()).font(.caption.bold()).foregroundStyle(.white.opacity(0.9))
-            Text(item.groupLabel).font(.system(size: 28, weight: .bold)).foregroundStyle(.white)
+        VStack(alignment: .leading, spacing: 8) {
+            Text(label.uppercased()).font(.ssmRounded(12, weight: .bold)).foregroundStyle(.white.opacity(0.9))
+            Text(item.groupLabel).font(.ssmRounded(28, weight: .heavy)).foregroundStyle(.white)
             Text("\(item.division.map { $0.capitalized } ?? "") • \(item.distanceLabel) • \(item.stage)")
-                .font(.subheadline)
+                .font(.ssmRounded(15, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.85))
         }
-        .padding()
+        .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(color)
-        .cornerRadius(SSMTheme.cornerRadius)
+        .background(color, in: RoundedRectangle(cornerRadius: SSMTheme.cornerRadius, style: .continuous))
+        .shadow(color: .black.opacity(0.15), radius: 10, x: 0, y: 5)
         .padding(.horizontal)
     }
 }
@@ -210,7 +211,7 @@ struct RaceSummaryCard: View {
         SSMCard {
             VStack(alignment: .leading, spacing: 4) {
                 Text(label.uppercased()).font(.caption.bold()).foregroundStyle(color)
-                Text(item.groupLabel).font(.headline).foregroundStyle(SSMTheme.navy)
+                Text(item.groupLabel).font(.ssmRounded(18, weight: .bold)).foregroundStyle(SSMTheme.navy)
                 Text("\(item.division.map { $0.capitalized } ?? "") • \(item.distanceLabel)")
                     .font(.subheadline)
                     .foregroundStyle(SSMTheme.muted)
@@ -231,13 +232,14 @@ struct LaneListCard: View {
                 ForEach(item.lanes) { lane in
                     HStack(alignment: .top, spacing: 12) {
                         Text("\(lane.lane)")
-                            .font(.headline)
-                            .frame(width: 32, height: 32)
-                            .background(SSMTheme.navy)
+                            .font(.ssmRounded(16, weight: .heavy))
+                            .frame(width: 36, height: 36)
+                            .background(SSMTheme.orangeGradient)
                             .foregroundStyle(.white)
                             .clipShape(Circle())
+                            .shadow(color: SSMTheme.orange.opacity(0.4), radius: 4, x: 0, y: 2)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(lane.skaterName).font(.headline)
+                            Text(lane.skaterName).font(.ssmRounded(17, weight: .bold)).foregroundStyle(SSMTheme.navy)
                             HStack(spacing: 6) {
                                 if let helmet = lane.helmetNumber {
                                     Text("#\(helmet)").font(.caption).foregroundStyle(SSMTheme.muted)

@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		AA00AA00AA00AA00AA000003 /* SSMCompanion in Frameworks */ = {isa = PBXBuildFile; productRef = AA00AA00AA00AA00AA000002 /* SSMCompanion */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		79754AC62FF1EA53000459A1 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -52,6 +56,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AA00AA00AA00AA00AA000003 /* SSMCompanion in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -112,6 +117,7 @@
 			);
 			name = "Speed Skate Meet IOS";
 			packageProductDependencies = (
+				AA00AA00AA00AA00AA000002 /* SSMCompanion */,
 			);
 			productName = "Speed Skate Meet IOS";
 			productReference = 79754AB82FF1EA51000459A1 /* Speed Skate Meet IOS.app */;
@@ -195,6 +201,9 @@
 			);
 			mainGroup = 79754AAF2FF1EA51000459A1;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				AA00AA00AA00AA00AA000001 /* XCLocalSwiftPackageReference "../SSMCompanion" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 79754AB92FF1EA51000459A1 /* Products */;
 			projectDirPath = "";
@@ -578,6 +587,20 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		AA00AA00AA00AA00AA000001 /* XCLocalSwiftPackageReference "../SSMCompanion" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../SSMCompanion;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		AA00AA00AA00AA00AA000002 /* SSMCompanion */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = SSMCompanion;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 79754AB02FF1EA51000459A1 /* Project object */;
 }

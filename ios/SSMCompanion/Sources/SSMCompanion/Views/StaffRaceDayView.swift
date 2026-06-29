@@ -44,12 +44,12 @@ public struct StaffRaceDayView: View {
                         NavigationLink {
                             LiveRaceDayView(meetID: meetID, meetName: meetName)
                         } label: {
-                            ActionRow(title: "Live Board", icon: "tv", color: SSMTheme.sky2)
+                            ActionRow(title: "Live Board", icon: "tv", gradient: SSMTheme.skyGradient)
                         }
                         NavigationLink {
                             ResultsView(meetID: meetID, meetName: meetName)
                         } label: {
-                            ActionRow(title: "Results", icon: "list.number", color: SSMTheme.navy2)
+                            ActionRow(title: "Results", icon: "list.number", gradient: SSMTheme.navyGradient)
                         }
                     }
                     .padding(.horizontal)
@@ -91,13 +91,13 @@ private struct DeckTile: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(label.uppercased()).font(.caption.bold()).foregroundStyle(.white.opacity(0.85))
-            Text(text).font(.headline).foregroundStyle(.white).lineLimit(2)
+            Text(label.uppercased()).font(.ssmRounded(11, weight: .bold)).foregroundStyle(.white.opacity(0.85))
+            Text(text).font(.ssmRounded(17, weight: .bold)).foregroundStyle(.white).lineLimit(2)
         }
-        .padding()
+        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(gradient)
-        .cornerRadius(SSMTheme.cornerRadius)
+        .background(gradient, in: RoundedRectangle(cornerRadius: SSMTheme.cornerRadius, style: .continuous))
+        .shadow(color: .black.opacity(0.12), radius: 8, x: 0, y: 4)
     }
 }
 
@@ -129,17 +129,16 @@ private struct RaceControlsCard: View {
                     Button {
                         Task { await viewModel.step(meetID: meetID, direction: -1) }
                     } label: {
-                        Label("Previous", systemImage: "chevron.left").frame(maxWidth: .infinity)
+                        Label("Previous", systemImage: "chevron.left")
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.ssmSoftPill)
 
                     Button {
                         Task { await viewModel.step(meetID: meetID, direction: 1) }
                     } label: {
-                        Label("Next", systemImage: "chevron.right").frame(maxWidth: .infinity)
+                        Label("Next", systemImage: "chevron.right")
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(SSMTheme.orange)
+                    .buttonStyle(.ssmPill)
                 }
                 .disabled(viewModel.isSendingAction)
 
@@ -148,17 +147,16 @@ private struct RaceControlsCard: View {
                         Task { await viewModel.togglePause(meetID: meetID) }
                     } label: {
                         Label(data.paused ? "Resume" : "Pause", systemImage: data.paused ? "play.fill" : "pause.fill")
-                            .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.ssmSoftPill)
 
                     if let current = data.current, current.status == "closed" {
-                        Button(role: .destructive) {
+                        Button {
                             Task { await viewModel.unlockCurrentRace(meetID: meetID) }
                         } label: {
-                            Label("Unlock Race", systemImage: "lock.open").frame(maxWidth: .infinity)
+                            Label("Unlock Race", systemImage: "lock.open")
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.ssmPill(LinearGradient(colors: [SSMTheme.danger, SSMTheme.danger.opacity(0.8)], startPoint: .top, endPoint: .bottom)))
                     }
                 }
                 .disabled(viewModel.isSendingAction)

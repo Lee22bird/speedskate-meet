@@ -4,26 +4,30 @@ struct MeetRow: View {
     let meet: MeetSummary
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text(meet.meetName)
-                    .font(.headline)
-                    .foregroundStyle(SSMTheme.navy)
-                Spacer()
-                SSMChip(meet.status.capitalized, color: meet.status == "live" ? SSMTheme.good : SSMTheme.sky2)
-            }
-            if !meet.date.isEmpty {
-                Text(meet.date)
-                    .font(.subheadline)
-                    .foregroundStyle(SSMTheme.muted)
-            }
-            if !meet.location.isEmpty {
-                Text(meet.location)
-                    .font(.caption)
-                    .foregroundStyle(SSMTheme.muted)
+        SSMCard {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text(meet.meetName)
+                        .font(.ssmRounded(18, weight: .bold))
+                        .foregroundStyle(SSMTheme.navy)
+                    Spacer()
+                    SSMChip(meet.status.capitalized, color: meet.status == "live" ? SSMTheme.good : SSMTheme.sky2)
+                }
+                if !meet.date.isEmpty {
+                    Text(meet.date)
+                        .font(.ssmRounded(14, weight: .semibold))
+                        .foregroundStyle(SSMTheme.muted)
+                }
+                if !meet.location.isEmpty {
+                    Text(meet.location)
+                        .font(.caption)
+                        .foregroundStyle(SSMTheme.muted)
+                }
             }
         }
-        .padding(.vertical, 4)
+        .listRowSeparator(.hidden)
+        .listRowBackground(Color.clear)
+        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
     }
 }
 
@@ -46,8 +50,11 @@ public struct MeetsListView: View {
                         NavigationLink(value: meet) {
                             MeetRow(meet: meet)
                         }
+                        .buttonStyle(.plain)
                     }
                     .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                    .background(SSMTheme.pageBackground)
                 }
             }
             .navigationDestination(for: MeetSummary.self) { meet in
@@ -73,7 +80,7 @@ public struct MeetDetailView: View {
                 SSMCard {
                     VStack(alignment: .leading, spacing: 8) {
                         Text(meet.meetName)
-                            .font(.title2.bold())
+                            .font(.ssmRounded(24, weight: .heavy))
                             .foregroundStyle(SSMTheme.navy)
                         if !meet.date.isEmpty {
                             Label(meet.date, systemImage: "calendar")
@@ -96,14 +103,16 @@ public struct MeetDetailView: View {
                 NavigationLink {
                     LiveRaceDayView(meetID: meet.id.stringValue, meetName: meet.meetName)
                 } label: {
-                    ActionRow(title: "Live Race Day", icon: "dot.radiowaves.left.and.right", color: SSMTheme.orange)
+                    ActionRow(title: "Live Race Day", icon: "dot.radiowaves.left.and.right", gradient: SSMTheme.orangeGradient)
                 }
+                .buttonStyle(.plain)
 
                 NavigationLink {
                     ResultsView(meetID: meet.id.stringValue, meetName: meet.meetName)
                 } label: {
-                    ActionRow(title: "Results", icon: "list.number", color: SSMTheme.sky2)
+                    ActionRow(title: "Results", icon: "list.number", gradient: SSMTheme.skyGradient)
                 }
+                .buttonStyle(.plain)
             }
             .padding()
         }
@@ -116,21 +125,21 @@ public struct MeetDetailView: View {
 struct ActionRow: View {
     let title: String
     let icon: String
-    let color: Color
+    let gradient: LinearGradient
 
     var body: some View {
         HStack {
             Image(systemName: icon)
-                .font(.title3)
+                .font(.title2)
             Text(title)
-                .font(.headline)
+                .font(.ssmRounded(18, weight: .bold))
             Spacer()
             Image(systemName: "chevron.right")
                 .foregroundStyle(.white.opacity(0.7))
         }
         .foregroundStyle(.white)
-        .padding()
-        .background(color)
-        .cornerRadius(SSMTheme.cornerRadius)
+        .padding(18)
+        .background(gradient, in: RoundedRectangle(cornerRadius: SSMTheme.cornerRadius, style: .continuous))
+        .shadow(color: .black.opacity(0.15), radius: 8, x: 0, y: 4)
     }
 }
