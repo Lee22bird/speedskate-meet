@@ -136,6 +136,7 @@ const createBuilderRoutes = require('./routes/builderRoutes');
 const createRegistrationRoutes = require('./routes/registrationRoutes');
 const createRaceDayRoutes = require('./routes/raceDayRoutes');
 const createSslImportRoutes = require('./routes/sslImportRoutes');
+const createMobileApiRoutes = require('./routes/mobileApiRoutes');
 const createStaffRoutes = require('./routes/staffRoutes');
 const createTimeTrialRoutes = require('./routes/timeTrialRoutes');
 const createDesktopRoutes = require('./routes/desktopRoutes');
@@ -1899,6 +1900,7 @@ app.use('/', createRaceDayRoutes(routeDeps));
 app.use('/', createStaffRoutes(routeDeps));
 app.use('/', createTimeTrialRoutes(routeDeps));
 app.use('/', createSslImportRoutes(routeDeps));
+app.use('/', createMobileApiRoutes(routeDeps));
 
 // ── Global error handling ──────────────────────────────────────────────────────
 // Catches synchronous throws from any route above (Express does this automatically)
