@@ -11,6 +11,9 @@ let package = Package(
         .library(name: "SSMCompanion", targets: ["SSMCompanion"]),
     ],
     targets: [
-        .target(name: "SSMCompanion"),
+        .target(
+            name: "SSMCompanion",
+            resources: [.process("Resources")]
+        ),
     ]
 )

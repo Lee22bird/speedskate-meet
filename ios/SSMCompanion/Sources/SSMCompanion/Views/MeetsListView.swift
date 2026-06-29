@@ -108,11 +108,20 @@ public struct SSMHeader: View {
 
     public var body: some View {
         ZStack(alignment: .bottomLeading) {
-            SpeedStreaksBackground()
+            Image("SSMIOSHero", bundle: .module)
+                .resizable()
+                .scaledToFill()
+                .frame(maxWidth: .infinity, minHeight: 178, maxHeight: 178)
+                .clipped()
+            LinearGradient(
+                colors: [.clear, .clear, SSMTheme.pageBackground.opacity(0.92)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .allowsHitTesting(false)
 
             VStack(alignment: .leading, spacing: 22) {
                 HStack(alignment: .top) {
-                    SSMBrandMark()
                     Spacer()
                     NotificationBellButton()
                 }
@@ -126,37 +135,8 @@ public struct SSMHeader: View {
             .padding(.bottom, 18)
         }
         .frame(minHeight: 178)
-        .overlay(alignment: .bottom) {
-            LinearGradient(
-                colors: [.clear, SSMTheme.pageBackground.opacity(0.96)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .frame(height: 30)
-            .allowsHitTesting(false)
-        }
-    }
-}
-
-private struct SSMBrandMark: View {
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 0) {
-                Text("SS")
-                    .foregroundStyle(.white)
-                Text("M")
-                    .foregroundStyle(SSMTheme.orange)
-            }
-            .font(.system(size: 34, weight: .black, design: .rounded).italic())
-            .tracking(-1)
-
-            Text("SPEED SKATE MEET")
-                .font(.system(size: 9, weight: .black, design: .rounded))
-                .foregroundStyle(.white.opacity(0.92))
-                .tracking(0.8)
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Speed Skate Meet")
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Speed Skate Meet. Find a Meet.")
     }
 }
 
