@@ -32,11 +32,19 @@ public final class MeetsListViewModel: ObservableObject {
     public init(api: APIClient = .shared) { self.api = api }
 
     public var liveMeet: MeetSummary? {
-        meets.first { $0.isLive == true }
+        filteredMeets.first { $0.isLiveNow }
     }
 
     public var upcomingMeets: [MeetSummary] {
-        meets.filter { $0.isLive != true }
+        filteredMeets.filter { !$0.isLiveNow }
+    }
+
+    public var filteredMeets: [MeetSummary] {
+        meets.filter { meet in
+            let search = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+            let matchesSearch = search.isEmpty || meet.searchableText.localizedCaseInsensitiveContains(search)
+            return matchesSearch && selectedFilter.matches(meet)
+        }
     }
 
     public func load() async {
@@ -44,22 +52,33 @@ public final class MeetsListViewModel: ObservableObject {
         errorMessage = nil
         defer { isLoading = false }
         do {
-            switch selectedFilter {
-            case .all:
-                meets = try await api.meets(query: searchText)
-            case .kansas:
-                meets = try await api.meets(query: searchText, state: "KS")
-            case .texas:
-                meets = try await api.meets(query: searchText, state: "TX")
-            case .nationals:
-                meets = try await api.meets(query: searchText, league: "national")
-            case .today:
-                meets = try await api.meets(query: searchText, when: "today")
-            case .thisWeek:
-                meets = try await api.meets(query: searchText, when: "week")
-            }
+            meets = try await api.meets()
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+}
+
+private extension MeetFilterChip {
+    func matches(_ meet: MeetSummary, now: Date = Date()) -> Bool {
+        switch self {
+        case .all:
+            return true
+        case .kansas:
+            return meet.searchableText.localizedCaseInsensitiveContains("Kansas") ||
+                meet.searchableText.localizedCaseInsensitiveContains("KS")
+        case .texas:
+            return meet.searchableText.localizedCaseInsensitiveContains("Texas") ||
+                meet.searchableText.localizedCaseInsensitiveContains("TX")
+        case .nationals:
+            return meet.searchableText.localizedCaseInsensitiveContains("National")
+        case .today:
+            guard let range = meet.dateRange else { return false }
+            return range.contains(Calendar.current.startOfDay(for: now))
+        case .thisWeek:
+            guard let range = meet.dateRange,
+                  let weekEnd = Calendar.current.date(byAdding: .day, value: 7, to: now) else { return false }
+            return range.overlaps(Calendar.current.startOfDay(for: now)...weekEnd)
         }
     }
 }

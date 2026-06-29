@@ -35,6 +35,33 @@ public struct MeetSummary: Decodable, Identifiable, Hashable {
         let letters = words.compactMap { $0.first }.map(String.init).joined()
         return letters.isEmpty ? "SM" : letters.uppercased()
     }
+
+    public var isLiveNow: Bool {
+        isLive == true || status.localizedCaseInsensitiveCompare("live") == .orderedSame
+    }
+
+    public var searchableText: String {
+        [meetName, location, city, state, league]
+            .compactMap { $0 }
+            .joined(separator: " ")
+    }
+
+    public var dateRange: ClosedRange<Date>? {
+        guard let start = Self.parseDate(date) else { return nil }
+        let end = Self.parseDate(endDate ?? "") ?? start
+        return min(start, end)...max(start, end)
+    }
+
+    private static func parseDate(_ value: String) -> Date? {
+        let formats = ["yyyy-MM-dd", "MM/dd/yyyy", "MMM d, yyyy", "MMMM d, yyyy"]
+        for format in formats {
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.dateFormat = format
+            if let date = formatter.date(from: value) { return date }
+        }
+        return ISO8601DateFormatter().date(from: value)
+    }
 }
 
 public struct MeetsResponse: Decodable {

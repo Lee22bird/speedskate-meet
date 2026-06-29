@@ -67,11 +67,11 @@ struct SSMFloatingTabBar: View {
                         Text(tab.title)
                             .font(.ssmRounded(11, weight: .bold))
                     }
-                    .foregroundStyle(selectedTab == tab ? .white : SSMTheme.muted)
+                    .foregroundStyle(selectedTab == tab ? SSMTheme.orange : SSMTheme.muted)
                     .padding(.vertical, 6)
                     .frame(maxWidth: .infinity)
                     .background(
-                        selectedTab == tab ? SSMTheme.orange.opacity(0.18) : Color.clear,
+                        selectedTab == tab ? SSMTheme.orange.opacity(0.12) : Color.clear,
                         in: RoundedRectangle(cornerRadius: 14, style: .continuous)
                     )
                 }

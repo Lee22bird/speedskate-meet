@@ -39,25 +39,13 @@ public struct MeetsListView: View {
     public var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    SSMHomeHeader()
+                VStack(alignment: .leading, spacing: 20) {
+                    SSMHeader()
 
                     VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            Text("Find a Meet")
-                                .font(.ssmRounded(30, weight: .heavy))
-                                .foregroundStyle(.white)
-                            Spacer()
-                            NotificationBellButton()
-                        }
+                        SearchBar(text: $viewModel.searchText)
 
-                        SSMSearchField(text: $viewModel.searchText) {
-                            Task { await viewModel.load() }
-                        }
-
-                        MeetFilterChipsRow(selected: $viewModel.selectedFilter) {
-                            Task { await viewModel.load() }
-                        }
+                        MeetFilterChipsRow(selected: $viewModel.selectedFilter)
                     }
                     .padding(.horizontal)
 
@@ -65,13 +53,13 @@ public struct MeetsListView: View {
                         ProgressView().frame(maxWidth: .infinity).padding(.top, 40)
                     } else if let error = viewModel.errorMessage {
                         ContentUnavailableFallback(text: error)
-                    } else if viewModel.meets.isEmpty {
-                        ContentUnavailableFallback(text: "No public meets yet.")
+                    } else if viewModel.filteredMeets.isEmpty {
+                        ContentUnavailableFallback(text: "No meets match those filters.")
                             .padding(.top, 40)
                     } else {
                         if let live = viewModel.liveMeet {
                             NavigationLink(value: live) {
-                                LiveMeetHeroCard(meet: live)
+                                LiveNowCard(meet: live)
                             }
                             .buttonStyle(.plain)
                             .padding(.horizontal)
@@ -92,7 +80,7 @@ public struct MeetsListView: View {
                             VStack(spacing: 12) {
                                 ForEach(viewModel.upcomingMeets) { meet in
                                     NavigationLink(value: meet) {
-                                        UpcomingMeetRow(meet: meet)
+                                        MeetCard(meet: meet)
                                     }
                                     .buttonStyle(.plain)
                                 }
@@ -101,7 +89,6 @@ public struct MeetsListView: View {
                         }
                     }
                 }
-                .padding(.top, 8)
                 .padding(.bottom, 80)
             }
             .scrollIndicators(.hidden)
@@ -116,101 +103,196 @@ public struct MeetsListView: View {
     }
 }
 
-private struct SSMHomeHeader: View {
-    var body: some View {
+public struct SSMHeader: View {
+    public init() {}
+
+    public var body: some View {
         ZStack(alignment: .bottomLeading) {
             SpeedStreaksBackground()
-            HStack(spacing: 2) {
-                Text("SSM").font(.system(size: 26, weight: .black, design: .rounded).italic())
-                Text("SPEED SKATE MEET").font(.system(size: 10, weight: .bold, design: .rounded))
-                    .foregroundStyle(SSMTheme.orange)
-                    .baselineOffset(-8)
+
+            VStack(alignment: .leading, spacing: 22) {
+                HStack(alignment: .top) {
+                    SSMBrandMark()
+                    Spacer()
+                    NotificationBellButton()
+                }
+
+                Text("Find a Meet")
+                    .font(.ssmRounded(36, weight: .heavy))
+                    .foregroundStyle(.white)
+                    .accessibilityAddTraits(.isHeader)
             }
-            .foregroundStyle(.white)
-            .padding(16)
+            .padding(.horizontal, 18)
+            .padding(.bottom, 18)
         }
-        .frame(height: 90)
+        .frame(minHeight: 178)
+        .overlay(alignment: .bottom) {
+            LinearGradient(
+                colors: [.clear, SSMTheme.pageBackground.opacity(0.96)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 30)
+            .allowsHitTesting(false)
+        }
+    }
+}
+
+private struct SSMBrandMark: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 0) {
+                Text("SS")
+                    .foregroundStyle(.white)
+                Text("M")
+                    .foregroundStyle(SSMTheme.orange)
+            }
+            .font(.system(size: 34, weight: .black, design: .rounded).italic())
+            .tracking(-1)
+
+            Text("SPEED SKATE MEET")
+                .font(.system(size: 9, weight: .black, design: .rounded))
+                .foregroundStyle(.white.opacity(0.92))
+                .tracking(0.8)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Speed Skate Meet")
     }
 }
 
 private struct NotificationBellButton: View {
     var body: some View {
-        ZStack(alignment: .topTrailing) {
-            Image(systemName: "bell.fill")
-                .font(.system(size: 18))
-                .foregroundStyle(.white)
-                .frame(width: 40, height: 40)
-                .background(SSMTheme.cardBackgroundLight, in: Circle())
-            Circle().fill(SSMTheme.orange).frame(width: 8, height: 8)
+        Button(action: {}) {
+            ZStack(alignment: .topTrailing) {
+                Image(systemName: "bell.fill")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 46, height: 46)
+                    .background(.black.opacity(0.24), in: Circle())
+                    .overlay(Circle().strokeBorder(.white.opacity(0.15), lineWidth: 1))
+                Circle()
+                    .fill(SSMTheme.orange)
+                    .frame(width: 10, height: 10)
+                    .overlay(Circle().strokeBorder(SSMTheme.pageBackground, lineWidth: 2))
+                    .offset(x: -1, y: 1)
+            }
         }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Notifications")
     }
 }
 
-private struct SSMSearchField: View {
+public struct SearchBar: View {
     @Binding var text: String
-    let onSubmit: () -> Void
+    public init(text: Binding<String>) { _text = text }
 
-    var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass").foregroundStyle(SSMTheme.muted)
+    public var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 19, weight: .medium))
+                .foregroundStyle(SSMTheme.muted)
             TextField("Search meets by name, city, state, rink…", text: $text)
                 .foregroundStyle(.white)
                 .ssmNoAutocapitalization()
                 .autocorrectionDisabled()
-                .onSubmit(onSubmit)
+
+            if !text.isEmpty {
+                Button {
+                    text = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(SSMTheme.muted)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear search")
+            }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(SSMTheme.cardBackgroundLight, in: SSMTheme.pillShape)
+        .padding(.horizontal, 18)
+        .frame(minHeight: 56)
+        .background(.black.opacity(0.24), in: SSMTheme.pillShape)
+        .overlay(SSMTheme.pillShape.strokeBorder(.white.opacity(0.13), lineWidth: 1))
     }
 }
 
 private struct MeetFilterChipsRow: View {
     @Binding var selected: MeetFilterChip
-    let onChange: () -> Void
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 ForEach(MeetFilterChip.allCases) { chip in
-                    Button {
-                        selected = chip
-                        onChange()
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: chip.icon)
-                            Text(chip.rawValue)
-                        }
-                        .font(.ssmRounded(13, weight: .bold))
-                        .foregroundStyle(selected == chip ? .white : SSMTheme.muted)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 9)
-                        .background(
-                            selected == chip ? SSMTheme.skyGradient : LinearGradient(colors: [SSMTheme.cardBackgroundLight, SSMTheme.cardBackgroundLight], startPoint: .top, endPoint: .bottom),
-                            in: SSMTheme.pillShape
-                        )
+                    FilterChip(chip: chip, isSelected: selected == chip) {
+                        withAnimation(.easeOut(duration: 0.18)) { selected = chip }
                     }
-                    .buttonStyle(.plain)
                 }
             }
+            .padding(.vertical, 2)
         }
     }
 }
 
-private struct LiveMeetHeroCard: View {
-    let meet: MeetSummary
+public struct FilterChip: View {
+    let chip: MeetFilterChip
+    let isSelected: Bool
+    let action: () -> Void
 
-    var body: some View {
-        ZStack {
+    public init(chip: MeetFilterChip, isSelected: Bool, action: @escaping () -> Void) {
+        self.chip = chip
+        self.isSelected = isSelected
+        self.action = action
+    }
+
+    public var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                if isSelected { Image(systemName: chip.icon) }
+                Text(chip.rawValue)
+            }
+            .font(.ssmRounded(14, weight: .semibold))
+            .foregroundStyle(isSelected ? .white : SSMTheme.muted)
+            .padding(.horizontal, 16)
+            .frame(minHeight: 42)
+            .background(isSelected ? SSMTheme.skyGradient : SSMTheme.inactiveChipGradient, in: SSMTheme.pillShape)
+            .overlay(SSMTheme.pillShape.strokeBorder(isSelected ? SSMTheme.orange.opacity(0.8) : .white.opacity(0.1), lineWidth: 1))
+            .shadow(color: isSelected ? SSMTheme.sky.opacity(0.24) : .clear, radius: 8)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+public struct LiveNowCard: View {
+    let meet: MeetSummary
+    @StateObject private var liveViewModel = LiveRaceDayViewModel()
+
+    public init(meet: MeetSummary) { self.meet = meet }
+
+    public var body: some View {
+        ZStack(alignment: .topLeading) {
             SpeedStreaksBackground()
-            VStack(alignment: .leading, spacing: 14) {
+            LinearGradient(colors: [.black.opacity(0.08), .black.opacity(0.72)], startPoint: .topTrailing, endPoint: .bottomLeading)
+
+            VStack(alignment: .leading, spacing: 13) {
                 LiveBadge()
                 Text(meet.meetName)
                     .font(.ssmRounded(26, weight: .heavy))
                     .foregroundStyle(.white)
-                Text("\(meet.raceCount) Races • \(meet.registrationCount) Registered")
-                    .font(.ssmRounded(15, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.85))
+
+                if let live = liveViewModel.data {
+                    Text("Race \(min(live.progress.completed + 1, live.progress.total)) of \(live.progress.total)")
+                        .font(.ssmRounded(18, weight: .bold))
+                        .foregroundStyle(.white)
+
+                    HStack(alignment: .top, spacing: 14) {
+                        RacePreview(label: "CURRENT", name: live.current?.groupLabel ?? "Between races", color: SSMTheme.sky)
+                        Divider().overlay(.white.opacity(0.16))
+                        RacePreview(label: "NEXT", name: live.next?.groupLabel ?? live.coming.first?.groupLabel ?? "Schedule complete", color: SSMTheme.orange)
+                    }
+                    .frame(minHeight: 48)
+                } else {
+                    Text("\(meet.raceCount) Races • \(meet.registrationCount) Registered")
+                        .font(.ssmRounded(15, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.82))
+                }
 
                 Label("Watch Live", systemImage: "play.fill")
                     .font(.ssmRounded(17, weight: .bold))
@@ -222,24 +304,49 @@ private struct LiveMeetHeroCard: View {
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(height: 230)
         .clipShape(RoundedRectangle(cornerRadius: SSMTheme.cornerRadius, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: SSMTheme.cornerRadius, style: .continuous).strokeBorder(SSMTheme.sky.opacity(0.4), lineWidth: 1.5))
         .shadow(color: .black.opacity(0.4), radius: 16, x: 0, y: 8)
+        .task { await liveViewModel.load(meetID: meet.id.stringValue) }
     }
 }
 
-private struct UpcomingMeetRow: View {
-    let meet: MeetSummary
+private struct RacePreview: View {
+    let label: String
+    let name: String
+    let color: Color
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(label)
+                .font(.ssmRounded(11, weight: .heavy))
+                .foregroundStyle(color)
+            Text(name)
+                .font(.ssmRounded(16, weight: .bold))
+                .foregroundStyle(.white)
+                .lineLimit(2)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+public struct MeetCard: View {
+    let meet: MeetSummary
+    public init(meet: MeetSummary) { self.meet = meet }
+
+    public var body: some View {
         SSMCard {
             HStack(spacing: 14) {
-                Text(meet.initials)
-                    .font(.ssmRounded(15, weight: .heavy))
-                    .foregroundStyle(.white)
-                    .frame(width: 48, height: 48)
-                    .background(SSMTheme.orangeGradient, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                ZStack {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(SSMTheme.navyGradient)
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .strokeBorder(SSMTheme.sky.opacity(0.24), lineWidth: 1)
+                    Text(meet.initials)
+                        .font(.ssmRounded(16, weight: .heavy))
+                        .foregroundStyle(.white)
+                }
+                .frame(width: 58, height: 58)
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(meet.meetName)
@@ -255,15 +362,19 @@ private struct UpcomingMeetRow: View {
                             .font(.caption)
                             .foregroundStyle(SSMTheme.muted)
                     }
-                    Text("\(meet.registrationCount) Registered • \(meet.raceCount) Races")
-                        .font(.caption2)
-                        .foregroundStyle(SSMTheme.sky2)
+                    HStack(spacing: 0) {
+                        Text("\(meet.registrationCount) Registered")
+                            .foregroundStyle(SSMTheme.sky2)
+                        Text(" • \(meet.raceCount) Races")
+                            .foregroundStyle(SSMTheme.muted)
+                    }
+                    .font(.caption2)
                 }
 
                 Spacer(minLength: 4)
 
                 VStack(spacing: 8) {
-                    SSMChip(meet.status.capitalized, color: SSMTheme.sky2)
+                    SSMChip(meet.status.capitalized, color: meet.isLiveNow ? SSMTheme.good : SSMTheme.sky2)
                     Image(systemName: "chevron.right").foregroundStyle(SSMTheme.muted)
                 }
             }

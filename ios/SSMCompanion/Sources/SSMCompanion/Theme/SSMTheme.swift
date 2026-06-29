@@ -82,6 +82,7 @@ public enum SSMTheme {
     public static let navyGradient = LinearGradient(colors: [navy, navy2, navy3], startPoint: .topLeading, endPoint: .bottomTrailing)
     public static let orangeGradient = LinearGradient(colors: [orange2, orange, orange3], startPoint: .topLeading, endPoint: .bottomTrailing)
     public static let skyGradient = LinearGradient(colors: [sky2, sky], startPoint: .topLeading, endPoint: .bottomTrailing)
+    public static let inactiveChipGradient = LinearGradient(colors: [cardBackground, cardBackgroundLight], startPoint: .topLeading, endPoint: .bottomTrailing)
     public static let goodGradient = LinearGradient(colors: [Color(red: 0x05/255, green: 0x96/255, blue: 0x69/255), good], startPoint: .topLeading, endPoint: .bottomTrailing)
     public static let amberGradient = LinearGradient(colors: [Color(red: 0xb4/255, green: 0x6a/255, blue: 0x06/255), Color(red: 0xf2/255, green: 0xa6/255, blue: 0x1d/255)], startPoint: .topLeading, endPoint: .bottomTrailing)
 
