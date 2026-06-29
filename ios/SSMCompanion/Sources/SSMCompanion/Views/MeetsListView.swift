@@ -9,7 +9,7 @@ struct MeetRow: View {
                 HStack {
                     Text(meet.meetName)
                         .font(.ssmRounded(18, weight: .bold))
-                        .foregroundStyle(SSMTheme.navy)
+                        .foregroundStyle(SSMTheme.textPrimary)
                     Spacer()
                     SSMChip(meet.status.capitalized, color: meet.status == "live" ? SSMTheme.good : SSMTheme.sky2)
                 }
@@ -54,9 +54,12 @@ public struct MeetsListView: View {
                     }
                     .listStyle(.plain)
                     .scrollContentBackground(.hidden)
+                    .scrollIndicators(.hidden)
+                    .safeAreaPadding(.bottom, 70)
                     .background(SSMTheme.pageBackground)
                 }
             }
+            .background(SSMTheme.pageBackground)
             .navigationDestination(for: MeetSummary.self) { meet in
                 MeetDetailView(meet: meet)
             }
@@ -77,11 +80,21 @@ public struct MeetDetailView: View {
     public var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                ZStack(alignment: .bottomLeading) {
+                    SpeedStreaksBackground()
+                    Text(meet.meetName.uppercased())
+                        .font(.system(size: 30, weight: .black, design: .rounded).italic())
+                        .foregroundStyle(.white)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.6)
+                        .padding(18)
+                        .shadow(color: .black.opacity(0.4), radius: 6, x: 0, y: 2)
+                }
+                .frame(height: 130)
+                .clipShape(RoundedRectangle(cornerRadius: SSMTheme.cornerRadius, style: .continuous))
+
                 SSMCard {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(meet.meetName)
-                            .font(.ssmRounded(24, weight: .heavy))
-                            .foregroundStyle(SSMTheme.navy)
                         if !meet.date.isEmpty {
                             Label(meet.date, systemImage: "calendar")
                                 .font(.subheadline)
@@ -115,6 +128,7 @@ public struct MeetDetailView: View {
                 .buttonStyle(.plain)
             }
             .padding()
+            .padding(.bottom, 70)
         }
         .background(SSMTheme.pageBackground)
         .navigationTitle("Meet")

@@ -14,7 +14,7 @@ public struct StaffRaceDayView: View {
     }
 
     public var body: some View {
-        ScrollView {
+        ScrollView { 
             VStack(spacing: 16) {
                 HStack {
                     SSMChip(role.displayName, color: SSMTheme.navy)
@@ -56,6 +56,7 @@ public struct StaffRaceDayView: View {
                 }
             }
             .padding(.vertical)
+            .padding(.bottom, 70)
         }
         .background(SSMTheme.pageBackground)
         .navigationTitle(meetName)

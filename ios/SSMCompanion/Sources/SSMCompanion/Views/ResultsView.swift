@@ -12,7 +12,7 @@ public struct ResultsView: View {
     }
 
     public var body: some View {
-        ScrollView {
+        ScrollView { 
             VStack(spacing: 16) {
                 if viewModel.isLoading && viewModel.data == nil {
                     ProgressView().padding(.top, 60)
@@ -35,6 +35,7 @@ public struct ResultsView: View {
                 }
             }
             .padding(.vertical)
+            .padding(.bottom, 70)
         }
         .background(SSMTheme.pageBackground)
         .navigationTitle(meetName)
@@ -52,7 +53,7 @@ private struct ResultsSectionCard: View {
     var body: some View {
         SSMCard {
             VStack(alignment: .leading, spacing: 10) {
-                Text(title).font(.headline).foregroundStyle(SSMTheme.navy)
+                Text(title).font(.headline).foregroundStyle(SSMTheme.textPrimary)
                 ForEach(rows) { row in
                     HStack {
                         Text("\(row.place)")
@@ -66,7 +67,7 @@ private struct ResultsSectionCard: View {
                         Spacer()
                         Text(formattedPoints(row.totalPoints))
                             .font(.subheadline.bold())
-                            .foregroundStyle(SSMTheme.navy)
+                            .foregroundStyle(SSMTheme.textPrimary)
                     }
                 }
             }
@@ -85,7 +86,7 @@ private struct OpenResultsSectionCard: View {
     var body: some View {
         SSMCard {
             VStack(alignment: .leading, spacing: 10) {
-                Text("\(section.groupLabel) — \(section.distanceLabel)").font(.headline).foregroundStyle(SSMTheme.navy)
+                Text("\(section.groupLabel) — \(section.distanceLabel)").font(.headline).foregroundStyle(SSMTheme.textPrimary)
                 ForEach(section.results) { row in
                     HStack {
                         Text(row.place ?? "—").font(.headline).foregroundStyle(SSMTheme.orange).frame(width: 28, alignment: .leading)

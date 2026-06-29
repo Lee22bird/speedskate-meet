@@ -2,27 +2,86 @@ import SwiftUI
 
 public struct RootTabView: View {
     @StateObject private var auth = AuthViewModel()
+    @State private var selectedTab: SSMTab = .meets
 
     public init() {}
 
     public var body: some View {
-        TabView {
-            MeetsListView()
-                .tabItem { Label("Meets", systemImage: "magnifyingglass") }
+        ZStack(alignment: .bottom) {
+            Group {
+                switch selectedTab {
+                case .meets: MeetsListView()
+                case .live: LiveTabRootView()
+                case .results: ResultsTabRootView()
+                case .staff: StaffTabRootView().environmentObject(auth)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            LiveTabRootView()
-                .tabItem { Label("Live", systemImage: "dot.radiowaves.left.and.right") }
-
-            ResultsTabRootView()
-                .tabItem { Label("Results", systemImage: "list.number") }
-
-            StaffTabRootView()
-                .tabItem { Label("Staff", systemImage: "person.badge.shield.checkmark") }
-                .environmentObject(auth)
+            SSMFloatingTabBar(selectedTab: $selectedTab)
         }
+        .background(SSMTheme.pageBackground)
+        .preferredColorScheme(.dark)
         .tint(SSMTheme.orange)
         .environmentObject(auth)
         .task { await auth.refreshSession() }
+    }
+}
+
+public enum SSMTab: CaseIterable {
+    case meets, live, results, staff
+
+    var title: String {
+        switch self {
+        case .meets: return "Meets"
+        case .live: return "Live"
+        case .results: return "Results"
+        case .staff: return "Staff"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .meets: return "magnifyingglass"
+        case .live: return "dot.radiowaves.left.and.right"
+        case .results: return "list.number"
+        case .staff: return "person.badge.shield.checkmark"
+        }
+    }
+}
+
+/// The dark floating pill nav bar from the approved mockup — replaces the
+/// system tab bar chrome entirely.
+struct SSMFloatingTabBar: View {
+    @Binding var selectedTab: SSMTab
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(SSMTab.allCases, id: \.self) { tab in
+                Button {
+                    selectedTab = tab
+                } label: {
+                    VStack(spacing: 4) {
+                        Image(systemName: tab.icon)
+                            .font(.system(size: 19, weight: .semibold))
+                        Text(tab.title)
+                            .font(.ssmRounded(11, weight: .bold))
+                    }
+                    .foregroundStyle(selectedTab == tab ? SSMTheme.orange : SSMTheme.muted)
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.vertical, 10)
+        .background(
+            SSMTheme.pillShape
+                .fill(SSMTheme.cardBackground)
+                .overlay(SSMTheme.pillShape.strokeBorder(SSMTheme.cardBorder, lineWidth: 1))
+                .shadow(color: .black.opacity(0.5), radius: 16, x: 0, y: 8)
+        )
+        .padding(.horizontal, 16)
+        .padding(.bottom, 6)
     }
 }
 
@@ -43,10 +102,15 @@ private struct LiveTabRootView: View {
                         NavigationLink(value: meet) {
                             MeetRow(meet: meet)
                         }
+                        .buttonStyle(.plain)
                     }
                     .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                    .scrollIndicators(.hidden)
+                    .safeAreaPadding(.bottom, 70)
                 }
             }
+            .background(SSMTheme.pageBackground)
             .navigationDestination(for: MeetSummary.self) { meet in
                 LiveRaceDayView(meetID: meet.id.stringValue, meetName: meet.meetName)
             }
@@ -72,10 +136,15 @@ private struct ResultsTabRootView: View {
                         NavigationLink(value: meet) {
                             MeetRow(meet: meet)
                         }
+                        .buttonStyle(.plain)
                     }
                     .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                    .scrollIndicators(.hidden)
+                    .safeAreaPadding(.bottom, 70)
                 }
             }
+            .background(SSMTheme.pageBackground)
             .navigationDestination(for: MeetSummary.self) { meet in
                 ResultsView(meetID: meet.id.stringValue, meetName: meet.meetName)
             }
@@ -97,5 +166,6 @@ struct ContentUnavailableFallback: View {
                 .foregroundStyle(SSMTheme.muted)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(SSMTheme.pageBackground)
     }
 }

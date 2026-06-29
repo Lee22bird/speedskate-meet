@@ -18,7 +18,7 @@ public struct LiveRaceDayView: View {
     }
 
     public var body: some View {
-        ScrollView {
+        ScrollView { 
             VStack(spacing: 16) {
                 Picker("View", selection: $mode) {
                     ForEach(DisplayMode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
@@ -41,6 +41,7 @@ public struct LiveRaceDayView: View {
                 }
             }
             .padding(.vertical)
+            .padding(.bottom, 70)
         }
         .background(SSMTheme.pageBackground)
         .navigationTitle(meetName)
@@ -188,7 +189,11 @@ struct RaceHeroCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(label.uppercased()).font(.ssmRounded(12, weight: .bold)).foregroundStyle(.white.opacity(0.9))
+            HStack {
+                Text(label.uppercased()).font(.ssmRounded(12, weight: .bold)).foregroundStyle(.white.opacity(0.9))
+                Spacer()
+                LiveBadge()
+            }
             Text(item.groupLabel).font(.ssmRounded(28, weight: .heavy)).foregroundStyle(.white)
             Text("\(item.division.map { $0.capitalized } ?? "") • \(item.distanceLabel) • \(item.stage)")
                 .font(.ssmRounded(15, weight: .semibold))
@@ -211,7 +216,7 @@ struct RaceSummaryCard: View {
         SSMCard {
             VStack(alignment: .leading, spacing: 4) {
                 Text(label.uppercased()).font(.caption.bold()).foregroundStyle(color)
-                Text(item.groupLabel).font(.ssmRounded(18, weight: .bold)).foregroundStyle(SSMTheme.navy)
+                Text(item.groupLabel).font(.ssmRounded(18, weight: .bold)).foregroundStyle(SSMTheme.textPrimary)
                 Text("\(item.division.map { $0.capitalized } ?? "") • \(item.distanceLabel)")
                     .font(.subheadline)
                     .foregroundStyle(SSMTheme.muted)
@@ -239,7 +244,7 @@ struct LaneListCard: View {
                             .clipShape(Circle())
                             .shadow(color: SSMTheme.orange.opacity(0.4), radius: 4, x: 0, y: 2)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(lane.skaterName).font(.ssmRounded(17, weight: .bold)).foregroundStyle(SSMTheme.navy)
+                            Text(lane.skaterName).font(.ssmRounded(17, weight: .bold)).foregroundStyle(SSMTheme.textPrimary)
                             HStack(spacing: 6) {
                                 if let helmet = lane.helmetNumber {
                                     Text("#\(helmet)").font(.caption).foregroundStyle(SSMTheme.muted)
