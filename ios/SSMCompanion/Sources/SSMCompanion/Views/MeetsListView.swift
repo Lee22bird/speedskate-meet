@@ -317,16 +317,7 @@ public struct MeetCard: View {
     public var body: some View {
         SSMCard {
             HStack(spacing: 14) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(SSMTheme.navyGradient)
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .strokeBorder(SSMTheme.sky.opacity(0.24), lineWidth: 1)
-                    Text(meet.initials)
-                        .font(.ssmRounded(16, weight: .heavy))
-                        .foregroundStyle(.white)
-                }
-                .frame(width: 58, height: 58)
+                DefaultMeetArtwork(initials: meet.initials)
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(meet.meetName)
@@ -359,6 +350,30 @@ public struct MeetCard: View {
                 }
             }
         }
+    }
+}
+
+private struct DefaultMeetArtwork: View {
+    let initials: String
+
+    var body: some View {
+        ZStack {
+            Image("SSMIOSHero", bundle: .module)
+                .resizable()
+                .scaledToFill()
+            Color.black.opacity(0.34)
+            Text(initials)
+                .font(.ssmRounded(15, weight: .heavy))
+                .foregroundStyle(.white)
+                .shadow(color: .black, radius: 4)
+        }
+        .frame(width: 62, height: 62)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(SSMTheme.sky.opacity(0.28), lineWidth: 1)
+        )
+        .accessibilityLabel("Default SSM meet artwork")
     }
 }
 

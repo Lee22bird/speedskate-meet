@@ -13,21 +13,15 @@ public struct MeetSummary: Decodable, Identifiable, Hashable {
     public let id: AnyMeetID
     public let meetName: String
     public let date: String
-    public let endDate: String?
     public let startTime: String?
     public let status: String
-    public let isLive: Bool?
     public let location: String
-    public let city: String?
-    public let state: String?
-    public let league: String?
     public let raceCount: Int
     public let registrationCount: Int
 
-    /// "Jul 4 – Jul 5, 2026" when there's a real end date, otherwise just the start date.
+    /// The listing endpoint currently returns only one meet date.
     public var dateRangeLabel: String {
-        guard let endDate, !endDate.isEmpty, endDate != date else { return date }
-        return "\(date) – \(endDate)"
+        date
     }
 
     public var initials: String {
@@ -37,19 +31,16 @@ public struct MeetSummary: Decodable, Identifiable, Hashable {
     }
 
     public var isLiveNow: Bool {
-        isLive == true || status.localizedCaseInsensitiveCompare("live") == .orderedSame
+        status.localizedCaseInsensitiveCompare("live") == .orderedSame
     }
 
     public var searchableText: String {
-        [meetName, location, city, state, league]
-            .compactMap { $0 }
-            .joined(separator: " ")
+        [meetName, location].joined(separator: " ")
     }
 
     public var dateRange: ClosedRange<Date>? {
         guard let start = Self.parseDate(date) else { return nil }
-        let end = Self.parseDate(endDate ?? "") ?? start
-        return min(start, end)...max(start, end)
+        return start...start
     }
 
     private static func parseDate(_ value: String) -> Date? {

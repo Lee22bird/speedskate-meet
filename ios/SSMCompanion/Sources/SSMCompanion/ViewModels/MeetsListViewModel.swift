@@ -65,11 +65,9 @@ private extension MeetFilterChip {
         case .all:
             return true
         case .kansas:
-            return meet.searchableText.localizedCaseInsensitiveContains("Kansas") ||
-                meet.searchableText.localizedCaseInsensitiveContains("KS")
+            return meet.matchesPlace(name: "Kansas", abbreviation: "KS")
         case .texas:
-            return meet.searchableText.localizedCaseInsensitiveContains("Texas") ||
-                meet.searchableText.localizedCaseInsensitiveContains("TX")
+            return meet.matchesPlace(name: "Texas", abbreviation: "TX")
         case .nationals:
             return meet.searchableText.localizedCaseInsensitiveContains("National")
         case .today:
@@ -80,5 +78,16 @@ private extension MeetFilterChip {
                   let weekEnd = Calendar.current.date(byAdding: .day, value: 7, to: now) else { return false }
             return range.overlaps(Calendar.current.startOfDay(for: now)...weekEnd)
         }
+    }
+}
+
+private extension MeetSummary {
+    func matchesPlace(name: String, abbreviation: String) -> Bool {
+        if searchableText.localizedCaseInsensitiveContains(name) { return true }
+        let tokens = searchableText
+            .uppercased()
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { !$0.isEmpty }
+        return tokens.contains(abbreviation)
     }
 }
