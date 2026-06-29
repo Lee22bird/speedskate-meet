@@ -128,6 +128,10 @@ module.exports = function createMobileApiRoutes(deps = {}) {
     const state = String(req.query.state || '').trim().toLowerCase();
     const league = String(req.query.league || '').trim().toLowerCase();
     const date = String(req.query.date || '').trim();
+    const when = String(req.query.when || '').trim().toLowerCase(); // 'today' | 'week'
+
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const weekFromNow = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
 
     const meets = (db.meets || [])
       .filter(isPublicMeet)
@@ -140,18 +144,30 @@ module.exports = function createMobileApiRoutes(deps = {}) {
         if (state && String(rink?.state || '').toLowerCase() !== state) return false;
         if (league && !String(m.leagueAssociation || m.league || '').toLowerCase().includes(league)) return false;
         if (date && String(m.date || '').slice(0, 10) !== date) return false;
+        const meetStart = String(m.date || '').slice(0, 10);
+        const meetEnd = String(m.endDate || m.date || '').slice(0, 10) || meetStart;
+        if (when === 'today' && !(meetStart <= todayStr && todayStr <= meetEnd)) return false;
+        if (when === 'week' && !(meetStart <= weekFromNow && meetEnd >= todayStr)) return false;
         return true;
       })
-      .map(m => ({
-        id: m.id,
-        meetName: m.meetName || 'Untitled Meet',
-        date: m.date || '',
-        startTime: m.startTime || '',
-        status: m.status || 'draft',
-        location: meetRinkLabel(db, m) || '',
-        raceCount: Array.isArray(m.races) ? m.races.length : 0,
-        registrationCount: Array.isArray(m.registrations) ? m.registrations.length : 0,
-      }));
+      .map(m => {
+        const rink = (db.rinks || []).find(r => Number(r.id) === Number(m.rinkId));
+        return {
+          id: m.id,
+          meetName: m.meetName || 'Untitled Meet',
+          date: m.date || '',
+          endDate: m.endDate || '',
+          startTime: m.startTime || '',
+          status: m.status || 'draft',
+          isLive: String(m.status || '') === 'live',
+          location: meetRinkLabel(db, m) || '',
+          city: rink?.city || '',
+          state: rink?.state || '',
+          league: m.leagueAssociation || m.league || '',
+          raceCount: Array.isArray(m.races) ? m.races.length : 0,
+          registrationCount: Array.isArray(m.registrations) ? m.registrations.length : 0,
+        };
+      });
 
     res.json({ ok: true, meets });
   });

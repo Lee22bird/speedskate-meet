@@ -115,7 +115,7 @@ public final class APIClient {
     }
 
     // ── Find a Meet ──────────────────────────────────────────────────────
-    public func meets(query: String = "", city: String = "", state: String = "", league: String = "", date: String = "") async throws -> [MeetSummary] {
+    public func meets(query: String = "", city: String = "", state: String = "", league: String = "", date: String = "", when: String = "") async throws -> [MeetSummary] {
         var components = URLComponents(string: "/api/v1/meets")!
         var items: [URLQueryItem] = []
         if !query.isEmpty { items.append(.init(name: "q", value: query)) }
@@ -123,6 +123,7 @@ public final class APIClient {
         if !state.isEmpty { items.append(.init(name: "state", value: state)) }
         if !league.isEmpty { items.append(.init(name: "league", value: league)) }
         if !date.isEmpty { items.append(.init(name: "date", value: date)) }
+        if !when.isEmpty { items.append(.init(name: "when", value: when)) }
         components.queryItems = items.isEmpty ? nil : items
         let response: MeetsResponse = try await request(components.string ?? "/api/v1/meets")
         return response.meets

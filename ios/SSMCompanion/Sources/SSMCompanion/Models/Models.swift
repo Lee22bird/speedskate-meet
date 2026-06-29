@@ -13,11 +13,28 @@ public struct MeetSummary: Decodable, Identifiable, Hashable {
     public let id: AnyMeetID
     public let meetName: String
     public let date: String
+    public let endDate: String?
     public let startTime: String?
     public let status: String
+    public let isLive: Bool?
     public let location: String
+    public let city: String?
+    public let state: String?
+    public let league: String?
     public let raceCount: Int
     public let registrationCount: Int
+
+    /// "Jul 4 – Jul 5, 2026" when there's a real end date, otherwise just the start date.
+    public var dateRangeLabel: String {
+        guard let endDate, !endDate.isEmpty, endDate != date else { return date }
+        return "\(date) – \(endDate)"
+    }
+
+    public var initials: String {
+        let words = meetName.split(separator: " ").prefix(2)
+        let letters = words.compactMap { $0.first }.map(String.init).joined()
+        return letters.isEmpty ? "SM" : letters.uppercased()
+    }
 }
 
 public struct MeetsResponse: Decodable {

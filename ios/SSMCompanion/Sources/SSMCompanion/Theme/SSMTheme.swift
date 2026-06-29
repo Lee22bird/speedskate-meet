@@ -40,6 +40,15 @@ public extension View {
         self
         #endif
     }
+
+    @ViewBuilder
+    func ssmNavigationBarHidden(_ hidden: Bool) -> some View {
+        #if os(iOS)
+        self.toolbar(hidden ? .hidden : .visible, for: .navigationBar)
+        #else
+        self
+        #endif
+    }
 }
 
 // A dark, "race broadcast" theme — near-black navy backgrounds, glowing
