@@ -97,30 +97,30 @@ private struct LiveTabRootView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                SSMHeader(title: "Live")
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    SSMHeader(title: "Live")
 
-                Group {
                     if viewModel.isLoading && viewModel.meets.isEmpty {
-                        ProgressView()
+                        ProgressView().frame(maxWidth: .infinity).padding(.top, 40)
                     } else if viewModel.meets.isEmpty {
                         ContentUnavailableFallback(text: "No live meets right now.")
+                            .padding(.top, 40)
                     } else {
-                        List(viewModel.meets) { meet in
-                            NavigationLink(value: meet) {
-                                MeetRow(meet: meet)
+                        VStack(spacing: 12) {
+                            ForEach(viewModel.meets) { meet in
+                                NavigationLink(value: meet) {
+                                    MeetRow(meet: meet)
+                                }
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
                         }
-                        .listStyle(.plain)
-                        .scrollContentBackground(.hidden)
-                        .scrollIndicators(.hidden)
-                        .safeAreaPadding(.bottom, 70)
+                        .padding(.horizontal)
                     }
                 }
-                .frame(maxHeight: .infinity)
+                .padding(.bottom, 80)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .scrollIndicators(.hidden)
             .background(SSMTheme.pageBackground)
             .ssmNavigationBarHidden(true)
             .navigationDestination(for: MeetSummary.self) { meet in
@@ -137,30 +137,30 @@ private struct ResultsTabRootView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                SSMHeader(title: "Results")
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    SSMHeader(title: "Results")
 
-                Group {
                     if viewModel.isLoading && viewModel.meets.isEmpty {
-                        ProgressView()
+                        ProgressView().frame(maxWidth: .infinity).padding(.top, 40)
                     } else if viewModel.meets.isEmpty {
                         ContentUnavailableFallback(text: "No meets found.")
+                            .padding(.top, 40)
                     } else {
-                        List(viewModel.meets) { meet in
-                            NavigationLink(value: meet) {
-                                MeetRow(meet: meet)
+                        VStack(spacing: 12) {
+                            ForEach(viewModel.meets) { meet in
+                                NavigationLink(value: meet) {
+                                    MeetRow(meet: meet)
+                                }
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
                         }
-                        .listStyle(.plain)
-                        .scrollContentBackground(.hidden)
-                        .scrollIndicators(.hidden)
-                        .safeAreaPadding(.bottom, 70)
+                        .padding(.horizontal)
                     }
                 }
-                .frame(maxHeight: .infinity)
+                .padding(.bottom, 80)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .scrollIndicators(.hidden)
             .background(SSMTheme.pageBackground)
             .ssmNavigationBarHidden(true)
             .navigationDestination(for: MeetSummary.self) { meet in

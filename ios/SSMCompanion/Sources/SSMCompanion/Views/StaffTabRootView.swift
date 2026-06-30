@@ -7,19 +7,20 @@ public struct StaffTabRootView: View {
 
     public var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                SSMHeader(title: "Staff")
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    SSMHeader(title: "Staff")
 
-                Group {
                     if auth.isLoggedIn {
                         StaffMeetsListView()
                     } else {
                         StaffLoginView()
                     }
                 }
-                .frame(maxHeight: .infinity)
+                .padding(.bottom, 80)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .scrollIndicators(.hidden)
+            .background(SSMTheme.pageBackground)
             .ssmNavigationBarHidden(true)
         }
     }
@@ -31,46 +32,41 @@ struct StaffLoginView: View {
     @State private var password = ""
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 16) {
-                Text("Log in with your SpeedSkateMeet account to access race-day controls for meets you're assigned to.")
-                    .font(.subheadline)
-                    .foregroundStyle(SSMTheme.muted)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal)
-                    .padding(.top, 18)
-
-                SSMCard {
-                    VStack(spacing: 12) {
-                        TextField("Email or username", text: $email)
-                            .ssmNoAutocapitalization()
-                            .autocorrectionDisabled()
-                            .ssmUsernameContentType()
-                        SecureField("Password", text: $password)
-                            .ssmPasswordContentType()
-
-                        if let error = auth.errorMessage {
-                            Text(error).font(.caption).foregroundStyle(SSMTheme.danger)
-                        }
-
-                        Button {
-                            Task { await auth.login(email: email, password: password) }
-                        } label: {
-                            if auth.isLoading {
-                                ProgressView().tint(.white)
-                            } else {
-                                Text("Log In")
-                            }
-                        }
-                        .buttonStyle(.ssmPill)
-                        .disabled(email.isEmpty || password.isEmpty || auth.isLoading)
-                    }
-                }
+        VStack(spacing: 16) {
+            Text("Log in with your SpeedSkateMeet account to access race-day controls for meets you're assigned to.")
+                .font(.subheadline)
+                .foregroundStyle(SSMTheme.muted)
+                .multilineTextAlignment(.center)
                 .padding(.horizontal)
+
+            SSMCard {
+                VStack(spacing: 12) {
+                    TextField("Email or username", text: $email)
+                        .ssmNoAutocapitalization()
+                        .autocorrectionDisabled()
+                        .ssmUsernameContentType()
+                    SecureField("Password", text: $password)
+                        .ssmPasswordContentType()
+
+                    if let error = auth.errorMessage {
+                        Text(error).font(.caption).foregroundStyle(SSMTheme.danger)
+                    }
+
+                    Button {
+                        Task { await auth.login(email: email, password: password) }
+                    } label: {
+                        if auth.isLoading {
+                            ProgressView().tint(.white)
+                        } else {
+                            Text("Log In")
+                        }
+                    }
+                    .buttonStyle(.ssmPill)
+                    .disabled(email.isEmpty || password.isEmpty || auth.isLoading)
+                }
             }
-            .padding(.bottom, 70)
+            .padding(.horizontal)
         }
-        .background(SSMTheme.pageBackground)
     }
 }
 
@@ -79,7 +75,7 @@ struct StaffMeetsListView: View {
     @StateObject private var viewModel = StaffMeetsViewModel()
 
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("Assigned Meets")
                     .font(.ssmRounded(18, weight: .bold))
@@ -94,16 +90,16 @@ struct StaffMeetsListView: View {
                 }
                 .buttonStyle(.plain)
             }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 12)
+            .padding(.horizontal)
 
-            Group {
-                if viewModel.isLoading && viewModel.meets.isEmpty {
-                    ProgressView()
-                } else if viewModel.meets.isEmpty {
-                    ContentUnavailableFallback(text: "You're not assigned as staff on any meets yet.")
-                } else {
-                    List(viewModel.meets) { meet in
+            if viewModel.isLoading && viewModel.meets.isEmpty {
+                ProgressView().frame(maxWidth: .infinity).padding(.top, 40)
+            } else if viewModel.meets.isEmpty {
+                ContentUnavailableFallback(text: "You're not assigned as staff on any meets yet.")
+                    .padding(.top, 40)
+            } else {
+                VStack(spacing: 12) {
+                    ForEach(viewModel.meets) { meet in
                         NavigationLink {
                             StaffRaceDayView(meetID: meet.id.stringValue, meetName: meet.meetName, role: meet.role)
                         } label: {
@@ -119,20 +115,11 @@ struct StaffMeetsListView: View {
                             }
                         }
                         .buttonStyle(.plain)
-                        .listRowSeparator(.hidden)
-                        .listRowBackground(Color.clear)
-                        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                     }
-                    .listStyle(.plain)
-                    .scrollContentBackground(.hidden)
-                    .scrollIndicators(.hidden)
-                    .safeAreaPadding(.bottom, 70)
                 }
+                .padding(.horizontal)
             }
-            .frame(maxHeight: .infinity)
         }
-        .background(SSMTheme.pageBackground)
         .task { await viewModel.load() }
-        .refreshable { await viewModel.load() }
     }
 }
