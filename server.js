@@ -152,6 +152,8 @@ const {
   createSsmSessionForUser,
   ssmRedirectForUser,
   postSsmUserMirrorToSsl,
+  createAppHandoffCode,
+  consumeAppHandoffCode,
 } = require('./services/ssoService');
 
 function rebuildTimeTrialRace(meet) {
@@ -970,8 +972,19 @@ async function handleSslSsoCallback(req, res) {
     user.sslMirrorSyncError = String(err.message || err);
     console.warn('SSL user mirror sync failed:', err.message);
   }
-  saveDb(db);
   setCookie(res, SESSION_COOKIE, sessionToken, Math.floor(SESSION_TTL_MS / 1000));
+
+  // Native app handoff: forward the session via a short-lived one-time code
+  // through a custom URL scheme instead of the normal web redirect. Only a
+  // hardcoded, allowlisted scheme is ever used here — never built from
+  // request input — to avoid turning this into an open redirect.
+  if (String(req.query.app || '').trim() === 'ssmcompanion') {
+    const code = createAppHandoffCode(db, sessionToken);
+    saveDb(db);
+    return res.redirect(`ssmcompanion://sso-complete?code=${encodeURIComponent(code)}`);
+  }
+
+  saveDb(db);
   return res.redirect(ssmRedirectForUser(user));
 }
 
@@ -1883,6 +1896,7 @@ app.use('/', createDesktopRoutes({ getSessionUser, pageShell, loadDb, saveDb, re
 // ── Extracted route modules ────────────────────────────────────────────────────
 const routeDeps = {
   requireRole, pageShell, saveDb, loadDb, getSessionUser, TEAM_LIST, toggleSwitch, ADMIN_PHONE,
+  setCookie, SESSION_COOKIE, SESSION_TTL_MS, consumeAppHandoffCode,
   // views
   renderArchivedMeetsView, renderPendingMeetsView, renderPendingRinksView,
   renderStaffAccountsView, renderMeetBuilderView, renderOpenBuilderView,

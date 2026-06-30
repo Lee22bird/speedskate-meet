@@ -149,6 +149,33 @@ function mirrorSslUser(db, payload) {
   return user;
 }
 
+const APP_HANDOFF_TTL_MS = 60 * 1000;
+
+// Short-lived, single-use code that hands an already-created SSM session
+// token to a native app via a custom URL scheme redirect, without putting
+// the long-lived session token itself in a deep link.
+function createAppHandoffCode(db, sessionToken) {
+  const code = crypto.randomBytes(18).toString('hex');
+  db.ssoAppHandoffs = (db.ssoAppHandoffs || []).filter(h => new Date(h.expiresAt).getTime() > Date.now());
+  db.ssoAppHandoffs.push({
+    code,
+    sessionToken,
+    expiresAt: new Date(Date.now() + APP_HANDOFF_TTL_MS).toISOString(),
+  });
+  return code;
+}
+
+function consumeAppHandoffCode(db, code) {
+  const raw = String(code || '').trim();
+  if (!raw) return null;
+  db.ssoAppHandoffs = db.ssoAppHandoffs || [];
+  const index = db.ssoAppHandoffs.findIndex(h => h.code === raw);
+  if (index === -1) return null;
+  const [handoff] = db.ssoAppHandoffs.splice(index, 1);
+  if (!handoff || new Date(handoff.expiresAt).getTime() < Date.now()) return null;
+  return handoff.sessionToken;
+}
+
 function createSsmSessionForUser(db, user, ttlMs = DEFAULT_SESSION_TTL_MS) {
   const token = crypto.randomBytes(24).toString('hex');
   db.sessions = (db.sessions || []).filter(s => Number(s.userId) !== Number(user.id));
@@ -245,6 +272,8 @@ module.exports = {
   ssmAllowedRolesFromSsl,
   nextUserId,
   mirrorSslUser,
+  createAppHandoffCode,
+  consumeAppHandoffCode,
   createSsmSessionForUser,
   ssmRedirectForUser,
   configuredSslBaseUrl,

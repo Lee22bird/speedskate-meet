@@ -63,6 +63,23 @@ struct StaffLoginView: View {
                     }
                     .buttonStyle(.ssmPill)
                     .disabled(email.isEmpty || password.isEmpty || auth.isLoading)
+
+                    #if canImport(AuthenticationServices)
+                    HStack {
+                        Rectangle().fill(SSMTheme.cardBorder).frame(height: 1)
+                        Text("or").font(.caption).foregroundStyle(SSMTheme.muted)
+                        Rectangle().fill(SSMTheme.cardBorder).frame(height: 1)
+                    }
+                    .padding(.vertical, 4)
+
+                    Button {
+                        Task { await auth.signInWithSSL() }
+                    } label: {
+                        Label("Sign in with SSL", systemImage: "person.crop.circle.badge.checkmark")
+                    }
+                    .buttonStyle(.ssmSoftPill)
+                    .disabled(auth.isLoading)
+                    #endif
                 }
             }
             .padding(.horizontal)
