@@ -19,6 +19,7 @@ public struct StaffTabRootView: View {
                 }
                 .frame(maxHeight: .infinity)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .ssmNavigationBarHidden(true)
         }
     }
@@ -32,16 +33,12 @@ struct StaffLoginView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
-                Label("Race-Day Staff Login", systemImage: "person.badge.shield.checkmark")
-                    .font(.ssmRounded(22, weight: .heavy))
-                    .foregroundStyle(.white)
-                    .padding(.top, 18)
-
                 Text("Log in with your SpeedSkateMeet account to access race-day controls for meets you're assigned to.")
                     .font(.subheadline)
                     .foregroundStyle(SSMTheme.muted)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
+                    .padding(.top, 18)
 
                 SSMCard {
                     VStack(spacing: 12) {

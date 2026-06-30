@@ -120,6 +120,7 @@ private struct LiveTabRootView: View {
                 }
                 .frame(maxHeight: .infinity)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .background(SSMTheme.pageBackground)
             .ssmNavigationBarHidden(true)
             .navigationDestination(for: MeetSummary.self) { meet in
@@ -159,6 +160,7 @@ private struct ResultsTabRootView: View {
                 }
                 .frame(maxHeight: .infinity)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .background(SSMTheme.pageBackground)
             .ssmNavigationBarHidden(true)
             .navigationDestination(for: MeetSummary.self) { meet in
