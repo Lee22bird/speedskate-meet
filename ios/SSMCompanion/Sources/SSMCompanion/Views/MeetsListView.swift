@@ -1,4 +1,9 @@
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
 struct MeetRow: View {
     let meet: MeetSummary
@@ -108,8 +113,7 @@ public struct SSMHeader: View {
 
     public var body: some View {
         ZStack(alignment: .bottomLeading) {
-            Image("SSMIOSHero", bundle: .module)
-                .resizable()
+            SSMHeroArtwork()
                 .scaledToFill()
                 .frame(maxWidth: .infinity, minHeight: 178, maxHeight: 178)
                 .clipped()
@@ -358,8 +362,7 @@ private struct DefaultMeetArtwork: View {
 
     var body: some View {
         ZStack {
-            Image("SSMIOSHero", bundle: .module)
-                .resizable()
+            SSMHeroArtwork()
                 .scaledToFill()
             Color.black.opacity(0.34)
             Text(initials)
@@ -374,6 +377,30 @@ private struct DefaultMeetArtwork: View {
                 .strokeBorder(SSMTheme.sky.opacity(0.28), lineWidth: 1)
         )
         .accessibilityLabel("Default SSM meet artwork")
+    }
+}
+
+private struct SSMHeroArtwork: View {
+    var body: some View {
+        Group {
+            #if canImport(UIKit)
+            if let url = Bundle.module.url(forResource: "SSMIOSHero", withExtension: "png"),
+               let image = UIImage(contentsOfFile: url.path) {
+                Image(uiImage: image).resizable()
+            } else {
+                SpeedStreaksBackground()
+            }
+            #elseif canImport(AppKit)
+            if let url = Bundle.module.url(forResource: "SSMIOSHero", withExtension: "png"),
+               let image = NSImage(contentsOf: url) {
+                Image(nsImage: image).resizable()
+            } else {
+                SpeedStreaksBackground()
+            }
+            #else
+            SpeedStreaksBackground()
+            #endif
+        }
     }
 }
 
