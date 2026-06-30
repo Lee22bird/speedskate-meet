@@ -144,6 +144,27 @@ public struct SSMHeader: View {
     }
 }
 
+public struct SSMTabBanner: View {
+    public init() {}
+
+    public var body: some View {
+        ZStack {
+            SSMHeroArtwork()
+                .scaledToFill()
+                .frame(maxWidth: .infinity, minHeight: 118, maxHeight: 118)
+                .clipped()
+            LinearGradient(
+                colors: [.clear, SSMTheme.pageBackground.opacity(0.78)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        }
+        .frame(height: 118)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Speed Skate Meet")
+    }
+}
+
 private struct NotificationBellButton: View {
     var body: some View {
         Button(action: {}) {

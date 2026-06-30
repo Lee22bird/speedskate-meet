@@ -7,12 +7,17 @@ public struct StaffTabRootView: View {
 
     public var body: some View {
         NavigationStack {
-            Group {
-                if auth.isLoggedIn {
-                    StaffMeetsListView()
-                } else {
-                    StaffLoginView()
+            VStack(spacing: 0) {
+                SSMTabBanner()
+
+                Group {
+                    if auth.isLoggedIn {
+                        StaffMeetsListView()
+                    } else {
+                        StaffLoginView()
+                    }
                 }
+                .frame(maxHeight: .infinity)
             }
             .navigationTitle("Staff")
         }

@@ -97,23 +97,28 @@ private struct LiveTabRootView: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                if viewModel.isLoading && viewModel.meets.isEmpty {
-                    ProgressView()
-                } else if viewModel.meets.isEmpty {
-                    ContentUnavailableFallback(text: "No live meets right now.")
-                } else {
-                    List(viewModel.meets) { meet in
-                        NavigationLink(value: meet) {
-                            MeetRow(meet: meet)
+            VStack(spacing: 0) {
+                SSMTabBanner()
+
+                Group {
+                    if viewModel.isLoading && viewModel.meets.isEmpty {
+                        ProgressView()
+                    } else if viewModel.meets.isEmpty {
+                        ContentUnavailableFallback(text: "No live meets right now.")
+                    } else {
+                        List(viewModel.meets) { meet in
+                            NavigationLink(value: meet) {
+                                MeetRow(meet: meet)
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
+                        .listStyle(.plain)
+                        .scrollContentBackground(.hidden)
+                        .scrollIndicators(.hidden)
+                        .safeAreaPadding(.bottom, 70)
                     }
-                    .listStyle(.plain)
-                    .scrollContentBackground(.hidden)
-                    .scrollIndicators(.hidden)
-                    .safeAreaPadding(.bottom, 70)
                 }
+                .frame(maxHeight: .infinity)
             }
             .background(SSMTheme.pageBackground)
             .navigationDestination(for: MeetSummary.self) { meet in
@@ -131,23 +136,28 @@ private struct ResultsTabRootView: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                if viewModel.isLoading && viewModel.meets.isEmpty {
-                    ProgressView()
-                } else if viewModel.meets.isEmpty {
-                    ContentUnavailableFallback(text: "No meets found.")
-                } else {
-                    List(viewModel.meets) { meet in
-                        NavigationLink(value: meet) {
-                            MeetRow(meet: meet)
+            VStack(spacing: 0) {
+                SSMTabBanner()
+
+                Group {
+                    if viewModel.isLoading && viewModel.meets.isEmpty {
+                        ProgressView()
+                    } else if viewModel.meets.isEmpty {
+                        ContentUnavailableFallback(text: "No meets found.")
+                    } else {
+                        List(viewModel.meets) { meet in
+                            NavigationLink(value: meet) {
+                                MeetRow(meet: meet)
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
+                        .listStyle(.plain)
+                        .scrollContentBackground(.hidden)
+                        .scrollIndicators(.hidden)
+                        .safeAreaPadding(.bottom, 70)
                     }
-                    .listStyle(.plain)
-                    .scrollContentBackground(.hidden)
-                    .scrollIndicators(.hidden)
-                    .safeAreaPadding(.bottom, 70)
                 }
+                .frame(maxHeight: .infinity)
             }
             .background(SSMTheme.pageBackground)
             .navigationDestination(for: MeetSummary.self) { meet in
