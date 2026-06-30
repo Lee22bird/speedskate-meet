@@ -153,15 +153,60 @@ private struct LiveBoardContent: View {
 
             HStack(spacing: 12) {
                 BoardTile(label: "Next", text: data.next?.groupLabel ?? "—", gradient: SSMTheme.skyGradient)
-                BoardTile(label: "Last Result", text: lastResultText, gradient: LinearGradient(colors: [SSMTheme.good, SSMTheme.good.opacity(0.7)], startPoint: .top, endPoint: .bottom))
+                BoardTile(label: "In Staging", text: data.coming.first?.groupLabel ?? "—", gradient: LinearGradient(colors: [SSMTheme.good, SSMTheme.good.opacity(0.7)], startPoint: .top, endPoint: .bottom))
             }
             .padding(.horizontal)
+
+            ForEach(Array(data.recentResults.prefix(3))) { race in
+                RecentResultBoardCard(race: race)
+                    .padding(.horizontal)
+            }
         }
     }
+}
 
-    private var lastResultText: String {
-        guard let first = data.recentResults.first, let winner = first.results.first else { return "Waiting" }
-        return winner.skaterName
+private struct RecentResultBoardCard: View {
+    let race: RecentRace
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: SSMTheme.cornerRadius)
+                .fill(SSMTheme.navyGradient)
+            VStack(alignment: .leading, spacing: 8) {
+                Text("FINAL")
+                    .font(.caption.bold())
+                    .foregroundStyle(SSMTheme.good)
+                Text(race.groupLabel)
+                    .font(.ssmRounded(24, weight: .heavy))
+                    .foregroundStyle(.white)
+                Text("\(race.division.map { $0.capitalized } ?? "") • \(race.distanceLabel)")
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.85))
+                if !race.results.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(race.results.prefix(4)) { row in
+                            Text("\(placeLabel(row.place ?? row.status)). \(row.skaterName)")
+                                .font(.ssmRounded(18, weight: .bold))
+                                .foregroundStyle(.white)
+                        }
+                    }
+                    .padding(.top, 4)
+                }
+            }
+            .padding(20)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(minHeight: 140)
+    }
+
+    private func placeLabel(_ raw: String?) -> String {
+        guard let raw, let place = Int(raw) else { return raw ?? "—" }
+        switch place {
+        case 1: return "1st"
+        case 2: return "2nd"
+        case 3: return "3rd"
+        default: return "\(place)th"
+        }
     }
 }
 
