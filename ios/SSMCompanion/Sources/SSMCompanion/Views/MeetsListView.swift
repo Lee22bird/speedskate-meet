@@ -45,7 +45,7 @@ public struct MeetsListView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    SSMHeader(title: "Find a Meet", showsNotifications: true)
+                    SSMHeader(title: "Find a Meet")
 
                     VStack(alignment: .leading, spacing: 12) {
                         SearchBar(text: $viewModel.searchText)
@@ -110,11 +110,9 @@ public struct MeetsListView: View {
 
 public struct SSMHeader: View {
     private let title: String
-    private let showsNotifications: Bool
 
-    public init(title: String, showsNotifications: Bool = false) {
+    public init(title: String) {
         self.title = title
-        self.showsNotifications = showsNotifications
     }
 
     public var body: some View {
@@ -130,47 +128,16 @@ public struct SSMHeader: View {
             )
             .allowsHitTesting(false)
 
-            VStack(alignment: .leading, spacing: 22) {
-                HStack(alignment: .top) {
-                    Spacer()
-                    if showsNotifications {
-                        NotificationBellButton()
-                    }
-                }
-
-                Text(title)
-                    .font(.ssmRounded(36, weight: .heavy))
-                    .foregroundStyle(.white)
-                    .accessibilityAddTraits(.isHeader)
-            }
-            .padding(.horizontal, 18)
-            .padding(.bottom, 18)
+            Text(title)
+                .font(.ssmRounded(36, weight: .heavy))
+                .foregroundStyle(.white)
+                .accessibilityAddTraits(.isHeader)
+                .padding(.horizontal, 18)
+                .padding(.bottom, 18)
         }
         .frame(minHeight: 178)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Speed Skate Meet. \(title).")
-    }
-}
-
-private struct NotificationBellButton: View {
-    var body: some View {
-        Button(action: {}) {
-            ZStack(alignment: .topTrailing) {
-                Image(systemName: "bell.fill")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 46, height: 46)
-                    .background(.black.opacity(0.24), in: Circle())
-                    .overlay(Circle().strokeBorder(.white.opacity(0.15), lineWidth: 1))
-                Circle()
-                    .fill(SSMTheme.orange)
-                    .frame(width: 10, height: 10)
-                    .overlay(Circle().strokeBorder(SSMTheme.pageBackground, lineWidth: 2))
-                    .offset(x: -1, y: 1)
-            }
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Notifications")
     }
 }
 
