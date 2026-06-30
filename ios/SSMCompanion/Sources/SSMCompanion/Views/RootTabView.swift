@@ -98,7 +98,7 @@ private struct LiveTabRootView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                SSMTabBanner()
+                SSMHeader(title: "Live")
 
                 Group {
                     if viewModel.isLoading && viewModel.meets.isEmpty {
@@ -121,10 +121,10 @@ private struct LiveTabRootView: View {
                 .frame(maxHeight: .infinity)
             }
             .background(SSMTheme.pageBackground)
+            .ssmNavigationBarHidden(true)
             .navigationDestination(for: MeetSummary.self) { meet in
                 LiveRaceDayView(meetID: meet.id.stringValue, meetName: meet.meetName)
             }
-            .navigationTitle("Live")
             .task { await viewModel.load() }
             .refreshable { await viewModel.load() }
         }
@@ -137,7 +137,7 @@ private struct ResultsTabRootView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                SSMTabBanner()
+                SSMHeader(title: "Results")
 
                 Group {
                     if viewModel.isLoading && viewModel.meets.isEmpty {
@@ -160,10 +160,10 @@ private struct ResultsTabRootView: View {
                 .frame(maxHeight: .infinity)
             }
             .background(SSMTheme.pageBackground)
+            .ssmNavigationBarHidden(true)
             .navigationDestination(for: MeetSummary.self) { meet in
                 ResultsView(meetID: meet.id.stringValue, meetName: meet.meetName)
             }
-            .navigationTitle("Results")
             .task { await viewModel.load() }
             .refreshable { await viewModel.load() }
         }

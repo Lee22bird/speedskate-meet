@@ -45,7 +45,7 @@ public struct MeetsListView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    SSMHeader()
+                    SSMHeader(title: "Find a Meet", showsNotifications: true)
 
                     VStack(alignment: .leading, spacing: 12) {
                         SearchBar(text: $viewModel.searchText)
@@ -109,7 +109,13 @@ public struct MeetsListView: View {
 }
 
 public struct SSMHeader: View {
-    public init() {}
+    private let title: String
+    private let showsNotifications: Bool
+
+    public init(title: String, showsNotifications: Bool = false) {
+        self.title = title
+        self.showsNotifications = showsNotifications
+    }
 
     public var body: some View {
         ZStack(alignment: .bottomLeading) {
@@ -127,10 +133,12 @@ public struct SSMHeader: View {
             VStack(alignment: .leading, spacing: 22) {
                 HStack(alignment: .top) {
                     Spacer()
-                    NotificationBellButton()
+                    if showsNotifications {
+                        NotificationBellButton()
+                    }
                 }
 
-                Text("Find a Meet")
+                Text(title)
                     .font(.ssmRounded(36, weight: .heavy))
                     .foregroundStyle(.white)
                     .accessibilityAddTraits(.isHeader)
@@ -140,28 +148,7 @@ public struct SSMHeader: View {
         }
         .frame(minHeight: 178)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Speed Skate Meet. Find a Meet.")
-    }
-}
-
-public struct SSMTabBanner: View {
-    public init() {}
-
-    public var body: some View {
-        ZStack {
-            SSMHeroArtwork()
-                .scaledToFill()
-                .frame(maxWidth: .infinity, minHeight: 118, maxHeight: 118)
-                .clipped()
-            LinearGradient(
-                colors: [.clear, SSMTheme.pageBackground.opacity(0.78)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        }
-        .frame(height: 118)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Speed Skate Meet")
+        .accessibilityLabel("Speed Skate Meet. \(title).")
     }
 }
 

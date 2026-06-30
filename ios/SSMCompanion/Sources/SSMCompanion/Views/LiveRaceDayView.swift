@@ -46,6 +46,7 @@ public struct LiveRaceDayView: View {
         .background(SSMTheme.pageBackground)
         .navigationTitle(meetName)
         .ssmInlineNavigationTitle()
+        .ssmNavigationBarHidden(false)
         .task {
             await viewModel.load(meetID: meetID)
             viewModel.startAutoRefresh(meetID: meetID)

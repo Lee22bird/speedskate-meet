@@ -40,6 +40,7 @@ public struct ResultsView: View {
         .background(SSMTheme.pageBackground)
         .navigationTitle(meetName)
         .ssmInlineNavigationTitle()
+        .ssmNavigationBarHidden(false)
         .task { await viewModel.load(meetID: meetID) }
         .refreshable { await viewModel.load(meetID: meetID) }
     }
