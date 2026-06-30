@@ -149,33 +149,6 @@ function mirrorSslUser(db, payload) {
   return user;
 }
 
-const APP_HANDOFF_TTL_MS = 60 * 1000;
-
-// Short-lived, single-use code that hands an already-created SSM session
-// token to a native app via a custom URL scheme redirect, without putting
-// the long-lived session token itself in a deep link.
-function createAppHandoffCode(db, sessionToken) {
-  const code = crypto.randomBytes(18).toString('hex');
-  db.ssoAppHandoffs = (db.ssoAppHandoffs || []).filter(h => new Date(h.expiresAt).getTime() > Date.now());
-  db.ssoAppHandoffs.push({
-    code,
-    sessionToken,
-    expiresAt: new Date(Date.now() + APP_HANDOFF_TTL_MS).toISOString(),
-  });
-  return code;
-}
-
-function consumeAppHandoffCode(db, code) {
-  const raw = String(code || '').trim();
-  if (!raw) return null;
-  db.ssoAppHandoffs = db.ssoAppHandoffs || [];
-  const index = db.ssoAppHandoffs.findIndex(h => h.code === raw);
-  if (index === -1) return null;
-  const [handoff] = db.ssoAppHandoffs.splice(index, 1);
-  if (!handoff || new Date(handoff.expiresAt).getTime() < Date.now()) return null;
-  return handoff.sessionToken;
-}
-
 function createSsmSessionForUser(db, user, ttlMs = DEFAULT_SESSION_TTL_MS) {
   const token = crypto.randomBytes(24).toString('hex');
   db.sessions = (db.sessions || []).filter(s => Number(s.userId) !== Number(user.id));
@@ -214,6 +187,47 @@ function configuredSslApiKey() {
     process.env.SSO_SHARED_SECRET ||
     'ssl-ssm-local-dev-package-key'
   ).trim();
+}
+
+// Lets someone log into SSM (web, desktop, or the iOS app) with their SSL
+// email/password directly, instead of needing a separate SSM account or a
+// browser-based "Sign in with SSL" redirect. SSL is the only place that ever
+// sees the real password — this just asks it to verify the pair and hands
+// back a profile shaped exactly like the existing SSO token payload, so it
+// can be passed straight into mirrorSslUser(). Returns null (never throws)
+// on any failure — wrong password, unknown email, or SSL being unreachable —
+// so callers can cleanly fall back to a local SSM account check.
+async function verifySslCredentials(email, password) {
+  if (!email || !password) return null;
+  if (typeof fetch !== 'function') return null;
+  const base = configuredSslBaseUrl();
+  if (!base) return null;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+  try {
+    const response = await fetch(`${base}/api/ssm/verify-credentials`, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        accept: 'application/json',
+        'content-type': 'application/json',
+        'x-ssl-api-key': configuredSslApiKey(),
+      },
+      body: JSON.stringify({ email, password }),
+    });
+    if (!response.ok) return null;
+    const body = await response.json().catch(() => null);
+    if (!body?.ok || !body.profile?.user_id) return null;
+    return body.profile;
+  } catch (err) {
+    // Network error, timeout, or SSL is down/unreachable (e.g. desktop app
+    // offline at a meet) — treat exactly like "not an SSL account" so the
+    // caller falls back to the local SSM password check.
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function ssmUserMirrorSnapshot(user) {
@@ -272,8 +286,7 @@ module.exports = {
   ssmAllowedRolesFromSsl,
   nextUserId,
   mirrorSslUser,
-  createAppHandoffCode,
-  consumeAppHandoffCode,
+  verifySslCredentials,
   createSsmSessionForUser,
   ssmRedirectForUser,
   configuredSslBaseUrl,

@@ -33,7 +33,7 @@ struct StaffLoginView: View {
 
     var body: some View {
         VStack(spacing: 16) {
-            Text("Log in with your SpeedSkateMeet account to access race-day controls for meets you're assigned to.")
+            Text("Log in with your SpeedSkateLeague email and password to access race-day controls for meets you're assigned to.")
                 .font(.subheadline)
                 .foregroundStyle(SSMTheme.muted)
                 .multilineTextAlignment(.center)
@@ -63,23 +63,6 @@ struct StaffLoginView: View {
                     }
                     .buttonStyle(.ssmPill)
                     .disabled(email.isEmpty || password.isEmpty || auth.isLoading)
-
-                    #if canImport(AuthenticationServices)
-                    HStack {
-                        Rectangle().fill(SSMTheme.cardBorder).frame(height: 1)
-                        Text("or").font(.caption).foregroundStyle(SSMTheme.muted)
-                        Rectangle().fill(SSMTheme.cardBorder).frame(height: 1)
-                    }
-                    .padding(.vertical, 4)
-
-                    Button {
-                        Task { await auth.signInWithSSL() }
-                    } label: {
-                        Label("Sign in with SSL", systemImage: "person.crop.circle.badge.checkmark")
-                    }
-                    .buttonStyle(.ssmSoftPill)
-                    .disabled(auth.isLoading)
-                    #endif
                 }
             }
             .padding(.horizontal)

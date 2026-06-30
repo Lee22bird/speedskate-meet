@@ -103,24 +103,6 @@ public final class APIClient {
         }
     }
 
-    /// SSL's login page, set to redirect into the existing /ssm/launch SSO
-    /// handoff once signed in. ASWebAuthenticationSession opens this; SSL
-    /// (after sign-in) -> SSM's /sso/ssl/callback?app=ssmcompanion -> our
-    /// custom URL scheme below, carrying a short-lived one-time code.
-    public static let sslSignInURL: URL = {
-        var components = URLComponents(string: "https://speedskateleague.com/login")!
-        components.queryItems = [.init(name: "next", value: "/ssm/launch?app=ssmcompanion")]
-        return components.url!
-    }()
-
-    public static let sslSignInCallbackScheme = "ssmcompanion"
-
-    /// Exchanges the one-time code from the "Sign in with SSL" handoff for
-    /// the same ssm_sess session cookie /admin/login would have set.
-    public func exchangeSsoCode(_ code: String) async throws {
-        let _: SimpleOKResponse = try await postJSON("/api/v1/sso/exchange", body: ["code": code])
-    }
-
     public func logout() {
         let host = baseURL.host ?? ""
         for cookie in HTTPCookieStorage.shared.cookies ?? [] where cookie.domain.contains(host) {

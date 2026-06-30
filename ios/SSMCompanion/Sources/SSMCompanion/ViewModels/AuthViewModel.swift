@@ -33,23 +33,6 @@ public final class AuthViewModel: ObservableObject {
         }
     }
 
-    #if canImport(AuthenticationServices)
-    public func signInWithSSL() async {
-        isLoading = true
-        errorMessage = nil
-        defer { isLoading = false }
-        do {
-            let code = try await SSLSignInCoordinator().signIn()
-            try await api.exchangeSsoCode(code)
-            await refreshSession()
-        } catch is CancellationError {
-            // User dismissed the SSL sign-in sheet — not an error to surface.
-        } catch {
-            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
-        }
-    }
-    #endif
-
     public func logout() {
         api.logout()
         currentUser = nil

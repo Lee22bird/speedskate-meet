@@ -98,30 +98,12 @@ function resolveStaffRole(user, meet) {
 
 module.exports = function createMobileApiRoutes(deps = {}) {
   const router = express.Router();
-  const { getSessionUser, loadDb, saveDb, setCookie, SESSION_COOKIE, SESSION_TTL_MS, consumeAppHandoffCode } = deps;
+  const { getSessionUser, loadDb } = deps;
 
   if (typeof getSessionUser !== 'function') throw new Error('mobileApiRoutes requires getSessionUser');
   if (typeof loadDb !== 'function') throw new Error('mobileApiRoutes requires loadDb');
 
   // ── Auth / session ────────────────────────────────────────────────────────
-  // "Sign in with SSL" handoff: the app opens SSL's login in a system browser
-  // session (ASWebAuthenticationSession), SSL redirects into SSM's existing
-  // /sso/ssl/callback?app=ssmcompanion, and SSM hands back a short-lived,
-  // single-use code via a custom URL scheme instead of a web redirect. The
-  // app exchanges that code here for the same session cookie the website
-  // already uses — no new auth/session logic, just a different transport.
-  router.post('/api/v1/sso/exchange', (req, res) => {
-    if (typeof consumeAppHandoffCode !== 'function' || typeof setCookie !== 'function') {
-      return res.status(501).json({ ok: false, error: 'SSO app handoff is not configured.' });
-    }
-    const db = loadDb();
-    const sessionToken = consumeAppHandoffCode(db, req.body && req.body.code);
-    saveDb(db);
-    if (!sessionToken) return res.status(403).json({ ok: false, error: 'That sign-in link expired. Please try again.' });
-    setCookie(res, SESSION_COOKIE, sessionToken, Math.floor(SESSION_TTL_MS / 1000));
-    res.json({ ok: true });
-  });
-
   router.get('/api/v1/me', (req, res) => {
     const data = getSessionUser(req);
     if (!data) return res.json({ ok: true, loggedIn: false, user: null });

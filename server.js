@@ -149,11 +149,10 @@ const {
   nextUserId,
   verifySslSsoToken,
   mirrorSslUser,
+  verifySslCredentials,
   createSsmSessionForUser,
   ssmRedirectForUser,
   postSsmUserMirrorToSsl,
-  createAppHandoffCode,
-  consumeAppHandoffCode,
 } = require('./services/ssoService');
 
 function rebuildTimeTrialRace(meet) {
@@ -973,17 +972,6 @@ async function handleSslSsoCallback(req, res) {
     console.warn('SSL user mirror sync failed:', err.message);
   }
   setCookie(res, SESSION_COOKIE, sessionToken, Math.floor(SESSION_TTL_MS / 1000));
-
-  // Native app handoff: forward the session via a short-lived one-time code
-  // through a custom URL scheme instead of the normal web redirect. Only a
-  // hardcoded, allowlisted scheme is ever used here — never built from
-  // request input — to avoid turning this into an open redirect.
-  if (String(req.query.app || '').trim() === 'ssmcompanion') {
-    const code = createAppHandoffCode(db, sessionToken);
-    saveDb(db);
-    return res.redirect(`ssmcompanion://sso-complete?code=${encodeURIComponent(code)}`);
-  }
-
   saveDb(db);
   return res.redirect(ssmRedirectForUser(user));
 }
@@ -1076,12 +1064,25 @@ app.get('/signup', (req, res) => {
     </div>`}));
 });
 
-app.post('/admin/login', (req, res) => {
+app.post('/admin/login', asyncHandler(async (req, res) => {
   const db=loadDb();
   const email=String(req.body.email||req.body.username||'').trim();
   const password=String(req.body.password||'').trim();
-  const user=findUserByLogin(db,email);
-  if(!user||String(user.password||'')!==password||user.active===false) return res.send(pageShell({title:'Login',user:null, bodyHtml:`
+
+  // SSL is the system of record for accounts now (signup already redirects
+  // there). Try the SSL email/password first; if that account doesn't exist
+  // or SSL is unreachable, fall back to a legacy local SSM account so
+  // accounts that predate SSL (or were never linked) keep working.
+  let user = null;
+  const sslProfile = await verifySslCredentials(email, password);
+  if (sslProfile) {
+    user = mirrorSslUser(db, sslProfile);
+  } else {
+    const localUser = findUserByLogin(db, email);
+    if (localUser && String(localUser.password||'')===password && localUser.active!==false) user = localUser;
+  }
+
+  if(!user) return res.send(pageShell({title:'Login',user:null, bodyHtml:`
     <div style="max-width:420px;margin:40px auto">
       <div class="page-header"><h1>Login</h1></div>
       <div class="card">
@@ -1092,7 +1093,7 @@ app.post('/admin/login', (req, res) => {
   const token=createSsmSessionForUser(db,user);
   saveDb(db); setCookie(res,SESSION_COOKIE,token,Math.floor(SESSION_TTL_MS/1000));
   return res.redirect(ssmRedirectForUser(user));
-});
+}));
 
 app.post('/admin/register', asyncHandler(async (req, res) => {
   res.status(403).send(pageShell({title:'Create Account',user:null, bodyHtml:`
@@ -1896,7 +1897,6 @@ app.use('/', createDesktopRoutes({ getSessionUser, pageShell, loadDb, saveDb, re
 // ── Extracted route modules ────────────────────────────────────────────────────
 const routeDeps = {
   requireRole, pageShell, saveDb, loadDb, getSessionUser, TEAM_LIST, toggleSwitch, ADMIN_PHONE,
-  setCookie, SESSION_COOKIE, SESSION_TTL_MS, consumeAppHandoffCode,
   // views
   renderArchivedMeetsView, renderPendingMeetsView, renderPendingRinksView,
   renderStaffAccountsView, renderMeetBuilderView, renderOpenBuilderView,
