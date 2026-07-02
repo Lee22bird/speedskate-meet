@@ -63,54 +63,106 @@ module.exports = function createPublicRoutes(deps = {}) {
     `}));
   });
 
-  // ── Download (SSM Desktop) ──────────────────────────────────────────────────
-  // Unlisted on purpose — not in main nav yet. Direct-link only during the
-  // alpha rollout. Update DOWNLOAD_URL/DOWNLOAD_VERSION when cutting a new
-  // GitHub Release (see RELEASE.md).
+  // ── Download (SSM Desktop) ─────────────────────────────────────────────────
+  // Landing/purchase page. STRIPE_LINK is the Stripe payment link.
+  // After payment, Stripe redirects to /download/success (configure in Stripe dashboard).
+  // Update DOWNLOAD_URL/DOWNLOAD_VERSION when cutting a new release (see RELEASE.md).
+  const STRIPE_LINK = 'https://buy.stripe.com/test_dRm14n8kfbhh2399DSaMU00';
+  const DOWNLOAD_URL = 'https://github.com/Lee22bird/speedskate-meet/releases/download/v0.1.0-alpha/SSM.Desktop.dmg';
+  const DOWNLOAD_VERSION = '0.1.0-alpha';
+
   router.get('/download', (req, res) => {
     const data = getSessionUser(req);
-    const DOWNLOAD_URL = 'https://github.com/Lee22bird/speedskate-meet/releases/download/v0.1.0-alpha/SSM.Desktop.dmg';
-    const DOWNLOAD_VERSION = '0.1.0-alpha';
-    res.send(pageShell({ title: 'Download SSM Desktop', description: 'Download SpeedSkateMeet Desktop for macOS — signed and notarized, runs your meet fully offline.', user: data?.user || null, bodyHtml: `
+    res.send(pageShell({ title: 'SSM Desktop — Run Your Meet Offline', description: 'SpeedSkateMeet Desktop runs your entire meet offline on macOS — no internet required on race day. Signed and notarized by Apple.', user: data?.user || null, bodyHtml: `
       <div class="page-header">
         <h1>SpeedSkateMeet Desktop</h1>
         <div class="sub">Run your entire meet offline — no internet required on race day.</div>
       </div>
 
-      <div class="card card-accent" style="margin-bottom:20px">
-        <div class="row between center" style="flex-wrap:wrap;gap:16px">
+      <!-- Hero purchase card -->
+      <div class="card" style="margin-bottom:24px;border:2px solid var(--orange);background:linear-gradient(135deg,#1b2c4a 0%,#263c61 100%)">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:20px">
           <div>
-            <h2 style="margin:0 0 4px">macOS (Apple Silicon)</h2>
-            <div class="note">Version ${DOWNLOAD_VERSION} • Signed &amp; notarized by Apple • ~132 MB</div>
+            <div style="font-size:13px;font-weight:700;letter-spacing:.08em;color:var(--orange);margin-bottom:6px">SSM DESKTOP FOR MACOS</div>
+            <div style="font-size:32px;font-weight:900;color:#fff;letter-spacing:-.02em;line-height:1.1">Version ${DOWNLOAD_VERSION}</div>
+            <div style="color:rgba(255,255,255,.6);margin-top:6px;font-size:14px">Apple Silicon (M1/M2/M3/M4) • Signed &amp; notarized • ~132 MB</div>
           </div>
-          <a class="btn-orange" href="${DOWNLOAD_URL}" style="font-size:16px;padding:14px 28px">⬇ Download for Mac</a>
+          <div style="text-align:center">
+            <a class="btn-orange" href="${STRIPE_LINK}" style="font-size:18px;padding:16px 36px;display:inline-block;font-weight:800;letter-spacing:-.01em">Purchase &amp; Download →</a>
+            <div style="color:rgba(255,255,255,.4);font-size:12px;margin-top:8px">Secure checkout via Stripe</div>
+          </div>
         </div>
       </div>
 
-      <div class="card" style="margin-bottom:16px;border-left:4px solid var(--orange)">
-        <div class="danger" style="font-weight:700">Early alpha build</div>
-        <p style="line-height:1.6;color:var(--text);margin-top:6px">This is an early release for testing. Expect rough edges. If something breaks, email <a href="mailto:LBird@speedskatemeet.com" style="color:var(--orange);font-weight:700">LBird@speedskatemeet.com</a>.</p>
-      </div>
-
-      <div class="grid-2">
+      <div class="grid-2" style="margin-bottom:24px">
         <div class="card">
-          <h2>Installing</h2>
-          <ol style="line-height:1.9;color:var(--text);padding-left:20px">
-            <li>Click <strong>Download for Mac</strong> above.</li>
-            <li>Open the downloaded <strong>SSM Desktop.dmg</strong> file.</li>
-            <li>Drag <strong>SpeedSkateMeet</strong> into your <strong>Applications</strong> folder.</li>
-            <li>Eject the DMG, then launch SpeedSkateMeet from Applications (not from the mounted DMG).</li>
-          </ol>
-          <p class="note" style="margin-top:8px">This build is signed and notarized by Apple, so it opens normally — no "unidentified developer" warning.</p>
-        </div>
-        <div class="card">
-          <h2>What you get offline</h2>
+          <h2>What runs offline</h2>
           <div class="stack">
             <div class="toggle-row"><div><div class="toggle-row-label">🏗️ Full meet setup</div><div class="toggle-row-desc">Build divisions, registrations, and the race schedule with no internet connection.</div></div></div>
-            <div class="toggle-row"><div><div class="toggle-row-label">🏁 Race day</div><div class="toggle-row-desc">Director, tabulator, announcer, and referee panels — all run locally on your laptop.</div></div></div>
-            <div class="toggle-row"><div><div class="toggle-row-label">💾 Local data</div><div class="toggle-row-desc">Everything is saved to your Mac automatically, with daily backups.</div></div></div>
+            <div class="toggle-row"><div><div class="toggle-row-label">🏁 Race day panels</div><div class="toggle-row-desc">Director, tabulator, announcer, and referee — all run locally on your laptop.</div></div></div>
+            <div class="toggle-row"><div><div class="toggle-row-label">📊 Live scoreboard</div><div class="toggle-row-desc">TV display updates in real time over your local network. AirPlay to any Apple TV.</div></div></div>
+            <div class="toggle-row"><div><div class="toggle-row-label">💾 Auto backups</div><div class="toggle-row-desc">Everything saves locally and daily backups run automatically in the background.</div></div></div>
+            <div class="toggle-row"><div><div class="toggle-row-label">🔁 Crash recovery</div><div class="toggle-row-desc">If anything goes sideways, the app restores exactly where you left off.</div></div></div>
           </div>
         </div>
+        <div class="card">
+          <h2>How it works</h2>
+          <ol style="line-height:2;color:var(--text);padding-left:20px;margin:0">
+            <li>Click <strong>Purchase &amp; Download</strong> above</li>
+            <li>Complete checkout — takes about 30 seconds</li>
+            <li>You'll be redirected back here with your download link</li>
+            <li>Open the DMG and drag <strong>SpeedSkateMeet</strong> to Applications</li>
+            <li>Launch it — no "unidentified developer" warning (signed by Apple)</li>
+          </ol>
+          <div style="margin-top:16px;padding:12px;background:rgba(249,115,22,.08);border-radius:8px;border-left:3px solid var(--orange)">
+            <div style="font-size:13px;color:var(--orange);font-weight:700;margin-bottom:4px">Questions?</div>
+            <div style="font-size:13px;color:var(--text)">Email <a href="mailto:LBird@speedskatemeet.com" style="color:var(--orange);font-weight:700">LBird@speedskatemeet.com</a> — usually reply same day.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="text-align:center;padding:32px">
+        <div style="font-size:22px;font-weight:800;color:var(--navy);margin-bottom:8px">Ready to run a cleaner meet?</div>
+        <div style="color:var(--muted);margin-bottom:20px">One-time purchase. No subscription. Works on any Mac with Apple Silicon.</div>
+        <a class="btn-orange" href="${STRIPE_LINK}" style="font-size:16px;padding:14px 32px">Purchase &amp; Download →</a>
+      </div>
+    `}));
+  });
+
+  // ── Download Success (after Stripe payment) ────────────────────────────────
+  // Stripe redirects here after a completed checkout. Configure the success URL
+  // in your Stripe payment link settings to: https://speedskatemeet.com/download/success
+  router.get('/download/success', (req, res) => {
+    const data = getSessionUser(req);
+    res.send(pageShell({ title: 'Download SSM Desktop', description: 'Thank you! Download SpeedSkateMeet Desktop for macOS.', user: data?.user || null, bodyHtml: `
+      <div style="max-width:600px;margin:0 auto;text-align:center;padding:40px 0 20px">
+        <div style="font-size:56px;margin-bottom:16px">✅</div>
+        <h1 style="margin-bottom:8px">You're all set!</h1>
+        <div style="color:var(--muted);font-size:18px;margin-bottom:32px">Your download is ready. Click below to get SpeedSkateMeet Desktop.</div>
+      </div>
+
+      <div class="card" style="max-width:600px;margin:0 auto 24px;border:2px solid var(--orange)">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px">
+          <div>
+            <div style="font-weight:800;font-size:18px;color:var(--navy)">SSM Desktop ${DOWNLOAD_VERSION}</div>
+            <div style="color:var(--muted);font-size:13px;margin-top:4px">macOS Apple Silicon • ~132 MB • Signed &amp; notarized</div>
+          </div>
+          <a class="btn-orange" href="${DOWNLOAD_URL}" style="font-size:16px;padding:14px 28px;font-weight:800">⬇ Download for Mac</a>
+        </div>
+      </div>
+
+      <div class="card" style="max-width:600px;margin:0 auto 16px">
+        <h2>Installing</h2>
+        <ol style="line-height:2;color:var(--text);padding-left:20px;margin:0">
+          <li>Open the downloaded <strong>SSM Desktop.dmg</strong> file</li>
+          <li>Drag <strong>SpeedSkateMeet</strong> into your <strong>Applications</strong> folder</li>
+          <li>Eject the DMG, then launch SpeedSkateMeet from Applications</li>
+        </ol>
+        <p class="note" style="margin-top:12px">Signed and notarized by Apple — no "unidentified developer" warning on launch.</p>
+      </div>
+
+      <div style="max-width:600px;margin:0 auto;text-align:center;padding:16px">
+        <div style="color:var(--muted);font-size:13px">Need help? Email <a href="mailto:LBird@speedskatemeet.com" style="color:var(--orange);font-weight:700">LBird@speedskatemeet.com</a></div>
       </div>
     `}));
   });

@@ -84,6 +84,7 @@ function navHtml(user) {
           <a class="nav-link" href="/submit-rink">Submit a Rink</a>
           <a class="nav-link" href="/rinks">Rinks</a>
           <a class="nav-link" href="/live">Live</a>
+          <a class="nav-link nav-download" href="/download">⬇ Download</a>
           ${accountLinks}
         </div>
         <div class="nav-mobile-account">${user ? `<a class="nav-mobile-portal" href="/portal">Portal</a>` : `<a class="nav-mobile-portal" href="/admin/login">Login</a>`}</div>
@@ -95,6 +96,7 @@ function navHtml(user) {
           <a href="/rinks">Rinks</a>
           <a href="/help">Help</a>
           <a href="/about">About</a>
+          <a href="/download">⬇ Download</a>
         </div>
         <div class="mobile-menu-divider"></div>
         <div class="mobile-menu-section">
@@ -231,6 +233,8 @@ function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
     .nav-cta:hover { background: var(--orange2); color: #fff; }
     .nav-ghost { border: 1px solid rgba(255,255,255,.25); color: rgba(255,255,255,.70); border-radius: 999px; }
     .nav-ghost:hover { border-color: rgba(255,255,255,.50); color: #fff; background: rgba(255,255,255,.06); }
+    .nav-download { border: 1px solid var(--orange); color: var(--orange) !important; border-radius: 999px; font-weight: 700; }
+    .nav-download:hover { background: var(--orange); color: #fff !important; }
 
     .mobile-menu-toggle,
     .nav-mobile-account,
