@@ -39,7 +39,7 @@ public struct NationalsScheduleView: View {
 
     private var header: some View {
         ZStack(alignment: .bottomLeading) {
-            SpeedStreaksBackground()
+            SSMTheme.navy
             VStack(alignment: .leading, spacing: 4) {
                 Text("2026 INDOOR NATIONALS")
                     .font(.ssmRounded(13, weight: .heavy))
