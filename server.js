@@ -653,6 +653,7 @@ app.get('/meets', (req, res) => {
 
 // ── 2026 Indoor Nationals schedule (public, read-only) ────────────────────────
 const NATIONALS = require('./data/nationals2026.js');
+const NATIONALS_HEATS = require('./data/nationals_heats.js');
 
 // Featured banner shown on /meets (and the app's Meets tab) linking to the
 // full schedule. Kept as a helper so it can be dropped onto other pages too.
@@ -693,17 +694,52 @@ function nationalsFeatureCardHtml() {
 app.get('/nationals', (req, res) => {
   // ?embed=1 → bare schedule (no site nav/footer) for embedding inside the
   // native SSM app's WebView. Otherwise the full branded website page.
-  if (req.query.embed) {
-    return res.send(nationalsEmbedShell(renderNationalsSchedule()));
+  const embed = !!req.query.embed;
+  if (embed) {
+    return res.send(nationalsEmbedShell(renderNationalsSchedule(true)));
   }
   const data = getSessionUser(req);
   res.send(pageShell({
     title: NATIONALS.title,
     description: `${NATIONALS.title} — full tentative event schedule. ${NATIONALS.location}, ${NATIONALS.dateRange}.`,
     user: data?.user || null,
-    bodyHtml: renderNationalsSchedule(),
+    bodyHtml: renderNationalsSchedule(false),
   }));
 });
+
+app.get('/nationals/heats', (req, res) => {
+  const embed = !!req.query.embed;
+  if (embed) {
+    return res.send(nationalsEmbedShell(renderNationalsHeats(true)));
+  }
+  const data = getSessionUser(req);
+  res.send(pageShell({
+    title: NATIONALS_HEATS.title,
+    description: `${NATIONALS.title} — heat sheets and start lists by division. Search for a skater to find their heat.`,
+    user: data?.user || null,
+    bodyHtml: renderNationalsHeats(false),
+  }));
+});
+
+// Tab bar linking the two nationals pages; preserves ?embed=1 so navigation
+// stays inside the app's WebView.
+function nationalsTabs(active, embed) {
+  const q = embed ? '?embed=1' : '';
+  const tab = (key, label, href) =>
+    `<a class="nats-tab${active === key ? ' active' : ''}" href="${href}${q}">${label}</a>`;
+  return `
+    <div class="nats-tabs">
+      ${tab('schedule', 'Schedule', '/nationals')}
+      ${tab('heats', 'Heat Sheets', '/nationals/heats')}
+    </div>
+    <style>
+      .nats-tabs{display:flex;gap:8px;margin-bottom:16px}
+      .nats-tab{flex:1;text-align:center;font-weight:800;font-size:14px;text-decoration:none;
+        color:var(--text);background:var(--card);border:1px solid var(--border2);
+        padding:11px 12px;border-radius:999px;transition:all .12s}
+      .nats-tab.active{background:var(--navy);color:var(--white);border-color:var(--navy)}
+    </style>`;
+}
 
 // Minimal standalone shell (no website chrome) so the schedule can be embedded
 // inside the native app's WebView. Redefines the same design tokens the
@@ -731,7 +767,7 @@ function nationalsEmbedShell(inner) {
   </style></head><body>${inner}</body></html>`;
 }
 
-function renderNationalsSchedule() {
+function renderNationalsSchedule(embed = false) {
   const dayId = i => `day-${i}`;
   const dayShort = date => {
     const m = String(date).match(/^(\w+)\s+([\d/]+)/);
@@ -785,6 +821,7 @@ function renderNationalsSchedule() {
       <div class="ns-hero-meta">${esc(NATIONALS.location)} &nbsp;•&nbsp; ${esc(NATIONALS.dateRange)}</div>
       ${NATIONALS.tentative?`<div class="ns-tentative">⚠︎ Tentative schedule — subject to change based on final entries</div>`:''}
     </div>
+    ${nationalsTabs('schedule', embed)}
     <div class="ns-daynav">${dayNav}</div>
     ${daysHtml}
     <div class="ns-footer">Schedule provided by ${esc(NATIONALS.org)}. Times are approximate and subject to change.</div>
@@ -828,6 +865,119 @@ function renderNationalsSchedule() {
       .ns-footer{text-align:center;color:var(--muted);font-size:12.5px;margin:8px 0 24px}
       @media(max-width:560px){.ns-hero-title{font-size:26px}.ns-time{flex-basis:66px}}
     </style>`;
+}
+
+function renderNationalsHeats(embed = false) {
+  const disciplines = (NATIONALS_HEATS.disciplines || []).map(disc => `
+    <div class="nh-discipline">
+      <div class="nh-disc-label">${esc(disc.name)}</div>
+      ${(disc.divisions || []).map(div => `
+        <details class="nh-div" open>
+          <summary class="nh-div-sum">
+            <span class="nh-div-name">${esc(div.division)}</span>
+            ${div.ages ? `<span class="nh-div-ages">${esc(div.ages)}</span>` : ''}
+          </summary>
+          <div class="nh-div-body">
+            ${(div.events || []).map(ev => `
+              <div class="nh-event">
+                <div class="nh-event-dist">${esc(ev.distance)}</div>
+                ${(ev.rounds || []).map(rd => `
+                  <div class="nh-round">
+                    <div class="nh-round-label">${esc(rd.label)}${rd.toQualify ? ` · <span class="nh-qual">${esc(rd.toQualify)} to qualify</span>` : ''}</div>
+                    <div class="nh-skaters">
+                      ${(rd.skaters || []).map(s => `
+                        <div class="nh-skater${s.scratched ? ' nh-scratched' : ''}" data-s="${esc((s.name + ' ' + s.team + ' ' + s.helmet).toLowerCase())}">
+                          <span class="nh-helmet">#${esc(s.helmet)}</span>
+                          <span class="nh-name">${esc(s.name)}</span>
+                          <span class="nh-team">${esc(s.team)}</span>
+                        </div>`).join('')}
+                    </div>
+                  </div>`).join('')}
+              </div>`).join('')}
+          </div>
+        </details>`).join('')}
+    </div>`).join('');
+
+  return `
+    <div class="nh-hero">
+      <div class="nh-hero-eyebrow">2026 INDOOR NATIONALS</div>
+      <h1 class="nh-hero-title">Heat Sheets</h1>
+      <div class="nh-hero-meta">${esc(NATIONALS_HEATS.subtitle || '')}</div>
+      ${NATIONALS_HEATS.tentative ? `<div class="nh-tentative">⚠︎ Tentative — subject to change based on final entries</div>` : ''}
+    </div>
+    ${nationalsTabs('heats', embed)}
+    <input id="nh-search" class="nh-search" type="search" autocomplete="off" placeholder="🔍  Search your name to find your heat…" />
+    <div id="nh-empty" class="nh-empty" hidden>No skaters match “<span></span>”.</div>
+    ${disciplines}
+    <div class="nh-footer">Heat assignments from the official USARS sheets. Tentative and subject to change.</div>
+    <style>
+      .nh-hero{background:linear-gradient(135deg,var(--navy),var(--navy3));color:var(--white);
+        border-radius:var(--radius-lg);padding:24px 22px;text-align:center;box-shadow:var(--shadow-lg);margin-bottom:16px}
+      .nh-hero-eyebrow{font-size:12px;font-weight:800;letter-spacing:.14em;color:var(--sky);margin-bottom:6px}
+      .nh-hero-title{font-family:'Barlow Condensed','Inter',sans-serif;font-weight:700;font-size:30px;line-height:1.05;color:var(--white)}
+      .nh-hero-meta{color:#c7d6ea;font-size:14px;font-weight:500;margin-top:6px}
+      .nh-tentative{display:inline-block;margin-top:12px;font-size:12px;font-weight:700;color:#ffd9a8;
+        background:rgba(249,115,22,.14);border:1px solid rgba(249,115,22,.35);padding:5px 12px;border-radius:999px}
+      .nh-search{width:100%;font-size:16px;font-weight:600;color:var(--text);background:var(--card);
+        border:1px solid var(--border2);border-radius:999px;padding:13px 18px;margin-bottom:16px;
+        position:sticky;top:0;z-index:20;box-shadow:var(--shadow-sm);-webkit-appearance:none}
+      .nh-search:focus{outline:none;border-color:var(--sky)}
+      .nh-empty{text-align:center;color:var(--muted);font-weight:600;padding:22px 0}
+      .nh-disc-label{font-family:'Barlow Condensed','Inter',sans-serif;font-weight:700;font-size:20px;
+        color:var(--navy);text-transform:uppercase;letter-spacing:.04em;margin:18px 0 10px}
+      .nh-div{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+        box-shadow:var(--shadow-sm);margin-bottom:10px;overflow:hidden}
+      .nh-div-sum{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;
+        gap:10px;padding:14px 16px;background:var(--navy);color:var(--white)}
+      .nh-div-sum::-webkit-details-marker{display:none}
+      .nh-div-name{font-weight:800;font-size:16px}
+      .nh-div-ages{font-size:12px;font-weight:700;color:#c7d6ea}
+      .nh-div-body{padding:6px 16px 14px}
+      .nh-event{padding:10px 0;border-bottom:1px solid var(--border)}
+      .nh-event:last-child{border-bottom:none}
+      .nh-event-dist{font-weight:800;color:var(--navy);font-size:15px;margin:6px 0}
+      .nh-round{margin:8px 0 8px 2px}
+      .nh-round-label{font-weight:700;font-size:12.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin-bottom:5px}
+      .nh-qual{color:var(--sky2);text-transform:none;letter-spacing:0}
+      .nh-skater{display:flex;gap:10px;align-items:baseline;padding:4px 0}
+      .nh-helmet{flex:0 0 46px;font-weight:800;color:var(--navy);font-variant-numeric:tabular-nums;font-size:13px}
+      .nh-name{font-weight:700;color:var(--text);font-size:14px}
+      .nh-team{color:var(--muted);font-size:13px}
+      .nh-scratched{opacity:.5}
+      .nh-scratched .nh-name{text-decoration:line-through}
+      .nh-footer{text-align:center;color:var(--muted);font-size:12.5px;margin:16px 0 24px}
+    </style>
+    <script>
+      (function(){
+        var q=document.getElementById('nh-search'), empty=document.getElementById('nh-empty');
+        if(!q) return;
+        function apply(){
+          var term=q.value.trim().toLowerCase(), any=false;
+          document.querySelectorAll('.nh-discipline').forEach(function(disc){
+            var dv=false;
+            disc.querySelectorAll('.nh-div').forEach(function(d){
+              var ev=false;
+              d.querySelectorAll('.nh-event').forEach(function(e){
+                var rv=false;
+                e.querySelectorAll('.nh-round').forEach(function(r){
+                  var sv=false;
+                  r.querySelectorAll('.nh-skater').forEach(function(s){
+                    var m=!term||s.getAttribute('data-s').indexOf(term)!==-1;
+                    s.hidden=!m; if(m) sv=true;
+                  });
+                  r.hidden=!sv; if(sv) rv=true;
+                });
+                e.hidden=!rv; if(rv) ev=true;
+              });
+              d.hidden=!ev; if(ev){dv=true; if(term) d.open=true;}
+            });
+            disc.hidden=!dv; if(dv) any=true;
+          });
+          if(empty){ empty.hidden=!(term&&!any); var sp=empty.querySelector('span'); if(sp) sp.textContent=q.value; }
+        }
+        q.addEventListener('input', apply);
+      })();
+    </script>`;
 }
 
 
@@ -1965,7 +2115,7 @@ app.get('/meet/:meetId/live', (req, res) => {
     <div class="grid-2">
       <div class="live-board-card">
         ${current?`
-          <h2>${esc(current.groupLabel)} — ${esc(cap(current.division))} — ${esc(current.distanceLabel)}</h2>
+          <h2>${esc(current.groupLabel)} — ${esc(cap(current.division))} — ${esc(current.distanceLabel)} — ${esc(raceDisplayStage(current))}</h2>
           <div class="live-lane-list">
             ${lanes.filter(l=>l.skaterName).map(l=>{
               const reg=regMap.get(Number(l.registrationId));
