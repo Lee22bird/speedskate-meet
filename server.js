@@ -646,9 +646,158 @@ app.get('/meets', (req, res) => {
   }).join('');
   res.send(pageShell({title:'Find a Meet', description:'Find upcoming inline speed skating meets near you. View schedules, register online, and follow live results on race day.', user:data?.user||null, bodyHtml:`
     <div class="page-header"><h1>Find a Meet</h1><div class="sub">Upcoming inline speed skating meets open for registration.</div></div>
+    ${nationalsFeatureCardHtml()}
     <div style="margin-bottom:16px"><a class="btn2" href="/submit-meet">+ Submit Your Meet</a></div>
     ${cards||`<div class="card"><div class="muted">No public meets yet.</div></div>`}`}));
 });
+
+// ── 2026 Indoor Nationals schedule (public, read-only) ────────────────────────
+const NATIONALS = require('./data/nationals2026.js');
+
+// Featured banner shown on /meets (and the app's Meets tab) linking to the
+// full schedule. Kept as a helper so it can be dropped onto other pages too.
+function nationalsFeatureCardHtml() {
+  return `
+    <a href="/nationals" class="nats-feature">
+      <div class="nats-feature-glow"></div>
+      <div class="nats-feature-body">
+        <div class="nats-feature-badge">🏆 National Championship</div>
+        <div class="nats-feature-title">${esc(NATIONALS.title)}</div>
+        <div class="nats-feature-meta">${esc(NATIONALS.location)} &nbsp;•&nbsp; ${esc(NATIONALS.dateRange)}</div>
+      </div>
+      <div class="nats-feature-cta">View Schedule →</div>
+    </a>
+    <style>
+      .nats-feature{position:relative;display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+        text-decoration:none;color:var(--white);margin-bottom:18px;padding:20px 22px;overflow:hidden;
+        background:linear-gradient(120deg,var(--navy) 0%,var(--navy3) 60%,#2f4c78 100%);
+        border:1px solid rgba(56,189,248,.25);border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);
+        transition:transform .15s ease,box-shadow .15s ease}
+      .nats-feature:hover{transform:translateY(-2px)}
+      .nats-feature-glow{position:absolute;top:-40%;right:-10%;width:280px;height:280px;pointer-events:none;
+        background:radial-gradient(circle,rgba(249,115,22,.35),transparent 70%)}
+      .nats-feature-body{position:relative;flex:1;min-width:220px}
+      .nats-feature-badge{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.08em;
+        text-transform:uppercase;color:var(--sky);background:rgba(56,189,248,.12);
+        border:1px solid rgba(56,189,248,.3);padding:4px 10px;border-radius:999px;margin-bottom:10px}
+      .nats-feature-title{font-family:'Barlow Condensed','Inter',sans-serif;font-weight:700;
+        font-size:24px;line-height:1.1;letter-spacing:.01em}
+      .nats-feature-meta{color:#c7d6ea;font-size:14px;font-weight:500;margin-top:6px}
+      .nats-feature-cta{position:relative;font-weight:800;font-size:15px;color:var(--navy);
+        background:linear-gradient(180deg,#ffa94d,var(--orange));padding:12px 20px;border-radius:999px;
+        box-shadow:0 6px 16px rgba(249,115,22,.4);white-space:nowrap}
+      @media(max-width:560px){.nats-feature-cta{width:100%;text-align:center}}
+    </style>`;
+}
+
+app.get('/nationals', (req, res) => {
+  const data = getSessionUser(req);
+  res.send(pageShell({
+    title: NATIONALS.title,
+    description: `${NATIONALS.title} — full tentative event schedule. ${NATIONALS.location}, ${NATIONALS.dateRange}.`,
+    user: data?.user || null,
+    bodyHtml: renderNationalsSchedule(),
+  }));
+});
+
+function renderNationalsSchedule() {
+  const dayId = i => `day-${i}`;
+  const dayShort = date => {
+    const m = String(date).match(/^(\w+)\s+([\d/]+)/);
+    return m ? `${m[1].slice(0,3)} ${m[2].replace(/\/26$/,'')}` : esc(date);
+  };
+
+  const dayNav = NATIONALS.days.map((d,i)=>
+    `<a class="ns-pill" href="#${dayId(i)}">${esc(dayShort(d.date))}</a>`).join('');
+
+  const daysHtml = NATIONALS.days.map((d,i)=>{
+    // Walk items, buffering consecutive events into one table.
+    let out = '';
+    let buf = [];
+    const flush = () => {
+      if (!buf.length) return;
+      out += `
+        <div class="ns-table-wrap">
+          <table class="ns-table">
+            <thead><tr><th>#</th><th>Division</th><th>Distance</th><th>Format</th><th>To Qualify</th></tr></thead>
+            <tbody>${buf.map(e=>`
+              <tr>
+                <td class="ns-num">${esc(e.num)||'—'}</td>
+                <td class="ns-div">${esc(e.division)}</td>
+                <td>${esc(e.distance)}</td>
+                <td class="ns-muted">${esc(e.format)||'—'}</td>
+                <td>${e.qualify?`<span class="ns-qual">${esc(e.qualify)}</span>`:'—'}</td>
+              </tr>`).join('')}</tbody>
+          </table>
+        </div>`;
+      buf = [];
+    };
+    d.items.forEach(it=>{
+      if (it.t==='event'){ buf.push(it); return; }
+      flush();
+      if (it.t==='head') out += `<div class="ns-head">${esc(it.text)}</div>`;
+      else if (it.t==='time') out += `<div class="ns-agenda"><span class="ns-time">${esc(it.time)}</span><span class="ns-agenda-text">${esc(it.text)}</span></div>`;
+      else if (it.t==='note') out += `<div class="ns-note">${esc(it.text)}</div>`;
+    });
+    flush();
+    return `
+      <section class="ns-day" id="${dayId(i)}">
+        <div class="ns-day-header"><span class="ns-day-date">${esc(d.date)}</span></div>
+        <div class="ns-day-body">${out}</div>
+      </section>`;
+  }).join('');
+
+  return `
+    <div class="ns-hero">
+      <div class="ns-hero-org">${esc(NATIONALS.org)}</div>
+      <h1 class="ns-hero-title">${esc(NATIONALS.title)}</h1>
+      <div class="ns-hero-meta">${esc(NATIONALS.location)} &nbsp;•&nbsp; ${esc(NATIONALS.dateRange)}</div>
+      ${NATIONALS.tentative?`<div class="ns-tentative">⚠︎ Tentative schedule — subject to change based on final entries</div>`:''}
+    </div>
+    <div class="ns-daynav">${dayNav}</div>
+    ${daysHtml}
+    <div class="ns-footer">Schedule provided by ${esc(NATIONALS.org)}. Times are approximate and subject to change.</div>
+    <style>
+      .ns-hero{background:linear-gradient(135deg,var(--navy),var(--navy3));color:var(--white);
+        border-radius:var(--radius-lg);padding:28px 24px;text-align:center;box-shadow:var(--shadow-lg);margin-bottom:18px}
+      .ns-hero-org{font-size:12px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--sky);margin-bottom:8px}
+      .ns-hero-title{font-family:'Barlow Condensed','Inter',sans-serif;font-weight:700;font-size:32px;line-height:1.08;margin:0;color:var(--white)}
+      .ns-hero-meta{color:#c7d6ea;font-size:15px;font-weight:500;margin-top:8px}
+      .ns-tentative{display:inline-block;margin-top:14px;font-size:12.5px;font-weight:700;color:#ffd9a8;
+        background:rgba(249,115,22,.14);border:1px solid rgba(249,115,22,.35);padding:6px 14px;border-radius:999px}
+      .ns-daynav{position:sticky;top:0;z-index:20;display:flex;gap:8px;overflow-x:auto;padding:12px 2px;
+        margin-bottom:14px;background:var(--page);-webkit-overflow-scrolling:touch}
+      .ns-pill{flex:0 0 auto;font-size:13px;font-weight:700;color:var(--text);text-decoration:none;
+        background:var(--card);border:1px solid var(--border2);padding:8px 14px;border-radius:999px;white-space:nowrap;transition:all .12s}
+      .ns-pill:hover{background:var(--navy);color:var(--white);border-color:var(--navy)}
+      .ns-day{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+        box-shadow:var(--shadow-sm);margin-bottom:18px;overflow:hidden;scroll-margin-top:64px}
+      .ns-day-header{background:linear-gradient(90deg,var(--navy),var(--navy2));padding:14px 20px}
+      .ns-day-date{font-family:'Barlow Condensed','Inter',sans-serif;font-weight:700;font-size:22px;color:var(--white);letter-spacing:.02em}
+      .ns-day-body{padding:16px 18px}
+      .ns-head{font-weight:800;font-size:15px;color:var(--navy);margin:18px 0 8px;padding-left:12px;
+        border-left:4px solid var(--orange);line-height:1.3}
+      .ns-head:first-child{margin-top:0}
+      .ns-agenda{display:flex;gap:12px;align-items:baseline;padding:5px 0;border-bottom:1px dashed var(--border)}
+      .ns-time{flex:0 0 78px;font-weight:800;font-size:13px;color:var(--sky2);font-variant-numeric:tabular-nums}
+      .ns-agenda-text{color:var(--text);font-size:14px}
+      .ns-note{color:var(--muted);font-size:13px;font-style:italic;padding:4px 0}
+      .ns-table-wrap{overflow-x:auto;margin:8px 0 6px;border:1px solid var(--border);border-radius:var(--radius-sm)}
+      .ns-table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:520px}
+      .ns-table th{background:var(--panel);color:var(--muted);font-size:11px;font-weight:800;text-transform:uppercase;
+        letter-spacing:.04em;text-align:left;padding:9px 12px;border-bottom:1px solid var(--border2)}
+      .ns-table td{padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
+      .ns-table tr:last-child td{border-bottom:none}
+      .ns-table tbody tr:hover{background:rgba(56,189,248,.06)}
+      .ns-num{font-weight:800;color:var(--navy);font-variant-numeric:tabular-nums;white-space:nowrap}
+      .ns-div{font-weight:700;color:var(--text)}
+      .ns-muted{color:var(--muted)}
+      .ns-qual{display:inline-block;font-size:12px;font-weight:700;color:var(--navy);
+        background:rgba(56,189,248,.14);border:1px solid rgba(56,189,248,.3);padding:2px 9px;border-radius:999px;white-space:nowrap}
+      .ns-footer{text-align:center;color:var(--muted);font-size:12.5px;margin:8px 0 24px}
+      @media(max-width:560px){.ns-hero-title{font-size:26px}.ns-time{flex-basis:66px}}
+    </style>`;
+}
 
 
 // ── Submit a Rink (public) ────────────────────────────────────────────────────
