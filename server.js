@@ -691,6 +691,11 @@ function nationalsFeatureCardHtml() {
 }
 
 app.get('/nationals', (req, res) => {
+  // ?embed=1 → bare schedule (no site nav/footer) for embedding inside the
+  // native SSM app's WebView. Otherwise the full branded website page.
+  if (req.query.embed) {
+    return res.send(nationalsEmbedShell(renderNationalsSchedule()));
+  }
   const data = getSessionUser(req);
   res.send(pageShell({
     title: NATIONALS.title,
@@ -699,6 +704,32 @@ app.get('/nationals', (req, res) => {
     bodyHtml: renderNationalsSchedule(),
   }));
 });
+
+// Minimal standalone shell (no website chrome) so the schedule can be embedded
+// inside the native app's WebView. Redefines the same design tokens the
+// schedule CSS relies on (normally provided by pageShell's :root).
+function nationalsEmbedShell(inner) {
+  return `<!doctype html><html lang="en"><head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet"/>
+  <style>
+    :root{--navy:#13213a;--navy2:#1b2c4a;--navy3:#263c61;--orange:#F97316;--orange2:#ea580c;
+      --sky:#38BDF8;--sky2:#0ea5e9;--white:#ffffff;--page:#e8edf3;--panel:#f3f6f9;--card:#f8fafc;
+      --border:rgba(19,33,58,.10);--border2:rgba(19,33,58,.16);--text:#24324a;--muted:#667085;
+      --shadow-sm:0 1px 2px rgba(19,33,58,.05);--shadow:0 4px 14px rgba(19,33,58,.07);
+      --shadow-lg:0 10px 30px rgba(19,33,58,.10);--radius-sm:8px;--radius:14px;--radius-lg:20px}
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{scroll-behavior:smooth}
+    body{font-family:'Inter',ui-sans-serif,system-ui,sans-serif;background:var(--page);color:var(--text);
+      padding:14px;padding-top:max(14px,env(safe-area-inset-top));
+      padding-bottom:max(24px,env(safe-area-inset-bottom))}
+    /* In embed mode the sticky day-nav should stick to the top of the webview. */
+    .ns-daynav{top:0}
+  </style></head><body>${inner}</body></html>`;
+}
 
 function renderNationalsSchedule() {
   const dayId = i => `day-${i}`;

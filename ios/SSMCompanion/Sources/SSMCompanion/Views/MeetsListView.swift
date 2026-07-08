@@ -54,6 +54,14 @@ public struct MeetsListView: View {
                     }
                     .padding(.horizontal)
 
+                    if viewModel.selectedFilter == .nationals {
+                        NavigationLink { NationalsScheduleView() } label: {
+                            NationalsScheduleBanner()
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.horizontal)
+                    }
+
                     if viewModel.isLoading && viewModel.meets.isEmpty {
                         ProgressView().frame(maxWidth: .infinity).padding(.top, 40)
                     } else if let error = viewModel.errorMessage {
