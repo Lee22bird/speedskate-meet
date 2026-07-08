@@ -67,8 +67,12 @@ public struct MeetsListView: View {
                     } else if let error = viewModel.errorMessage {
                         ContentUnavailableFallback(text: error)
                     } else if viewModel.filteredMeets.isEmpty {
-                        ContentUnavailableFallback(text: "No meets match those filters.")
-                            .padding(.top, 40)
+                        // Under the Nationals filter the schedule banner above is
+                        // the content, so skip the generic "no meets" message.
+                        if viewModel.selectedFilter != .nationals {
+                            ContentUnavailableFallback(text: "No meets match those filters.")
+                                .padding(.top, 40)
+                        }
                     } else {
                         if let live = viewModel.liveMeet {
                             NavigationLink(value: live) {
