@@ -20,6 +20,7 @@ public enum MeetFilterChip: String, CaseIterable, Identifiable {
 @MainActor
 public final class MeetsListViewModel: ObservableObject {
     @Published public var meets: [MeetSummary] = []
+    @Published public var featuredSchedule: FeaturedSchedule?
     @Published public var isLoading = false
     @Published public var errorMessage: String?
     @Published public var searchText: String = ""
@@ -49,7 +50,9 @@ public final class MeetsListViewModel: ObservableObject {
         errorMessage = nil
         defer { isLoading = false }
         do {
-            meets = try await api.meets()
+            let response = try await api.meets()
+            meets = response.meets
+            featuredSchedule = response.featuredSchedule
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }

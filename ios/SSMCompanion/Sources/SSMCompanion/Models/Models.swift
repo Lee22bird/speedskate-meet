@@ -55,9 +55,19 @@ public struct MeetSummary: Decodable, Identifiable, Hashable {
     }
 }
 
+public struct FeaturedSchedule: Decodable, Hashable {
+    public let title: String
+    public let subtitle: String
+    public let url: String
+}
+
 public struct MeetsResponse: Decodable {
     public let ok: Bool
     public let meets: [MeetSummary]
+    // Server-driven promo for a featured schedule (e.g. Nationals). Absent/null
+    // when there's nothing to feature — lets us turn the in-app banner on/off
+    // from the server with no app update.
+    public let featuredSchedule: FeaturedSchedule?
 }
 
 public struct MeetDetail: Decodable {

@@ -9,11 +9,14 @@ import WebKit
 /// content shows — giving a native-feeling screen without re-implementing the
 /// (large, frequently-updated) schedule in Swift.
 public struct NationalsScheduleView: View {
-    private let url = URL(string: "https://speedskatemeet.com/nationals?embed=1")!
+    private let url: URL
 
     @State private var isLoading = true
 
-    public init() {}
+    public init(featured: FeaturedSchedule) {
+        self.url = URL(string: featured.url)
+            ?? URL(string: "https://speedskatemeet.com/nationals?embed=1")!
+    }
 
     public var body: some View {
         ZStack(alignment: .top) {
@@ -64,19 +67,20 @@ public struct NationalsScheduleView: View {
 /// A tappable banner promoting the nationals schedule. Shown on the Meets list
 /// when the "Nationals" filter is active.
 public struct NationalsScheduleBanner: View {
-    public init() {}
+    let featured: FeaturedSchedule
+    public init(featured: FeaturedSchedule) { self.featured = featured }
     public var body: some View {
         HStack(spacing: 14) {
             Image(systemName: "trophy.fill")
                 .font(.system(size: 24, weight: .bold))
                 .foregroundStyle(.white)
                 .frame(width: 46, height: 46)
-                .background(SSMTheme.orangeGradient, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .background(SSMTheme.orange, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             VStack(alignment: .leading, spacing: 3) {
-                Text("2026 Indoor Nationals")
+                Text(featured.title)
                     .font(.ssmRounded(17, weight: .bold))
                     .foregroundStyle(.white)
-                Text("View the full event schedule")
+                Text(featured.subtitle)
                     .font(.ssmRounded(13, weight: .semibold))
                     .foregroundStyle(SSMTheme.muted)
             }

@@ -54,9 +54,9 @@ public struct MeetsListView: View {
                     }
                     .padding(.horizontal)
 
-                    if viewModel.selectedFilter == .nationals {
-                        NavigationLink { NationalsScheduleView() } label: {
-                            NationalsScheduleBanner()
+                    if viewModel.selectedFilter == .nationals, let featured = viewModel.featuredSchedule {
+                        NavigationLink { NationalsScheduleView(featured: featured) } label: {
+                            NationalsScheduleBanner(featured: featured)
                         }
                         .buttonStyle(.plain)
                         .padding(.horizontal)
@@ -67,9 +67,11 @@ public struct MeetsListView: View {
                     } else if let error = viewModel.errorMessage {
                         ContentUnavailableFallback(text: error)
                     } else if viewModel.filteredMeets.isEmpty {
-                        // Under the Nationals filter the schedule banner above is
-                        // the content, so skip the generic "no meets" message.
-                        if viewModel.selectedFilter != .nationals {
+                        // When the Nationals banner is showing it's the content,
+                        // so skip the generic "no meets" message. Once the server
+                        // stops featuring the schedule, the normal empty state
+                        // returns automatically.
+                        if !(viewModel.selectedFilter == .nationals && viewModel.featuredSchedule != nil) {
                             ContentUnavailableFallback(text: "No meets match those filters.")
                                 .padding(.top, 40)
                         }

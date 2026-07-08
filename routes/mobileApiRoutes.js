@@ -15,6 +15,22 @@ const {
 } = require('../services/standings');
 const { staffAssignmentsForMeet } = require('../services/staffAssignments');
 
+// Server-controlled "featured schedule" promo shown as a banner under the
+// app's Nationals tab. Returning null hides the banner in the app with NO app
+// update. It auto-expires the day after Nationals ends, and can be killed
+// early by setting SSM_HIDE_NATIONALS=1 in the environment.
+function featuredScheduleConfig() {
+  if (String(process.env.SSM_HIDE_NATIONALS || '').trim() === '1') return null;
+  // Day after the 2026 Indoor Nationals ends (Central time ~ UTC-5).
+  const expiresAt = Date.parse('2026-07-16T05:00:00Z');
+  if (Date.now() > expiresAt) return null;
+  return {
+    title: '2026 Indoor Nationals',
+    subtitle: 'View the full event schedule',
+    url: 'https://speedskatemeet.com/nationals?embed=1',
+  };
+}
+
 // ── JSON API for the SSM Companion iOS app ─────────────────────────────────
 // Display/control only — every handler here calls the exact same service
 // functions the website already uses (computeMeetStandings, currentRaceInfo,
@@ -153,7 +169,7 @@ module.exports = function createMobileApiRoutes(deps = {}) {
         registrationCount: Array.isArray(m.registrations) ? m.registrations.length : 0,
       }));
 
-    res.json({ ok: true, meets });
+    res.json({ ok: true, meets, featuredSchedule: featuredScheduleConfig() });
   });
 
   router.get('/api/v1/meets/:meetId', (req, res) => {
