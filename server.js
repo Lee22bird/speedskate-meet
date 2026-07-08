@@ -721,6 +721,49 @@ app.get('/nationals/heats', (req, res) => {
   }));
 });
 
+// ── One-off meet import (password-protected) ───────────────────────────────
+// Loads a fully-formed meet object (e.g. the reconstructed Nationals meet) into
+// the live DB without shell access. Set SSM_MEET_IMPORT_KEY in the environment
+// and send it as the "x-import-key" header. Fails closed if the key is unset.
+app.post('/api/admin/import-meet', (req, res) => {
+  const expected = String(process.env.SSM_MEET_IMPORT_KEY || '').trim();
+  if (!expected) return res.status(503).json({ ok: false, error: 'Import disabled: SSM_MEET_IMPORT_KEY not set.' });
+  const provided = String(req.get('x-import-key') || '').trim();
+  const a = Buffer.from(provided), b = Buffer.from(expected);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+    return res.status(401).json({ ok: false, error: 'Unauthorized.' });
+  }
+  // Either import the bundled Nationals meet ({"source":"nationals"}) or a full
+  // meet object posted in the body ({meet:{...}} or the raw object).
+  let meet;
+  if (req.body && req.body.source === 'nationals') {
+    try {
+      meet = JSON.parse(fs.readFileSync(path.join(__dirname, 'data', 'nationals_meet.json'), 'utf8'));
+    } catch (e) {
+      return res.status(500).json({ ok: false, error: 'Bundled nationals meet not found.' });
+    }
+  } else {
+    meet = (req.body && req.body.meet && typeof req.body.meet === 'object') ? req.body.meet : req.body;
+  }
+  if (!meet || typeof meet !== 'object' || Array.isArray(meet) || !meet.id || !meet.meetName) {
+    return res.status(400).json({ ok: false, error: 'Body must be {"source":"nationals"} or a meet object with id and meetName.' });
+  }
+  try {
+    const db = loadDb();
+    db.meets = (db.meets || []).filter(m => Number(m.id) !== Number(meet.id));
+    try { if (typeof migrateMeet === 'function') migrateMeet(meet, 'system'); } catch (e) { /* best effort */ }
+    db.meets.push(meet);
+    saveDb(db);
+    return res.json({
+      ok: true, id: meet.id, meetName: meet.meetName,
+      races: Array.isArray(meet.races) ? meet.races.length : 0,
+      registrations: Array.isArray(meet.registrations) ? meet.registrations.length : 0,
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 // Tab bar linking the two nationals pages; preserves ?embed=1 so navigation
 // stays inside the app's WebView.
 function nationalsTabs(active, embed) {
