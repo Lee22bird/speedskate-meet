@@ -923,7 +923,7 @@ function renderNationalsHeats(embed = false) {
           <div class="nh-div-body">
             ${(div.events || []).map(ev => `
               <div class="nh-event">
-                <div class="nh-event-dist">${esc(ev.distance)}</div>
+                <div class="nh-event-dist">${ev.phase ? `<span class="nh-phase">${esc(ev.phase)}</span>` : ''}${esc(ev.distance)}</div>
                 ${(ev.rounds || []).map(rd => `
                   <div class="nh-round">
                     <div class="nh-round-label">${esc(rd.label)}${rd.toQualify ? ` · <span class="nh-qual">${esc(rd.toQualify)} to qualify</span>` : ''}</div>
@@ -978,7 +978,9 @@ function renderNationalsHeats(embed = false) {
       .nh-div-body{padding:6px 16px 14px}
       .nh-event{padding:10px 0;border-bottom:1px solid var(--border)}
       .nh-event:last-child{border-bottom:none}
-      .nh-event-dist{font-weight:800;color:var(--navy);font-size:15px;margin:6px 0}
+      .nh-event-dist{font-weight:800;color:var(--navy);font-size:15px;margin:6px 0;display:flex;align-items:center;gap:8px}
+      .nh-phase{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--sky2);
+        background:rgba(56,189,248,.14);border:1px solid rgba(56,189,248,.3);padding:2px 8px;border-radius:999px}
       .nh-round{margin:8px 0 8px 2px}
       .nh-round-label{font-weight:700;font-size:12.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin-bottom:5px}
       .nh-qual{color:var(--sky2);text-transform:none;letter-spacing:0}
