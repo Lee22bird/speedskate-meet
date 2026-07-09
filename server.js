@@ -911,35 +911,38 @@ function renderNationalsSchedule(embed = false) {
 }
 
 function renderNationalsHeats(embed = false) {
-  const disciplines = (NATIONALS_HEATS.disciplines || []).map(disc => `
-    <div class="nh-discipline">
-      <div class="nh-disc-label">${esc(disc.name)}</div>
-      ${(disc.divisions || []).map(div => `
-        <details class="nh-div" open>
-          <summary class="nh-div-sum">
-            <span class="nh-div-name">${esc(div.division)}</span>
-            ${div.ages ? `<span class="nh-div-ages">${esc(div.ages)}</span>` : ''}
-          </summary>
-          <div class="nh-div-body">
-            ${(div.events || []).map(ev => `
-              <div class="nh-event">
-                <div class="nh-event-dist">${ev.phase ? `<span class="nh-phase">${esc(ev.phase)}</span>` : ''}${esc(ev.distance)}</div>
-                ${(ev.rounds || []).map(rd => `
-                  <div class="nh-round">
-                    <div class="nh-round-label">${esc(rd.label)}${rd.toQualify ? ` · <span class="nh-qual">${esc(rd.toQualify)} to qualify</span>` : ''}</div>
-                    <div class="nh-skaters">
-                      ${(rd.skaters || []).map(s => `
-                        <div class="nh-skater${s.scratched ? ' nh-scratched' : ''}" data-s="${esc((s.name + ' ' + s.team + ' ' + s.helmet).toLowerCase())}">
-                          <span class="nh-helmet">#${esc(s.helmet)}</span>
-                          <span class="nh-name">${esc(s.name)}</span>
-                          <span class="nh-team">${esc(s.team)}</span>
-                        </div>`).join('')}
-                    </div>
-                  </div>`).join('')}
-              </div>`).join('')}
-          </div>
-        </details>`).join('')}
-    </div>`).join('');
+  const daysHtml = (NATIONALS_HEATS.days || []).map(day => `
+    <section class="hs-day">
+      <div class="hs-day-head">${esc(day.date)}</div>
+      ${(day.sessions || []).map(sess => `
+        <div class="hs-session">
+          ${sess.label ? `<div class="hs-session-label">${esc(sess.label)}</div>` : ''}
+          ${(sess.events || []).map(ev => {
+            const posted = (ev.rounds || []).length > 0;
+            return `
+            <div class="hs-event"${posted ? '' : ' data-empty="1"'}>
+              <div class="hs-event-head">
+                ${ev.num ? `<span class="hs-num">#${esc(ev.num)}</span>` : ''}
+                <span class="hs-ev-div">${esc(ev.division)}</span>
+                <span class="hs-ev-dist">${esc(ev.distance)}</span>
+                ${ev.format ? `<span class="hs-ev-fmt">${esc(ev.format)}</span>` : ''}
+              </div>
+              <div class="hs-event-body">
+                ${posted ? ev.rounds.map(rd => `
+                  <div class="hs-round">
+                    <div class="hs-round-label">${esc(rd.label)}${rd.toQualify ? ` · <span class="hs-qual">${esc(rd.toQualify)} to qualify</span>` : ''}</div>
+                    ${(rd.skaters || []).map(s => `
+                      <div class="hs-skater${s.scratched ? ' hs-scratched' : ''}" data-s="${esc((s.name + ' ' + s.team + ' ' + s.helmet).toLowerCase())}">
+                        <span class="hs-helmet">#${esc(s.helmet)}</span>
+                        <span class="hs-name">${esc(s.name)}</span>
+                        <span class="hs-team">${esc(s.team)}</span>
+                      </div>`).join('')}
+                  </div>`).join('') : `<div class="hs-notposted">Lineups not posted yet</div>`}
+              </div>
+            </div>`;
+          }).join('')}
+        </div>`).join('')}
+    </section>`).join('');
 
   return `
     <div class="nh-hero">
@@ -951,8 +954,8 @@ function renderNationalsHeats(embed = false) {
     ${nationalsTabs('heats', embed)}
     <input id="nh-search" class="nh-search" type="search" autocomplete="off" placeholder="🔍  Search your name to find your heat…" />
     <div id="nh-empty" class="nh-empty" hidden>No skaters match “<span></span>”.</div>
-    ${disciplines}
-    <div class="nh-footer">Heat assignments from the official USARS sheets. Tentative and subject to change.</div>
+    ${daysHtml}
+    <div class="nh-footer">Heat assignments from the official USARS sheets, in running order. Tentative and subject to change.</div>
     <style>
       .nh-hero{background:linear-gradient(135deg,var(--navy),var(--navy3));color:var(--white);
         border-radius:var(--radius-lg);padding:24px 22px;text-align:center;box-shadow:var(--shadow-lg);margin-bottom:16px}
@@ -963,34 +966,33 @@ function renderNationalsHeats(embed = false) {
         background:rgba(249,115,22,.14);border:1px solid rgba(249,115,22,.35);padding:5px 12px;border-radius:999px}
       .nh-search{width:100%;font-size:16px;font-weight:600;color:var(--text);background:var(--card);
         border:1px solid var(--border2);border-radius:999px;padding:13px 18px;margin-bottom:16px;
-        position:sticky;top:0;z-index:20;box-shadow:var(--shadow-sm);-webkit-appearance:none}
+        position:sticky;top:0;z-index:30;box-shadow:var(--shadow-sm);-webkit-appearance:none}
       .nh-search:focus{outline:none;border-color:var(--sky)}
       .nh-empty{text-align:center;color:var(--muted);font-weight:600;padding:22px 0}
-      .nh-disc-label{font-family:'Barlow Condensed','Inter',sans-serif;font-weight:700;font-size:20px;
-        color:var(--navy);text-transform:uppercase;letter-spacing:.04em;margin:18px 0 10px}
-      .nh-div{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
-        box-shadow:var(--shadow-sm);margin-bottom:10px;overflow:hidden}
-      .nh-div-sum{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;
-        gap:10px;padding:14px 16px;background:var(--navy);color:var(--white)}
-      .nh-div-sum::-webkit-details-marker{display:none}
-      .nh-div-name{font-weight:800;font-size:16px}
-      .nh-div-ages{font-size:12px;font-weight:700;color:#c7d6ea}
-      .nh-div-body{padding:6px 16px 14px}
-      .nh-event{padding:10px 0;border-bottom:1px solid var(--border)}
-      .nh-event:last-child{border-bottom:none}
-      .nh-event-dist{font-weight:800;color:var(--navy);font-size:15px;margin:6px 0;display:flex;align-items:center;gap:8px}
-      .nh-phase{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--sky2);
-        background:rgba(56,189,248,.14);border:1px solid rgba(56,189,248,.3);padding:2px 8px;border-radius:999px}
-      .nh-round{margin:8px 0 8px 2px}
-      .nh-round-label{font-weight:700;font-size:12.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin-bottom:5px}
-      .nh-qual{color:var(--sky2);text-transform:none;letter-spacing:0}
-      .nh-skater{display:flex;gap:10px;align-items:baseline;padding:4px 0}
-      .nh-helmet{flex:0 0 46px;font-weight:800;color:var(--navy);font-variant-numeric:tabular-nums;font-size:13px}
-      .nh-name{font-weight:700;color:var(--text);font-size:14px}
-      .nh-team{color:var(--muted);font-size:13px}
-      .nh-scratched{opacity:.5}
-      .nh-scratched .nh-name{text-decoration:line-through}
       .nh-footer{text-align:center;color:var(--muted);font-size:12.5px;margin:16px 0 24px}
+      .hs-day{margin-bottom:20px}
+      .hs-day-head{position:sticky;top:56px;z-index:15;font-family:'Barlow Condensed','Inter',sans-serif;
+        font-weight:700;font-size:22px;color:#fff;background:linear-gradient(90deg,var(--navy),var(--navy2));
+        padding:12px 18px;border-radius:var(--radius);box-shadow:var(--shadow-sm);margin-bottom:12px}
+      .hs-session-label{font-weight:800;font-size:14px;color:var(--navy);padding-left:12px;
+        border-left:4px solid var(--orange);margin:16px 0 10px}
+      .hs-event{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+        box-shadow:var(--shadow-sm);padding:12px 14px;margin-bottom:10px}
+      .hs-event-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px;margin-bottom:2px}
+      .hs-num{font-weight:800;color:var(--sky2);font-size:12px;font-variant-numeric:tabular-nums;
+        background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.3);padding:2px 8px;border-radius:999px}
+      .hs-ev-div{font-weight:800;color:var(--navy);font-size:16px}
+      .hs-ev-dist{color:var(--text);font-weight:600;font-size:14px}
+      .hs-ev-fmt{color:var(--muted);font-size:12px;font-weight:600}
+      .hs-round{margin:8px 0 6px}
+      .hs-round-label{font-weight:700;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin-bottom:4px}
+      .hs-qual{color:var(--sky2);text-transform:none;letter-spacing:0}
+      .hs-skater{display:flex;gap:10px;align-items:baseline;padding:3px 0}
+      .hs-helmet{flex:0 0 46px;font-weight:800;color:var(--navy);font-size:13px;font-variant-numeric:tabular-nums}
+      .hs-name{font-weight:700;color:var(--text);font-size:14px}
+      .hs-team{color:var(--muted);font-size:13px}
+      .hs-scratched{opacity:.5}.hs-scratched .hs-name{text-decoration:line-through}
+      .hs-notposted{color:var(--muted);font-style:italic;font-size:13px;padding:2px 0}
     </style>
     <script>
       (function(){
@@ -998,25 +1000,29 @@ function renderNationalsHeats(embed = false) {
         if(!q) return;
         function apply(){
           var term=q.value.trim().toLowerCase(), any=false;
-          document.querySelectorAll('.nh-discipline').forEach(function(disc){
+          document.querySelectorAll('.hs-day').forEach(function(day){
             var dv=false;
-            disc.querySelectorAll('.nh-div').forEach(function(d){
-              var ev=false;
-              d.querySelectorAll('.nh-event').forEach(function(e){
-                var rv=false;
-                e.querySelectorAll('.nh-round').forEach(function(r){
-                  var sv=false;
-                  r.querySelectorAll('.nh-skater').forEach(function(s){
-                    var m=!term||s.getAttribute('data-s').indexOf(term)!==-1;
-                    s.hidden=!m; if(m) sv=true;
+            day.querySelectorAll('.hs-session').forEach(function(se){
+              var sv=false;
+              se.querySelectorAll('.hs-event').forEach(function(ev){
+                var evVis=false;
+                if(ev.getAttribute('data-empty')==='1'){
+                  evVis=!term;
+                } else {
+                  ev.querySelectorAll('.hs-round').forEach(function(r){
+                    var rv=false;
+                    r.querySelectorAll('.hs-skater').forEach(function(s){
+                      var m=!term||s.getAttribute('data-s').indexOf(term)!==-1;
+                      s.hidden=!m; if(m) rv=true;
+                    });
+                    r.hidden=!rv; if(rv) evVis=true;
                   });
-                  r.hidden=!sv; if(sv) rv=true;
-                });
-                e.hidden=!rv; if(rv) ev=true;
+                }
+                ev.hidden=!evVis; if(evVis) sv=true;
               });
-              d.hidden=!ev; if(ev){dv=true; if(term) d.open=true;}
+              se.hidden=!sv; if(sv) dv=true;
             });
-            disc.hidden=!dv; if(dv) any=true;
+            day.hidden=!dv; if(dv) any=true;
           });
           if(empty){ empty.hidden=!(term&&!any); var sp=empty.querySelector('span'); if(sp) sp.textContent=q.value; }
         }
