@@ -796,6 +796,7 @@ function nationalsEmbedShell(inner) {
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet"/>
   <style>
     :root{--navy:#13213a;--navy2:#1b2c4a;--navy3:#263c61;--orange:#F97316;--orange2:#ea580c;
+      --green:#10b981;
       --sky:#38BDF8;--sky2:#0ea5e9;--white:#ffffff;--page:#e8edf3;--panel:#f3f6f9;--card:#f8fafc;
       --border:rgba(19,33,58,.10);--border2:rgba(19,33,58,.16);--text:#24324a;--muted:#667085;
       --shadow-sm:0 1px 2px rgba(19,33,58,.05);--shadow:0 4px 14px rgba(19,33,58,.07);
@@ -929,13 +930,15 @@ function renderNationalsHeats(embed = false) {
               </div>
               <div class="hs-event-body">
                 ${posted ? ev.rounds.map(rd => `
-                  <div class="hs-round">
-                    <div class="hs-round-label">${esc(rd.label)}${rd.toQualify ? ` · <span class="hs-qual">${esc(rd.toQualify)} to qualify</span>` : ''}</div>
+                  <div class="hs-round${rd.results ? ' hs-round-results' : ''}">
+                    <div class="hs-round-label">${esc(rd.label)}${rd.results ? ` · <span class="hs-final-badge">✓ Final Results</span>` : ''}${rd.toQualify ? ` · <span class="hs-qual">${esc(rd.toQualify)} to qualify</span>` : ''}</div>
                     ${(rd.skaters || []).map(s => `
-                      <div class="hs-skater${s.scratched ? ' hs-scratched' : ''}" data-s="${esc((s.name + ' ' + s.team + ' ' + s.helmet).toLowerCase())}">
+                      <div class="hs-skater${s.scratched ? ' hs-scratched' : ''}${s.place ? ' hs-placed' : ''}${s.place === '1' ? ' hs-win' : ''}" data-s="${esc((s.name + ' ' + s.team + ' ' + s.helmet).toLowerCase())}">
+                        ${rd.results ? `<span class="hs-place">${s.place ? esc(s.place) : '–'}</span>` : ''}
                         <span class="hs-helmet">#${esc(s.helmet)}</span>
                         <span class="hs-name">${esc(s.name)}</span>
                         <span class="hs-team">${esc(s.team)}</span>
+                        ${s.time ? `<span class="hs-time">${esc(s.time)}</span>` : ''}
                       </div>`).join('')}
                   </div>`).join('') : `<div class="hs-notposted">Lineups not posted yet</div>`}
               </div>
@@ -993,6 +996,16 @@ function renderNationalsHeats(embed = false) {
       .hs-team{color:var(--muted);font-size:13px}
       .hs-scratched{opacity:.5}.hs-scratched .hs-name{text-decoration:line-through}
       .hs-notposted{color:var(--muted);font-style:italic;font-size:13px;padding:2px 0}
+      /* Final results (green) */
+      .hs-round-results .hs-round-label{color:var(--green)}
+      .hs-final-badge{color:var(--green);font-weight:800;text-transform:none;letter-spacing:0}
+      .hs-place{flex:0 0 24px;text-align:center;font-weight:800;font-size:12px;color:var(--green);
+        background:rgba(34,197,94,.14);border:1px solid rgba(34,197,94,.34);border-radius:6px;
+        padding:1px 0;font-variant-numeric:tabular-nums}
+      .hs-time{margin-left:auto;flex:0 0 auto;font-weight:700;font-size:13px;color:var(--green);
+        font-variant-numeric:tabular-nums;padding-left:8px}
+      .hs-win .hs-place{background:var(--green);color:#fff;border-color:var(--green)}
+      .hs-win .hs-name{color:var(--green);font-weight:800}
     </style>
     <script>
       (function(){
