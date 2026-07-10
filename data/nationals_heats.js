@@ -4982,38 +4982,6 @@ module.exports = {
        ]
       },
       {
-       "num": "87",
-       "division": "Premier Ladies",
-       "distance": "1000 Meters",
-       "format": "Final",
-       "qualify": "",
-       "rounds": [
-        {
-         "label": "Final",
-         "toQualify": "",
-         "results": false,
-         "skaters": [
-          {
-           "helmet": "34",
-           "name": "Catherine Ream",
-           "team": "Team Xtreme",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "36",
-           "name": "Donna Shelton",
-           "team": "California Speed",
-           "scratched": true,
-           "place": "",
-           "time": ""
-          }
-         ]
-        }
-       ]
-      },
-      {
        "num": "88",
        "division": "Premier Men",
        "distance": "1000 Meters",
@@ -9938,14 +9906,6 @@ module.exports = {
        "rounds": []
       },
       {
-       "num": "175",
-       "division": "Premier Ladies",
-       "distance": "500 Meters",
-       "format": "",
-       "qualify": "Final",
-       "rounds": []
-      },
-      {
        "num": "176",
        "division": "Premier Men",
        "distance": "500 Meters",
@@ -14800,14 +14760,6 @@ module.exports = {
       {
        "num": "262",
        "division": "Grand Esquire Men",
-       "distance": "700 Meters",
-       "format": "",
-       "qualify": "Final",
-       "rounds": []
-      },
-      {
-       "num": "263",
-       "division": "Premier Ladies",
        "distance": "700 Meters",
        "format": "",
        "qualify": "Final",
