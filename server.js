@@ -920,17 +920,25 @@ function renderNationalsSchedule(embed = false) {
 }
 
 function renderNationalsHeats(embed = false) {
-  // Results view: keep only rounds that carry finishing places (final results),
-  // dropping heats/semis lineups and any event/session/day left empty. This
-  // naturally shows just the completed finals days (Long, Short, …) and adds a
-  // new day automatically as soon as its placement sheets are folded in.
-  const resultDays = (NATIONALS_HEATS.days || []).map(day => ({
+  // Finals view: show only the days that have actually raced (add each day's
+  // date here as it happens), and within them keep only FINAL rounds — whether
+  // they already have finishing places (green results) or are still a seeded
+  // final lineup — dropping heats/semis and anything left empty. A final flips
+  // to green automatically once its placement sheet is folded in.
+  const RESULTS_SHOW_DATES = new Set(['7/9/26', '7/10/26', '7/11/26']);
+  const inShowList = date => {
+    const m = String(date).match(/(\d+\/\d+\/\d+)/);
+    return !!(m && RESULTS_SHOW_DATES.has(m[1]));
+  };
+  // Match "Final" but NOT "Semifinal" (which contains the substring "final").
+  const isFinalRound = r => r.results || /^final/i.test(r.label || '');
+  const resultDays = (NATIONALS_HEATS.days || []).filter(day => inShowList(day.date)).map(day => ({
     ...day,
     sessions: (day.sessions || []).map(sess => ({
       ...sess,
       events: (sess.events || []).map(ev => ({
         ...ev,
-        rounds: (ev.rounds || []).filter(r => r.results),
+        rounds: (ev.rounds || []).filter(isFinalRound),
       })).filter(ev => ev.rounds.length),
     })).filter(sess => sess.events.length),
   })).filter(day => day.sessions.length);
