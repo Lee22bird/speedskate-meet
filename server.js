@@ -818,10 +818,18 @@ function renderNationalsSchedule(embed = false) {
     return m ? `${m[1].slice(0,3)} ${m[2].replace(/\/26$/,'')}` : esc(date);
   };
 
-  const dayNav = NATIONALS.days.map((d,i)=>
+  // Hide days that are already finished — their finals live on the Heat Sheets
+  // (Results) tab. Edit this set as the meet progresses.
+  const SCHEDULE_HIDE_DATES = new Set(['7/7/26', '7/8/26', '7/9/26', '7/10/26']);
+  const scheduleDays = NATIONALS.days.filter(d => {
+    const m = String(d.date).match(/(\d+\/\d+\/\d+)/);
+    return !(m && SCHEDULE_HIDE_DATES.has(m[1]));
+  });
+
+  const dayNav = scheduleDays.map((d,i)=>
     `<a class="ns-pill" href="#${dayId(i)}">${esc(dayShort(d.date))}</a>`).join('');
 
-  const daysHtml = NATIONALS.days.map((d,i)=>{
+  const daysHtml = scheduleDays.map((d,i)=>{
     // Walk items, buffering consecutive events into one table.
     let out = '';
     let buf = [];
@@ -912,7 +920,22 @@ function renderNationalsSchedule(embed = false) {
 }
 
 function renderNationalsHeats(embed = false) {
-  const daysHtml = (NATIONALS_HEATS.days || []).map(day => `
+  // Results view: keep only rounds that carry finishing places (final results),
+  // dropping heats/semis lineups and any event/session/day left empty. This
+  // naturally shows just the completed finals days (Long, Short, …) and adds a
+  // new day automatically as soon as its placement sheets are folded in.
+  const resultDays = (NATIONALS_HEATS.days || []).map(day => ({
+    ...day,
+    sessions: (day.sessions || []).map(sess => ({
+      ...sess,
+      events: (sess.events || []).map(ev => ({
+        ...ev,
+        rounds: (ev.rounds || []).filter(r => r.results),
+      })).filter(ev => ev.rounds.length),
+    })).filter(sess => sess.events.length),
+  })).filter(day => day.sessions.length);
+
+  const daysHtml = resultDays.map(day => `
     <section class="hs-day">
       <div class="hs-day-head">${esc(day.date)}</div>
       ${(day.sessions || []).map(sess => `
