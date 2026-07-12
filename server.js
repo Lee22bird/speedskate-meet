@@ -654,6 +654,7 @@ app.get('/meets', (req, res) => {
 // ── 2026 Indoor Nationals schedule (public, read-only) ────────────────────────
 const NATIONALS = require('./data/nationals2026.js');
 const NATIONALS_HEATS = require('./data/nationals_heats.js');
+const NATIONALS_CHAMPIONS = require('./data/nationals_champions.js');
 
 // Featured banner shown on /meets (and the app's Meets tab) linking to the
 // full schedule. Kept as a helper so it can be dropped onto other pages too.
@@ -721,6 +722,20 @@ app.get('/nationals/heats', (req, res) => {
   }));
 });
 
+app.get('/nationals/champions', (req, res) => {
+  const embed = !!req.query.embed;
+  if (embed) {
+    return res.send(nationalsEmbedShell(renderNationalsChampions(true)));
+  }
+  const data = getSessionUser(req);
+  res.send(pageShell({
+    title: NATIONALS_CHAMPIONS.title,
+    description: `${NATIONALS.title} — overall division champions and standings.`,
+    user: data?.user || null,
+    bodyHtml: renderNationalsChampions(false),
+  }));
+});
+
 // ── One-off meet import (password-protected) ───────────────────────────────
 // Loads a fully-formed meet object (e.g. the reconstructed Nationals meet) into
 // the live DB without shell access. Set SSM_MEET_IMPORT_KEY in the environment
@@ -764,6 +779,91 @@ app.post('/api/admin/import-meet', (req, res) => {
   }
 });
 
+// Overall division champions / standings, scored across each division's three
+// distances. Podium gets medals; every skater shows their per-distance placings.
+function renderNationalsChampions(embed = false) {
+  const ord = n => {
+    if (!n) return '';
+    const num = Number(n);
+    if (isNaN(num)) return esc(n); // DQ / DNF / etc.
+    const s = ['th', 'st', 'nd', 'rd'], v = num % 100;
+    return num + (s[(v - 20) % 10] || s[v] || s[0]);
+  };
+  const medal = r => (r === '1' ? '🥇' : r === '2' ? '🥈' : r === '3' ? '🥉' : '');
+  const divsHtml = (NATIONALS_CHAMPIONS.divisions || []).map(dv => `
+    <section class="ch-div">
+      <div class="ch-div-head">${esc(dv.division)}</div>
+      <div class="ch-list">
+        ${(dv.skaters || []).map(s => `
+          <div class="ch-row${s.rank === '1' ? ' ch-champ' : ''}" data-s="${esc(s.name.toLowerCase())}">
+            <span class="ch-rank">${medal(s.rank) || esc(s.rank)}</span>
+            <span class="ch-name">${esc(s.name)}</span>
+            <span class="ch-places">${(s.places || []).map(p => `<span class="ch-pl">${esc(p.m)}m <b>${ord(p.place)}</b></span>`).join('')}</span>
+            ${s.total ? `<span class="ch-pts">${esc(s.total)}<small>pts</small></span>` : ''}
+          </div>`).join('')}
+      </div>
+    </section>`).join('');
+  return `
+    <div class="nh-hero">
+      <div class="nh-hero-eyebrow">2026 INDOOR NATIONALS</div>
+      <h1 class="nh-hero-title">Division Champions</h1>
+      <div class="nh-hero-meta">${esc(NATIONALS_CHAMPIONS.subtitle || '')}</div>
+    </div>
+    ${nationalsTabs('champions', embed)}
+    <input id="ch-search" class="nh-search" type="search" autocomplete="off" placeholder="🔍  Search a skater…" />
+    <div id="ch-empty" class="nh-empty" hidden>No skaters match your search.</div>
+    ${divsHtml}
+    <div class="nh-footer">Overall standings scored across each division's three distances. Unofficial — see the official USARS results for the record.</div>
+    <style>
+      .nh-hero{background:linear-gradient(135deg,var(--navy),var(--navy3));color:var(--white);
+        border-radius:var(--radius-lg);padding:24px 22px;text-align:center;box-shadow:var(--shadow-lg);margin-bottom:16px}
+      .nh-hero-eyebrow{font-size:12px;font-weight:800;letter-spacing:.14em;color:var(--sky);margin-bottom:6px}
+      .nh-hero-title{font-family:'Barlow Condensed','Inter',sans-serif;font-weight:700;font-size:30px;line-height:1.05;color:var(--white)}
+      .nh-hero-meta{color:#c7d6ea;font-size:14px;font-weight:500;margin-top:6px}
+      .nh-search{width:100%;font-size:16px;font-weight:600;color:var(--text);background:var(--card);
+        border:1px solid var(--border2);border-radius:999px;padding:13px 18px;margin-bottom:16px;
+        position:sticky;top:0;z-index:30;box-shadow:var(--shadow-sm);-webkit-appearance:none}
+      .nh-search:focus{outline:none;border-color:var(--sky)}
+      .nh-empty{text-align:center;color:var(--muted);font-weight:600;padding:22px 0}
+      .nh-footer{text-align:center;color:var(--muted);font-size:12.5px;margin:16px 0 24px}
+      .ch-div{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+        box-shadow:var(--shadow-sm);padding:10px 14px 6px;margin-bottom:12px}
+      .ch-div-head{font-family:'Barlow Condensed','Inter',sans-serif;font-weight:700;font-size:20px;
+        color:var(--navy);border-bottom:2px solid var(--border2);padding-bottom:6px;margin-bottom:4px}
+      .ch-row{display:flex;align-items:baseline;gap:10px;padding:7px 4px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+      .ch-row:last-child{border-bottom:none}
+      .ch-champ{background:linear-gradient(90deg,rgba(249,115,22,.10),transparent);border-radius:8px}
+      .ch-rank{flex:0 0 30px;text-align:center;font-weight:800;font-size:15px;color:var(--navy);font-variant-numeric:tabular-nums}
+      .ch-name{font-weight:700;color:var(--text);font-size:14px;flex:1 1 180px;min-width:120px}
+      .ch-places{display:flex;flex-wrap:wrap;gap:5px;flex:2 1 220px}
+      .ch-pl{font-size:11.5px;font-weight:600;color:var(--muted);background:var(--panel);
+        border:1px solid var(--border);border-radius:6px;padding:1px 7px}
+      .ch-pl b{color:var(--navy)}
+      .ch-pts{flex:0 0 auto;font-weight:800;color:var(--sky2);font-size:14px;font-variant-numeric:tabular-nums}
+      .ch-pts small{font-weight:600;color:var(--muted);font-size:10px;margin-left:2px}
+    </style>
+    <script>
+      (function(){
+        var q=document.getElementById('ch-search'), empty=document.getElementById('ch-empty');
+        if(!q) return;
+        function apply(){
+          var t=q.value.trim().toLowerCase(), any=false;
+          document.querySelectorAll('.ch-div').forEach(function(dv){
+            var shown=0;
+            dv.querySelectorAll('.ch-row').forEach(function(r){
+              var m=!t||(r.getAttribute('data-s')||'').indexOf(t)>-1;
+              r.style.display=m?'':'none'; if(m)shown++;
+            });
+            dv.style.display=shown?'':'none'; if(shown)any=true;
+          });
+          empty.hidden=any;
+        }
+        q.addEventListener('input',apply);
+      })();
+    </script>
+  `;
+}
+
 // Tab bar linking the two nationals pages; preserves ?embed=1 so navigation
 // stays inside the app's WebView.
 function nationalsTabs(active, embed) {
@@ -774,6 +874,7 @@ function nationalsTabs(active, embed) {
     <div class="nats-tabs">
       ${tab('schedule', 'Schedule', '/nationals')}
       ${tab('heats', 'Heat Sheets', '/nationals/heats')}
+      ${tab('champions', 'Champions', '/nationals/champions')}
     </div>
     <style>
       .nats-tabs{display:flex;gap:8px;margin-bottom:16px}
