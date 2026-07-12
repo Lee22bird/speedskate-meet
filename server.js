@@ -795,10 +795,10 @@ function renderNationalsChampions(embed = false) {
       <div class="ch-div-head">${esc(dv.division)}</div>
       <div class="ch-list">
         ${(dv.skaters || []).map(s => `
-          <div class="ch-row${s.rank === '1' ? ' ch-champ' : ''}" data-s="${esc(s.name.toLowerCase())}">
+          <div class="ch-row${s.rank === '1' ? ' ch-champ' : ''}" data-s="${esc((s.name + ' ' + (s.team || '')).toLowerCase())}">
             <span class="ch-rank">${medal(s.rank) || esc(s.rank)}</span>
-            <span class="ch-name">${esc(s.name)}</span>
-            <span class="ch-places">${(s.places || []).map(p => `<span class="ch-pl">${esc(p.m)}m <b>${ord(p.place)}</b></span>`).join('')}</span>
+            <span class="ch-name">${esc(s.name)}${s.team ? ` <em class="ch-team">${esc(s.team)}</em>` : ''}</span>
+            <span class="ch-places">${(s.places || []).map(p => { const dq = p.place && isNaN(Number(p.place)); return `<span class="ch-pl${dq ? ' ch-dq' : ''}">${esc(p.m)}m <b>${ord(p.place)}</b></span>`; }).join('')}</span>
             ${s.total ? `<span class="ch-pts">${esc(s.total)}<small>pts</small></span>` : ''}
           </div>`).join('')}
       </div>
@@ -835,6 +835,9 @@ function renderNationalsChampions(embed = false) {
       .ch-champ{background:linear-gradient(90deg,rgba(249,115,22,.10),transparent);border-radius:8px}
       .ch-rank{flex:0 0 30px;text-align:center;font-weight:800;font-size:15px;color:var(--navy);font-variant-numeric:tabular-nums}
       .ch-name{font-weight:700;color:var(--text);font-size:14px;flex:1 1 180px;min-width:120px}
+      .ch-team{font-style:normal;font-weight:600;color:var(--muted);font-size:12.5px}
+      .ch-dq{color:#dc2626;border-color:rgba(220,38,38,.35) !important;background:rgba(220,38,38,.08) !important;text-decoration:line-through}
+      .ch-dq b{color:#dc2626}
       .ch-places{display:flex;flex-wrap:wrap;gap:5px;flex:2 1 220px}
       .ch-pl{font-size:11.5px;font-weight:600;color:var(--muted);background:var(--panel);
         border:1px solid var(--border);border-radius:6px;padding:1px 7px}
