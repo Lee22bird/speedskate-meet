@@ -3,6 +3,9 @@ const HEAT_ADVANCEMENT_MIN = 8;
 const TWO_HEAT_ADVANCEMENT_MAX = 14;
 const FINAL_TARGET_SIZE = 6;
 const HEAT_MAX_SIZE = 7;
+// USARS SR505.4: semis are always 2 heats of ~6, top 3 → the 6-skater final.
+const SEMI_COUNT = 2;
+const SEMI_PER_HEAT = Math.ceil(FINAL_TARGET_SIZE / SEMI_COUNT); // 3
 
 function normalEntryCount(value) {
   const n = Number(value);
@@ -45,15 +48,30 @@ function planNormalRaceSizing(entryCount) {
     };
   }
 
-  const heatCount = Math.max(3, Math.ceil(count / HEAT_MAX_SIZE));
+  // 15+ : Heats → 2 Semis → Final, per USARS SR505.3/.4. Exact bands:
+  //   15–24 → 3 heats, top 4 each (→12);  25–32 → 4 heats, top 3 each (→12).
+  //   Each semi (2 × 6) advances its top 3 to the 6-skater final.
+  //   33+ → SR505.3 requires quarterfinals; flagged (quartersNeeded) — for now
+  //   we extend with more heats into the semis and mark it for the quarter round.
+  let heatCount, heatPerHeat;
+  if (count <= 24) { heatCount = 3; heatPerHeat = 4; }
+  else if (count <= 32) { heatCount = 4; heatPerHeat = 3; }
+  else { heatCount = Math.ceil(count / 8); heatPerHeat = Math.max(2, Math.ceil((SEMI_COUNT * FINAL_TARGET_SIZE) / heatCount)); }
+  const semiTotal = Math.min(heatPerHeat * heatCount, count);
   return {
-    kind: 'manual_multi_heat_final',
+    kind: 'heat_semi_final',
     entryCount: count,
     finalSize: FINAL_TARGET_SIZE,
     heatCount,
     heatSizes: splitEvenly(count, heatCount),
+    semiCount: SEMI_COUNT,
+    semiSizes: splitEvenly(semiTotal, SEMI_COUNT),
+    quartersNeeded: count >= 33, // SR505.3: quarterfinals not yet generated
     advancement: {
-      type: 'manual',
+      type: 'heat_semi_final',
+      heatPerHeat,            // top N from each heat → the semis
+      semiTotal,              // teams/skaters reaching the semis
+      semiPerHeat: SEMI_PER_HEAT, // top 3 from each semi → the final
       finalSize: FINAL_TARGET_SIZE,
     },
   };
