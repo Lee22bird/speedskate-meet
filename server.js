@@ -1029,7 +1029,7 @@ function renderNationalsHeats(embed = false) {
   // they already have finishing places (green results) or are still a seeded
   // final lineup — dropping heats/semis and anything left empty. A final flips
   // to green automatically once its placement sheet is folded in.
-  const RESULTS_SHOW_DATES = new Set(['7/9/26', '7/10/26', '7/11/26', '7/12/26']);
+  const RESULTS_SHOW_DATES = new Set(['7/9/26', '7/10/26', '7/11/26', '7/12/26', '7/13/26']);
   const inShowList = date => {
     const m = String(date).match(/(\d+\/\d+\/\d+)/);
     return !!(m && RESULTS_SHOW_DATES.has(m[1]));
