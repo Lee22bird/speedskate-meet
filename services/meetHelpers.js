@@ -158,6 +158,29 @@ function baseGroups() {
   ].map(g=>({...g,divisions:makeDivisionsTemplate()}));
 }
 
+// Official USARS indoor distances per division (short / middle / long), from the
+// rulebook division table. Men race longer at Junior+; Veteran and up share
+// 500/700/1000 across genders.
+const USARS_DISTANCES = {
+  tiny_tot_girls:['100m','200m','300m'],       tiny_tot_boys:['100m','200m','300m'],
+  primary_girls:['200m','300m','400m'],        primary_boys:['200m','300m','400m'],
+  juvenile_girls:['200m','300m','500m'],       juvenile_boys:['200m','300m','500m'],
+  elementary_girls:['300m','500m','700m'],     elementary_boys:['300m','500m','700m'],
+  freshman_girls:['300m','500m','1000m'],      freshman_boys:['300m','500m','1000m'],
+  sophomore_ladies:['500m','1000m','1500m'],   sophomore_men:['500m','1000m','1500m'],
+  junior_ladies:['500m','1000m','1500m'],      junior_men:['500m','1000m','2000m'],
+  senior_ladies:['500m','1000m','2000m'],      senior_men:['500m','1500m','3000m'],
+  classic_ladies:['500m','1000m','1500m'],     classic_men:['500m','1000m','2000m'],
+  grand_classic_ladies:['500m','1000m','1500m'], grand_classic_men:['500m','1000m','2000m'],
+  masters_ladies:['500m','700m','1000m'],      masters_men:['500m','1000m','1500m'],
+  grand_masters_ladies:['500m','700m','1000m'], grand_masters_men:['500m','1000m','1500m'],
+  veteran_ladies:['500m','700m','1000m'],      veteran_men:['500m','700m','1000m'],
+  grand_veteran_ladies:['500m','700m','1000m'], grand_veteran_men:['500m','700m','1000m'],
+  esquire_ladies:['500m','700m','1000m'],      esquire_men:['500m','700m','1000m'],
+  grand_esquire_ladies:['500m','700m','1000m'], grand_esquire_men:['500m','700m','1000m'],
+  premier_ladies:['500m','700m','1000m'],      premier_men:['500m','700m','1000m'],
+};
+
 // Full USARS indoor national division set: 5-year adult bands with the "Grand"
 // divisions and Premier (17 age groups x 2 = 34). Opt-in via the meet's
 // "USARS divisions" toggle; the standard baseGroups() stays the default.
@@ -199,7 +222,14 @@ function baseGroupsUSARS() {
     {id:'grand_esquire_men',   label:'Grand Esquire Men',   ages:'60-64',     gender:'men'},
     {id:'premier_ladies',      label:'Premier Ladies',      ages:'65+'        , gender:'women'},
     {id:'premier_men',         label:'Premier Men',         ages:'65+'        , gender:'men'},
-  ].map(g=>({...g,divisions:makeDivisionsTemplate()}));
+  ].map(g => {
+    const d = USARS_DISTANCES[g.id] || ['', '', ''];
+    const divisions = makeDivisionsTemplate();
+    // Nationals are elite; pre-enable elite with the 3 official distances so the
+    // USARS division set is race-ready on switch (director can still adjust).
+    divisions.elite = { enabled: true, cost: 0, distances: [d[0] || '', d[1] || '', d[2] || '', ''] };
+    return { ...g, divisions };
+  });
 }
 
 function ownerNameForUser(user) {
