@@ -197,29 +197,11 @@ function renderBlockBuilderView({ meet }) {
           </div>
         </section>
 
-        <section class="setup-mini-card block-control-mini block-danger-zone">
+        <section class="setup-mini-card block-control-mini">
           <div class="setup-mini-title">Race Actions</div>
           <div class="block-action-stack">
-            <form method="POST" action="/portal/meet/${meet.id}/assign-races?returnTo=blocks" onsubmit="return confirm('Rebuild recalculates heats, finals, race assignments, and lanes.
-
-Your manual block schedule is preserved.
-
-Use this after late registrations, scratches, division changes, challenge-up changes, or lane count changes.
-
-Continue?')">
-              <button class="btn2" type="submit">🔄 Rebuild Races</button>
-            </form>
-            <div class="note">Use after registrations, scratches, division changes, or lane updates.</div>
-            <form method="POST" action="/portal/meet/${meet.id}/blocks/auto-flow" onsubmit="return confirm('Optimize Race Flow only reorders races already assigned inside each block.
-
-It does NOT rebuild races, delete races, or move races between blocks.
-
-Moves heats earlier and finals later while balancing races within their assigned blocks.
-
-Continue?')">
-              <button class="btn-good" type="submit">Optimize Race Flow</button>
-            </form>
-            <div class="note">Moves heats earlier and finals later while balancing races inside their assigned blocks.</div>
+            <div class="note" style="margin-top:0">Rebuild Races and Optimize Race Flow now have their own tab.</div>
+            <a class="btn2" href="/portal/meet/${meet.id}/race-actions">Open Race Actions →</a>
           </div>
         </section>
       </div>

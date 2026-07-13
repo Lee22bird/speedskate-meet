@@ -121,6 +121,7 @@ function meetTabs(meet, active) {
     ['blocks','Block Builder',`/portal/meet/${meet.id}/blocks`],
     ['registered','Registered',`/portal/meet/${meet.id}/registered`],
     ['checkin','Check-In',`/portal/meet/${meet.id}/checkin`],
+    ['race-actions','Race Actions',`/portal/meet/${meet.id}/race-actions`],
     ['race-day','Race Day',`/portal/meet/${meet.id}/race-day/director`],
     ['results','Results',`/portal/meet/${meet.id}/results`],
   ];

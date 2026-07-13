@@ -833,6 +833,9 @@ router.post('/portal/meet/:meetId/assign-races', requireRole('meet_director'), (
   ensureCurrentRace(meet);
   saveDb(req.db);
 
+  if (String(req.query.returnTo || '') === 'race-actions') {
+    return res.redirect(`/portal/meet/${meet.id}/race-actions?rebuilt=1`);
+  }
   if (String(req.query.returnTo || '') === 'blocks') {
     return res.redirect(`/portal/meet/${meet.id}/blocks?rebuilt=1`);
   }

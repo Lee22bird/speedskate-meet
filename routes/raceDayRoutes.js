@@ -945,6 +945,95 @@ function renderCorrectionRaceForm(meet, race, regMap, user, error = '', ok = '')
     ${correctionHistory.length ? `<div class="card" style="margin-top:16px"><h2>Recent Corrections for This Race</h2><table class="table"><thead><tr><th>Time</th><th>By</th><th>Reason</th></tr></thead><tbody>${correctionHistory.map(row => `<tr><td>${esc(new Date(row.correctedAt || '').toLocaleString())}</td><td>${esc(row.correctedBy || '')}</td><td>${esc(row.reason || '')}</td></tr>`).join('')}</tbody></table></div>` : ''}`;
 }
 
+function renderRaceActionsPage({ meet }) {
+  return `
+    <div class="page-header">
+      <h1>Race Actions</h1>
+      <p class="muted">Rebuild the race set or optimize the running order after changes on race day.</p>
+    </div>
+
+    <div class="card">
+      <div class="ra-grid">
+        <div class="ra-action">
+          <form method="POST" action="/portal/meet/${meet.id}/assign-races?returnTo=race-actions" onsubmit="return confirm('Rebuild recalculates heats, finals, race assignments, and lanes.\\n\\nYour manual block schedule is preserved.\\n\\nUse this after late registrations, scratches, division changes, challenge-up changes, or lane count changes.\\n\\nContinue?')">
+            <button class="btn2 ra-btn" type="submit">🔄 Rebuild Races</button>
+          </form>
+          <div class="note">Recalculate heats, finals, assignments &amp; lanes.</div>
+        </div>
+        <div class="ra-action">
+          <form method="POST" action="/portal/meet/${meet.id}/blocks/auto-flow?returnTo=race-actions" onsubmit="return confirm('Optimize Race Flow only reorders races already assigned inside each block.\\n\\nIt does NOT rebuild races, delete races, or move races between blocks.\\n\\nMoves heats earlier and finals later while balancing races within their assigned blocks.\\n\\nContinue?')">
+            <button class="btn-good ra-btn" type="submit">⚡ Optimize Race Flow</button>
+          </form>
+          <div class="note">Reorder races within blocks for a smoother day.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Race-day checklist</h2>
+      <p class="muted" style="margin-top:-4px">Before you run these, make sure:</p>
+      <ul class="ra-checklist">
+        <li>All late registrations are entered and scratches are marked.</li>
+        <li>Division changes and challenge-ups are finalized.</li>
+        <li>The lane count for the rink is set correctly.</li>
+        <li>Your race blocks are built the way you want the day to run.</li>
+      </ul>
+      <p class="ra-tip">Typical flow: make your changes &rsaquo; <strong>Rebuild Races</strong> &rsaquo; <strong>Optimize Race Flow</strong> &rsaquo; head to Race Day.</p>
+    </div>
+
+    <div class="card">
+      <h2>What each button does</h2>
+      <div class="ra-explain">
+        <div class="ra-explain-item">
+          <div class="ra-explain-head">🔄 Rebuild Races</div>
+          <p>Recalculates heats, semifinals, finals, race assignments, and lane draws from the current registrations.</p>
+          <ul>
+            <li><strong>Use after:</strong> late registrations, scratches, division changes, challenge-up changes, or a lane-count change.</li>
+            <li><strong>Keeps:</strong> your manual block schedule — blocks, breaks, lunch, awards, and practice stay put.</li>
+            <li><strong>Changes:</strong> which skaters are in which heats/finals, and their lane assignments.</li>
+          </ul>
+        </div>
+        <div class="ra-explain-item">
+          <div class="ra-explain-head">⚡ Optimize Race Flow</div>
+          <p>Reorders the races already assigned inside each block so the day runs smoothly.</p>
+          <ul>
+            <li><strong>Does:</strong> move heats earlier and finals later, balancing races within their assigned blocks.</li>
+            <li><strong>Does NOT:</strong> rebuild races, delete races, or move races between blocks.</li>
+            <li><strong>Use it:</strong> after Rebuild, or any time the order inside a block feels off.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <style>
+      .ra-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+      .ra-action{display:flex;flex-direction:column;gap:8px}
+      .ra-btn{width:100%;font-size:16px;padding:16px;font-weight:800}
+      .ra-action .note{color:var(--muted);font-size:13px}
+      .ra-checklist{margin:8px 0 0;padding-left:20px;line-height:1.9}
+      .ra-tip{margin-top:14px;padding:12px 14px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:12px;color:#334155;font-size:14px}
+      .ra-explain{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+      .ra-explain-head{font-weight:800;font-size:16px;color:var(--navy);margin-bottom:6px}
+      .ra-explain-item p{color:var(--text);margin:0 0 8px}
+      .ra-explain-item ul{margin:0;padding-left:18px;line-height:1.7;color:#475569;font-size:14px}
+      @media (max-width:720px){.ra-grid,.ra-explain{grid-template-columns:1fr}}
+    </style>
+  `;
+}
+
+router.get('/portal/meet/:meetId/race-actions', requireRole('meet_director'), (req, res) => {
+  const meet=getMeetOr404(req.db,req.params.meetId);
+  if(!meet) return res.redirect('/portal');
+  if(!canEditMeet(req.user,meet)) return res.status(403).send(pageShell({title:'Forbidden',user:req.user,bodyHtml:`<div class="page-header"><h1>Forbidden</h1></div><div class="card"><div class="danger">Only the meet owner can edit this meet.</div></div>`}));
+  res.send(pageShell({
+    title:'Race Actions',
+    user:req.user,
+    meet,
+    activeTab:'race-actions',
+    bodyHtml:renderRaceActionsPage({ meet }),
+  }));
+});
+
 router.get('/portal/meet/:meetId/blocks', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet) return res.redirect('/portal');
@@ -1074,7 +1163,8 @@ router.post('/portal/meet/:meetId/blocks/auto-flow', requireRole('meet_director'
   if (changedBlocks) saveDb(req.db);
   else saveDb(req.db);
 
-  res.redirect(`/portal/meet/${meet.id}/blocks?autoFlow=${changedBlocks}`);
+  const dest = String(req.query.returnTo || '') === 'race-actions' ? 'race-actions' : 'blocks';
+  res.redirect(`/portal/meet/${meet.id}/${dest}?autoFlow=${changedBlocks}`);
 });
 
 router.post('/api/meet/:meetId/blocks/move-race', requireRole('meet_director'), (req, res) => {
