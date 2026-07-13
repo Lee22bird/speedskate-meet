@@ -15601,7 +15601,7 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "relay": true,
          "skaters": [
           {
@@ -15609,15 +15609,15 @@ module.exports = {
            "name": "Team New England/Ohana Red",
            "team": "Janani Karthick, Jhene Jenkins",
            "scratched": false,
-           "place": "",
-           "time": ""
+           "place": "1",
+           "time": "2:32.160"
           },
           {
            "helmet": "5",
            "name": "Astro Speed Orange",
            "team": "Hadley Woodfell, Isabella Quintero",
            "scratched": false,
-           "place": "",
+           "place": "2",
            "time": ""
           },
           {
@@ -15625,7 +15625,7 @@ module.exports = {
            "name": "Midwest Racing Purple",
            "team": "Jordanna Gonser, Leeanna Gonser",
            "scratched": false,
-           "place": "",
+           "place": "3",
            "time": ""
           }
          ]
@@ -15642,7 +15642,7 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "relay": true,
          "skaters": [
           {
@@ -15650,15 +15650,15 @@ module.exports = {
            "name": "Team New England/Ohana Pink",
            "team": "Sameer Tembe, Navinth Santhosh",
            "scratched": false,
-           "place": "",
-           "time": ""
+           "place": "1",
+           "time": "2:26.230"
           },
           {
            "helmet": "8",
            "name": "Astro Speed Grey",
            "team": "Gracyn Lentz, Zayvian Herbert",
            "scratched": false,
-           "place": "",
+           "place": "2",
            "time": ""
           },
           {
@@ -15666,7 +15666,7 @@ module.exports = {
            "name": "California Speed Black",
            "team": "Braxten Tseng, Kaninshk Chaturvedi",
            "scratched": false,
-           "place": "",
+           "place": "3",
            "time": ""
           }
          ]
@@ -15683,87 +15683,39 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "relay": true,
          "skaters": [
+          {
+           "helmet": "15",
+           "name": "Midwest Racing #3 Purple",
+           "team": "Wesley Barrow, Ryker Peck",
+           "scratched": false,
+           "place": "1",
+           "time": "3:23.720"
+          },
+          {
+           "helmet": "5",
+           "name": "Midwest Racing Orange",
+           "team": "Austin Marshall, Luca DeFalco",
+           "scratched": false,
+           "place": "2",
+           "time": ""
+          },
           {
            "helmet": "16",
            "name": "California Speed Pink",
            "team": "Silas Lao, Anvay Shetty",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "17",
-           "name": "California Speed #3 Grey",
-           "team": "Rishvik Prathap, Nilavan Gopikrishna",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "18",
-           "name": "Team New England/Ohana Black",
-           "team": "Caden Beauregard, Karsyn Carpenter",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "19",
-           "name": "Midwest Racing #2 Red",
-           "team": "Matthew Towne II, Nash Bird",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "20",
-           "name": "Stardust Racing Yellow",
-           "team": "Aaryan Borden, Pavishnu Reddy Elangovan, Elementary 2 Boys 2000 Meters Relay",
-           "scratched": false,
-           "place": "",
+           "place": "3",
            "time": ""
           },
           {
            "helmet": "21",
            "name": "California Speed #2 Blue",
-           "team": "Roger Williams, Matthew Tseng",
+           "team": "Roger Williams, Matthew Tseng, DQ #19 Midwest Racing #2 Distanced, Matthew Towne II, Nash Bird, DQ #9 Team New England/Ohana Distanced, Caden Beauregard, Karsyn Carpenter",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "22",
-           "name": "Team New England/Ohana #2 Green",
-           "team": "Khushal Sai Kothakota, Aarth Amrutkar",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "23",
-           "name": "Midwest Racing Orange",
-           "team": "Austin Marshall, Luca DeFalco",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "24",
-           "name": "Midwest Racing #3 Purple",
-           "team": "Wesley Barrow, Ryker Peck",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "25",
-           "name": "Middlesex Racing Team Pink",
-           "team": "Harish Venkatesh, Shrikumaran Sivam",
-           "scratched": false,
-           "place": "",
+           "place": "4",
            "time": ""
           }
          ]
@@ -15780,55 +15732,23 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "relay": true,
          "skaters": [
           {
-           "helmet": "1",
+           "helmet": "10",
            "name": "California Speed Red",
            "team": "Jorja Reign Storey, Pricilla Yang",
            "scratched": false,
-           "place": "",
-           "time": ""
+           "place": "1",
+           "time": "3:28.753"
           },
           {
-           "helmet": "2",
-           "name": "California Speed #4 Yellow",
-           "team": "Valery Hurtado, Pia Yanez",
+           "helmet": "8",
+           "name": "Midwest Racing Grey",
+           "team": "McKinley Nigh, Jabree Scott",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "3",
-           "name": "California Speed #5 Blue",
-           "team": "Sofia Ortiz, Mia Yanez",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "4",
-           "name": "Midwest Racing #3 Green",
-           "team": "Koralyn Hick, Patricia Balirigi",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "5",
-           "name": "Team Xtreme #2 Orange",
-           "team": "Maisie Tobey, Hattie Tobey, Elementary 2 Girls 2000 Meters Relay",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "6",
-           "name": "California Speed #2 Purple",
-           "team": "Palakshi Sagwal, Ashlynn Payne",
-           "scratched": false,
-           "place": "",
+           "place": "2",
            "time": ""
           },
           {
@@ -15836,47 +15756,7 @@ module.exports = {
            "name": "Team New England/Ohana Pink",
            "team": "Harshini Velli, Addyson Bernard",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "8",
-           "name": "Midwest Racing Grey",
-           "team": "McKinley Nigh, Jabree Scott",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "9",
-           "name": "Midwest Racing #4 Black",
-           "team": "Rosalyn Reid, Karlee Meier",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "10",
-           "name": "Astro Speed Red",
-           "team": "Zelina Medina, Violet Glass, Elementary 2 Girls 2000 Meters Relay",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "11",
-           "name": "California Speed #3 Yellow",
-           "team": "Alice Shao, Veronica Castiblanco",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "12",
-           "name": "Midwest Racing #2 Blue",
-           "team": "Kenishka Sudhakar, Skyler Kirkhart",
-           "scratched": false,
-           "place": "",
+           "place": "3",
            "time": ""
           },
           {
@@ -15884,23 +15764,23 @@ module.exports = {
            "name": "Team Xtreme Green",
            "team": "Brynlie Newman, Vera Jose",
            "scratched": false,
-           "place": "",
+           "place": "4",
            "time": ""
           },
           {
-           "helmet": "14",
-           "name": "Xtreme Speed Team Orange",
-           "team": "Kaia Morse, Nora Turner",
+           "helmet": "12",
+           "name": "Midwest Racing #2 Blue",
+           "team": "Kenishka Sudhakar, Skyler Kirkhart",
            "scratched": false,
-           "place": "",
+           "place": "5",
            "time": ""
           },
           {
-           "helmet": "15",
-           "name": "Astro Speed #2 Purple",
-           "team": "Penelope Wooddell, Elisa Picard",
+           "helmet": "6",
+           "name": "California Speed #2 Purple",
+           "team": "Palakshi Sagwal, Ashlynn Payne",
            "scratched": false,
-           "place": "",
+           "place": "6",
            "time": ""
           }
          ]
@@ -15917,111 +15797,47 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "relay": true,
          "skaters": [
           {
-           "helmet": "26",
-           "name": "California Speed Grey",
-           "team": "Hiranyaa Rathod, Kylie Baisa",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "27",
-           "name": "California Speed #3 Black",
-           "team": "Amber Tseng, Mailani Black",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "28",
-           "name": "California Speed #5 Red",
-           "team": "Ashlyn Crews, Alyshea Lee",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "29",
-           "name": "Team New England/Ohana Yellow",
-           "team": "Ria Navgere, Mariana Romero",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "30",
+           "helmet": "21",
            "name": "SS2-Wolverines Racing Blue",
            "team": "Rae Casterina, Alexa Swetz",
            "scratched": false,
-           "place": "",
-           "time": ""
+           "place": "1",
+           "time": "3:16.575"
           },
           {
-           "helmet": "31",
-           "name": "Midwest Racing #2 Green",
-           "team": "Milla Pham, Journie Warkentin",
+           "helmet": "17",
+           "name": "California Speed Grey",
+           "team": "Hiranyaa Rathod, Kylie Baisa",
            "scratched": false,
-           "place": "",
+           "place": "2",
            "time": ""
           },
           {
-           "helmet": "32",
-           "name": "Xtreme Speed Team Orange",
-           "team": "Bella Crout, Avery Turner, Sophomore 2 Ladies 2000 Meters Relay",
+           "helmet": "11",
+           "name": "Team New England/Ohana Yellow",
+           "team": "Ria Navgere, Mariana Romero",
            "scratched": false,
-           "place": "",
+           "place": "3",
            "time": ""
           },
           {
-           "helmet": "33",
+           "helmet": "24",
            "name": "California Speed #2 Purple",
            "team": "Dillynn Craft, Charlotte Williams",
            "scratched": false,
-           "place": "",
+           "place": "4",
            "time": ""
           },
           {
-           "helmet": "34",
-           "name": "California Speed #4 Pink",
-           "team": "Margo Kushnir, Reena Byun",
+           "helmet": "19",
+           "name": "Piedmont/Omni Red",
+           "team": "Isabella Salazar, Lilliann Salizar, DQ #27 Midwest Racing Return Gate Area, Laney Steven, Stokley Shrewsbery",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "35",
-           "name": "Piedmont/Omni Grey",
-           "team": "Isabella Salazar, Lilliann Salizar",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "36",
-           "name": "Midwest Racing Black",
-           "team": "Laney Steven, Stokley Shrewsbery",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "37",
-           "name": "Stallions Racing Red",
-           "team": "Jenaya Washington, Ky Reed",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "2",
-           "name": "Astro Speed Yellow",
-           "team": "Alina Rosario, Eva Picard",
-           "scratched": false,
-           "place": "",
+           "place": "5",
            "time": ""
           }
          ]
@@ -16038,31 +15854,23 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "relay": true,
          "skaters": [
+          {
+           "helmet": "3",
+           "name": "SS2-Wolverines Racing #2 No Time Blue",
+           "team": "Jace Mendoza, Brayden Talbott",
+           "scratched": false,
+           "place": "1",
+           "time": ""
+          },
           {
            "helmet": "1",
            "name": "California Speed Red",
            "team": "Axel Perez, Chislon Lao",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "3",
-           "name": "Team New England/Ohana Blue",
-           "team": "Hemtej Velli Rajesh, Logan Beauregard",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "4",
-           "name": "SS2-Wolverines Racing Green",
-           "team": "Deklan Oakes, Daniel Handzic",
-           "scratched": false,
-           "place": "",
+           "place": "2",
            "time": ""
           },
           {
@@ -16070,23 +15878,7 @@ module.exports = {
            "name": "Midwest Racing #2 Orange",
            "team": "Karan Sudhakar, Jet Osmani",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "6",
-           "name": "Xtreme Speed Team Purple",
-           "team": "Ben Hammer, Edward Morse",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "7",
-           "name": "Diamond State Racing Pink",
-           "team": "Canon Jones, Greyson Bolen, Sophomore 2 Men 3000 Meters Relay",
-           "scratched": false,
-           "place": "",
+           "place": "3",
            "time": ""
           },
           {
@@ -16094,47 +15886,15 @@ module.exports = {
            "name": "California Speed #2 Grey",
            "team": "Dylan Chow, Yuvan Gopikrishna",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "9",
-           "name": "LA Speed Black",
-           "team": "Brandon Kong, Isaac Belander",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "10",
-           "name": "SS2-Wolverines Racing #2 Red",
-           "team": "Jace Mendoza, Brayden Talbott",
-           "scratched": false,
-           "place": "",
+           "place": "4",
            "time": ""
           },
           {
            "helmet": "11",
            "name": "Midwest Racing Yellow",
-           "team": "Brently Berg-Fudge, Dylan Sousa",
+           "team": "Brently Berg-Fudge, Dylan Sousa, DQ #7 Diamond State Racing Distanced, Canon Jones, Greyson Bolen",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "12",
-           "name": "Midwest Racing #3 Blue",
-           "team": "Richie Cabrera, Damion See",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "13",
-           "name": "Stardust Racing Green",
-           "team": "Evan Nunnelley, Nehal Katikireddy",
-           "scratched": false,
-           "place": "",
+           "place": "5",
            "time": ""
           }
          ]
@@ -16151,55 +15911,23 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "relay": true,
          "skaters": [
           {
            "helmet": "14",
            "name": "Team New England/Ohana Orange",
-           "team": "Sadhana Ganesan, Jeilyn Godin, SC #15 Midwest Racing #2 Purple, Salma Narayan, Elyiah Belcher",
+           "team": "Sadhana Ganesan, Jeilyn Godin",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "16",
-           "name": "Team Xtreme Pink",
-           "team": "Marillyn Snell-Greer, Michaela Lyons",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "17",
-           "name": "Xtreme Speed Team Grey",
-           "team": "Mylie Kukla, Marley Geske",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "18",
-           "name": "Team Florida Black",
-           "team": "Gabriella Pasquarella, J'ana-Brielle Ursu, Senior 2 Ladies 3000 Meters Relay",
-           "scratched": false,
-           "place": "",
-           "time": ""
+           "place": "1",
+           "time": "4:54.547"
           },
           {
            "helmet": "19",
            "name": "Piedmont/Omni Red",
            "team": "Lilly Nolen, Cassandra Gerdin",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "20",
-           "name": "Synergy Speed Skating Yellow",
-           "team": "Payten Hutto, McKenzie Browne",
-           "scratched": false,
-           "place": "",
+           "place": "2",
            "time": ""
           },
           {
@@ -16207,15 +15935,31 @@ module.exports = {
            "name": "Midwest Racing Blue",
            "team": "Leona Newman, Sage Meek",
            "scratched": false,
-           "place": "",
+           "place": "3",
            "time": ""
           },
           {
-           "helmet": "22",
-           "name": "Bells Speed Club Green",
-           "team": "Aleigh Heavey, Amelia Terry",
+           "helmet": "20",
+           "name": "Synergy Speed Skating Yellow",
+           "team": "Payten Hutto, McKenzie Browne",
            "scratched": false,
-           "place": "",
+           "place": "4",
+           "time": ""
+          },
+          {
+           "helmet": "16",
+           "name": "Team Xtreme Pink",
+           "team": "Marillyn Snell-Greer, Michaela Lyons",
+           "scratched": false,
+           "place": "5",
+           "time": ""
+          },
+          {
+           "helmet": "17",
+           "name": "Xtreme Speed Team Grey",
+           "team": "Mylie Kukla, Marley Geske",
+           "scratched": false,
+           "place": "6",
            "time": ""
           }
          ]
@@ -16232,31 +15976,23 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "relay": true,
          "skaters": [
           {
-           "helmet": "23",
-           "name": "California Speed Orange",
-           "team": "Benjamin Lin, Brad Rex",
+           "helmet": "30",
+           "name": "Midwest Racing Blue",
+           "team": "Caiden Haynes, Ashton Hale",
            "scratched": false,
-           "place": "",
-           "time": ""
+           "place": "1",
+           "time": "7:59.289"
           },
           {
-           "helmet": "24",
-           "name": "Emerald Coast Speed Purple",
-           "team": "Mathew Gilley, Nehemia Millard",
+           "helmet": "28",
+           "name": "Piedmont/Omni Red",
+           "team": "Nicholas Holmes, Spencer Curtis",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "25",
-           "name": "Midwest Racing #2 Pink",
-           "team": "Jayden Roberts, Aden Sailor",
-           "scratched": false,
-           "place": "",
+           "place": "2",
            "time": ""
           },
           {
@@ -16264,47 +16000,15 @@ module.exports = {
            "name": "Xtreme Speed Team Grey",
            "team": "Jakob Adams, Elijah Byham",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "27",
-           "name": "Team Velocity Black",
-           "team": "Shaun Speidel, Noah Rumfelt, Senior 2 Men 5000 Meters Relay",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "28",
-           "name": "Piedmont/Omni Red",
-           "team": "Nicholas Holmes, Spencer Curtis",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "29",
-           "name": "DFW Speed Yellow",
-           "team": "Camaron Mayo, Gage Daugherty",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "30",
-           "name": "Midwest Racing Blue",
-           "team": "Caiden Haynes, Ashton Hale",
-           "scratched": false,
-           "place": "",
+           "place": "3",
            "time": ""
           },
           {
            "helmet": "31",
            "name": "Midwest Racing #3 Green",
-           "team": "Carlo Balderrama, Michael Coultis",
+           "team": "Carlo Balderrama, Michael Coultis, DQ #23 California Speed Distanced, Benjamin Lin, Brad Rex, DQ #24 Emerald Coast Speed No Relay, Mathew Gilley, Nehemia Millard",
            "scratched": false,
-           "place": "",
+           "place": "4",
            "time": ""
           }
          ]
@@ -16321,39 +16025,31 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "relay": true,
          "skaters": [
-          {
-           "helmet": "11",
-           "name": "Skagit Speedsters Yellow",
-           "team": "Tiffany Thornock, Danita Dunlap",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "12",
-           "name": "Stardust Racing Blue",
-           "team": "Fanny Laura Pedroso, Stephana Ochoa",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "13",
-           "name": "Stardust Racing #2 Green",
-           "team": "Lisa Cesaroni, Paige Paul",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
           {
            "helmet": "10",
            "name": "Piedmont/Omni Red",
            "team": "Amanda Owen, Vali Holmes",
            "scratched": false,
-           "place": "",
+           "place": "1",
+           "time": "3:29.099"
+          },
+          {
+           "helmet": "11",
+           "name": "Skagit Speedsters Yellow",
+           "team": "Tiffany Thornock, Danita Dunlap",
+           "scratched": false,
+           "place": "2",
+           "time": ""
+          },
+          {
+           "helmet": "12",
+           "name": "Stardust Racing Blue",
+           "team": "Fanny Laura Pedroso, Stephana Ochoa, DQ #13 Stardust Racing #2 Interference/Interference, Lisa Cesaroni, Paige Paul",
+           "scratched": false,
+           "place": "3",
            "time": ""
           }
          ]
@@ -16370,7 +16066,7 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "relay": true,
          "skaters": [
           {
@@ -16378,15 +16074,15 @@ module.exports = {
            "name": "Diamond State Racing Purple",
            "team": "Steven Southerland, Tony Jones",
            "scratched": false,
-           "place": "",
-           "time": ""
+           "place": "1",
+           "time": "5:02.236"
           },
           {
            "helmet": "14",
            "name": "Piedmont/Omni Orange",
            "team": "Nathan Collier, Stephen Woodham",
            "scratched": false,
-           "place": "",
+           "place": "2",
            "time": ""
           }
          ]
@@ -16403,39 +16099,39 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "relay": true,
          "skaters": [
           {
-           "helmet": "18",
-           "name": "Frenchtown Speed Team Black",
-           "team": "Carole Olinger, Michelle Bischoff",
+           "helmet": "17",
+           "name": "Piedmont/Omni Grey",
+           "team": "Shannon Dunning, Stephanie Peck",
            "scratched": false,
-           "place": "",
-           "time": ""
+           "place": "1",
+           "time": "3:44.401"
           },
           {
            "helmet": "16",
            "name": "California Speed Pink",
            "team": "Micki Alapati, Brandie Aldrich",
            "scratched": false,
-           "place": "",
+           "place": "2",
            "time": ""
           },
           {
-           "helmet": "17",
-           "name": "Piedmont/Omni Grey",
-           "team": "Shannon Dunning, Stephanie Peck",
+           "helmet": "18",
+           "name": "Frenchtown Speed Team Black",
+           "team": "Carole Olinger, Michelle Bischoff",
            "scratched": false,
-           "place": "",
+           "place": "3",
            "time": ""
           },
           {
            "helmet": "37",
            "name": "Midwest Racing Red",
-           "team": "Jessica Jacobson, Shannon Degenhardt, Masters 2 Ladies 2000 Meters Relay",
+           "team": "Jessica Jacobson, Shannon Degenhardt",
            "scratched": false,
-           "place": "",
+           "place": "4",
            "time": ""
           }
          ]
@@ -16452,23 +16148,23 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "relay": true,
          "skaters": [
+          {
+           "helmet": "37",
+           "name": "Piedmont/Omni Red",
+           "team": "Joey Fitzgerald, Robert Owen",
+           "scratched": false,
+           "place": "1",
+           "time": "3:04.312"
+          },
           {
            "helmet": "32",
            "name": "LA Speed Orange",
            "team": "Joshua Fredrickson, Jean Poupart",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "33",
-           "name": "Team New England/Ohana Purple",
-           "team": "Johnny Ristine, Kenny Bernard Sr",
-           "scratched": false,
-           "place": "",
+           "place": "2",
            "time": ""
           },
           {
@@ -16476,55 +16172,23 @@ module.exports = {
            "name": "Frenchtown Speed Team Pink",
            "team": "Francisco Ramirez, Benjamin Carey",
            "scratched": false,
-           "place": "",
+           "place": "3",
            "time": ""
           },
           {
-           "helmet": "35",
-           "name": "Stallions Racing Grey",
-           "team": "Ronald Daza Londono, Josh Simas",
+           "helmet": "33",
+           "name": "Team New England/Ohana Purple",
+           "team": "Johnny Ristine, Kenny Bernard Sr",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "36",
-           "name": "Astro Speed Black",
-           "team": "Michael Oswald, Gil Nunez, Masters 2 Men 2000 Meters Relay",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "37",
-           "name": "Piedmont/Omni Red",
-           "team": "Joey Fitzgerald, Robert Owen",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "4",
-           "name": "Synergy Speed Skating Green",
-           "team": "Mike Zawitkowski, Shannon Pendergraft",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "2",
-           "name": "Skagit Speedsters Yellow",
-           "team": "Derek Jonasson, John Simon",
-           "scratched": false,
-           "place": "",
+           "place": "4",
            "time": ""
           },
           {
            "helmet": "3",
            "name": "Stardust Racing Blue",
-           "team": "Austin Rivera, Jarrett Paul",
+           "team": "Austin Rivera, Jarrett Paul, DQ #36 Astro Speed Distanced, Michael Oswald, Gil Nunez",
            "scratched": false,
-           "place": "",
+           "place": "5",
            "time": ""
           }
          ]
@@ -16541,15 +16205,23 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "relay": true,
          "skaters": [
+          {
+           "helmet": "20",
+           "name": "Astro Speed Yellow",
+           "team": "Julie Glass, Christine Moore",
+           "scratched": false,
+           "place": "1",
+           "time": "3:44.825"
+          },
           {
            "helmet": "21",
            "name": "Stardust Racing Blue",
            "team": "Tracy Putnam, Janine Cobb",
            "scratched": false,
-           "place": "",
+           "place": "2",
            "time": ""
           },
           {
@@ -16557,15 +16229,7 @@ module.exports = {
            "name": "Piedmont/Omni Red",
            "team": "Elizabeth Martin, Maigan Sanders",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "20",
-           "name": "Astro Speed Yellow",
-           "team": "Julie Glass, Christine Moore",
-           "scratched": false,
-           "place": "",
+           "place": "3",
            "time": ""
           }
          ]
@@ -16582,7 +16246,7 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "relay": true,
          "skaters": [
           {
@@ -16590,15 +16254,15 @@ module.exports = {
            "name": "Team New England/Ohana Pink",
            "team": "Eddie Wilcox, Rob Gould",
            "scratched": false,
-           "place": "",
-           "time": ""
+           "place": "1",
+           "time": "3:10.279"
           },
           {
            "helmet": "22",
            "name": "California Speed Green",
            "team": "Mike Crews, Steven Chow",
            "scratched": false,
-           "place": "",
+           "place": "6",
            "time": ""
           },
           {
@@ -16606,7 +16270,7 @@ module.exports = {
            "name": "Stardust Racing Grey",
            "team": "Nick Chrissan, Jeremiah Bankston",
            "scratched": false,
-           "place": "",
+           "place": "5",
            "time": ""
           },
           {
@@ -16614,7 +16278,7 @@ module.exports = {
            "name": "Piedmont/Omni Orange",
            "team": "Leonard Morgan, Richard Nance",
            "scratched": false,
-           "place": "",
+           "place": "2",
            "time": ""
           },
           {
@@ -16622,7 +16286,7 @@ module.exports = {
            "name": "Team Velocity Black",
            "team": "Jon Esterline, Steve Downing",
            "scratched": false,
-           "place": "",
+           "place": "7",
            "time": ""
           },
           {
@@ -16630,7 +16294,7 @@ module.exports = {
            "name": "Team Velocity #2 Red",
            "team": "Michael Paeth, James Ashley Rumfelt",
            "scratched": false,
-           "place": "",
+           "place": "4",
            "time": ""
           },
           {
@@ -16638,7 +16302,7 @@ module.exports = {
            "name": "Synergy Speed Skating Purple",
            "team": "Kevin Kmetz, Jarrod Pierce",
            "scratched": false,
-           "place": "",
+           "place": "3",
            "time": ""
           }
          ]
@@ -16655,15 +16319,15 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "relay": true,
          "skaters": [
           {
            "helmet": "30",
-           "name": "Team Xtreme Blue",
+           "name": "Team Xtreme No Time Blue",
            "team": "Andrea Lyons, Catherine Ream",
            "scratched": false,
-           "place": "",
+           "place": "1",
            "time": ""
           },
           {
@@ -16671,7 +16335,7 @@ module.exports = {
            "name": "DFW Speed Yellow",
            "team": "Robbin Joynes, Starr Heckel",
            "scratched": false,
-           "place": "",
+           "place": "2",
            "time": ""
           }
          ]
@@ -16688,47 +16352,39 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "relay": true,
          "skaters": [
-          {
-           "helmet": "33",
-           "name": "Team Xtreme Purple",
-           "team": "Walter Langley, Joe Rejsek",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "32",
-           "name": "DFW Speed Orange",
-           "team": "Mark Thornton, Tom Atkins",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "34",
-           "name": "Stardust Racing Pink",
-           "team": "Jason Jones, Jonathan Simkins",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "35",
-           "name": "Stardust Racing #2 Grey",
-           "team": "Don Powley, John Poslusny",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
           {
            "helmet": "31",
            "name": "Piedmont/Omni Green",
            "team": "Jason Cohen, Mark Merrick",
            "scratched": false,
-           "place": "",
+           "place": "2",
+           "time": "3:28.669"
+          },
+          {
+           "helmet": "1",
+           "name": "Smoky Mountain Speed Red",
+           "team": "Raleigh Sanford, Perry Allen",
+           "scratched": false,
+           "place": "3",
+           "time": ""
+          },
+          {
+           "helmet": "33",
+           "name": "Team Xtreme Purple",
+           "team": "Walter Langley, Joe Rejsek",
+           "scratched": false,
+           "place": "4",
+           "time": ""
+          },
+          {
+           "helmet": "32",
+           "name": "DFW Speed Orange",
+           "team": "Mark Thornton, Tom Atkins, DQ #34 Stardust Racing Interference/Interference, Jason Jones, Jonathan Simkins, SC #35 Stardust Racing #2 Grey, Don Powley, John Poslusny",
+           "scratched": false,
+           "place": "5",
            "time": ""
           }
          ]
@@ -16758,23 +16414,23 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "relay": true,
          "skaters": [
           {
-           "helmet": "10",
-           "name": "Team New England/Ohana Red",
-           "team": "Janani Karthick, Sara Navgere, Kenny Bernard JR, Karsyn Carpenter",
+           "helmet": "12",
+           "name": "Midwest Racing Blue",
+           "team": "McKinley Nigh, Koralyn Hick, Matthew Towne II, Wesley Barrow",
            "scratched": false,
-           "place": "",
-           "time": ""
+           "place": "1",
+           "time": "2:06.021"
           },
           {
-           "helmet": "11",
-           "name": "Team New England/Ohana #2 Yellow",
-           "team": "Jhene Jenkins, Roshitha Sai Kothakota, Navinth Santhosh, Sameer Tembe",
+           "helmet": "9",
+           "name": "California Speed Black",
+           "team": "Mia Yanez, Pia Yanez, Roger Williams, Nilavan Gopikrishna",
            "scratched": false,
-           "place": "",
+           "place": "2",
            "time": ""
           },
           {
@@ -16782,31 +16438,23 @@ module.exports = {
            "name": "Astro Speed Green",
            "team": "Myla Dehaven, Heavenleigh Charles, Dempsy Hayes, Noah Fluellen",
            "scratched": false,
-           "place": "",
+           "place": "3",
+           "time": ""
+          },
+          {
+           "helmet": "10",
+           "name": "Team New England/Ohana Red",
+           "team": "Janani Karthick, Sara Navgere, Kenny Bernard JR, Karsyn Carpenter",
+           "scratched": false,
+           "place": "4",
            "time": ""
           },
           {
            "helmet": "14",
            "name": "Astro Speed #2 Orange",
-           "team": "Annaleah Valerio, Isabella Quintero, Zayvian Herbert, Rylan Jones",
+           "team": "Annaleah Valerio, Isabella Quintero, Zayvian Herbert, Rylan Jones, DQ #11 Team New England/Ohana #2 No Relay, Jhene Jenkins, Roshitha Sai Kothakota, Navinth Santhosh, Sameer Tembe",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "9",
-           "name": "California Speed Black",
-           "team": "Mia Yanez, Pia Yanez, Roger Williams, Nilavan Gopikrishna",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "12",
-           "name": "Midwest Racing Blue",
-           "team": "McKinley Nigh, Koralyn Hick, Matthew Towne II, Wesley Barrow",
-           "scratched": false,
-           "place": "",
+           "place": "5",
            "time": ""
           }
          ]
@@ -16823,47 +16471,23 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "relay": true,
          "skaters": [
-          {
-           "helmet": "18",
-           "name": "Team New England/Ohana Black",
-           "team": "Mariana Romero, Harshini Velli, Hemtej Velli Rajesh, Caden Beauregard",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "19",
-           "name": "Team New England/Ohana #2 Red",
-           "team": "Addyson Bernard, Swara Tembe, Logan Beauregard, Khushal Sai Kothakota",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
           {
            "helmet": "15",
            "name": "California Speed Purple",
            "team": "Amber Tseng, Jorja Reign Storey, Dylan Chow, Ethan Gomez",
            "scratched": false,
-           "place": "",
-           "time": ""
+           "place": "1",
+           "time": "3:14.400"
           },
           {
-           "helmet": "16",
-           "name": "California Speed #2 Pink",
-           "team": "Priscilla Yang, Charlotte Williams, Yuvan Gopikrishna, Silas Lao",
+           "helmet": "18",
+           "name": "Team New England/Ohana Black",
+           "team": "Mariana Romero, Harshini Velli, Hemtej Velli Rajesh, Caden Beauregard",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "17",
-           "name": "California Speed #3 Grey",
-           "team": "Mailani Black, Alice Shao, Anvay Shetty, Matthew Tseng",
-           "scratched": false,
-           "place": "",
+           "place": "2",
            "time": ""
           },
           {
@@ -16871,7 +16495,15 @@ module.exports = {
            "name": "Midwest Racing Yellow",
            "team": "Journie Warkentin, Jabree Scott, Brently Berg-Fudge, Luca DeFalco",
            "scratched": false,
-           "place": "",
+           "place": "3",
+           "time": ""
+          },
+          {
+           "helmet": "16",
+           "name": "California Speed #2 Pink",
+           "team": "Priscilla Yang, Charlotte Williams, Yuvan Gopikrishna, Silas Lao",
+           "scratched": false,
+           "place": "4",
            "time": ""
           },
           {
@@ -16879,7 +16511,15 @@ module.exports = {
            "name": "Midwest Racing #2 Blue",
            "team": "Patricia Balirigi, Skyler Kirkhart, Josef Stevens, Ryker Peck",
            "scratched": false,
-           "place": "",
+           "place": "5",
+           "time": ""
+          },
+          {
+           "helmet": "17",
+           "name": "California Speed #3 Grey",
+           "team": "Mailani Black, Alice Shao, Anvay Shetty, Matthew Tseng, DQ #19 Team New England/Ohana #2 Distanced, Addyson Bernard, Swara Tembe, Logan Beauregard, Khushal Sai Kothakota",
+           "scratched": false,
+           "place": "6",
            "time": ""
           }
          ]
@@ -16896,31 +16536,23 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "relay": true,
          "skaters": [
           {
-           "helmet": "26",
-           "name": "Skagit Speedsters Grey",
-           "team": "Sunnie Waldron, Danita Dunlap, Derek Jonasson, John Simon",
+           "helmet": "28",
+           "name": "Stardust Racing Red",
+           "team": "Fanny Laura Pedroso, Janine Cobb, Austin Rivera, Jonathan Simkins",
            "scratched": false,
-           "place": "",
-           "time": ""
+           "place": "1",
+           "time": "3:24.935"
           },
           {
            "helmet": "27",
            "name": "Frenchtown Speed Team Black",
            "team": "Carole Olinger, Michelle Bischoff, Francisco Ramirez, Benjamin Carey",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "25",
-           "name": "DFW Speed Pink",
-           "team": "Robbin Joynes, Starr Heckel, Mark Thornton, Tom Atkins",
-           "scratched": false,
-           "place": "",
+           "place": "2",
            "time": ""
           },
           {
@@ -16928,15 +16560,7 @@ module.exports = {
            "name": "California Speed Green",
            "team": "Brandie Aldrich, Micki Alapati, William Culhane, Steven Chow",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "28",
-           "name": "Stardust Racing Red",
-           "team": "Fanny Laura Pedroso, Janine Cobb, Austin Rivera, Jonathan Simkins",
-           "scratched": false,
-           "place": "",
+           "place": "3",
            "time": ""
           },
           {
@@ -16944,15 +16568,15 @@ module.exports = {
            "name": "Piedmont/Omni Orange",
            "team": "Elizabeth Martin, Stephanie Peck, Leonard Morgan, Mark Merrick",
            "scratched": false,
-           "place": "",
+           "place": "4",
            "time": ""
           },
           {
-           "helmet": "24",
-           "name": "Piedmont/Omni #2 Purple",
-           "team": "Maigan Sanders, Shannon Dunning, Richard Nance, Stephen Woodham",
+           "helmet": "25",
+           "name": "DFW Speed Pink",
+           "team": "Robbin Joynes, Starr Heckel, Mark Thornton, Tom Atkins, DQ #24 Piedmont/Omni #2 Causing Rerun, Maigan Sanders, Shannon Dunning, Richard Nance, Stephen Woodham, DQ #26 Skagit Speedsters Causing Rerun, Sunnie Waldron, Danita Dunlap, Derek Jonasson, John Simon",
            "scratched": false,
-           "place": "",
+           "place": "5",
            "time": ""
           }
          ]
@@ -16969,79 +16593,39 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "relay": true,
          "skaters": [
-          {
-           "helmet": "36",
-           "name": "California Speed Black",
-           "team": "Hiranyaa Rathod, Dillynn Craft, Chislon Lao, Axel Perez",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "37",
-           "name": "Piedmont/Omni #2 Red",
-           "team": "Isabella Salazar, Cassandra Gerdin, Joey Fitzgerald, Robert Owen",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "2",
-           "name": "SS2-Wolverines Racing Yellow",
-           "team": "Chrissy Oldfield, Alexa Swetz, Deklan Oakes, Brayden Talbott, SC #3 Midwest Racing #2 Blue, Leona Newman, Salma Narayan, Jayden Roberts, Aden Sailor",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "8",
-           "name": "Stardust Racing Grey",
-           "team": "Stephana Ochoa, Paige Paul, Jarrett Paul, Evan Nunnelley, Senior 4 Mixed 4000 Meters Relay",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "4",
-           "name": "California Speed #2 Green",
-           "team": "Kylie Baisa, Reena Byun, Brad Rex, Benjamin Lin",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
           {
            "helmet": "5",
            "name": "Piedmont/Omni Orange",
            "team": "Lilly Nolen, Vali Holmes, Nicholas Holmes, Spencer Curtis",
            "scratched": false,
-           "place": "",
-           "time": ""
+           "place": "1",
+           "time": "6:06.341"
           },
           {
            "helmet": "6",
            "name": "Midwest Racing Purple",
            "team": "Sage Meek, Stokley Shrewsbery, Caiden Haynes, Ashton Hale",
            "scratched": false,
-           "place": "",
+           "place": "2",
            "time": ""
           },
           {
-           "helmet": "7",
-           "name": "Midwest Racing #3 Pink",
-           "team": "Laney Steven, Leona Newman, Carlo Balderrama, Michael Coultis",
+           "helmet": "2",
+           "name": "SS2-Wolverines Racing Yellow",
+           "team": "Chrissy Oldfield, Alexa Swetz, Deklan Oakes, Brayden Talbott",
            "scratched": false,
-           "place": "",
+           "place": "3",
            "time": ""
           },
           {
            "helmet": "1",
            "name": "Team New England/Ohana Red",
-           "team": "Sadhana Ganesan, Jeilyn Godin, Eddie Wilcox, Kenny Bernard Sr",
+           "team": "Sadhana Ganesan, Jeilyn Godin, Eddie Wilcox, Kenny Bernard Sr, DQ #36 California Speed Wrong # of Laps/Wrong # of Laps, Hiranyaa Rathod, Dillynn Craft, Chislon Lao, Axel Perez, DQ #4 Piedmont/Omni #2 No Relay, Isabella Salazar, Cassandra Gerdin, Joey Fitzgerald, Robert Owen",
            "scratched": false,
-           "place": "",
+           "place": "4",
            "time": ""
           }
          ]
@@ -17095,80 +16679,48 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "relay": true,
          "skaters": [
           {
-           "helmet": "29",
-           "name": "California Speed Yellow",
-           "team": "Roger Williams, Rishvik Prathap, Nilavan Gopikrishna",
+           "helmet": "37",
+           "name": "Midwest Racing Red",
+           "team": "McKinley Nigh, Wesley Barrow, Matthew Towne II",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "30",
-           "name": "Team New England/Ohana Blue",
-           "team": "Karsyn Carpenter, Kenny Bernard JR, Sara Navgere",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "31",
-           "name": "Midwest Racing #2 Green",
-           "team": "Koralyn Hick, Kenishka Sudhakar, Austin Marshall",
-           "scratched": false,
-           "place": "",
-           "time": ""
+           "place": "1",
+           "time": "2:08.130"
           },
           {
            "helmet": "32",
            "name": "Middlesex Racing Team Orange",
            "team": "Namal Aadhvik Logeshawara, Shrikumaran Sivam, Harish Venkatesh",
            "scratched": false,
-           "place": "",
-           "time": ""
+           "place": "2",
+           "time": "2:15.777"
+          },
+          {
+           "helmet": "31",
+           "name": "Midwest Racing #2 Green",
+           "team": "Koralyn Hick, Kenishka Sudhakar, Austin Marshall",
+           "scratched": false,
+           "place": "3",
+           "time": "2:17.109"
           },
           {
            "helmet": "33",
            "name": "Astro Speed Purple",
-           "team": "Myla Dehaven, Dempsy Hayes, Noah Fluellen, Juvenile 3 Person 1200 Meters Relay",
+           "team": "Myla Dehaven, Dempsy Hayes, Noah Fluellen",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "34",
-           "name": "California Speed #2 Pink",
-           "team": "Mia Yanez, Braxten Tseng, Pia Yanez",
-           "scratched": false,
-           "place": "",
-           "time": ""
+           "place": "4",
+           "time": "2:19.010"
           },
           {
            "helmet": "35",
            "name": "Piedmont/Omni Grey",
-           "team": "Zoe Smith, Ethan Smith, Julian Schamberg",
+           "team": "Zoe Smith, Ethan Smith, Julian Schamberg, DQ #30 Team New England/Ohana No Relay, Karsyn Carpenter, Kenny Bernard JR, Sara Navgere",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "36",
-           "name": "Team New England/Ohana #2 Black",
-           "team": "Sameer Tembe, Navinth Santhosh, Janani Karthick",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "37",
-           "name": "Midwest Racing Red",
-           "team": "McKinley Nigh, Wesley Barrow, Matthew Towne II",
-           "scratched": false,
-           "place": "",
-           "time": ""
+           "place": "5",
+           "time": "2:20.625"
           }
          ]
         }
@@ -17184,7 +16736,7 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "relay": true,
          "skaters": [
           {
@@ -17192,23 +16744,23 @@ module.exports = {
            "name": "California Speed Red",
            "team": "Jorja Reign Storey, Dylan Chow, Yuvan Gopikrishna",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "2",
-           "name": "California Speed #3 Yellow",
-           "team": "Amber Tseng, Mailani Black, Anvay Shetty",
-           "scratched": false,
-           "place": "",
-           "time": ""
+           "place": "1",
+           "time": "3:26.266"
           },
           {
            "helmet": "3",
            "name": "Team New England/Ohana Blue",
            "team": "Hemtej Velli Rajesh, Caden Beauregard, Mariana Romero",
            "scratched": false,
-           "place": "",
+           "place": "2",
+           "time": ""
+          },
+          {
+           "helmet": "8",
+           "name": "Midwest Racing Grey",
+           "team": "Jabree Scott, Brently Berg-Fudge, Luca DeFalco",
+           "scratched": false,
+           "place": "3",
            "time": ""
           },
           {
@@ -17216,23 +16768,7 @@ module.exports = {
            "name": "SS2-Wolverines Racing Green",
            "team": "Jace Mendoza, Rae Casterina, Kaidyn Handzic",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "5",
-           "name": "Midwest Racing #2 Orange",
-           "team": "Journie Warkentin, Ryker Peck, Josef Stevens",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "6",
-           "name": "Team Xtreme Purple",
-           "team": "Brynlie Newman, Vera Jose, Lucas Mueller, Freshman 3 Mixed 2100 Meters Relay",
-           "scratched": false,
-           "place": "",
+           "place": "4",
            "time": ""
           },
           {
@@ -17240,39 +16776,15 @@ module.exports = {
            "name": "California Speed #2 Pink",
            "team": "Charlotte Williams, Ethan Gomez, Silas Lao",
            "scratched": false,
-           "place": "",
+           "place": "5",
            "time": ""
           },
           {
-           "helmet": "8",
-           "name": "California Speed #4 Grey",
-           "team": "Pricilla Yang, Palakshi Sagwal, Matthew Tseng",
+           "helmet": "5",
+           "name": "Midwest Racing #2 Orange",
+           "team": "Journie Warkentin, Ryker Peck, Josef Stevens",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "9",
-           "name": "Team New England/Ohana #2 Black",
-           "team": "Logan Beauregard, Khushal Sai Kothakota, Harshini Velli",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "10",
-           "name": "Midwest Racing Red",
-           "team": "Jabree Scott, Brently Berg-Fudge, Luca DeFalco",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "11",
-           "name": "Midwest Racing #3 Yellow",
-           "team": "Karlee Meier, Skyler Kirkhart, Nash Bird, SC #12 Stardust Racing Blue, Shivanshi Dua, Nehal Katikireddy, Pavishnu Reddy Elangovan",
-           "scratched": false,
-           "place": "",
+           "place": "6",
            "time": ""
           }
          ]
@@ -17289,23 +16801,23 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "relay": true,
          "skaters": [
           {
-           "helmet": "13",
-           "name": "California Speed Green",
-           "team": "Hiranyaa Rathod, Chislon Lao, Axel Perez",
+           "helmet": "11",
+           "name": "Midwest Racing Yellow",
+           "team": "Sage Meek, Caiden Haynes, Ashton Hale",
            "scratched": false,
-           "place": "",
-           "time": ""
+           "place": "1",
+           "time": "4:34.837"
           },
           {
-           "helmet": "14",
-           "name": "Piedmont/Omni #2 Orange",
-           "team": "Cassandra Gerdin, Joey Fitzgerald, Robert Owen",
+           "helmet": "21",
+           "name": "Piedmont/Omni Blue",
+           "team": "Lilly Nolen, Nicholas Holmes, Spencer Curtis",
            "scratched": false,
-           "place": "",
+           "place": "2",
            "time": ""
           },
           {
@@ -17313,87 +16825,23 @@ module.exports = {
            "name": "Team New England/Ohana Purple",
            "team": "Sadhana Ganesan, Johnny Ristine, Kenny Bernard Sr",
            "scratched": false,
-           "place": "",
+           "place": "3",
+           "time": ""
+          },
+          {
+           "helmet": "14",
+           "name": "Piedmont/Omni #2 Orange",
+           "team": "Cassandra Gerdin, Joey Fitzgerald, Robert Owen",
+           "scratched": false,
+           "place": "4",
            "time": ""
           },
           {
            "helmet": "16",
            "name": "SS2-Wolverines Racing Pink",
-           "team": "Alexa Swetz, Deklan Oakes, Brayden Talbott",
+           "team": "Alexa Swetz, Deklan Oakes, Brayden Talbott, DQ #13 California Speed Green, Hiranyaa Rathod, Chislon Lao, Axel Perez",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "17",
-           "name": "Midwest Racing #2 Grey",
-           "team": "Leona Newman, Jayden Roberts, Jet Osmani",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "18",
-           "name": "Midwest Racing #4 Black",
-           "team": "Laney Steven, Dylan Sousa, Damion See",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "19",
-           "name": "Stallions Racing Red",
-           "team": "Ky Reed, Devan Van, Martin Khlop, Senior 3 Mixed 3000 Meters Relay",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "20",
-           "name": "California Speed #2 Yellow",
-           "team": "Dillynn Craft, Brad Rex, Benjamin Lin",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "21",
-           "name": "Piedmont/Omni Blue",
-           "team": "Lilly Nolen, Nicholas Holmes, Spencer Curtis",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "22",
-           "name": "DFW Speed Green",
-           "team": "Camaron Mayo, Emerson Study, Gage Daugherty",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "23",
-           "name": "Midwest Racing Orange",
-           "team": "Sage Meek, Caiden Haynes, Ashton Hale",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "24",
-           "name": "Midwest Racing #3 Purple",
-           "team": "Stokley Shrewsbery, Carlo Balderrama, Michael Coultis",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "25",
-           "name": "Midwest Racing #5 Pink",
-           "team": "Elyiah Belcher, Richie Cabrera, Karan Sudhakar",
-           "scratched": false,
-           "place": "",
+           "place": "5",
            "time": ""
           }
          ]
@@ -17410,63 +16858,31 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "relay": true,
          "skaters": [
-          {
-           "helmet": "26",
-           "name": "Piedmont/Omni #2 Grey",
-           "team": "Amanda Owen, Nathan Collier, Jason Cohen",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "27",
-           "name": "Frenchtown Speed Team Black",
-           "team": "Carole Olinger, Francisco Ramirez, Benjamin Carey",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "28",
-           "name": "Stallions Racing Red",
-           "team": "Ronald Daza Londono, Josh Simas, Kristina Chambers",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "29",
-           "name": "Stardust Racing #2 Yellow",
-           "team": "Lisa Cesaroni, Fanny Laura Pedroso, Jeremiah Bankston",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "30",
-           "name": "Astro Speed Blue",
-           "team": "Michael Oswald, Julie Glass, Gil Nunez, Masters 3 Mixed 3000 Meters Relay",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
           {
            "helmet": "31",
            "name": "LA Speed Green",
            "team": "Jenna Guidry, Joshua Fredrickson, Jean Poupart",
            "scratched": false,
-           "place": "",
-           "time": ""
+           "place": "1",
+           "time": "4:46.863"
           },
           {
            "helmet": "32",
            "name": "Piedmont/Omni Orange",
            "team": "Vali Holmes, Richard Nance, Stephen Woodham",
            "scratched": false,
-           "place": "",
+           "place": "2",
+           "time": ""
+          },
+          {
+           "helmet": "30",
+           "name": "Astro Speed Blue",
+           "team": "Michael Oswald, Julie Glass, Gil Nunez",
+           "scratched": false,
+           "place": "3",
            "time": ""
           },
           {
@@ -17474,23 +16890,15 @@ module.exports = {
            "name": "Synergy Speed Skating Purple",
            "team": "McKenzie Browne, Kevin Kmetz, Jarrod Pierce",
            "scratched": false,
-           "place": "",
+           "place": "4",
            "time": ""
           },
           {
-           "helmet": "34",
-           "name": "Skagit Speedsters Pink",
-           "team": "Derek Jonasson, Tiffany Thornock, Danita Dunlap",
+           "helmet": "27",
+           "name": "Frenchtown Speed Team Black",
+           "team": "Carole Olinger, Francisco Ramirez, Benjamin Carey, DQ #28 Stallions Racing No Relay, Ronald Daza Londono, Josh Simas, Kristina Chambers",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "35",
-           "name": "Stardust Racing Grey",
-           "team": "Stephana Ochoa, Jarrett Paul, Austin Rivera",
-           "scratched": false,
-           "place": "",
+           "place": "5",
            "time": ""
           }
          ]
@@ -17507,15 +16915,15 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "relay": true,
          "skaters": [
           {
-           "helmet": "3",
-           "name": "Team Xtreme Blue",
-           "team": "Andrea Lyons, Walter Langley, Joe Rejsek",
+           "helmet": "4",
+           "name": "Stardust Racing No Time Green",
+           "team": "Janine Cobb, Jason Jones, Jonathan Simkins",
            "scratched": false,
-           "place": "",
+           "place": "1",
            "time": ""
           },
           {
@@ -17523,39 +16931,7 @@ module.exports = {
            "name": "Team New England/Ohana Gray",
            "team": "Rob Gould, Eddie Wilcox, Amanda Gould",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "2",
-           "name": "DFW Speed Yellow",
-           "team": "Robbin Joynes, Mark Thornton, Tom Atkins",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "36",
-           "name": "California Speed Black",
-           "team": "Brandie Aldrich, Mike Crews, Steven Chow",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "4",
-           "name": "Stardust Racing Green",
-           "team": "Janine Cobb, Jason Jones, Jonathan Simkins",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "5",
-           "name": "Stardust Racing #2 Orange",
-           "team": "Tracy Putnam, Nick Chrissan, John Poslusny",
-           "scratched": false,
-           "place": "",
+           "place": "2",
            "time": ""
           },
           {
@@ -17563,7 +16939,31 @@ module.exports = {
            "name": "Piedmont/Omni Red",
            "team": "Elizabeth Martin, Leonard Morgan, Mark Merrick",
            "scratched": false,
-           "place": "",
+           "place": "3",
+           "time": ""
+          },
+          {
+           "helmet": "3",
+           "name": "Team Xtreme Blue",
+           "team": "Andrea Lyons, Walter Langley, Joe Rejsek",
+           "scratched": false,
+           "place": "4",
+           "time": ""
+          },
+          {
+           "helmet": "36",
+           "name": "California Speed Black",
+           "team": "Brandie Aldrich, Mike Crews, Steven Chow",
+           "scratched": false,
+           "place": "5",
+           "time": ""
+          },
+          {
+           "helmet": "5",
+           "name": "Stardust Racing #2 Orange",
+           "team": "Tracy Putnam, Nick Chrissan, John Poslusny, DQ #2 DFW Speed Distanced, Robbin Joynes, Mark Thornton, Tom Atkins",
+           "scratched": false,
+           "place": "6",
            "time": ""
           }
          ]
@@ -17669,7 +17069,15 @@ module.exports = {
           {
            "helmet": "29",
            "name": "California Speed #2 Yellow",
-           "team": "Anvay Shetty, Silas Lao, Matthew Tseng, SC #32 Stardust Racing Orange, Pavishnu Reddy Elangovan, Nehal Katikireddy, Aaryan Borden",
+           "team": "Anvay Shetty, Silas Lao, Matthew Tseng",
+           "scratched": false,
+           "place": "",
+           "time": ""
+          },
+          {
+           "helmet": "32",
+           "name": "Stardust Racing Orange",
+           "team": "Pavishnu Reddy Elangovan, Nehal Katikireddy, Aaryan Borden",
            "scratched": false,
            "place": "",
            "time": ""
@@ -17726,15 +17134,7 @@ module.exports = {
           {
            "helmet": "9",
            "name": "Midwest Racing #2 Black",
-           "team": "Masiey Hughes-Reece, Patricia Balirigi, Karlee Meier",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "10",
-           "name": "Astro Speed Red",
-           "team": "Violet Glass, Alina Rosario, Zelina Medina, Freshman 3 Girls 2100 Meters Relay",
+           "team": "Masiey Hughes-Reece, Patricia Balirigi, Karlee Meier, Freshman 3 Girls 2100 Meters Relay",
            "scratched": false,
            "place": "",
            "time": ""
@@ -17759,6 +17159,14 @@ module.exports = {
            "helmet": "13",
            "name": "Midwest Racing Green",
            "team": "Journie Warkentin, Jabree Scott, Skyler Kirkhart, SC #14 Astro Speed #2 Orange, Zelina Medina, Elisa Picard, Penelope Wooddell",
+           "scratched": false,
+           "place": "",
+           "time": ""
+          },
+          {
+           "helmet": "10",
+           "name": "Astro Speed Red",
+           "team": "Violet Glass, Alina Rosario, Zelina Medina",
            "scratched": false,
            "place": "",
            "time": ""

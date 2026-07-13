@@ -70,13 +70,13 @@ def build_lut_for(disc, top):
             b[k].sort(key=lambda r: r["label"])
     return lut
 
-def build_relay_lut():
-    # Relays live under "00 Relays". The PDF header division ("Senior 2 Men",
-    # "Masters 2 Ladies", …) + meters matches the schedule's relay events, so we
-    # key them the same way. Each TEAM becomes one row: club+color as the name,
-    # member names as the detail (the "team" field the UI shows muted).
+def _relay_raw(top):
+    # Parse "{top}/00 Relays" into key -> {heats,semis,final} (all rounds, no
+    # finalize). The PDF header division ("Senior 2 Men", "Masters 2 Ladies", …)
+    # + meters matches the schedule's relay events. Each TEAM is one row:
+    # club+color as the name, member names as the muted detail.
     lut = {}
-    root = os.path.join(ROOT, "00 Relays")
+    root = os.path.join(ROOT, top, "00 Relays")
     if not os.path.isdir(root):
         return lut
     for pdf in glob.glob(os.path.join(root, "**", "*.pdf"), recursive=True):
@@ -96,6 +96,22 @@ def build_relay_lut():
                              "place": t.get("place", ""), "time": t.get("time", "")}
                             for t in rnd["teams"]],
             })
+    return lut
+
+
+def build_relay_lut():
+    # Relays now live inside the versioned Inlines folders (Inlines*/00 Relays).
+    # Merge oldest->newest so released results override earlier lineups, exactly
+    # like the individual races.
+    merged = {}
+    for top in ("Inlines", "Inlines2", "Inlines3", "Inlines4", "Inlines5", "Inlines6", "Inlines7"):
+        newer = _relay_raw(top)
+        for key, batch in newer.items():
+            base = merged.setdefault(key, {"heats": [], "semis": [], "final": []})
+            for phase, rounds in batch.items():
+                if rounds:
+                    base[phase] = rounds
+    lut = merged
     for b in lut.values():
         if any(r.get("results") for r in b["final"]):
             b["final"] = [r for r in b["final"] if r.get("results")]

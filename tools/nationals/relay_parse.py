@@ -25,7 +25,10 @@ def parse_relay_sheet(path):
     sec_re = re.compile(r'^(Heat|Semifinal|Semi|Quarterfinal|Quarter|Final)s?\s*#?(\d*)\s*(?:(\d+)\s*To Qualify)?', re.I)
     # Team line: optional place, "#helmet", then club+color (+ optional time).
     team_re = re.compile(r'^(?:(\d+)\s+)?#(\d+)\s+(.+)$')
-    time_re = re.compile(r'\s+(\d{1,2}:\d{2}\.\d{1,3}|\d{1,3}\.\d{1,3})\s*$')
+    # Time can appear ANYWHERE in the club line — placements put it between the
+    # club and the color ("Team New England/Ohana 2:32.160 Red") — so search
+    # (not anchor) and splice it out.
+    time_re = re.compile(r'(\d{1,2}:\d{2}\.\d{1,3}|\d{1,2}\.\d{2,3})')
 
     rounds = []
     cur = None       # current round
@@ -48,7 +51,8 @@ def parse_relay_sheet(path):
             tm = time_re.search(rest)
             if tm:
                 time = tm.group(1)
-                rest = rest[:tm.start()]
+                rest = (rest[:tm.start()] + " " + rest[tm.end():])
+            rest = re.sub(r'\s{2,}', ' ', rest).strip()
             if cur is None:
                 cur = {"round": "final", "number": "", "toQualify": "", "teams": []}
                 rounds.append(cur)
