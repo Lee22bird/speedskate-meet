@@ -13,6 +13,7 @@ const {
   combineDateTime,
   OPEN_GROUP_DEFAULTS, QUAD_GROUP_DEFAULTS,
   coachVisibleMeets,
+  baseGroups, baseGroupsUSARS,
 } = require('../services/meetHelpers');
 const {
   normalizeRelayEligibleGroupIds, normalizeRelayAgeRange,
@@ -207,6 +208,27 @@ router.post('/portal/meet/:meetId/builder/save-preset', requireRole('meet_direct
   const preset=makeSetupPresetFromMeet(req.db, meet, req.body.presetName, req.user.id);
   req.db.setupPresets.push(preset);
   saveDb(req.db); res.redirect(`/portal/meet/${meet.id}/builder?presetSaved=1${laneOrTrackChanged?'&lanesSaved=1':''}`);
+});
+
+// Switch the meet's division set between the standard set and the full USARS
+// national set. Its own action (not the big settings form) so rebuilding
+// meet.groups can't collide with the form's per-division distance fields.
+// Preserves per-division settings for any division id that survives the switch.
+router.post('/portal/meet/:meetId/division-scheme', requireRole('meet_director'), (req, res) => {
+  const meet = getMeetOr404(req.db, req.params.meetId);
+  if (!meet || !canEditMeet(req.user, meet)) return res.redirect('/portal');
+  const wantUsars = String(req.body.scheme || '') === 'usars';
+  if (wantUsars !== !!meet.usarsDivisions) {
+    meet.usarsDivisions = wantUsars;
+    const nextBase = wantUsars ? baseGroupsUSARS() : baseGroups();
+    const prev = new Map((meet.groups || []).map(g => [g.id, g]));
+    meet.groups = nextBase.map(g => {
+      const old = prev.get(g.id);
+      return old && old.divisions ? { ...g, divisions: old.divisions } : g;
+    });
+    saveDb(req.db);
+  }
+  res.redirect(`/portal/meet/${meet.id}/builder?schemeSwitched=${wantUsars ? 'usars' : 'standard'}`);
 });
 
 // Load a saved setup preset into the current meet (copy reusable structure only)

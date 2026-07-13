@@ -158,6 +158,50 @@ function baseGroups() {
   ].map(g=>({...g,divisions:makeDivisionsTemplate()}));
 }
 
+// Full USARS indoor national division set: 5-year adult bands with the "Grand"
+// divisions and Premier (17 age groups x 2 = 34). Opt-in via the meet's
+// "USARS divisions" toggle; the standard baseGroups() stays the default.
+// NOTE: age ranges follow the standard USARS scheme — confirm against the
+// current USARS rulebook before a sanctioned meet.
+function baseGroupsUSARS() {
+  return [
+    {id:'tiny_tot_girls',      label:'Tiny Tot Girls',      ages:'5 & under', gender:'girls'},
+    {id:'tiny_tot_boys',       label:'Tiny Tot Boys',       ages:'5 & under', gender:'boys'},
+    {id:'primary_girls',       label:'Primary Girls',       ages:'6-7',       gender:'girls'},
+    {id:'primary_boys',        label:'Primary Boys',        ages:'6-7',       gender:'boys'},
+    {id:'juvenile_girls',      label:'Juvenile Girls',      ages:'8-9',       gender:'girls'},
+    {id:'juvenile_boys',       label:'Juvenile Boys',       ages:'8-9',       gender:'boys'},
+    {id:'elementary_girls',    label:'Elementary Girls',    ages:'10-11',     gender:'girls'},
+    {id:'elementary_boys',     label:'Elementary Boys',     ages:'10-11',     gender:'boys'},
+    {id:'freshman_girls',      label:'Freshman Girls',      ages:'12-13',     gender:'girls'},
+    {id:'freshman_boys',       label:'Freshman Boys',       ages:'12-13',     gender:'boys'},
+    {id:'sophomore_ladies',    label:'Sophomore Ladies',    ages:'14-15',     gender:'women'},
+    {id:'sophomore_men',       label:'Sophomore Men',       ages:'14-15',     gender:'men'},
+    {id:'junior_ladies',       label:'Junior Ladies',       ages:'16-17',     gender:'women'},
+    {id:'junior_men',          label:'Junior Men',          ages:'16-17',     gender:'men'},
+    {id:'senior_ladies',       label:'Senior Ladies',       ages:'18-24',     gender:'women'},
+    {id:'senior_men',          label:'Senior Men',          ages:'18-24',     gender:'men'},
+    {id:'classic_ladies',      label:'Classic Ladies',      ages:'25-29',     gender:'women'},
+    {id:'classic_men',         label:'Classic Men',         ages:'25-29',     gender:'men'},
+    {id:'grand_classic_ladies',label:'Grand Classic Ladies',ages:'30-34',     gender:'women'},
+    {id:'grand_classic_men',   label:'Grand Classic Men',   ages:'30-34',     gender:'men'},
+    {id:'masters_ladies',      label:'Masters Ladies',      ages:'35-39',     gender:'women'},
+    {id:'masters_men',         label:'Masters Men',         ages:'35-39',     gender:'men'},
+    {id:'grand_masters_ladies',label:'Grand Masters Ladies',ages:'40-44',     gender:'women'},
+    {id:'grand_masters_men',   label:'Grand Masters Men',   ages:'40-44',     gender:'men'},
+    {id:'veteran_ladies',      label:'Veteran Ladies',      ages:'45-49',     gender:'women'},
+    {id:'veteran_men',         label:'Veteran Men',         ages:'45-49',     gender:'men'},
+    {id:'grand_veteran_ladies',label:'Grand Veteran Ladies',ages:'50-54',     gender:'women'},
+    {id:'grand_veteran_men',   label:'Grand Veteran Men',   ages:'50-54',     gender:'men'},
+    {id:'esquire_ladies',      label:'Esquire Ladies',      ages:'55-59',     gender:'women'},
+    {id:'esquire_men',         label:'Esquire Men',         ages:'55-59',     gender:'men'},
+    {id:'grand_esquire_ladies',label:'Grand Esquire Ladies',ages:'60-64',     gender:'women'},
+    {id:'grand_esquire_men',   label:'Grand Esquire Men',   ages:'60-64',     gender:'men'},
+    {id:'premier_ladies',      label:'Premier Ladies',      ages:'65+'        , gender:'women'},
+    {id:'premier_men',         label:'Premier Men',         ages:'65+'        , gender:'men'},
+  ].map(g=>({...g,divisions:makeDivisionsTemplate()}));
+}
+
 function ownerNameForUser(user) {
   return String(user?.displayName || user?.name || user?.username || user?.email || '').trim();
 }
@@ -1414,6 +1458,7 @@ module.exports = {
   nextId,
   makeDivisionsTemplate,
   baseGroups,
+  baseGroupsUSARS,
   defaultMeet,
   normalizeDivisionSet,
   normalizeOpenGroups,

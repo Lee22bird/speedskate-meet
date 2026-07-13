@@ -454,7 +454,20 @@ function renderMeetBuilderView({ db, meet, user = null, query = {} }) {
           </div>
         </div>
       </div>
-      <div class="page-header"><h2>Division Groups</h2><div class="sub">Enable classes and set distances for each age group.</div></div>
+      <div class="page-header">
+        <h2>Division Groups</h2>
+        <div class="sub">Enable classes and set distances for each age group.</div>
+        <div class="action-row" style="margin-top:10px;align-items:center;gap:10px">
+          <span class="note" style="margin:0">Division set:</span>
+          <button type="submit" formaction="/portal/meet/${meet.id}/division-scheme" formmethod="post" name="scheme" value="standard"
+            class="${!meet.usarsDivisions ? 'btn-good' : 'btn2'}"
+            onclick="return confirm('Switch to the Standard division set (24 age groups)?\\n\\nThis rebuilds the age-group list. Save any other settings changes first.');">Standard</button>
+          <button type="submit" formaction="/portal/meet/${meet.id}/division-scheme" formmethod="post" name="scheme" value="usars"
+            class="${meet.usarsDivisions ? 'btn-good' : 'btn2'}"
+            onclick="return confirm('Switch to the full USARS national divisions (34 age groups, incl. Grand + Premier)?\\n\\nThis rebuilds the age-group list. Save any other settings changes first.');">USARS National</button>
+          <span class="note" style="margin:0">${meet.usarsDivisions ? '34 USARS divisions' : '24 standard divisions'}</span>
+        </div>
+      </div>
       ${groupsHtml}
 
       <div class="card" style="margin-top:8px">
