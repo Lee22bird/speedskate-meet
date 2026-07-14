@@ -10,6 +10,10 @@ const {
   generateOpenRacesForMeet,
   generateQuadRacesForMeet,
 } = require('./raceGenerator');
+// currentRaceInfo + recentClosedRaces live in raceDay (raceGenerator has internal
+// copies it does not export); the coach* helpers below need them. raceDay does not
+// require meetHelpers, so this is not circular.
+const { currentRaceInfo, recentClosedRaces } = require('./raceDay');
 const {
   defaultPricingFields,
   normalizeMeetPricingFields,
