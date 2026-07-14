@@ -23,6 +23,7 @@ const {
 const {
   relayOptionKeyForRace, renderRelayEligibleSkatersHtml,
 } = require('../services/relayHelpers');
+const { advanceRelayProgression } = require('../services/relayGenerator');
 const ttHelpers = require('../services/ttHelpers');
 const {
   genderBucket, openGroupForTimeTrialReg, timeTrialRaceForMeet,
@@ -1721,8 +1722,11 @@ router.post('/portal/meet/:meetId/race-day/judges/save', requireRole('judge','me
   // Heat/semi advancement. 2-heat fields: top 3 each → final (unchanged). USARS
   // meets with 3-4 heats: heats → 2 semis → final per SR505.4 (semis created
   // lazily). Semis closing seeds the final. Non-USARS meets keep the 2-heat MVP.
+  // Relays (2- & 4-person) use the parallel place-based relay engine; 3-person
+  // relays advance by times (SR505.9) and are left manual for now.
   if(req.body.action==='close') {
-    advanceRaceProgression(meet, race);
+    if(race.isRelayRace) advanceRelayProgression(meet, race);
+    else advanceRaceProgression(meet, race);
   }
 
   meet.updatedAt=nowIso();

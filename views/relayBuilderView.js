@@ -91,7 +91,7 @@ function renderRelayBuilderView({ meet, saved = false, added = '', gen = null })
 
     ${saved ? '<div class="good" style="margin-bottom:12px">✅ Relay Builder saved.</div>' : ''}
     ${added ? `<div class="good" style="margin-bottom:12px">✅ Relay Builder saved. Added ${esc(added)} new relay race(s).</div>` : ''}
-    ${gen ? `<div class="good" style="margin-bottom:12px">✅ Generated relay races from submitted teams — ${esc(gen.created)} created, ${esc(gen.updated)} refreshed${gen.skipped ? `, ${esc(gen.skipped)} skipped (results already entered)` : ''}.${gen.needsHeats.length ? ` <strong>Needs heats (too many teams for one final):</strong> ${gen.needsHeats.map(esc).join(', ')} — heat generation is coming in the next update.` : ''}</div>` : ''}
+    ${gen ? `<div class="good" style="margin-bottom:12px">✅ Generated relay races from submitted teams — ${esc(gen.created)} final${gen.created===1?'':'s'} created, ${esc(gen.updated)} refreshed${gen.skipped ? `, ${esc(gen.skipped)} skipped (results already entered)` : ''}.${(gen.bracketed&&gen.bracketed.length) ? ` <strong>Split into heats:</strong> ${gen.bracketed.map(esc).join(', ')}.` : ''}${gen.needsHeats.length ? ` <strong>3-person, needs time-based heats (coming):</strong> ${gen.needsHeats.map(esc).join(', ')}.` : ''}</div>` : ''}
 
     <div class="card" style="margin-top:16px;border-left:4px solid var(--orange)">
       <div class="row between center" style="flex-wrap:wrap;gap:12px">

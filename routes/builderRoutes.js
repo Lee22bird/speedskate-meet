@@ -465,6 +465,7 @@ router.get('/portal/meet/:meetId/relay-builder', requireRole('meet_director'), (
         created: Number(req.query.created||0),
         updated: Number(req.query.updated||0),
         skipped: Number(req.query.skipped||0),
+        bracketed: String(req.query.bracketed||'').split('|').map(s=>s.trim()).filter(Boolean),
         needsHeats: String(req.query.heats||'').split('|').map(s=>s.trim()).filter(Boolean),
       } : null,
     }),
@@ -532,7 +533,7 @@ router.post('/portal/meet/:meetId/relay-builder/add-template', requireRole('meet
 router.post('/portal/meet/:meetId/relay-builder/generate-from-teams', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
-  const { created, updated, skipped, needsHeats } = buildRelayRacesFromTeams(meet);
+  const { created, updated, skipped, needsHeats, bracketed } = buildRelayRacesFromTeams(meet);
   meet.updatedAt=nowIso();
   saveDb(req.db);
   const q = [
@@ -540,6 +541,7 @@ router.post('/portal/meet/:meetId/relay-builder/generate-from-teams', requireRol
     `created=${created.length}`,
     `updated=${updated.length}`,
     `skipped=${skipped.length}`,
+    `bracketed=${encodeURIComponent((bracketed||[]).map(b=>`${b.label} (${b.heats}h${b.semis?'+2s':''})`).join('|'))}`,
     `heats=${encodeURIComponent(needsHeats.map(h=>h.label).join('|'))}`,
   ].join('&');
   res.redirect(`/portal/meet/${meet.id}/relay-builder?${q}`);
