@@ -485,7 +485,12 @@ router.post('/portal/meet/:meetId/relay-builder/add-template', requireRole('meet
 
     if(enabled){
       const name=[ageGroup, relayType, 'Relay'].filter(Boolean).join(' ');
+      // Match by relayDivisionId first so the builder and the coach-form generator
+      // (services/relayGenerator.js) share one race per division; fall back to
+      // name+distance for legacy relay races created before divisionId existed.
       let race=(meet.races||[]).find(r =>
+        r.isRelayRace && base.divisionId && r.relayDivisionId === base.divisionId
+      ) || (meet.races||[]).find(r =>
         r.isRelayRace &&
         String(r.groupLabel||'').trim().toLowerCase() === String(name||'').trim().toLowerCase() &&
         String(r.distanceLabel||'').trim().toLowerCase() === String(distance||'').trim().toLowerCase()
@@ -497,8 +502,10 @@ router.post('/portal/meet/:meetId/relay-builder/add-template', requireRole('meet
         race.relayAgeRange = ageRange;
         race.ages = ageRange || ageGroup;
         race.notes = notes;
+        if(base.divisionId) race.relayDivisionId = base.divisionId;
       } else if(name && distance){
         race=makeRelayRace({ name, distance, notes, relayType, ageGroup, ageRange });
+        if(base.divisionId) race.relayDivisionId = base.divisionId;
         race.orderHint=9800+(meet.races||[]).filter(r=>r.isRelayRace).length+added;
         meet.races.push(race);
         added+=1;
@@ -512,6 +519,7 @@ router.post('/portal/meet/:meetId/relay-builder/add-template', requireRole('meet
       ageRange,
       distance,
       notes,
+      divisionId: base.divisionId,
     };
   });
 

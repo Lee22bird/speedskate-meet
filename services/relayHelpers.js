@@ -2,22 +2,24 @@ const crypto = require('crypto');
 const { esc } = require('../utils/html');
 const { ageMatch } = require('./meetHelpers');
 const { ageForReg } = require('./meetHelpers');
+const { RELAY_DIVISIONS } = require('./relayDivisions');
 
-// ── Relay template defaults ───────────────────────────────────────────────────
-const RELAY_TEMPLATE_ROWS = [
-  { type: '3 Person', age: 'Juvenile', ageRange: '9 & Under', distance: '900m', notes: '1 lap × 3 times each' },
-  { type: '3 Person', age: 'Freshman', ageRange: '10-13', distance: '900m', notes: '1 lap × 3 times each' },
-  { type: '3 Person', age: 'Senior', ageRange: '14 & Older', distance: '900m', notes: '1 lap × 3 times each' },
-  { type: '3 Person', age: 'Master', ageRange: '35 & Older', distance: '900m', notes: '1 lap × 3 times each' },
-  { type: '2 Person', age: 'Juvenile', ageRange: '9 & Under', distance: '1200m', notes: '2 laps × 3 times each' },
-  { type: '2 Person', age: 'Freshman', ageRange: '10-13', distance: '1200m', notes: '2 laps × 3 times each' },
-  { type: '2 Person', age: 'Senior', ageRange: '14 & Older', distance: '1200m', notes: '2 laps × 3 times each' },
-  { type: '2 Person', age: 'Master', ageRange: '35 & Older', distance: '1200m', notes: '2 laps × 3 times each' },
-  { type: '4 Person', age: 'Juvenile', ageRange: '9 & Under', distance: '1200m', notes: '3 laps × 1 time each' },
-  { type: '4 Person', age: 'Freshman', ageRange: '10-13', distance: '2000m', notes: '5 laps × 1 time each' },
-  { type: '4 Person', age: 'Senior', ageRange: '14 & Older', distance: '2000m', notes: '5 laps × 1 time each' },
-  { type: '4 Person', age: 'Master', ageRange: '35 & Older', distance: '2000m', notes: '5 laps × 1 time each' },
-];
+// ── Relay template rows ───────────────────────────────────────────────────────
+// The full USARS relay division set (services/relayDivisions.js) — one row per
+// division, so the Relay Builder lists EVERY division with its correct gender
+// split, age bracket, and rulebook distance (single source of truth shared with
+// the coach relay form + relay generator). `age` = the division label minus the
+// size token, gender kept: "Primary 2 Boys" -> "Primary Boys", "Juvenile 3 Person"
+// -> "Juvenile".
+const RELAY_TEMPLATE_ROWS = RELAY_DIVISIONS.map(d => ({
+  type: `${d.size} Person`,
+  age: d.label.replace(/ \d+ /, ' ').replace(/ Person$/, '').trim(),
+  ageRange: d.ageRange,
+  distance: d.distance,
+  notes: '',
+  divisionId: d.id,
+  gender: d.gender,
+}));
 
 // ── Normalizers ───────────────────────────────────────────────────────────────
 function normalizeRelayEligibleGroupIds(value) {
@@ -31,15 +33,33 @@ function normalizeRelayAgeRange(value) {
 
 function normalizeRelayTemplates(saved) {
   const existing = Array.isArray(saved) ? saved : [];
+  // Fast path: a saved set that already matches the current division count aligns
+  // by index (preserves any per-row edits). Otherwise (e.g. a legacy 12-row save
+  // meeting the expanded USARS set) match saved rows to divisions by divisionId or
+  // type+age so previously-enabled relays carry over without scrambling the list.
+  const alignedByIndex = existing.length === RELAY_TEMPLATE_ROWS.length;
+  const byKey = new Map();
+  if (!alignedByIndex) {
+    existing.forEach(row => {
+      if (!row) return;
+      if (row.divisionId) byKey.set('id:' + row.divisionId, row);
+      const key = `${String(row.type || '').toLowerCase().trim()}|${String(row.age || '').toLowerCase().trim()}`;
+      if (!byKey.has(key)) byKey.set(key, row);
+    });
+  }
   return RELAY_TEMPLATE_ROWS.map((def, idx) => {
-    const row = existing[idx] || {};
+    const row = alignedByIndex
+      ? (existing[idx] || {})
+      : (byKey.get('id:' + def.divisionId) || byKey.get(`${def.type.toLowerCase()}|${def.age.toLowerCase()}`) || {});
     return {
       enabled: !!row.enabled,
       type: String(row.type || def.type),
       age: String(row.age || def.age),
       ageRange: normalizeRelayAgeRange(row.ageRange || row.ages || def.ageRange || def.ages),
       distance: String(row.distance || def.distance),
-      notes: String(row.notes || def.notes),
+      notes: String(row.notes || def.notes || ''),
+      divisionId: def.divisionId,
+      gender: def.gender,
     };
   });
 }
