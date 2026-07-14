@@ -22,6 +22,13 @@ function buildNationalsDevRoster() {
   for (const r of NATIONALS_ROSTER) {
     const g = byLabel.get(String(r.division || '').trim().toLowerCase());
     if (!g) continue; // division outside the USARS set — skip
+    // Options carry the skater's real IDN 2026 entries: the elite individual event,
+    // each inline relay size they raced (relay2/3/4Person), and quad if they entered
+    // any quad event (individual or quad relay). quadRelays are kept on the row for
+    // the future quad-relay divisions (no distinct registration option yet).
+    const options = ['elite'];
+    for (const n of (r.relays || [])) options.push(`relay${n}Person`);
+    if (r.quad || (r.quadRelays || []).length) options.push('quad');
     rows.push({
       name: r.name,
       team: r.team || 'Independent',
@@ -29,7 +36,8 @@ function buildNationalsDevRoster() {
       // 'boys'/'girls' — the importer's testRosterGenderForAge() promotes these
       // to men/women for 16+ automatically.
       gender: (g.gender === 'boys' || g.gender === 'men') ? 'boys' : 'girls',
-      options: ['elite'],
+      options,
+      quadRelays: r.quadRelays || [],
     });
   }
   return rows;
