@@ -104,7 +104,7 @@ def build_relay_lut():
     # Merge oldest->newest so released results override earlier lineups, exactly
     # like the individual races.
     merged = {}
-    for top in ("Inlines", "Inlines2", "Inlines3", "Inlines4", "Inlines5", "Inlines6", "Inlines7"):
+    for top in ("Inlines", "Inlines2", "Inlines3", "Inlines4", "Inlines5", "Inlines6", "Inlines7", "Inlines8"):
         newer = _relay_raw(top)
         for key, batch in newer.items():
             base = merged.setdefault(key, {"heats": [], "semis": [], "final": []})
@@ -137,11 +137,11 @@ def build_relay_lut():
 
 
 def build_lineups():
-    # Inline precedence (oldest -> newest): Inlines (base) < Inlines2 < Inlines3 < Inlines4.
+    # Inline precedence (oldest -> newest): Inlines (base) < Inlines2 < ... < Inlines8.
     # Each newer batch wins per (division, distance, phase) where it has data,
     # so the latest final RESULTS override the earlier pre-race lineups. Quad from Quads.
     inline = build_lut_for("inline", "Inlines")
-    for top in ("Inlines2", "Inlines3", "Inlines4", "Inlines5", "Inlines6", "Inlines7"):
+    for top in ("Inlines2", "Inlines3", "Inlines4", "Inlines5", "Inlines6", "Inlines7", "Inlines8"):
         newer = build_lut_for("inline", top)
         for key, batch in newer.items():
             base = inline.setdefault(key, {"heats": [], "semis": [], "final": []})

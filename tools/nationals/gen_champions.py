@@ -54,7 +54,7 @@ def age_key(div):
 def build():
     # Inlines folders in order; later folders override a division's standings.
     dirs = sorted(glob.glob(os.path.join(ROOT, "Inlines*")),
-                  key=lambda p: (len(p), p))  # Inlines < Inlines2 < ... < Inlines6
+                  key=lambda p: (len(p), p))  # Inlines < Inlines2 < ... < Inlines8 (auto-discovered)
     hmap = build_helmet_map(dirs)
     by_div = {}
     for base in dirs:
