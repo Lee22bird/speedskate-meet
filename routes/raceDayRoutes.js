@@ -171,6 +171,11 @@ function laneResultFromBody(existing, lane, body, user) {
     time: String(body[`time_${lane}`] ?? existing.time ?? '').trim(),
     status,
   };
+  // Preserve relay-team identity on generated relay entries (this editor otherwise
+  // rebuilds entries from a fixed field list and would drop these).
+  if (existing.relayTeamId != null) result.relayTeamId = existing.relayTeamId;
+  if (Array.isArray(existing.relayMemberRegIds)) result.relayMemberRegIds = existing.relayMemberRegIds;
+  if (existing.color) result.color = existing.color;
   if (!isDisqualification(status)) return result;
   result.dqCategory = status === 'DQ' ? (existing.dqCategory || 'DQ_OTHER') : status;
   result.dqRuleReference = String(body[`dqRuleReference_${lane}`] ?? existing.dqRuleReference ?? '').trim().slice(0, 200);

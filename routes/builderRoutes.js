@@ -20,6 +20,8 @@ const {
   normalizeRelayTemplates, makeRelayRace, relayRaceExists,
   renderRelayEligibleSkatersHtml, RELAY_TEMPLATE_ROWS,
 } = require('../services/relayHelpers');
+const { buildRelayRacesFromTeams } = require('../services/relayGenerator');
+const { RELAY_DIVISION_BY_ID } = require('../services/relayDivisions');
 const {
   genderBucket, openGroupForTimeTrialReg, timeTrialRaceForMeet,
   timeTrialEntriesForMeet, rebuildTimeTrialRace, timeTrialLeaderboards,
@@ -459,6 +461,12 @@ router.get('/portal/meet/:meetId/relay-builder', requireRole('meet_director'), (
       meet,
       saved:req.query.saved,
       added:req.query.added,
+      gen: req.query.gen ? {
+        created: Number(req.query.created||0),
+        updated: Number(req.query.updated||0),
+        skipped: Number(req.query.skipped||0),
+        needsHeats: String(req.query.heats||'').split('|').map(s=>s.trim()).filter(Boolean),
+      } : null,
     }),
   }));
 });
@@ -510,6 +518,23 @@ router.post('/portal/meet/:meetId/relay-builder/add-template', requireRole('meet
   meet.updatedAt=nowIso();
   saveDb(req.db);
   res.redirect(`/portal/meet/${meet.id}/relay-builder?saved=1&added=${added}`);
+});
+
+// Stage 4a: build relay finals from coach-submitted teams (meet.relayTeams).
+router.post('/portal/meet/:meetId/relay-builder/generate-from-teams', requireRole('meet_director'), (req, res) => {
+  const meet=getMeetOr404(req.db,req.params.meetId);
+  if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
+  const { created, updated, skipped, needsHeats } = buildRelayRacesFromTeams(meet);
+  meet.updatedAt=nowIso();
+  saveDb(req.db);
+  const q = [
+    'gen=1',
+    `created=${created.length}`,
+    `updated=${updated.length}`,
+    `skipped=${skipped.length}`,
+    `heats=${encodeURIComponent(needsHeats.map(h=>h.label).join('|'))}`,
+  ].join('&');
+  res.redirect(`/portal/meet/${meet.id}/relay-builder?${q}`);
 });
 
 router.post('/portal/meet/:meetId/relay-builder/delete', requireRole('meet_director'), (req, res) => {

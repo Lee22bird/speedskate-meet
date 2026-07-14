@@ -1,4 +1,5 @@
 const { esc } = require('../utils/html');
+const { RELAY_DIVISIONS, RELAY_DIVISION_BY_ID } = require('../services/relayDivisions');
 
 function toggleSwitch(name, checked, label = '', value = 'on') {
   return `
@@ -13,9 +14,25 @@ function relayAgeRange(row) {
   return String(row?.ageRange || row?.ages || '').trim();
 }
 
-function renderRelayBuilderView({ meet, saved = false, added = '' }) {
+// Summary of coach-submitted teams (meet.relayTeams) grouped by division, in the
+// canonical RELAY_DIVISIONS order.
+function submittedTeamsSummary(meet) {
+  const teams = (meet.relayTeams || []).filter(t => Array.isArray(t.memberRegIds) && t.memberRegIds.length);
+  const byDiv = new Map();
+  for (const t of teams) {
+    if (!RELAY_DIVISION_BY_ID.has(t.divisionId)) continue;
+    byDiv.set(t.divisionId, (byDiv.get(t.divisionId) || 0) + 1);
+  }
+  const rows = RELAY_DIVISIONS
+    .filter(d => byDiv.has(d.id))
+    .map(d => ({ label: d.label, distance: d.distance, count: byDiv.get(d.id) }));
+  return { total: teams.length, rows };
+}
+
+function renderRelayBuilderView({ meet, saved = false, added = '', gen = null }) {
   meet.relayTemplates = Array.isArray(meet.relayTemplates) ? meet.relayTemplates : [];
   const relayRaces = (meet.races || []).filter(r => r.isRelayRace);
+  const submitted = submittedTeamsSummary(meet);
 
   const relayRows = relayRaces.map(r => `
     <tr>
@@ -74,6 +91,25 @@ function renderRelayBuilderView({ meet, saved = false, added = '' }) {
 
     ${saved ? '<div class="good" style="margin-bottom:12px">✅ Relay Builder saved.</div>' : ''}
     ${added ? `<div class="good" style="margin-bottom:12px">✅ Relay Builder saved. Added ${esc(added)} new relay race(s).</div>` : ''}
+    ${gen ? `<div class="good" style="margin-bottom:12px">✅ Generated relay races from submitted teams — ${esc(gen.created)} created, ${esc(gen.updated)} refreshed${gen.skipped ? `, ${esc(gen.skipped)} skipped (results already entered)` : ''}.${gen.needsHeats.length ? ` <strong>Needs heats (too many teams for one final):</strong> ${gen.needsHeats.map(esc).join(', ')} — heat generation is coming in the next update.` : ''}</div>` : ''}
+
+    <div class="card" style="margin-top:16px;border-left:4px solid var(--orange)">
+      <div class="row between center" style="flex-wrap:wrap;gap:12px">
+        <div>
+          <h2 style="margin:0">🛼 Submitted Relay Teams</h2>
+          <div class="note">${submitted.total ? `${esc(submitted.total)} team${submitted.total === 1 ? '' : 's'} submitted by coaches. Generate races to pre-load these teams into relay finals.` : 'No relay teams submitted yet. Coaches build teams from the Coach Panel → Build Relay Teams.'}</div>
+        </div>
+        ${submitted.total ? `
+        <form method="POST" action="/portal/meet/${meet.id}/relay-builder/generate-from-teams" style="display:inline">
+          <button class="btn-orange" type="submit">Generate Races from Teams →</button>
+        </form>` : ''}
+      </div>
+      ${submitted.total ? `
+      <table class="table" style="margin-top:12px">
+        <thead><tr><th>Division</th><th>Distance</th><th>Teams</th></tr></thead>
+        <tbody>${submitted.rows.map(r => `<tr><td><strong>${esc(r.label)}</strong></td><td>${esc(r.distance)}</td><td><span class="chip chip-sky">${esc(r.count)}</span></td></tr>`).join('')}</tbody>
+      </table>` : ''}
+    </div>
 
     <div class="card" style="margin-top:16px">
       <style>
