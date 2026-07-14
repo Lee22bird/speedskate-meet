@@ -1743,11 +1743,21 @@ app.post('/portal/coach/roster/delete', requireRole('coach','meet_director','sup
 
 app.get('/portal/coach', requireRole('coach','meet_director','super_admin'), (req, res) => {
   const meets = coachVisibleMeets(req.db, req.user);
-  const meetCards = meets.map(meet => ({
-    meet,
-    upcoming: coachUpcomingForMeet(meet, req.user.team),
-    regs: coachTeamRegistrations(meet, req.user.team),
-  }));
+  // A super-admin's Coach Portal maps over EVERY meet, so one meet with malformed
+  // data must not crash the whole page — build each card defensively and degrade
+  // the bad ones (logging which meet failed so the root cause can be traced).
+  const meetCards = meets.map(meet => {
+    try {
+      return {
+        meet,
+        upcoming: coachUpcomingForMeet(meet, req.user.team),
+        regs: coachTeamRegistrations(meet, req.user.team),
+      };
+    } catch (err) {
+      console.error(`Coach Portal: skipping meet ${meet && meet.id} (${meet && meet.meetName}) — ${err && err.message}`);
+      return { meet, upcoming: [], regs: [] };
+    }
+  });
 
   res.send(pageShell({
     title: 'Coach Portal',

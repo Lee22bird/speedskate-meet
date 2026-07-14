@@ -3,7 +3,7 @@ const { ensureTimeTrialEvent, timeTrialEventTitle } = require('./timeTrialEvents
 function orderedRaces(meet) {
   const timeTrialEvent = ensureTimeTrialEvent(meet);
   const timeTrialById = new Map((meet.timeTrialEvents || []).filter(event => event.enabled).map(event => [String(event.id), event]));
-  const raceById = new Map((meet.races || []).map(r => [r.id, r]));
+  const raceById = new Map((meet.races || []).filter(Boolean).map(r => [r.id, r]));
   const out = [];
 
   for (const block of meet.blocks || []) {
@@ -47,7 +47,7 @@ function orderedRaces(meet) {
 
   const assigned = new Set(out.map(r => r.id));
 
-  for (const race of meet.races || []) {
+  for (const race of (meet.races || []).filter(Boolean)) {
     if (!assigned.has(race.id)) {
       out.push({
         ...race,

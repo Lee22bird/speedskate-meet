@@ -10,10 +10,12 @@ const {
   generateOpenRacesForMeet,
   generateQuadRacesForMeet,
 } = require('./raceGenerator');
-// currentRaceInfo + recentClosedRaces live in raceDay (raceGenerator has internal
-// copies it does not export); the coach* helpers below need them. raceDay does not
-// require meetHelpers, so this is not circular.
-const { currentRaceInfo, recentClosedRaces } = require('./raceDay');
+// NOTE: currentRaceInfo + recentClosedRaces live in raceDay, but there is a require
+// cycle (raceDay → timeTrialEvents → meetHelpers → raceDay) AND raceDay reassigns
+// module.exports at the end — so any top-level require here (destructured OR whole-
+// module) captures a stale/partial exports object. The coach* helpers below
+// therefore require('./raceDay') INSIDE the function (call-time), which reads the
+// final cached exports after the cycle has resolved.
 const {
   defaultPricingFields,
   normalizeMeetPricingFields,
@@ -1427,6 +1429,7 @@ function coachTeamRegistrations(meet,coachTeam) {
 }
 
 function coachUpcomingForMeet(meet,coachTeam) {
+  const { currentRaceInfo } = require('./raceDay'); // require at call time — see note above
   const regs=coachTeamRegistrations(meet,coachTeam); const regIds=new Set(regs.map(r=>Number(r.id)));
   const info=currentRaceInfo(meet);
   return info.ordered.map((race,idx)=>{
@@ -1437,6 +1440,7 @@ function coachUpcomingForMeet(meet,coachTeam) {
 }
 
 function coachRecentResultsForMeet(meet,coachTeam) {
+  const { recentClosedRaces } = require('./raceDay'); // require at call time — see note above
   const regs=coachTeamRegistrations(meet,coachTeam); const regIds=new Set(regs.map(r=>Number(r.id)));
   return recentClosedRaces(meet,12).map(race=>{
     const matched=(race.laneEntries||[]).filter(le=>regIds.has(Number(le.registrationId)));
