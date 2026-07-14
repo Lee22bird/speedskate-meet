@@ -7,7 +7,7 @@ const { raceDaySubTabs, meetTabs: _mt, announcerBoxHtml: _abh } = require('../ut
 const {
   getMeetOr404, meetRinkLabel, meetDateLabel, nextId,
   isArchivedMeet, orderedRaces: _ord, ensureAtLeastOneBlock,
-  tryAdvanceTopThreeFromTwoHeats, isAdvancementRace, isOpenDivision,
+  tryAdvanceTopThreeFromTwoHeats, advanceRaceProgression, isAdvancementRace, isOpenDivision,
   numericPlace, computeMeetStandings: _cms, sponsorLineHtml, raceStatusResultsHtml,
 } = require('../services/meetHelpers');
 const {
@@ -1718,12 +1718,11 @@ router.post('/portal/meet/:meetId/race-day/judges/save', requireRole('judge','me
   race.notes=String(req.body.notes||''); race.status=req.body.action==='close'?'closed':'open';
   race.closedAt=req.body.action==='close'?nowIso():race.closedAt;
 
-  // Heat advancement MVP:
-  // When exactly 2 sibling heats are closed, top 3 by place from each heat
-  // are copied into the matching final. No times / fastest-loser logic.
-  // More than 2 heats stays manual for now.
+  // Heat/semi advancement. 2-heat fields: top 3 each → final (unchanged). USARS
+  // meets with 3-4 heats: heats → 2 semis → final per SR505.4 (semis created
+  // lazily). Semis closing seeds the final. Non-USARS meets keep the 2-heat MVP.
   if(req.body.action==='close') {
-    tryAdvanceTopThreeFromTwoHeats(meet, race);
+    advanceRaceProgression(meet, race);
   }
 
   meet.updatedAt=nowIso();

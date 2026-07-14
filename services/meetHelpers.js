@@ -1139,6 +1139,172 @@ function tryAdvanceTopThreeFromTwoHeats(meet, changedRace) {
   return { advanced: true, finalRaceId: finalRace.id };
 }
 
+// ── USARS SR505.4 heat → semi → final advancement ──────────────────────────────
+// Extends the 2-heat MVP to 3-4 heat fields (15-32 skaters): heats feed 2 semis,
+// semis feed the 6-skater final. Auto-semis are GATED (default OFF) so existing
+// meets are byte-for-byte unaffected; USARS-mode meets opt in. Semis are created
+// lazily during advancement (no change to race generation). The seeding functions
+// are pure + reused by relay stage B.
+function semiAdvancementEnabled(meet) {
+  return !!(meet && (meet.autoSemis || meet.usarsDivisions));
+}
+
+// SR505.4 semi seeding: [heatNumber, finishing-place] pairs feeding each of the
+// two semis, by heat count. 3 heats top 4 each (→12), 4 heats top 3 each (→12).
+//   3 heats: semi1 = h1(1-4)+h2(2,3);  semi2 = h2(1,4)+h3(1-4).
+//   4 heats: semi1 = heats 1&4 top 3;  semi2 = heats 2&3 top 3.
+function semiSeedingPlan(heatCount) {
+  if (heatCount === 3) return [
+    [[1, 1], [1, 2], [1, 3], [1, 4], [2, 2], [2, 3]],
+    [[2, 1], [2, 4], [3, 1], [3, 2], [3, 3], [3, 4]],
+  ];
+  if (heatCount === 4) return [
+    [[1, 1], [1, 2], [1, 3], [4, 1], [4, 2], [4, 3]],
+    [[2, 1], [2, 2], [2, 3], [3, 1], [3, 2], [3, 3]],
+  ];
+  return null; // 2 heats handled elsewhere; 5+ (quarterfinals) stays manual
+}
+
+// Valid finishers of a race in finishing order (numeric place, no DQ/status).
+function orderedFinishers(race) {
+  return (race.laneEntries || [])
+    .filter(e => numericPlace(e.place) !== null && !String(e.status || '').trim())
+    .sort((a, b) => numericPlace(a.place) - numericPlace(b.place));
+}
+
+// Fresh advancement lane entry copied from a qualifying result.
+function advancementEntry(src, fromLabel, fromPlace) {
+  return {
+    lane: 0,
+    registrationId: src.registrationId || '',
+    helmetNumber: src.helmetNumber || '',
+    skaterName: src.skaterName || '',
+    team: src.team || '',
+    place: '', time: '', status: '',
+    qualifiedFrom: fromLabel,
+    qualifiedPlace: fromPlace,
+  };
+}
+
+// Seed the 2 semis from the closed heats (SR505.4). Creates the semi races lazily
+// if they don't exist yet, so race generation stays untouched.
+function advanceSemisFromHeats(meet, changedRace) {
+  const familyKey = advancementFamilyKey(changedRace);
+  if (!familyKey) return { advanced: false, reason: 'missing_family' };
+  const family = (meet.races || []).filter(r => isAdvancementRace(r) && advancementFamilyKey(r) === familyKey);
+  const heats = family.filter(r => String(r.stage || '').toLowerCase() === 'heat')
+    .sort((a, b) => Number(a.heatNumber || 0) - Number(b.heatNumber || 0));
+  const finalRace = family.find(r => String(r.stage || '').toLowerCase() === 'final' || r.isFinal);
+  if (!finalRace) return { advanced: false, reason: 'missing_final' };
+
+  const plan = semiSeedingPlan(heats.length);
+  if (!plan) {
+    finalRace.advancementWarning = `Manual advancement required — ${heats.length} heats.`;
+    return { advanced: false, reason: 'unsupported_heat_count' };
+  }
+  if (heats.some(h => String(h.status || '') !== 'closed')) return { advanced: false, reason: 'heats_not_closed' };
+
+  const finishersByNum = new Map(heats.map(h => [Number(h.heatNumber || 0), orderedFinishers(h)]));
+
+  // Resolve each semi's qualifiers; every referenced slot must exist.
+  const semiQual = [];
+  for (const pairs of plan) {
+    const q = [];
+    for (const [hn, pl] of pairs) {
+      const src = (finishersByNum.get(hn) || [])[pl - 1];
+      if (!src) return { advanced: false, reason: 'missing_qualifiers' };
+      q.push(advancementEntry(src, 'H' + hn, pl));
+    }
+    semiQual.push(q);
+  }
+
+  // Find or (re)create exactly 2 semi races in this family.
+  let semis = family.filter(r => String(r.stage || '').toLowerCase() === 'semi')
+    .sort((a, b) => Number(a.heatNumber || 0) - Number(b.heatNumber || 0));
+  const anyResults = semis.some(s => (s.laneEntries || []).some(e => numericPlace(e.place) !== null || String(e.status || '').trim()));
+  if (semis.length !== 2 && !anyResults) {
+    if (semis.length) meet.races = meet.races.filter(r => !(String(r.stage || '').toLowerCase() === 'semi' && advancementFamilyKey(r) === familyKey));
+    semis = [1, 2].map(n => ({
+      ...finalRace,
+      id: 'r' + crypto.randomBytes(6).toString('hex'),
+      stage: 'semi',
+      heatNumber: n,
+      isFinal: false,
+      countsForOverall: false,
+      orderHint: Number(finalRace.orderHint || 0) - (n === 1 ? 0.11 : 0.10),
+      status: 'open',
+      closedAt: '',
+      laneEntries: [],
+      advancementWarning: '',
+      advancedFromHeatsAt: '',
+      advancedFromSemisAt: '',
+    }));
+    meet.races.push(...semis);
+  } else if (semis.some(s => (s.laneEntries || []).some(e => numericPlace(e.place) !== null || String(e.status || '').trim()))) {
+    // Don't reseed semis that already have results entered.
+    return { advanced: false, reason: 'semis_have_results' };
+  }
+
+  semis.forEach((semi, i) => {
+    semi.laneEntries = semiQual[i].map((e, idx) => ({ ...e, lane: idx + 1 }));
+    semi.resultsMode = semi.resultsMode || 'places';
+    semi.status = String(semi.status || '') === 'closed' ? 'closed' : 'open';
+    semi.stage = 'semi';
+    semi.isFinal = false;
+    semi.countsForOverall = false;
+    semi.advancedFromHeatsAt = nowIso();
+  });
+
+  finalRace.advancementWarning = '';
+  return { advanced: true, semiRaceIds: semis.map(s => s.id) };
+}
+
+// Seed the final from the 2 closed semis (top 3 each → 6). SR505.4.
+function advanceFinalFromSemis(meet, changedRace) {
+  const familyKey = advancementFamilyKey(changedRace);
+  if (!familyKey) return { advanced: false, reason: 'missing_family' };
+  const family = (meet.races || []).filter(r => isAdvancementRace(r) && advancementFamilyKey(r) === familyKey);
+  const semis = family.filter(r => String(r.stage || '').toLowerCase() === 'semi')
+    .sort((a, b) => Number(a.heatNumber || 0) - Number(b.heatNumber || 0));
+  const finalRace = family.find(r => String(r.stage || '').toLowerCase() === 'final' || r.isFinal);
+  if (!finalRace) return { advanced: false, reason: 'missing_final' };
+  if (semis.length !== 2) return { advanced: false, reason: 'not_two_semis' };
+  if (semis.some(s => String(s.status || '') !== 'closed')) return { advanced: false, reason: 'semis_not_closed' };
+
+  const qualifiers = [];
+  for (const semi of semis) {
+    const topThree = orderedFinishers(semi).slice(0, 3);
+    if (topThree.length < 3) return { advanced: false, reason: 'missing_top_three' };
+    for (const e of topThree) qualifiers.push(advancementEntry(e, 'S' + Number(semi.heatNumber || 0), numericPlace(e.place)));
+  }
+
+  finalRace.laneEntries = qualifiers.slice(0, 6).map((e, idx) => ({ ...e, lane: idx + 1 }));
+  finalRace.resultsMode = finalRace.resultsMode || 'places';
+  finalRace.status = String(finalRace.status || '') === 'closed' ? 'closed' : 'open';
+  finalRace.isFinal = true;
+  finalRace.countsForOverall = true;
+  finalRace.advancementWarning = '';
+  finalRace.advancedFromSemisAt = nowIso();
+  return { advanced: true, finalRaceId: finalRace.id };
+}
+
+// Race-close dispatcher: routes heat/semi progression through the right stage.
+// Backwards-compatible — 2-heat fields and non-USARS meets hit the existing path.
+function advanceRaceProgression(meet, changedRace) {
+  if (!isAdvancementRace(changedRace)) return { advanced: false, reason: 'not_advancement_race' };
+  const stage = String(changedRace.stage || '').toLowerCase();
+  if (stage === 'semi') return advanceFinalFromSemis(meet, changedRace);
+  if (stage !== 'heat') return { advanced: false, reason: 'not_progression_stage' };
+
+  const familyKey = advancementFamilyKey(changedRace);
+  const heats = (meet.races || []).filter(r =>
+    isAdvancementRace(r) && advancementFamilyKey(r) === familyKey && String(r.stage || '').toLowerCase() === 'heat');
+  if (heats.length >= 3 && heats.length <= 4 && semiAdvancementEnabled(meet)) {
+    return advanceSemisFromHeats(meet, changedRace);
+  }
+  return tryAdvanceTopThreeFromTwoHeats(meet, changedRace);
+}
+
 function pricingFieldsFromMeet(meet) {
   return {
     baseEntryFee: Number(meet?.baseEntryFee || 0),
@@ -1535,6 +1701,12 @@ module.exports = {
   advancementFamilyKey,
   numericPlace,
   tryAdvanceTopThreeFromTwoHeats,
+  semiAdvancementEnabled,
+  semiSeedingPlan,
+  orderedFinishers,
+  advanceSemisFromHeats,
+  advanceFinalFromSemis,
+  advanceRaceProgression,
   pricingFieldsFromMeet,
   hasRelayEvents,
   buildRegistrationPricingPreview,
