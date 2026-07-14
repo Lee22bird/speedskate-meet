@@ -450,6 +450,11 @@ function renderMeetBuilderView({ db, meet, user = null, query = {} }) {
                 <div><label>Meet Notes</label><textarea name="notes">${esc(meet.notes||'')}</textarea></div>
                 <div><label>Relay Notes</label><textarea name="relayNotes">${esc(meet.relayNotes||'')}</textarea></div>
               </div>
+              <div style="margin-top:10px">
+                <label>Relay Roster Deadline</label>
+                <input type="datetime-local" name="relayDeadline" value="${esc(meet.relayDeadline||'')}" />
+                <div class="hint" style="font-size:12px;color:var(--muted);margin-top:4px">Shown to coaches on the Build Relay Teams page. When this date/time passes, the coach relay form locks so no late teams can be added. Leave blank for no deadline.</div>
+              </div>
             </section>
           </div>
         </div>

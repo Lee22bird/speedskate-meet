@@ -133,6 +133,7 @@ function saveMeetFields(meet, body, db) {
   meet.notes=String(body.notes||'');
   meet.scheduleNotes=String(body.scheduleNotes||'');
   meet.relayNotes=String(body.relayNotes||'');
+  meet.relayDeadline=String(body.relayDeadline||'').trim(); // free text shown to coaches; locks the coach relay form once passed
   meet.tiebreaker=String(body.tiebreaker||'d2')==='sr832'?'sr832':'d2';
   meet.baseEntryFee=Number(String(body.baseEntryFee||'0').trim()||0);
   meet.additionalRaceFee=Number(String(body.additionalRaceFee||'0').trim()||0);

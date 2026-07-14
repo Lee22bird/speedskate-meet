@@ -4,6 +4,22 @@ function esc(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+// Format a datetime-local deadline ("2026-07-10T21:00") as friendly wall-clock
+// text ("Fri, Jul 10 · 9:00 PM"), parsing the components directly so it reads
+// the same regardless of server timezone. Falls back to the raw string.
+const _DL_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const _DL_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+function formatRelayDeadline(val) {
+  const s = String(val || '').trim();
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(s);
+  if (!m) return s;
+  const y = +m[1], mo = +m[2], d = +m[3], hh = +m[4], mm = +m[5];
+  const wd = _DL_DAYS[new Date(y, mo - 1, d).getDay()];
+  const ap = hh < 12 ? 'AM' : 'PM';
+  const h12 = (hh % 12) || 12;
+  return `${wd}, ${_DL_MONTHS[mo - 1]} ${d} · ${h12}:${String(mm).padStart(2, '0')} ${ap}`;
+}
+
 // Coach relay team builder. Coach forms teams from their club's age/gender-
 // eligible skaters via dropdowns; each filled team is saved as a relay entry.
 // No-split-club is automatic (only this club's skaters appear). Color is left
@@ -47,7 +63,7 @@ function renderCoachRelaysView({ meet, club, skaters, locked, savedCount }) {
   }).join('');
 
   const deadlineNote = meet.relayDeadline
-    ? `<div class="rl-deadline${locked ? ' rl-locked' : ''}">${locked ? '🔒 Relay entries are locked' : '⏰ Relay entries due'}: ${esc(meet.relayDeadline)}</div>`
+    ? `<div class="rl-deadline${locked ? ' rl-locked' : ''}">${locked ? '🔒 Relay entries are locked' : '⏰ Relay entries due'}: ${esc(formatRelayDeadline(meet.relayDeadline))}</div>`
     : '';
 
   return `
@@ -77,4 +93,4 @@ function renderCoachRelaysView({ meet, club, skaters, locked, savedCount }) {
     </style>`;
 }
 
-module.exports = { renderCoachRelaysView };
+module.exports = { renderCoachRelaysView, formatRelayDeadline };

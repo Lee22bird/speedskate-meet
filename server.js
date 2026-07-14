@@ -122,7 +122,7 @@ const { renderArchivedMeetsView } = require('./views/archivedMeetsView');
 const { renderCoachRosterView } = require('./views/coachRosterView');
 const { renderStaffAccountsView } = require('./views/staffAccountsView');
 const { renderCoachPortalView } = require('./views/coachPortalView');
-const { renderCoachRelaysView } = require('./views/coachRelaysView');
+const { renderCoachRelaysView, formatRelayDeadline } = require('./views/coachRelaysView');
 const { RELAY_DIVISION_BY_ID } = require('./services/relayDivisions');
 const { renderBlockBuilderView } = require('./views/blockBuilderView');
 const { renderMeetBuilderView } = require('./views/meetBuilderView');
@@ -1761,8 +1761,17 @@ app.get('/portal/coach', requireRole('coach','meet_director','super_admin'), (re
 // dropdowns. No-split-club is automatic (only this club's skaters). Locks after
 // the meet's relay deadline. Submitted teams (meet.relayTeams) feed relay races.
 function relayDeadlinePassed(meet) {
-  const d = meet && meet.relayDeadline ? new Date(meet.relayDeadline) : null;
-  return !!(d && !isNaN(d.getTime()) && Date.now() > d.getTime());
+  const raw = meet && meet.relayDeadline ? String(meet.relayDeadline).trim() : '';
+  if (!raw) return false;
+  // datetime-local carries no timezone and Render runs UTC. Pin to UTC and add a
+  // grace buffer so the lock never trips EARLY for a US (behind-UTC) meet — failing
+  // late is harmless (relays run days after the deadline); locking honest coaches
+  // out early is not. Directors wanting a harder cutoff can set an earlier time.
+  const iso = /\dT\d/.test(raw) ? raw + 'Z' : raw;
+  const t = new Date(iso).getTime();
+  if (isNaN(t)) return false;
+  const GRACE_MS = 12 * 3600 * 1000;
+  return Date.now() > t + GRACE_MS;
 }
 
 app.get('/portal/meet/:meetId/coach/relays', requireRole('coach','meet_director','super_admin'), (req, res) => {
@@ -1896,7 +1905,7 @@ app.get('/portal/meet/:meetId/coach', requireRole('coach','meet_director','super
       <div class="row between center">
         <div>
           <div style="font-weight:800;color:var(--navy)">🛼 Relay Teams</div>
-          <div class="note">Build your club's relay teams${meet.relayDeadline?` — due ${esc(meet.relayDeadline)}`:''}.</div>
+          <div class="note">Build your club's relay teams${meet.relayDeadline?` — due ${esc(formatRelayDeadline(meet.relayDeadline))}`:''}.</div>
         </div>
         <a class="btn-orange btn-sm" href="/portal/meet/${esc(meet.id)}/coach/relays">Build Relay Teams →</a>
       </div>
