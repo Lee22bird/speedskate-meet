@@ -12,7 +12,7 @@
 // lazily (property-at-call-time) to avoid a require cycle.
 const crypto = require('crypto');
 const { nowIso } = require('../utils/date');
-const { DIRECT_FINAL_MAX, planRelayRaceSizing, distributeByTeam } = require('./raceSizing');
+const { DIRECT_FINAL_MAX, planRelayRaceSizing, planThreePersonRelaySizing, distributeByTeam } = require('./raceSizing');
 const { RELAY_DIVISIONS, RELAY_DIVISION_BY_ID } = require('./relayDivisions');
 const { makeRelayRace } = require('./relayHelpers');
 const mh = require('./meetHelpers'); // lazy access: mh.semiSeedingPlan / orderedFinishers / numericPlace
@@ -93,13 +93,6 @@ function buildRelayRacesFromTeams(meet) {
     const laneEntries = divTeams.map((t, i) => teamLaneEntry(t, i + 1, regById));
     const base = 9800 + RELAY_DIVISIONS.indexOf(div);
 
-    // 3-person with >7 teams: win-and-in + fastest-times (SR505.9) not built yet.
-    if (div.size === 3 && divTeams.length > DIRECT_FINAL_MAX) {
-      meet.races = meet.races.filter(r => !(r.isRelayRace && r.relayDivisionId === div.id));
-      needsHeats.push(info);
-      continue;
-    }
-
     // Rebuild this division's (resultless) relay races from scratch.
     meet.races = meet.races.filter(r => !(r.isRelayRace && r.relayDivisionId === div.id));
 
@@ -110,21 +103,25 @@ function buildRelayRacesFromTeams(meet) {
       meet.races.push(race);
       created.push(race);
     } else {
-      // 2p/4p: heats + final shell; semis created lazily on last-heat close.
+      // Heats + final shell; semis created lazily on close. 2p/4p qualify by PLACE
+      // (SR505.3/.4); 3-person by TIME (SR505.9 win-and-in + fastest-times), so its
+      // heats/semis record times.
       const plan = planRelayRaceSizing(divTeams.length, div.size);
+      const timesBased = div.size === 3;
       const buckets = distributeByTeam(laneEntries, plan.heatSizes);
       buckets.forEach((bucket, idx) => {
         const heat = makeRelayStageRace(div, base + (idx + 1) * 0.01);
         heat.stage = 'heat';
         heat.heatNumber = idx + 1;
         heat.isFinal = false;
+        if (timesBased) heat.resultsMode = 'times';
         heat.laneEntries = bucket.map((e, i) => ({ ...e, lane: i + 1 }));
         meet.races.push(heat);
       });
       const finalRace = makeRelayStageRace(div, base + 0.9);
       finalRace.laneEntries = [];
       meet.races.push(finalRace);
-      bracketed.push({ ...info, heats: plan.heatCount, semis: plan.semiCount || 0 });
+      bracketed.push({ ...info, heats: plan.heatCount, semis: plan.semiCount || 0, timesBased });
     }
   }
 
@@ -260,11 +257,102 @@ function relaySemisToFinal(meet, changedRace) {
   return { advanced: true, finalRaceId: finalRace.id };
 }
 
-// Race-close dispatcher for relays. 2p/4p only; 3-person deferred (SR505.9 times).
+// ── 3-person relay advancement (SR505.9 win-and-in + fastest TIMES) ────────────
+function numericTime(v) {
+  const n = parseFloat(String(v == null ? '' : v).replace(/[^\d.]/g, ''));
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+// Teams in a race with a valid time and no DQ, fastest first.
+function timedFinishers(race) {
+  return (race.laneEntries || [])
+    .filter(e => numericTime(e.time) !== null && !String(e.status || '').trim())
+    .sort((a, b) => numericTime(a.time) - numericTime(b.time));
+}
+// Win-and-in + fastest times: the winner (fastest) of each heat advances directly,
+// then the remaining slots are filled by the fastest times among all non-winners.
+// Returns advanceTotal qualifiers ({entry, from}) or null if any heat has no times.
+function winAndInQualifiers(heats, advanceTotal) {
+  const winners = [], rest = [];
+  for (const heat of heats) {
+    const fin = timedFinishers(heat);
+    if (!fin.length) return null;
+    winners.push({ entry: fin[0], from: 'H' + Number(heat.heatNumber || 0) });
+    for (const e of fin.slice(1)) rest.push({ entry: e, from: 'H' + Number(heat.heatNumber || 0), t: numericTime(e.time) });
+  }
+  rest.sort((a, b) => a.t - b.t);
+  return [...winners, ...rest.slice(0, Math.max(0, advanceTotal - winners.length))].slice(0, advanceTotal);
+}
+
+function advanceThreePersonRelay(meet, changedRace) {
+  const family = relayFamily(meet, changedRace);
+  const finalRace = family.find(r => stageIs(r, 'final') || r.isFinal);
+  if (!finalRace) return { advanced: false, reason: 'missing_final' };
+  const stage = String(changedRace.stage || '').toLowerCase();
+
+  if (stage === 'semi') {
+    const semis = family.filter(r => stageIs(r, 'semi')).sort(byHeatNum);
+    if (semis.length !== 2) return { advanced: false, reason: 'not_two_semis' };
+    if (semis.some(s => String(s.status || '') !== 'closed')) return { advanced: false, reason: 'semis_not_closed' };
+    const quals = winAndInQualifiers(semis, 6); // 2 semi winners + 4 fastest times
+    if (!quals) return { advanced: false, reason: 'missing_qualifiers' };
+    finalRace.laneEntries = quals.map((q, i) => ({ ...relayEntry(q.entry, q.from), lane: i + 1 }));
+    finalRace.status = String(finalRace.status || '') === 'closed' ? 'closed' : 'open';
+    finalRace.isFinal = true;
+    finalRace.advancedFromSemisAt = nowIso();
+    finalRace.advancementWarning = '';
+    return { advanced: true, finalRaceId: finalRace.id };
+  }
+  if (stage !== 'heat') return { advanced: false, reason: 'not_progression_stage' };
+
+  const heats = family.filter(r => stageIs(r, 'heat')).sort(byHeatNum);
+  if (heats.some(h => String(h.status || '') !== 'closed')) return { advanced: false, reason: 'heats_not_closed' };
+  const totalTeams = heats.reduce((n, h) => n + (h.laneEntries || []).length, 0);
+  const adv = planThreePersonRelaySizing(totalTeams).advancement;
+  if (!adv) return { advanced: false, reason: 'unsupported' };
+
+  const quals = winAndInQualifiers(heats, adv.advanceTotal);
+  if (!quals) return { advanced: false, reason: 'missing_qualifiers' };
+
+  if (adv.semiCount === 2) {
+    // Seed the 12 qualifiers into 2 semis of 6, snaked by qualifying rank so the
+    // winners and fastest are spread (SR505.9 gives no explicit 3-person seeding).
+    let semis = family.filter(r => stageIs(r, 'semi')).sort(byHeatNum);
+    if (semis.some(relayHasEnteredResults)) return { advanced: false, reason: 'semis_have_results' };
+    if (semis.length !== 2) {
+      if (semis.length) meet.races = meet.races.filter(r => !(stageIs(r, 'semi') && r.isRelayRace && r.relayDivisionId === changedRace.relayDivisionId));
+      semis = [1, 2].map(n => ({
+        ...finalRace,
+        id: 'r' + crypto.randomBytes(6).toString('hex'),
+        stage: 'semi', heatNumber: n, isFinal: false, resultsMode: 'times',
+        orderHint: Number(finalRace.orderHint || 0) - (n === 1 ? 0.11 : 0.10),
+        status: 'open', closedAt: '', laneEntries: [], advancedFromHeatsAt: '', advancedFromSemisAt: '',
+      }));
+      meet.races.push(...semis);
+    }
+    const lanes = [[], []];
+    quals.forEach((q, i) => lanes[i % 2].push(q));
+    semis.forEach((semi, si) => {
+      semi.laneEntries = lanes[si].map((q, i) => ({ ...relayEntry(q.entry, q.from), lane: i + 1 }));
+      semi.resultsMode = 'times'; semi.stage = 'semi'; semi.isFinal = false;
+      semi.status = String(semi.status || '') === 'closed' ? 'closed' : 'open';
+      semi.advancedFromHeatsAt = nowIso();
+    });
+    return { advanced: true, semiRaceIds: semis.map(s => s.id) };
+  }
+  // Direct to the final (8–21 teams: 6 qualify).
+  finalRace.laneEntries = quals.slice(0, 6).map((q, i) => ({ ...relayEntry(q.entry, q.from), lane: i + 1 }));
+  finalRace.status = String(finalRace.status || '') === 'closed' ? 'closed' : 'open';
+  finalRace.isFinal = true;
+  finalRace.advancedFromHeatsAt = nowIso();
+  finalRace.advancementWarning = '';
+  return { advanced: true, finalRaceId: finalRace.id };
+}
+
+// Race-close dispatcher for relays. 2p/4p -> place-based; 3-person -> times (SR505.9).
 function advanceRelayProgression(meet, changedRace) {
   if (!changedRace || !changedRace.isRelayRace || !changedRace.relayDivisionId) return { advanced: false, reason: 'not_relay' };
   const div = RELAY_DIVISION_BY_ID.get(changedRace.relayDivisionId);
-  if (div && div.size === 3) return { advanced: false, reason: 'three_person_uses_times' };
+  if (div && div.size === 3) return advanceThreePersonRelay(meet, changedRace);
   const stage = String(changedRace.stage || '').toLowerCase();
   if (stage === 'semi') return relaySemisToFinal(meet, changedRace);
   if (stage !== 'heat') return { advanced: false, reason: 'not_progression_stage' };
