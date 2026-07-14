@@ -24,7 +24,17 @@ function formatRelayDeadline(val) {
 // eligible skaters via dropdowns; each filled team is saved as a relay entry.
 // No-split-club is automatic (only this club's skaters appear). Color is left
 // to the tabulator. Locks after the meet's relay deadline.
-function renderCoachRelaysView({ meet, club, skaters, locked, savedCount }) {
+function renderCoachRelaysView({ meet, club, skaters, locked, savedCount, teamPicker = null }) {
+  const teamQ = teamPicker && teamPicker.selected ? `?team=${encodeURIComponent(teamPicker.selected)}` : '';
+  const pickerHtml = teamPicker ? `
+    <div class="card" style="margin-bottom:12px;border-left:4px solid var(--sky2)">
+      <div class="row between center" style="flex-wrap:wrap;gap:10px">
+        <div><strong>Viewing club</strong> <span class="note">— admin view, switch to any team</span></div>
+        <select onchange="location.href='/portal/meet/${esc(meet.id)}/coach/relays?team='+encodeURIComponent(this.value)" style="min-width:200px;padding:8px 10px;border:1px solid var(--border2);border-radius:8px">
+          ${(teamPicker.teams || []).map(t => `<option value="${esc(t)}"${t === teamPicker.selected ? ' selected' : ''}>${esc(t)}</option>`).join('') || '<option value="">(no teams registered)</option>'}
+        </select>
+      </div>
+    </div>` : '';
   const clubKey = String(club || '').trim().toLowerCase();
   const myTeams = (meet.relayTeams || []).filter(t => String(t.club || '').trim().toLowerCase() === clubKey);
   const byDiv = new Map();
@@ -71,13 +81,14 @@ function renderCoachRelaysView({ meet, club, skaters, locked, savedCount }) {
       <h1>Relay Teams — ${esc(club || 'Your Club')}</h1>
       <div class="sub">Build your relay teams from your club's skaters. Pick each team's members; only your own skaters appear (no split-club teams). Colors are assigned by the tabulator on race day.</div>
     </div>
+    ${pickerHtml}
     ${savedCount != null ? `<div class="card" style="border-left:4px solid var(--green)"><div class="good">✅ Saved ${esc(savedCount)} relay team${savedCount === 1 ? '' : 's'}.</div></div>` : ''}
     ${deadlineNote}
     ${fieldable.length ? `
-      <form method="POST" action="/portal/meet/${esc(meet.id)}/coach/relays">
+      <form method="POST" action="/portal/meet/${esc(meet.id)}/coach/relays${teamQ}">
         ${sections}
-        ${locked ? '' : `<div class="action-row" style="margin-top:16px"><button class="btn-orange" type="submit">Save Relay Teams</button><a class="btn2" href="/portal/meet/${esc(meet.id)}/coach">Back to Coach Portal</a></div>`}
-      </form>` : `<div class="card"><div class="muted">None of your registered skaters are eligible for a relay division yet. Register skaters (with the relay option) first.</div></div>`}
+        ${locked ? '' : `<div class="action-row" style="margin-top:16px"><button class="btn-orange" type="submit">Save Relay Teams</button><a class="btn2" href="/portal/meet/${esc(meet.id)}/coach${teamQ}">Back to Coach Portal</a></div>`}
+      </form>` : `<div class="card"><div class="muted">${teamPicker ? 'This club has' : 'None of your registered skaters are'} no relay-eligible skaters registered yet.</div></div>`}
 
     <style>
       .rl-deadline{display:inline-block;font-weight:800;font-size:14px;color:var(--navy);background:#f0f9ff;border:1px solid #bae6fd;border-radius:12px;padding:8px 14px;margin-bottom:14px}

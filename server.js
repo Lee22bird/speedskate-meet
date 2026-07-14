@@ -1774,25 +1774,49 @@ function relayDeadlinePassed(meet) {
   return Date.now() > t + GRACE_MS;
 }
 
+// Super-admins can view/manage ANY club's coach views by passing ?team= (so they
+// can see everything). Coaches and meet directors stay scoped to their own team.
+function canPickCoachTeam(user) {
+  return hasRole(user, 'super_admin');
+}
+function meetTeamNames(meet) {
+  const set = new Set();
+  (meet.registrations || []).forEach(r => { const t = String(r.team || '').trim(); if (t) set.add(t); });
+  (meet.relayTeams || []).forEach(t => { const c = String(t.club || '').trim(); if (c) set.add(c); });
+  return Array.from(set).sort((a, b) => a.localeCompare(b));
+}
+function effectiveCoachTeam(req, meet) {
+  if (canPickCoachTeam(req.user)) {
+    const q = String(req.query.team || '').trim();
+    if (q) return q;
+    const own = String(req.user.team || '').trim();
+    if (own) return own;
+    return meetTeamNames(meet)[0] || ''; // default a privileged viewer to the first club
+  }
+  return String(req.user.team || '').trim();
+}
+
 app.get('/portal/meet/:meetId/coach/relays', requireRole('coach','meet_director','super_admin'), (req, res) => {
   const meet = getMeetOr404(req.db, req.params.meetId);
   if (!meet) return res.redirect('/portal');
-  const club = String(req.user.team || '').trim();
+  const club = effectiveCoachTeam(req, meet);
   const skaters = coachTeamRegistrations(meet, club);
   const savedCount = req.query.saved != null ? Number(req.query.saved) : null;
   res.send(pageShell({
     title: 'Relay Teams',
     user: req.user,
     meet,
-    bodyHtml: renderCoachRelaysView({ meet, club, skaters, locked: relayDeadlinePassed(meet), savedCount }),
+    bodyHtml: renderCoachRelaysView({ meet, club, skaters, locked: relayDeadlinePassed(meet), savedCount,
+      teamPicker: canPickCoachTeam(req.user) ? { teams: meetTeamNames(meet), selected: club } : null }),
   }));
 });
 
 app.post('/portal/meet/:meetId/coach/relays', requireRole('coach','meet_director','super_admin'), (req, res) => {
   const meet = getMeetOr404(req.db, req.params.meetId);
   if (!meet) return res.redirect('/portal');
-  const club = String(req.user.team || '').trim();
-  if (relayDeadlinePassed(meet)) return res.redirect(`/portal/meet/${meet.id}/coach/relays`);
+  const club = effectiveCoachTeam(req, meet);
+  const teamQ = canPickCoachTeam(req.user) && club ? `&team=${encodeURIComponent(club)}` : '';
+  if (relayDeadlinePassed(meet)) return res.redirect(`/portal/meet/${meet.id}/coach/relays?locked=1${teamQ}`);
 
   const validIds = new Set(coachTeamRegistrations(meet, club).map(s => String(s.id)));
   // Parse t_<divisionId>_<teamIndex>_<slot> fields -> teams.
@@ -1822,13 +1846,13 @@ app.post('/portal/meet/:meetId/coach/relays', requireRole('coach','meet_director
     .filter(t => String(t.club || '').trim().toLowerCase() !== club.toLowerCase())
     .concat(newTeams);
   saveDb(req.db);
-  res.redirect(`/portal/meet/${meet.id}/coach/relays?saved=${newTeams.length}`);
+  res.redirect(`/portal/meet/${meet.id}/coach/relays?saved=${newTeams.length}${teamQ}`);
 });
 
 app.get('/portal/meet/:meetId/coach', requireRole('coach','meet_director','super_admin'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet) return res.redirect('/portal');
-  const team=String(req.user.team||'').trim();
+  const team=effectiveCoachTeam(req, meet);
   const regs=coachTeamRegistrations(meet,team);
   const upcoming=coachUpcomingForMeet(meet,team);
   const recent=coachRecentResultsForMeet(meet,team);
@@ -1899,15 +1923,23 @@ app.get('/portal/meet/:meetId/coach', requireRole('coach','meet_director','super
   res.send(pageShell({title:'Coach Panel',user:req.user,meet, bodyHtml:`
     <div class="page-header">
       <h1>Coach Panel</h1>
-      <div class="sub">${esc(meet.meetName)} • ${esc(team)}</div>
+      <div class="sub">${esc(meet.meetName)} • ${esc(team) || '<span class="muted">no club selected</span>'}</div>
     </div>
+    ${canPickCoachTeam(req.user) ? `<div class="card" style="margin-bottom:12px;border-left:4px solid var(--sky2)">
+      <div class="row between center" style="flex-wrap:wrap;gap:10px">
+        <div><strong>Viewing club</strong> <span class="note">— admin view, switch to any team</span></div>
+        <select onchange="location.href='/portal/meet/${esc(meet.id)}/coach?team='+encodeURIComponent(this.value)" style="min-width:200px;padding:8px 10px;border:1px solid var(--border2);border-radius:8px">
+          ${meetTeamNames(meet).map(t=>`<option value="${esc(t)}"${t===team?' selected':''}>${esc(t)}</option>`).join('') || '<option value="">(no teams registered)</option>'}
+        </select>
+      </div>
+    </div>` : ''}
     <div class="card" style="margin-bottom:16px;border-left:4px solid var(--orange)">
       <div class="row between center">
         <div>
           <div style="font-weight:800;color:var(--navy)">🛼 Relay Teams</div>
-          <div class="note">Build your club's relay teams${meet.relayDeadline?` — due ${esc(formatRelayDeadline(meet.relayDeadline))}`:''}.</div>
+          <div class="note">Build ${canPickCoachTeam(req.user)?'this club\'s':'your club\'s'} relay teams${meet.relayDeadline?` — due ${esc(formatRelayDeadline(meet.relayDeadline))}`:''}.</div>
         </div>
-        <a class="btn-orange btn-sm" href="/portal/meet/${esc(meet.id)}/coach/relays">Build Relay Teams →</a>
+        <a class="btn-orange btn-sm" href="/portal/meet/${esc(meet.id)}/coach/relays${team?`?team=${encodeURIComponent(team)}`:''}">Build Relay Teams →</a>
       </div>
     </div>
     <div class="card" style="margin-bottom:16px">
