@@ -122,6 +122,8 @@ const { renderArchivedMeetsView } = require('./views/archivedMeetsView');
 const { renderCoachRosterView } = require('./views/coachRosterView');
 const { renderStaffAccountsView } = require('./views/staffAccountsView');
 const { renderCoachPortalView } = require('./views/coachPortalView');
+const { renderCoachRelaysView } = require('./views/coachRelaysView');
+const { RELAY_DIVISION_BY_ID } = require('./services/relayDivisions');
 const { renderBlockBuilderView } = require('./views/blockBuilderView');
 const { renderMeetBuilderView } = require('./views/meetBuilderView');
 const { renderOpenBuilderView } = require('./views/openBuilderView');
@@ -1754,6 +1756,66 @@ app.get('/portal/coach', requireRole('coach','meet_director','super_admin'), (re
   }));
 });
 
+// ── Coach relay team builder ───────────────────────────────────────────────
+// Coaches form their club's relay teams from age/gender-eligible skaters via
+// dropdowns. No-split-club is automatic (only this club's skaters). Locks after
+// the meet's relay deadline. Submitted teams (meet.relayTeams) feed relay races.
+function relayDeadlinePassed(meet) {
+  const d = meet && meet.relayDeadline ? new Date(meet.relayDeadline) : null;
+  return !!(d && !isNaN(d.getTime()) && Date.now() > d.getTime());
+}
+
+app.get('/portal/meet/:meetId/coach/relays', requireRole('coach','meet_director','super_admin'), (req, res) => {
+  const meet = getMeetOr404(req.db, req.params.meetId);
+  if (!meet) return res.redirect('/portal');
+  const club = String(req.user.team || '').trim();
+  const skaters = coachTeamRegistrations(meet, club);
+  const savedCount = req.query.saved != null ? Number(req.query.saved) : null;
+  res.send(pageShell({
+    title: 'Relay Teams',
+    user: req.user,
+    meet,
+    bodyHtml: renderCoachRelaysView({ meet, club, skaters, locked: relayDeadlinePassed(meet), savedCount }),
+  }));
+});
+
+app.post('/portal/meet/:meetId/coach/relays', requireRole('coach','meet_director','super_admin'), (req, res) => {
+  const meet = getMeetOr404(req.db, req.params.meetId);
+  if (!meet) return res.redirect('/portal');
+  const club = String(req.user.team || '').trim();
+  if (relayDeadlinePassed(meet)) return res.redirect(`/portal/meet/${meet.id}/coach/relays`);
+
+  const validIds = new Set(coachTeamRegistrations(meet, club).map(s => String(s.id)));
+  // Parse t_<divisionId>_<teamIndex>_<slot> fields -> teams.
+  const teamsMap = new Map();
+  for (const [key, val] of Object.entries(req.body || {})) {
+    const m = /^t_(.+)_(\d+)_(\d+)$/.exec(key);
+    if (!m) continue;
+    const divId = m[1];
+    if (!RELAY_DIVISION_BY_ID.has(divId)) continue;
+    const regId = String(val || '').trim();
+    if (!regId || !validIds.has(regId)) continue;
+    const tkey = divId + '#' + m[2];
+    if (!teamsMap.has(tkey)) teamsMap.set(tkey, { divId, members: [] });
+    const t = teamsMap.get(tkey);
+    if (!t.members.includes(regId)) t.members.push(regId); // dedupe within a team
+  }
+  // Keep only complete teams (exactly the division's size).
+  let nextTeamId = (meet.relayTeams || []).reduce((mx, t) => Math.max(mx, Number(t.id) || 0), 0) + 1;
+  const newTeams = [];
+  for (const { divId, members } of teamsMap.values()) {
+    const div = RELAY_DIVISION_BY_ID.get(divId);
+    if (!div || members.length !== div.size) continue;
+    newTeams.push({ id: nextTeamId++, divisionId: divId, club, memberRegIds: members, color: '', updatedAt: nowIso() });
+  }
+  // Replace this club's teams with the submitted set.
+  meet.relayTeams = (meet.relayTeams || [])
+    .filter(t => String(t.club || '').trim().toLowerCase() !== club.toLowerCase())
+    .concat(newTeams);
+  saveDb(req.db);
+  res.redirect(`/portal/meet/${meet.id}/coach/relays?saved=${newTeams.length}`);
+});
+
 app.get('/portal/meet/:meetId/coach', requireRole('coach','meet_director','super_admin'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet) return res.redirect('/portal');
@@ -1829,6 +1891,15 @@ app.get('/portal/meet/:meetId/coach', requireRole('coach','meet_director','super
     <div class="page-header">
       <h1>Coach Panel</h1>
       <div class="sub">${esc(meet.meetName)} • ${esc(team)}</div>
+    </div>
+    <div class="card" style="margin-bottom:16px;border-left:4px solid var(--orange)">
+      <div class="row between center">
+        <div>
+          <div style="font-weight:800;color:var(--navy)">🛼 Relay Teams</div>
+          <div class="note">Build your club's relay teams${meet.relayDeadline?` — due ${esc(meet.relayDeadline)}`:''}.</div>
+        </div>
+        <a class="btn-orange btn-sm" href="/portal/meet/${esc(meet.id)}/coach/relays">Build Relay Teams →</a>
+      </div>
     </div>
     <div class="card" style="margin-bottom:16px">
       <div class="row between center">
