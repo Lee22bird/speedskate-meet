@@ -81,6 +81,63 @@ function shouldSplitNormalRace(entryCount) {
   return planNormalRaceSizing(entryCount).kind !== 'direct_final';
 }
 
+// USARS SR505.9 — 3-person relays do NOT use the place-based individual bracket.
+// They use WIN-AND-IN + FASTEST TIMES: the winner of each heat advances directly;
+// the remaining slots are filled by the fastest times among all non-winners. 6
+// advance into the final (7 if exactly 7 teams). Verified against the rulebook
+// table (IDN 2026/USARSRules.txt SR505.9): the "Time Qualify" column equals
+// advanceTotal − heatCount (winners), i.e. fillByTime below.
+//   7      -> final (7 teams)
+//   8-14   -> 2 heats -> 6 final          (2 winners + 4 fastest)
+//   15-21  -> 3 heats -> 6 final          (3 winners + 3 fastest)
+//   22-28  -> 4 heats -> 12 -> 2 semis -> 6 (4 winners + 8 fastest; semi: 2 win + 4 fastest)
+//   29-35  -> 5 heats -> 12 -> 2 semis -> 6
+//   36-40  -> 6 heats -> 12 -> 2 semis -> 6
+//   41-45  -> 7 heats -> 12 -> 2 semis -> 6
+function planThreePersonRelaySizing(teamCount) {
+  const count = normalEntryCount(teamCount);
+  if (count <= DIRECT_FINAL_MAX) {
+    return { kind: 'relay3_final', entryCount: count, finalSize: count, heatCount: 0, heatSizes: [], semiCount: 0, qualifyBy: 'time_win_and_in', advancement: null };
+  }
+  let heatCount;
+  if (count <= 14) heatCount = 2;
+  else if (count <= 21) heatCount = 3;
+  else if (count <= 28) heatCount = 4;
+  else if (count <= 35) heatCount = 5;
+  else if (count <= 40) heatCount = 6;
+  else heatCount = 7; // 41-45 (and 46+ best-effort — rulebook table tops out at 45)
+  const hasSemis = count >= 22;                 // 22+ : heats feed 2 semis of 6
+  const advanceTotal = hasSemis ? 12 : FINAL_TARGET_SIZE; // teams leaving the heat round
+  return {
+    kind: 'relay3_win_and_in',
+    entryCount: count,
+    finalSize: FINAL_TARGET_SIZE,
+    heatCount,
+    heatSizes: splitEvenly(count, heatCount),
+    semiCount: hasSemis ? SEMI_COUNT : 0,
+    semiSizes: hasSemis ? splitEvenly(SEMI_COUNT * FINAL_TARGET_SIZE, SEMI_COUNT) : [],
+    qualifyBy: 'time_win_and_in',
+    advancement: {
+      type: 'relay3_win_and_in',
+      winnersPerHeat: 1,                        // heat winner advances directly
+      advanceTotal,                             // total teams advancing from heats
+      fillByTime: advanceTotal - heatCount,     // remaining slots = fastest times (matches rulebook "Time Qualify")
+      semiCount: hasSemis ? SEMI_COUNT : 0,
+      semiWinnersPerHeat: hasSemis ? 1 : 0,
+      semiFillByTime: hasSemis ? (FINAL_TARGET_SIZE - SEMI_COUNT) : 0, // 2 semi winners + 4 fastest = 6
+      finalSize: FINAL_TARGET_SIZE,
+    },
+  };
+}
+
+// Relay bracket plan. 2- and 4-person relays reuse the individual SR505.3
+// place-based bands (contestant TEAMS as the entries). 3-person relays use the
+// win-and-in + fastest-times SR505.9 table above.
+function planRelayRaceSizing(teamCount, relaySize) {
+  if (Number(relaySize) === 3) return planThreePersonRelaySizing(teamCount);
+  return { ...planNormalRaceSizing(teamCount), qualifyBy: 'place' };
+}
+
 function distributeByTeam(entries, heatSizesOrCount) {
   const targetSizes = Array.isArray(heatSizesOrCount)
     ? heatSizesOrCount.map(size => Math.max(0, Math.floor(Number(size) || 0)))
@@ -137,6 +194,8 @@ module.exports = {
   TWO_HEAT_ADVANCEMENT_MAX,
   splitEvenly,
   planNormalRaceSizing,
+  planRelayRaceSizing,
+  planThreePersonRelaySizing,
   shouldSplitNormalRace,
   distributeByTeam,
 };
