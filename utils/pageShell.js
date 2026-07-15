@@ -66,6 +66,9 @@ function navHtml(user) {
     ? `<a class="mobile-menu-primary" href="/portal">Portal</a><a href="/admin/logout">Logout</a>`
     : `<a class="mobile-menu-primary" href="/admin/login">Login</a>`;
 
+  // Desktop app uses the square SSM app icon in the nav; the website keeps the wordmark.
+  const navLogo = process.env.SSM_DESKTOP === '1' ? 'ssm-icon.png' : 'ssm-logo.png';
+
   return `
     <nav class="topnav">
       <div class="nav-inner">
@@ -73,7 +76,7 @@ function navHtml(user) {
           <span></span><span></span><span></span>
         </button>
         <a class="nav-brand" href="/">
-          <img src="/public/images/branding/ssm-logo.png" alt="SpeedSkateMeet" class="nav-logo" />
+          <img src="/public/images/branding/${navLogo}" alt="SpeedSkateMeet" class="nav-logo" />
         </a>
         <div class="nav-links">
           <a class="nav-link" href="/">Home</a>
