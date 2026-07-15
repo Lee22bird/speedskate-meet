@@ -22,7 +22,7 @@ files:
 
 extraMetadata:
   main: desktop/main.js
-  version: 0.2.1-alpha
+  version: 0.2.2-alpha
 
 mac:
   category: public.app-category.sports
