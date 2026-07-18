@@ -2672,6 +2672,127 @@ app.get('/privacy', (req, res) => {
   `}));
 });
 
+// ── Speed Skate Time Trials (iOS app): public support + privacy ──────────────
+app.get('/speed-skate-time-trials/support', (req, res) => {
+  res.send(pageShell({
+    title: 'Speed Skate Time Trials Support',
+    user: null,
+    description: 'Support, setup guide, and troubleshooting for the Speed Skate Time Trials iPhone app — camera timing setup, detection sensitivity, saved results, and how to contact us.',
+    bodyHtml: `
+    <div style="max-width:760px;margin:0 auto;padding:48px 20px 80px;">
+      <div style="text-align:center;padding-bottom:36px;border-bottom:1px solid rgba(19,33,58,.10);margin-bottom:40px;">
+        <div style="font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#2563eb;margin-bottom:12px;">Help &amp; Support</div>
+        <h1 style="font-size:clamp(28px,5vw,40px);font-weight:800;color:#13213a;margin:0 0 14px;line-height:1.1;">Speed Skate Time Trials Support</h1>
+        <p style="color:#475569;font-size:16px;line-height:1.65;max-width:580px;margin:0 auto;">Need help with Speed Skate Time Trials? This page provides setup guidance, troubleshooting information, and a way to contact us.</p>
+      </div>
+
+      <section style="margin-bottom:40px;">
+        <h2 style="font-size:20px;font-weight:800;color:#13213a;margin:0 0 16px;">Getting Started</h2>
+        <div style="background:#ffffff;border:1px solid rgba(19,33,58,.12);border-radius:16px;padding:6px 26px;box-shadow:0 1px 3px rgba(19,33,58,.05);">
+          <ol style="margin:0;padding:20px 0 20px 22px;color:#334155;font-size:15px;line-height:1.7;">
+            <li style="margin-bottom:10px;">Secure the iPhone in a stable position.</li>
+            <li style="margin-bottom:10px;">Point the camera toward the course or timing area.</li>
+            <li style="margin-bottom:10px;">Position the virtual timing line where the skater will cross.</li>
+            <li style="margin-bottom:10px;">Select the appropriate detection sensitivity.</li>
+            <li style="margin-bottom:10px;">Tap <strong style="color:#13213a;">Arm</strong>, then cross the line to start and finish the trial.</li>
+            <li>Save the completed result to view it in <strong style="color:#13213a;">History</strong>.</li>
+          </ol>
+        </div>
+      </section>
+
+      <section style="margin-bottom:40px;">
+        <h2 style="font-size:20px;font-weight:800;color:#13213a;margin:0 0 16px;">Troubleshooting</h2>
+
+        <div style="background:#ffffff;border:1px solid rgba(19,33,58,.12);border-radius:16px;padding:22px 26px;box-shadow:0 1px 3px rgba(19,33,58,.05);margin-bottom:14px;">
+          <h3 style="font-size:16px;font-weight:700;color:#13213a;margin:0 0 10px;">The timer does not trigger</h3>
+          <ul style="margin:0;padding-left:20px;color:#475569;font-size:15px;line-height:1.75;">
+            <li>Make sure the skater crosses the highlighted timing line.</li>
+            <li>Confirm the timer has been armed.</li>
+            <li>Try the <strong style="color:#13213a;">High Outdoors</strong> sensitivity setting.</li>
+            <li>Improve lighting and keep the camera stable.</li>
+          </ul>
+        </div>
+
+        <div style="background:#ffffff;border:1px solid rgba(19,33,58,.12);border-radius:16px;padding:22px 26px;box-shadow:0 1px 3px rgba(19,33,58,.05);margin-bottom:14px;">
+          <h3 style="font-size:16px;font-weight:700;color:#13213a;margin:0 0 10px;">The timer triggers unexpectedly</h3>
+          <ul style="margin:0;padding-left:20px;color:#475569;font-size:15px;line-height:1.75;">
+            <li>Keep moving trees, shadows, people, and vehicles away from the timing line.</li>
+            <li>Try <strong style="color:#13213a;">Balanced</strong> or <strong style="color:#13213a;">Low</strong> sensitivity.</li>
+            <li>Reposition the phone so the timing line has a cleaner background.</li>
+          </ul>
+        </div>
+
+        <div style="background:#ffffff;border:1px solid rgba(19,33,58,.12);border-radius:16px;padding:22px 26px;box-shadow:0 1px 3px rgba(19,33,58,.05);margin-bottom:14px;">
+          <h3 style="font-size:16px;font-weight:700;color:#13213a;margin:0 0 10px;">The camera is unavailable</h3>
+          <ul style="margin:0;padding-left:20px;color:#475569;font-size:15px;line-height:1.75;">
+            <li>Open iPhone <strong style="color:#13213a;">Settings</strong>.</li>
+            <li>Find <strong style="color:#13213a;">Speed Skate Time Trials</strong>.</li>
+            <li>Enable <strong style="color:#13213a;">Camera</strong> permission.</li>
+            <li>Close and reopen the app.</li>
+          </ul>
+        </div>
+
+        <div style="background:#ffffff;border:1px solid rgba(19,33,58,.12);border-radius:16px;padding:22px 26px;box-shadow:0 1px 3px rgba(19,33,58,.05);">
+          <h3 style="font-size:16px;font-weight:700;color:#13213a;margin:0 0 10px;">Saved results</h3>
+          <p style="margin:0;color:#475569;font-size:15px;line-height:1.75;">Results are stored locally on your device. Removing the app may also remove saved results.</p>
+        </div>
+      </section>
+
+      <section style="margin-bottom:40px;">
+        <h2 style="font-size:20px;font-weight:800;color:#13213a;margin:0 0 16px;">Contact Support</h2>
+        <div style="background:#ffffff;border:1px solid rgba(19,33,58,.12);border-radius:16px;padding:24px 26px;box-shadow:0 1px 3px rgba(19,33,58,.05);">
+          <p style="margin:0 0 16px;color:#475569;font-size:15px;line-height:1.6;">Have a question or need help? Email us and we&rsquo;ll get back to you as soon as possible.</p>
+          <a href="mailto:Lbird@speedskatemeet.com" style="display:inline-flex;align-items:center;gap:8px;background:#2563eb;color:#fff;font-size:15px;font-weight:700;padding:13px 26px;border-radius:50px;text-decoration:none;">&#9993; Lbird@speedskatemeet.com</a>
+        </div>
+      </section>
+
+      <section>
+        <h2 style="font-size:20px;font-weight:800;color:#13213a;margin:0 0 16px;">Privacy</h2>
+        <div style="background:#ffffff;border:1px solid rgba(19,33,58,.12);border-radius:16px;padding:24px 26px;box-shadow:0 1px 3px rgba(19,33,58,.05);">
+          <p style="margin:0;color:#475569;font-size:15px;line-height:1.6;">Read the <a href="/speed-skate-time-trials/privacy" style="color:#2563eb;font-weight:600;text-decoration:none;">Speed Skate Time Trials Privacy Policy</a> to learn how the app handles your data.</p>
+        </div>
+      </section>
+    </div>
+    `
+  }));
+});
+
+app.get('/speed-skate-time-trials/privacy', (req, res) => {
+  res.send(pageShell({
+    title: 'Speed Skate Time Trials Privacy Policy',
+    user: null,
+    description: 'Privacy policy for the Speed Skate Time Trials iPhone app. The camera is used only for on-device timing; results are stored locally and no personal data is collected or transmitted.',
+    bodyHtml: `
+    <div style="max-width:760px;margin:0 auto;padding:48px 20px 80px;">
+      <div style="text-align:center;padding-bottom:36px;border-bottom:1px solid rgba(19,33,58,.10);margin-bottom:40px;">
+        <div style="font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#2563eb;margin-bottom:12px;">Legal</div>
+        <h1 style="font-size:clamp(28px,5vw,40px);font-weight:800;color:#13213a;margin:0 0 12px;line-height:1.1;">Speed Skate Time Trials Privacy Policy</h1>
+        <p style="color:#667085;font-size:14px;margin:0;">Last updated: July 18, 2026</p>
+      </div>
+      ${[
+        ['Overview', 'Speed Skate Time Trials is a timing app for inline speed skating, designed to work entirely on your device. It does not require an account, and we do not collect, sell, or share personal information.'],
+        ['Camera', 'The app uses your iPhone camera solely to detect when a skater crosses the on-screen timing line. Video is processed live on your device to measure timing and is not recorded, saved, or transmitted. No photos or video leave your device.'],
+        ['Data We Store', 'Timing results you save are stored locally on your device only. They are not uploaded to us or to any third party. Because results are stored on your device, removing the app may also remove your saved results.'],
+        ['Information We Do Not Collect', 'We do not collect your name, email address, contacts, precise location, or advertising identifiers, and the app does not include third-party advertising.'],
+        ['Data Sharing', 'We do not sell or share personal information. Because your results stay on your device, there is nothing for us to share.'],
+        ['Children&rsquo;s Privacy', 'The app is not directed to children under 13, and we do not knowingly collect personal information from children.'],
+        ['Your Choices', 'You control your data: delete individual results in the app, or remove the app to delete its locally stored data. You can disable Camera access at any time in iPhone Settings, though the app needs the camera to time trials.'],
+        ['Changes to This Policy', 'If we make changes to this policy, we will update the date shown at the top of this page.'],
+        ['Contact', 'Questions about privacy? Email us at <a href="mailto:Lbird@speedskatemeet.com" style="color:#2563eb;font-weight:600;">Lbird@speedskatemeet.com</a>.'],
+      ].map(([h, p]) => `
+        <div style="margin-bottom:30px;">
+          <h2 style="font-size:19px;font-weight:800;color:#13213a;margin:0 0 10px;">${h}</h2>
+          <p style="font-size:15px;color:#475569;line-height:1.75;margin:0;">${p}</p>
+        </div>
+      `).join('')}
+      <div style="margin-top:8px;padding-top:24px;border-top:1px solid rgba(19,33,58,.10);">
+        <a href="/speed-skate-time-trials/support" style="color:#2563eb;font-weight:600;text-decoration:none;">&larr; Back to Speed Skate Time Trials Support</a>
+      </div>
+    </div>
+    `
+  }));
+});
+
 // ── Start server ──────────────────────────────────────────────────────────────
 
 app.listen(PORT, HOST, () => {
