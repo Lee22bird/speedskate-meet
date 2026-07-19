@@ -2600,46 +2600,46 @@ process.on('unhandledRejection', err => {
 
 // ── Support & Privacy ─────────────────────────────────────────────────────────
 app.get('/support', (req, res) => {
-  res.send(pageShell({ title: 'Support – SpeedSkateMeet', user: null, bodyHtml: `
+  res.send(pageShell({ title: 'Support', user: null, description: 'Get help with SpeedSkateMeet — contact support, common questions, and how to report bugs or request features.', bodyHtml: `
     <div style="max-width:720px;margin:0 auto;padding:48px 20px 80px;">
-      <div style="text-align:center;padding-bottom:40px;border-bottom:1px solid rgba(255,255,255,0.07);margin-bottom:40px;">
-        <div style="font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#3b82f6;margin-bottom:12px;">Help &amp; Support</div>
-        <h1 style="font-size:clamp(26px,5vw,38px);font-weight:800;margin-bottom:10px;">SpeedSkateMeet Support</h1>
-        <p style="color:#94a3b8;">Need help with the SpeedSkateMeet app or website?</p>
+      <div style="text-align:center;padding-bottom:36px;border-bottom:1px solid rgba(19,33,58,.10);margin-bottom:40px;">
+        <div style="font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#2563eb;margin-bottom:12px;">Help &amp; Support</div>
+        <h1 style="font-size:clamp(26px,5vw,38px);font-weight:800;color:#13213a;margin:0 0 10px;">SpeedSkateMeet Support</h1>
+        <p style="color:#475569;font-size:16px;line-height:1.6;">Need help with the SpeedSkateMeet app or website?</p>
       </div>
       <div style="margin-bottom:36px;">
-        <h2 style="font-size:18px;font-weight:700;margin-bottom:16px;">Contact Us</h2>
-        <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:22px 24px;">
-          <p style="font-size:14px;color:#94a3b8;margin-bottom:12px;">Email us and we'll get back to you as soon as possible.</p>
-          <a href="mailto:Lbird@speedskatemeet.com" style="display:inline-flex;align-items:center;gap:8px;background:#3b82f6;color:#fff;font-size:15px;font-weight:700;padding:13px 28px;border-radius:50px;text-decoration:none;">✉ Lbird@speedskatemeet.com</a>
+        <h2 style="font-size:18px;font-weight:800;color:#13213a;margin:0 0 16px;">Contact Us</h2>
+        <div style="background:#ffffff;border:1px solid rgba(19,33,58,.12);border-radius:14px;padding:22px 24px;box-shadow:0 1px 3px rgba(19,33,58,.05);">
+          <p style="font-size:14px;color:#475569;margin:0 0 14px;">Email us and we'll get back to you as soon as possible.</p>
+          <a href="mailto:Lbird@speedskatemeet.com" style="display:inline-flex;align-items:center;gap:8px;background:#2563eb;color:#fff;font-size:15px;font-weight:700;padding:13px 28px;border-radius:50px;text-decoration:none;">&#9993; Lbird@speedskatemeet.com</a>
         </div>
       </div>
-      <hr style="border:none;border-top:1px solid rgba(255,255,255,0.07);margin:36px 0;">
+      <hr style="border:none;border-top:1px solid rgba(19,33,58,.10);margin:36px 0;">
       <div style="margin-bottom:36px;">
-        <h2 style="font-size:18px;font-weight:700;margin-bottom:16px;">Common Questions</h2>
-        <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:22px 24px;margin-bottom:12px;">
-          <h3 style="font-size:15px;font-weight:700;margin-bottom:6px;">I can't log in</h3>
-          <p style="font-size:14px;color:#94a3b8;margin:0;">Make sure you're using the email associated with your SpeedSkateMeet account. Use "Forgot Password" on the login screen if needed.</p>
+        <h2 style="font-size:18px;font-weight:800;color:#13213a;margin:0 0 16px;">Common Questions</h2>
+        <div style="background:#ffffff;border:1px solid rgba(19,33,58,.12);border-radius:14px;padding:22px 24px;box-shadow:0 1px 3px rgba(19,33,58,.05);margin-bottom:12px;">
+          <h3 style="font-size:15px;font-weight:700;color:#13213a;margin:0 0 6px;">I can't log in</h3>
+          <p style="font-size:14px;color:#475569;margin:0;">Make sure you're using the email associated with your SpeedSkateMeet account. Use "Forgot Password" on the login screen if needed.</p>
         </div>
-        <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:22px 24px;margin-bottom:12px;">
-          <h3 style="font-size:15px;font-weight:700;margin-bottom:6px;">Meet results aren't showing</h3>
-          <p style="font-size:14px;color:#94a3b8;margin:0;">Pull to refresh or reload the page. Results are posted by meet directors and may take a few minutes after an event ends.</p>
+        <div style="background:#ffffff;border:1px solid rgba(19,33,58,.12);border-radius:14px;padding:22px 24px;box-shadow:0 1px 3px rgba(19,33,58,.05);margin-bottom:12px;">
+          <h3 style="font-size:15px;font-weight:700;color:#13213a;margin:0 0 6px;">Meet results aren't showing</h3>
+          <p style="font-size:14px;color:#475569;margin:0;">Pull to refresh or reload the page. Results are posted by meet directors and may take a few minutes after an event ends.</p>
         </div>
-        <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:22px 24px;margin-bottom:12px;">
-          <h3 style="font-size:15px;font-weight:700;margin-bottom:6px;">Found a bug?</h3>
-          <p style="font-size:14px;color:#94a3b8;margin:0;">Email us at <a href="mailto:Lbird@speedskatemeet.com" style="color:#3b82f6;">Lbird@speedskatemeet.com</a> with your device model, iOS version, and a screenshot if possible.</p>
+        <div style="background:#ffffff;border:1px solid rgba(19,33,58,.12);border-radius:14px;padding:22px 24px;box-shadow:0 1px 3px rgba(19,33,58,.05);margin-bottom:12px;">
+          <h3 style="font-size:15px;font-weight:700;color:#13213a;margin:0 0 6px;">Found a bug?</h3>
+          <p style="font-size:14px;color:#475569;margin:0;">Email us at <a href="mailto:Lbird@speedskatemeet.com" style="color:#2563eb;font-weight:600;">Lbird@speedskatemeet.com</a> with your device model, iOS version, and a screenshot if possible.</p>
         </div>
-        <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:22px 24px;">
-          <h3 style="font-size:15px;font-weight:700;margin-bottom:6px;">Feature request?</h3>
-          <p style="font-size:14px;color:#94a3b8;margin:0;">We'd love to hear your ideas. Email us anytime.</p>
+        <div style="background:#ffffff;border:1px solid rgba(19,33,58,.12);border-radius:14px;padding:22px 24px;box-shadow:0 1px 3px rgba(19,33,58,.05);">
+          <h3 style="font-size:15px;font-weight:700;color:#13213a;margin:0 0 6px;">Feature request?</h3>
+          <p style="font-size:14px;color:#475569;margin:0;">We'd love to hear your ideas. Email us anytime.</p>
         </div>
       </div>
-      <hr style="border:none;border-top:1px solid rgba(255,255,255,0.07);margin:36px 0;">
+      <hr style="border:none;border-top:1px solid rgba(19,33,58,.10);margin:36px 0;">
       <div>
-        <h2 style="font-size:18px;font-weight:700;margin-bottom:16px;">Legal</h2>
-        <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:22px 24px;">
-          <h3 style="font-size:15px;font-weight:700;margin-bottom:6px;">Privacy Policy</h3>
-          <p style="font-size:14px;color:#94a3b8;margin:0;">View our <a href="/privacy" style="color:#3b82f6;">Privacy Policy</a> to learn how we handle your data.</p>
+        <h2 style="font-size:18px;font-weight:800;color:#13213a;margin:0 0 16px;">Legal</h2>
+        <div style="background:#ffffff;border:1px solid rgba(19,33,58,.12);border-radius:14px;padding:22px 24px;box-shadow:0 1px 3px rgba(19,33,58,.05);">
+          <h3 style="font-size:15px;font-weight:700;color:#13213a;margin:0 0 6px;">Privacy Policy</h3>
+          <p style="font-size:14px;color:#475569;margin:0;">View our <a href="/privacy" style="color:#2563eb;font-weight:600;">Privacy Policy</a> to learn how we handle your data.</p>
         </div>
       </div>
     </div>
@@ -2647,25 +2647,25 @@ app.get('/support', (req, res) => {
 });
 
 app.get('/privacy', (req, res) => {
-  res.send(pageShell({ title: 'Privacy Policy – SpeedSkateMeet', user: null, bodyHtml: `
+  res.send(pageShell({ title: 'Privacy Policy', user: null, description: 'SpeedSkateMeet privacy policy — what we collect, how we use it, data sharing, retention, and how to contact us.', bodyHtml: `
     <div style="max-width:760px;margin:0 auto;padding:48px 20px 80px;">
-      <div style="text-align:center;padding-bottom:40px;border-bottom:1px solid rgba(255,255,255,0.07);margin-bottom:40px;">
-        <div style="font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#3b82f6;margin-bottom:12px;">Legal</div>
-        <h1 style="font-size:clamp(26px,5vw,38px);font-weight:800;margin-bottom:10px;">Privacy Policy</h1>
-        <p style="font-size:14px;color:#94a3b8;">Last updated: July 2, 2026</p>
+      <div style="text-align:center;padding-bottom:36px;border-bottom:1px solid rgba(19,33,58,.10);margin-bottom:40px;">
+        <div style="font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#2563eb;margin-bottom:12px;">Legal</div>
+        <h1 style="font-size:clamp(26px,5vw,38px);font-weight:800;color:#13213a;margin:0 0 10px;">Privacy Policy</h1>
+        <p style="font-size:14px;color:#667085;margin:0;">Last updated: July 2, 2026</p>
       </div>
       ${[
         ['1. Information We Collect', 'When you create an account and use SpeedSkateMeet, we collect your name, email address, and a unique user ID. Meet directors and officials may also enter skater names and race results as part of meet management.'],
         ['2. How We Use Your Information', 'All data is used solely to operate the platform: authenticate your account, display meet results, manage race-day operations, and provide customer support. We do not use your data for advertising or marketing.'],
         ['3. Data Sharing', 'We do not sell or share your personal information with third parties for advertising. Your data is processed by Render (cloud hosting) to operate the service.'],
-        ['4. Data Retention', 'We retain your data for as long as your account is active. To request deletion, email <a href="mailto:Lbird@speedskatemeet.com" style="color:#3b82f6;">Lbird@speedskatemeet.com</a> and we will process it within 30 days.'],
+        ['4. Data Retention', 'We retain your data for as long as your account is active. To request deletion, email <a href="mailto:Lbird@speedskatemeet.com" style="color:#2563eb;font-weight:600;">Lbird@speedskatemeet.com</a> and we will process it within 30 days.'],
         ['5. Children\'s Privacy', 'SpeedSkateMeet is not directed to children under 13. We do not knowingly collect personal information from children under 13.'],
         ['6. Security', 'All data is transmitted over HTTPS. We use industry-standard security practices to protect your information.'],
-        ['7. Contact Us', 'Questions? Email us at <a href="mailto:Lbird@speedskatemeet.com" style="color:#3b82f6;">Lbird@speedskatemeet.com</a>.'],
+        ['7. Contact Us', 'Questions? Email us at <a href="mailto:Lbird@speedskatemeet.com" style="color:#2563eb;font-weight:600;">Lbird@speedskatemeet.com</a>.'],
       ].map(([h, p]) => `
-        <div style="margin-bottom:32px;">
-          <h2 style="font-size:18px;font-weight:700;margin-bottom:10px;">${h}</h2>
-          <p style="font-size:14px;color:#94a3b8;line-height:1.75;margin:0;">${p}</p>
+        <div style="margin-bottom:30px;">
+          <h2 style="font-size:18px;font-weight:800;color:#13213a;margin:0 0 10px;">${h}</h2>
+          <p style="font-size:14px;color:#475569;line-height:1.75;margin:0;">${p}</p>
         </div>
       `).join('')}
     </div>
