@@ -1242,6 +1242,48 @@ router.post('/api/meet/:meetId/blocks/move-race', requireRole('meet_director'), 
   res.json({ok:true});
 });
 
+// R3: bulk assignment — move many races (and/or the time-trial event) in one
+// request. Mirrors /blocks/move-race semantics per id; unknown ids are skipped
+// and reported so a stale client can resync instead of hard-failing.
+router.post('/api/meet/:meetId/blocks/move-races', requireRole('meet_director'), (req, res) => {
+  const meet=getMeetOr404(req.db,req.params.meetId);
+  if(!meet||!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
+  const raceIds=Array.isArray(req.body.raceIds)?req.body.raceIds.map(String).map(s=>s.trim()).filter(Boolean):[];
+  const destBlockId=String(req.body.destBlockId||'').trim();
+  if(!raceIds.length) return res.status(400).send('Races missing');
+  ensureAtLeastOneBlock(meet);
+  let destBlock=null;
+  if(destBlockId!=='__unassigned__'){
+    destBlock=(meet.blocks||[]).find(b=>String(b.id)===destBlockId);
+    if(!destBlock) return res.status(404).send('Block not found');
+    if((destBlock.type||'race')!=='race') return res.status(400).send('Cannot drop races into non-race blocks');
+  }
+  const ttEvent=ensureTimeTrialEvent(meet);
+  const raceById=new Map((meet.races||[]).map(r=>[String(r.id),r]));
+  const known=raceIds.filter(id=>raceById.has(id)||(ttEvent&&String(ttEvent.id)===id));
+  if(!known.length) return res.status(404).send('No matching races');
+  createDesktopBackupIfActive(req.db,'before_block_generation',meet.id);
+  for(const raceId of known){
+    const isTT=ttEvent&&String(ttEvent.id)===raceId;
+    for(const block of meet.blocks||[]){
+      if(isTT) block.timeTrialEventIds=(block.timeTrialEventIds||[]).map(String).filter(id=>id!==raceId);
+      else block.raceIds=(block.raceIds||[]).map(String).filter(id=>id!==raceId);
+    }
+    if(destBlock){
+      if(isTT){
+        destBlock.timeTrialEventIds=destBlock.timeTrialEventIds||[];
+        if(!destBlock.timeTrialEventIds.map(String).includes(raceId)) destBlock.timeTrialEventIds.push(raceId);
+      }else{
+        destBlock.raceIds=destBlock.raceIds||[];
+        if(!destBlock.raceIds.map(String).includes(raceId)) destBlock.raceIds.push(raceId);
+      }
+    }
+  }
+  ensureCurrentRace(meet);
+  meet.updatedAt=nowIso(); saveDb(req.db);
+  res.json({ok:true,moved:known.length,skipped:raceIds.length-known.length});
+});
+
 router.post('/portal/meet/:meetId/blocks/generate', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');

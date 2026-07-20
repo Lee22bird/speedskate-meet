@@ -304,6 +304,13 @@ function renderBlockBuilderView({ meet }) {
       .block-drag-handle:active{cursor:grabbing;}
       .dragging-block{opacity:.45;}
       .block-drop-line{height:4px;border-radius:2px;background:#f97316;margin:6px 2px;box-shadow:0 0 0 2px rgba(249,115,22,.18);}
+      .race-item.selected{outline:2px solid #f97316;outline-offset:-2px;background:#fff7ed;}
+      .race-item.selected .race-label:before{content:'✓ ';color:#ea580c;font-weight:900;}
+      .bulk-bar{display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:8px 10px;border:1px solid #fdba74;border-radius:12px;background:#fff7ed;}
+      .bulk-count{font-weight:800;color:#c2410c;font-size:13px;white-space:nowrap;}
+      .bulk-bar select{flex:1;min-width:0;}
+      .bulk-hint{margin:0 0 8px;font-size:12px;}
+      .bulk-hint a{color:#0284c7;font-weight:700;}
       .block-danger-zone{border-color:rgba(249,115,22,.22);background:linear-gradient(180deg,#fff,#fff7ed);}
       @media(max-width:1000px){.block-control-grid{grid-template-columns:1fr}.block-builder-hero{align-items:flex-start}.block-builder-control-card{padding:18px}.block-control-head{flex-direction:column}.block-summary-grid{grid-template-columns:1fr 1fr}}
       @media(max-width:640px){.block-summary-grid,.schedule-add-grid{grid-template-columns:1fr}.schedule-add-primary{grid-column:auto}.block-how-it-works{align-items:flex-start;flex-direction:column}.block-how-it-works span+span:before{content:'↓';margin-right:5px}.block-tool-buttons .btn2,.block-tool-buttons .btn-sm,.block-action-stack .btn2,.block-action-stack .btn-good{width:100%;justify-content:center}}
@@ -315,6 +322,14 @@ function renderBlockBuilderView({ meet }) {
           <div class="card">
             <h2 style="margin-bottom:12px">Unassigned Races</h2>
             <div class="unassigned-panel">
+              <div class="bulk-bar" id="bulkBar" style="display:none">
+                <span class="bulk-count" id="bulkCount">0 selected</span>
+                <select id="bulkDest" onchange="if(this.value){bulkSendTo(this.value);this.value='';}">
+                  <option value="">Send to block…</option>
+                </select>
+                <button class="btn2 btn-sm" type="button" onclick="clearSelection()">Clear</button>
+              </div>
+              <div class="bulk-hint note">Click to select • Shift-click for a range • or <a href="#" onclick="selectVisible();return false">select all shown</a></div>
               <div class="filters-row">
                 <div><label>Search</label><input id="raceSearch" placeholder="division..." oninput="applyFilters()" /></div>
                 <div><label>Class</label>
@@ -444,6 +459,77 @@ function renderBlockBuilderView({ meet }) {
         const notes=inp?inp.value.trim():'';
         sub.textContent=dayLabelJs(day)+(notes?' • '+notes:'');
       }
+      // ── R3: multi-select + bulk assignment (Unassigned panel) ──
+      let lastClickedIndex=null;
+      function visibleUnassigned(){ return Array.from(document.querySelectorAll('#unassignedZone .race-item:not(.hidden)')); }
+      function selectedItems(){ return Array.from(document.querySelectorAll('#unassignedZone .race-item.selected')); }
+      function updateBulkBar(){
+        const bar=document.getElementById('bulkBar');
+        if(!bar) return;
+        const n=selectedItems().length;
+        bar.style.display=n?'flex':'none';
+        document.getElementById('bulkCount').textContent=n+' selected';
+        if(n) rebuildBulkDest();
+      }
+      function rebuildBulkDest(){
+        const sel=document.getElementById('bulkDest');
+        if(!sel) return;
+        sel.innerHTML='<option value="">Send to block…</option>';
+        document.querySelectorAll('.bb-left .block-card').forEach(card=>{
+          const num=card.querySelector('[data-role="block-num"]');
+          const day=card.getAttribute('data-block-day')||'';
+          const o=document.createElement('option');
+          o.value=card.id.replace(/^block-/,'');
+          o.textContent=(num?num.textContent:'Block')+' — '+dayLabelJs(day);
+          sel.appendChild(o);
+        });
+      }
+      function clearSelection(){ selectedItems().forEach(i=>i.classList.remove('selected')); updateBulkBar(); }
+      function selectVisible(){ visibleUnassigned().forEach(i=>i.classList.add('selected')); updateBulkBar(); }
+      function toggleSelect(item,shiftKey){
+        const vis=visibleUnassigned();
+        const idx=vis.indexOf(item);
+        if(shiftKey&&lastClickedIndex!==null&&idx!==-1){
+          const a=Math.min(lastClickedIndex,idx), b=Math.max(lastClickedIndex,idx);
+          for(let i=a;i<=b;i++) if(vis[i]) vis[i].classList.add('selected');
+        }else{
+          item.classList.toggle('selected');
+        }
+        if(idx!==-1) lastClickedIndex=idx;
+        updateBulkBar();
+      }
+      function attachBulkSelect(){
+        const uz=document.getElementById('unassignedZone');
+        if(!uz) return;
+        uz.addEventListener('click',e=>{
+          if(e.target.closest('a,button')) return; // e.g. "Open Time Trial" link
+          const item=e.target.closest('.race-item');
+          if(!item||!uz.contains(item)) return;
+          toggleSelect(item,e.shiftKey);
+        });
+      }
+      async function bulkMove(items,zone,destBlockId){
+        const ids=items.map(i=>i.getAttribute('data-race-id'));
+        saveFilters();
+        items.forEach(i=>{
+          i.classList.remove('selected');
+          zone.appendChild(i);
+          if(zone.id!=='unassignedZone') i.classList.remove('hidden');
+        });
+        refreshZonePlaceholders(); applyFilters(); updateBulkBar();
+        try{
+          const r=await fetch('/api/meet/'+meetId+'/blocks/move-races',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({raceIds:ids,destBlockId})});
+          const j=r.ok?await r.json():null;
+          if(!j||j.ok!==true) return resync('Bulk move failed.');
+          if(j.skipped) resync(); // stale ids server-side — refresh to the saved truth
+        }catch(err){console.error(err);resync('Bulk move failed.');}
+      }
+      function bulkSendTo(destBlockId){
+        const items=selectedItems();
+        const zone=document.querySelector('[data-drop-block="'+String(destBlockId).replace(/"/g,'')+'"]');
+        if(!items.length||!zone) return;
+        bulkMove(items,zone,destBlockId);
+      }
       function attachDnD(){
         document.querySelectorAll('.race-item').forEach(el=>{
           if(el.getAttribute('draggable')!=='true') return;
@@ -459,8 +545,18 @@ function renderBlockBuilderView({ meet }) {
             const destBlockId=zone.getAttribute('data-drop-block');
             if(!raceId) return;
             const item=findItem(raceId);
-            if(!item||zone===item.parentElement) return;
+            if(!item) return;
+            // dragging a selected item drags the whole selection
+            if(item.classList.contains('selected')){
+              const bulk=selectedItems();
+              if(bulk.length>1){
+                if(bulk.every(i=>zone.contains(i))) return;
+                return bulkMove(bulk,zone,destBlockId);
+              }
+            }
+            if(zone===item.parentElement){ item.classList.remove('selected'); updateBulkBar(); return; }
             saveFilters();
+            item.classList.remove('selected'); updateBulkBar();
             const prevParent=item.parentElement, prevNext=item.nextSibling;
             placeItem(zone,item); // optimistic: move in the DOM immediately
             try{
@@ -669,7 +765,7 @@ function renderBlockBuilderView({ meet }) {
         }
         document.getElementById('unassignedChip').textContent=String(v);
       }
-      restoreFilters(); restoreBuilderScroll(); attachDnD(); attachBlockDnD(); applyFilters();
+      restoreFilters(); restoreBuilderScroll(); attachDnD(); attachBlockDnD(); attachBulkSelect(); applyFilters();
     </script>`;
 }
 
