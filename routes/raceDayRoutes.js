@@ -32,6 +32,7 @@ const {
 } = ttHelpers;
 const { completedTimeTrialEvents, ensureTimeTrialEvent, timeTrialEventTitle } = require('../services/timeTrialEvents');
 const { renderTimeTrialFinalResultsHtml } = require('../services/timeTrialResultsView');
+const { generateScheduleBlocks } = require('../services/scheduleGenerator');
 const { createBackup: createDesktopBackup } = require('../services/desktopBackupService');
 const { invalidLaneStatus, sendIfInvalid } = require('../utils/validate');
 const {
@@ -1282,6 +1283,30 @@ router.post('/api/meet/:meetId/blocks/move-races', requireRole('meet_director'),
   ensureCurrentRace(meet);
   meet.updatedAt=nowIso(); saveDb(req.db);
   res.json({ok:true,moved:known.length,skipped:raceIds.length-known.length});
+});
+
+// R1: Generate Schedule — builds blocks by day -> distance -> round (heats/
+// semis/finals), divisions youngest to oldest, relays then quad on their own
+// days (services/scheduleGenerator.js). NEVER overwrites an existing schedule
+// without explicit confirmation: replace mode with any assigned races returns
+// 409 {needsConfirm} unless confirmReplace===true. Append mode only places
+// unassigned races into new blocks. Manual editing is untouched either way.
+router.post('/api/meet/:meetId/blocks/generate-schedule', requireRole('meet_director'), (req, res) => {
+  const meet=getMeetOr404(req.db,req.params.meetId);
+  if(!meet||!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
+  const mode=String(req.body.mode||'replace')==='append'?'append':'replace';
+  const assignedCount=(meet.blocks||[]).reduce((n,b)=>n+((b.raceIds||[]).length)+((b.timeTrialEventIds||[]).length),0);
+  if(mode==='replace'&&assignedCount>0&&req.body.confirmReplace!==true)
+    return res.status(409).json({ok:false,needsConfirm:true,assignedCount});
+  const {blocks,placed}=generateScheduleBlocks(meet,{mode});
+  if(!placed) return res.status(400).send(mode==='append'?'All races are already assigned':'No races to schedule');
+  createDesktopBackupIfActive(req.db,'before_block_generation',meet.id);
+  if(mode==='replace') meet.blocks=blocks;
+  else meet.blocks=[...(meet.blocks||[]),...blocks];
+  ensureAtLeastOneBlock(meet);
+  ensureCurrentRace(meet);
+  meet.updatedAt=nowIso(); saveDb(req.db);
+  res.json({ok:true,mode,blocks:blocks.length,placed});
 });
 
 router.post('/portal/meet/:meetId/blocks/generate', requireRole('meet_director'), (req, res) => {

@@ -234,6 +234,9 @@ function renderBlockBuilderView({ meet }) {
           <div class="setup-mini-title">Add To Schedule</div>
           <p class="note block-add-helper">Build your race day by adding blocks, breaks, lunch, awards, or practice sessions.</p>
           <div class="block-tool-buttons schedule-add-grid">
+            <button class="schedule-add-card schedule-add-generate" type="button" onclick="generateSchedule(this)">
+              <span class="schedule-add-icon">⚡</span><span><strong>Generate Schedule</strong><small>Auto-build the meet: each distance on its own day (Heats → Semis → Finals, youngest first), then relays, then quad. You can edit everything after.</small></span>
+            </button>
             <button class="schedule-add-card schedule-add-primary" type="button" onclick="addBlock(this)">
               <span class="schedule-add-icon">＋</span><span><strong>+ New Race Block</strong><small>Create a block for a group of races.</small></span>
             </button>
@@ -287,6 +290,9 @@ function renderBlockBuilderView({ meet }) {
       .schedule-add-primary{grid-column:1/-1;min-height:88px;border-color:#fb923c;background:linear-gradient(135deg,#fff7ed,#ffedd5);box-shadow:0 8px 18px rgba(249,115,22,.14);}
       .schedule-add-primary strong{font-size:16px;color:#c2410c;}
       .schedule-add-primary .schedule-add-icon{background:#f97316;color:#fff;font-size:24px;}
+      .schedule-add-generate{grid-column:1/-1;min-height:88px;border-color:#12335c;background:linear-gradient(135deg,#eff6ff,#dbeafe);box-shadow:0 8px 18px rgba(18,51,92,.14);}
+      .schedule-add-generate strong{font-size:16px;color:#12335c;}
+      .schedule-add-generate .schedule-add-icon{background:#12335c;color:#fff;font-size:22px;}
       .block-tool-buttons button:disabled{opacity:.62;cursor:wait;transform:none;}
       .block-schedule-empty{min-height:310px;padding:42px 24px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;border:2px dashed #bae6fd;border-radius:22px;background:linear-gradient(180deg,#f8fcff,#eff8ff);}
       .block-schedule-empty h2{margin:12px 0 6px;color:var(--navy);}
@@ -673,6 +679,40 @@ function renderBlockBuilderView({ meet }) {
           button.innerHTML=original;
         }finally{
           clearTimeout(timeout);
+        }
+      }
+      // R1: Generate Schedule. Replace requires explicit confirmation when any
+      // races are already assigned (server enforces via 409 needsConfirm); the
+      // fallback offer generates blocks for unassigned races only (append).
+      async function generateSchedule(button){
+        if(blockCreatePending) return;
+        saveFilters();
+        const post=body=>fetch('/api/meet/'+meetId+'/blocks/generate-schedule',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+        button.disabled=true;
+        try{
+          let r=await post({mode:'replace'});
+          if(r.status===409){
+            const j=await r.json().catch(()=>({}));
+            const n=j&&j.assignedCount?j.assignedCount:'some';
+            if(confirm('Your schedule already has '+n+' assigned race(s).\\n\\nOK — REPLACE the entire schedule with a freshly generated one.\\nCancel — keep your current schedule.')){
+              r=await post({mode:'replace',confirmReplace:true});
+            }else if(confirm('Keep your current schedule and generate blocks for the UNASSIGNED races only?')){
+              r=await post({mode:'append'});
+            }else{
+              return;
+            }
+          }
+          if(!r.ok){
+            const msg=(await r.text()).trim();
+            alert('Generate failed'+(msg?' — '+msg:'.'));
+            return;
+          }
+          location.replace('/portal/meet/'+encodeURIComponent(meetId)+'/blocks?generated=1');
+        }catch(err){
+          console.error(err);
+          alert('Generate failed — network error.');
+        }finally{
+          button.disabled=false;
         }
       }
       function addBlock(button){
