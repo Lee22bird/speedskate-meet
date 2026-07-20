@@ -24,6 +24,51 @@ function renderBlockBuilderView({ meet }) {
   const breakTypes = ['break', 'lunch', 'awards', 'practice'];
   const breakIcons = { break: '☕', lunch: '🍽️', awards: '🏆', practice: '🛼' };
 
+  // ── R6: derive the day list from the meet's start/end dates ──
+  // block.day stays a "Day N" string (other views/print pages read it as-is);
+  // we only derive HOW MANY days exist and add real-date labels for display.
+  function parseIsoDate(s) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || '').trim());
+    if (!m) return null;
+    const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+    return isNaN(d.getTime()) ? null : d;
+  }
+  function buildMeetDays() {
+    const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const start = parseIsoDate(meet.date);
+    let end = parseIsoDate(meet.endDate) || start;
+    let count = 3; // legacy fallback when the meet has no dates yet
+    let dates = null;
+    if (start) {
+      if (end < start) end = start;
+      count = Math.min(31, Math.round((end - start) / 86400000) + 1);
+      dates = [];
+      for (let i = 0; i < count; i++) dates.push(new Date(start.getTime() + i * 86400000));
+    }
+    // never drop a day an existing block already references
+    for (const b of meet.blocks || []) {
+      const m = /^Day (\d+)$/.exec(String(b.day || '').trim());
+      if (m) count = Math.max(count, +m[1]);
+    }
+    const days = [];
+    for (let i = 0; i < count; i++) {
+      const value = 'Day ' + (i + 1);
+      const d = dates && dates[i];
+      days.push({ value, label: d ? value + ' — ' + DOW[d.getUTCDay()] + ' ' + (d.getUTCMonth() + 1) + '/' + d.getUTCDate() : value });
+    }
+    return days;
+  }
+  const meetDays = buildMeetDays();
+  const dayLabelByValue = new Map(meetDays.map(d => [d.value, d.label]));
+  const dayLabel = day => { const v = String(day || 'Day 1'); return dayLabelByValue.get(v) || v; };
+  function dayOptionsHtml(current) {
+    const cur = String(current || 'Day 1');
+    const opts = meetDays.map(d => `<option value="${esc(d.value)}" ${cur === d.value ? 'selected' : ''}>${esc(d.label)}</option>`);
+    // custom/legacy day string on this block — keep it selectable so nothing is lost
+    if (!dayLabelByValue.has(cur)) opts.push(`<option value="${esc(cur)}" selected>${esc(cur)}</option>`);
+    return opts.join('');
+  }
+
   function raceItemHtml(race, isCurrent, draggable = true) {
     const tag = race.isTimeTrial ? '⏱ ' : race.isRelayRace ? '🔄 ' : race.isOpenRace ? '🏁 ' : race.isQuadRace ? '🛼 ' : (race.isAdditionalRace ? '➕ ' : '');
     const cls = race.isTimeTrial ? 'tt-item' : race.isRelayRace ? 'relay-item' : race.isOpenRace ? 'open-item' : race.isQuadRace ? 'quad-item' : (race.isAdditionalRace ? 'additional-item' : '');
@@ -62,21 +107,27 @@ function renderBlockBuilderView({ meet }) {
     else blockNumber[block.id] = ++raceCount;
   }
 
+  let prevDayKey = null;
   const blocksHtml = (meet.blocks || []).map(block => {
+    const dayKey = String(block.day || 'Day 1');
+    const dayHeader = dayKey !== prevDayKey
+      ? `<div class="bb-day-header" data-day="${esc(dayKey)}">${esc(dayLabel(dayKey))}</div>`
+      : '';
+    prevDayKey = dayKey;
     const isBreak = breakTypes.includes(block.type || '');
     if (isBreak) {
       const icon = breakIcons[block.type] || '📌';
-      return `
-        <div class="divider-card" id="block-${esc(block.id)}">
+      return dayHeader + `
+        <div class="divider-card" id="block-${esc(block.id)}" data-block-day="${esc(dayKey)}">
           <div class="divider-card-inner">
             <div class="divider-icon">${icon}</div>
             <div class="divider-info">
               <div class="divider-name" data-role="block-name">${esc(block.name)}</div>
-              <div class="note" data-role="divider-sub">${esc(block.day || 'Day 1')}${block.notes ? ' • ' + esc(block.notes) : ''}</div>
+              <div class="note" data-role="divider-sub">${esc(dayLabel(block.day))}${block.notes ? ' • ' + esc(block.notes) : ''}</div>
             </div>
             <div class="action-row">
               <select class="divider-day-sel" onchange="setBlockDay('${esc(block.id)}',this.value)">
-                ${['Day 1', 'Day 2', 'Day 3'].map(d => `<option value="${d}" ${block.day === d ? 'selected' : ''}>${d}</option>`).join('')}
+                ${dayOptionsHtml(block.day)}
               </select>
               <input class="divider-notes-inp" value="${esc(block.notes || '')}" placeholder="notes..." onblur="setBlockNotes('${esc(block.id)}',this.value)" style="max-width:140px" />
               <button class="btn2 btn-sm" onclick="renameBlock('${esc(block.id)}')">Rename</button>
@@ -87,12 +138,12 @@ function renderBlockBuilderView({ meet }) {
     }
 
     const displayNum = blockNumber[block.id] || '';
-    return `
-      <div class="block-card" id="block-${esc(block.id)}">
+    return dayHeader + `
+      <div class="block-card" id="block-${esc(block.id)}" data-block-day="${esc(dayKey)}">
         <div class="block-head" style="margin-bottom:12px">
           <div>
             <div style="font-weight:700;font-size:17px;color:var(--navy)" data-role="block-num">Block ${displayNum}</div>
-            <div class="note" data-role="block-day">${esc(block.day || 'Day 1')}</div>
+            <div class="note" data-role="block-day">${esc(dayLabel(block.day))}</div>
           </div>
           <div class="action-row">
             <a class="btn2 btn-sm" href="/portal/meet/${meet.id}/score-sheets/print?scope=block&blockId=${esc(block.id)}" target="_blank">🖨 Score Sheets</a>
@@ -105,7 +156,7 @@ function renderBlockBuilderView({ meet }) {
         <div class="form-grid cols-2" style="margin-bottom:12px">
           <div><label>Day</label>
             <select onchange="setBlockDay('${esc(block.id)}',this.value)">
-              ${['Day 1', 'Day 2', 'Day 3'].map(d => `<option value="${d}" ${block.day === d ? 'selected' : ''}>${d}</option>`).join('')}
+              ${dayOptionsHtml(block.day)}
             </select>
           </div>
           <div><label>Notes</label><input value="${esc(block.notes || '')}" onblur="setBlockNotes('${esc(block.id)}',this.value)" placeholder="notes..." /></div>
@@ -241,6 +292,9 @@ function renderBlockBuilderView({ meet }) {
       .block-card:target,.divider-card:target{outline:3px solid rgba(56,189,248,.75);box-shadow:0 0 0 7px rgba(56,189,248,.14),var(--shadow-lg);animation:block-created-pulse .8s ease-out;}
       @keyframes block-created-pulse{from{transform:scale(.985);background:#e0f2fe}to{transform:scale(1)}}
       .block-action-stack{display:grid;gap:8px;}
+      .bb-day-header{margin:4px 0 12px;padding:9px 16px;border-radius:13px;background:var(--navy,#12335c);color:#fff;font-weight:800;font-size:13px;letter-spacing:.06em;text-transform:uppercase;display:flex;align-items:center;gap:9px;box-shadow:0 3px 10px rgba(15,23,42,.14);}
+      .bb-day-header:before{content:'📅';font-size:15px;}
+      .bb-day-header+.block-card,.bb-day-header+.divider-card{margin-top:0;}
       .block-danger-zone{border-color:rgba(249,115,22,.22);background:linear-gradient(180deg,#fff,#fff7ed);}
       @media(max-width:1000px){.block-control-grid{grid-template-columns:1fr}.block-builder-hero{align-items:flex-start}.block-builder-control-card{padding:18px}.block-control-head{flex-direction:column}.block-summary-grid{grid-template-columns:1fr 1fr}}
       @media(max-width:640px){.block-summary-grid,.schedule-add-grid{grid-template-columns:1fr}.schedule-add-primary{grid-column:auto}.block-how-it-works{align-items:flex-start;flex-direction:column}.block-how-it-works span+span:before{content:'↓';margin-right:5px}.block-tool-buttons .btn2,.block-tool-buttons .btn-sm,.block-action-stack .btn2,.block-action-stack .btn-good{width:100%;justify-content:center}}
@@ -278,6 +332,24 @@ function renderBlockBuilderView({ meet }) {
     </div>
     <script>
       let dragRaceId=null; const meetId=${JSON.stringify(meet.id)};
+      const dayLabels=${JSON.stringify(Object.fromEntries(meetDays.map(d => [d.value, d.label])))};
+      function dayLabelJs(v){ return dayLabels[v]||v; }
+      function refreshDayHeaders(){
+        const left=document.querySelector('.bb-left');
+        if(!left) return;
+        left.querySelectorAll(':scope > .bb-day-header').forEach(h=>h.remove());
+        let prev=null;
+        left.querySelectorAll(':scope > .block-card, :scope > .divider-card').forEach(card=>{
+          const day=card.getAttribute('data-block-day')||'Day 1';
+          if(day!==prev){
+            const h=document.createElement('div');
+            h.className='bb-day-header'; h.setAttribute('data-day',day);
+            h.textContent=dayLabelJs(day);
+            left.insertBefore(h,card);
+          }
+          prev=day;
+        });
+      }
       function scrollStorageKey(){return 'ssm_block_scroll_'+meetId;}
       function unassignedScrollStorageKey(){return 'ssm_block_unassigned_scroll_'+meetId;}
       function saveBuilderScroll(){
@@ -359,7 +431,7 @@ function renderBlockBuilderView({ meet }) {
         const inp=card.querySelector('.divider-notes-inp');
         const day=sel?sel.value:'Day 1';
         const notes=inp?inp.value.trim():'';
-        sub.textContent=day+(notes?' • '+notes:'');
+        sub.textContent=dayLabelJs(day)+(notes?' • '+notes:'');
       }
       function attachDnD(){
         document.querySelectorAll('.race-item').forEach(el=>{
@@ -466,17 +538,22 @@ function renderBlockBuilderView({ meet }) {
           // Server may auto-create a block (ensureAtLeastOneBlock) or we hit the
           // empty state — reload once to pick up the server-rendered result.
           if(!document.querySelector('.bb-left .block-card, .bb-left .divider-card')) return location.reload();
-          renumberBlocks(); refreshZonePlaceholders(); applyFilters();
+          renumberBlocks(); refreshDayHeaders(); refreshZonePlaceholders(); applyFilters();
         }catch(err){console.error(err);resync('Delete failed.');}
       }
       async function moveBlock(id,dir){
         saveFilters();
         const card=document.getElementById('block-'+id);
-        const sib=card&&(dir==='up'?card.previousElementSibling:card.nextElementSibling);
-        if(!card||!sib) return; // already at the edge — nothing to do
+        if(!card) return;
         const parent=card.parentElement;
-        if(dir==='up') parent.insertBefore(card,sib); else parent.insertBefore(sib,card);
-        renumberBlocks(); // optimistic: swap in the DOM immediately
+        // siblings are cards AND day headers — swap against cards only
+        const cards=Array.from(parent.querySelectorAll(':scope > .block-card, :scope > .divider-card'));
+        const i=cards.indexOf(card);
+        const j=dir==='up'?i-1:i+1;
+        if(i<0||j<0||j>=cards.length) return; // already at the edge — nothing to do
+        const other=cards[j];
+        if(dir==='up') parent.insertBefore(card,other); else parent.insertBefore(other,card);
+        renumberBlocks(); refreshDayHeaders(); // optimistic: swap in the DOM immediately
         try{
           const r=await fetch('/api/meet/'+meetId+'/blocks/move',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({blockId:id,dir})});
           const j=r.ok?await r.json():null;
@@ -488,9 +565,11 @@ function renderBlockBuilderView({ meet }) {
       async function setBlockDay(id,day){
         saveFilters();
         const card=document.getElementById('block-'+id);
+        if(card) card.setAttribute('data-block-day',day);
         const el=card&&card.querySelector('[data-role="block-day"]');
-        if(el) el.textContent=day;
+        if(el) el.textContent=dayLabelJs(day);
         updateDividerSub(id);
+        refreshDayHeaders();
         try{
           const r=await fetch('/api/meet/'+meetId+'/blocks/update-meta',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({blockId:id,day})});
           if(!r.ok) resync('Saving the day failed.');
