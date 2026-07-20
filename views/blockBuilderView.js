@@ -71,8 +71,8 @@ function renderBlockBuilderView({ meet }) {
           <div class="divider-card-inner">
             <div class="divider-icon">${icon}</div>
             <div class="divider-info">
-              <div class="divider-name">${esc(block.name)}</div>
-              <div class="note">${esc(block.day || 'Day 1')}${block.notes ? ' • ' + esc(block.notes) : ''}</div>
+              <div class="divider-name" data-role="block-name">${esc(block.name)}</div>
+              <div class="note" data-role="divider-sub">${esc(block.day || 'Day 1')}${block.notes ? ' • ' + esc(block.notes) : ''}</div>
             </div>
             <div class="action-row">
               <select class="divider-day-sel" onchange="setBlockDay('${esc(block.id)}',this.value)">
@@ -91,8 +91,8 @@ function renderBlockBuilderView({ meet }) {
       <div class="block-card" id="block-${esc(block.id)}">
         <div class="block-head" style="margin-bottom:12px">
           <div>
-            <div style="font-weight:700;font-size:17px;color:var(--navy)">Block ${displayNum}</div>
-            <div class="note">${esc(block.day || 'Day 1')}</div>
+            <div style="font-weight:700;font-size:17px;color:var(--navy)" data-role="block-num">Block ${displayNum}</div>
+            <div class="note" data-role="block-day">${esc(block.day || 'Day 1')}</div>
           </div>
           <div class="action-row">
             <a class="btn2 btn-sm" href="/portal/meet/${meet.id}/score-sheets/print?scope=block&blockId=${esc(block.id)}" target="_blank">🖨 Score Sheets</a>
@@ -314,6 +314,53 @@ function renderBlockBuilderView({ meet }) {
         document.getElementById('classFilter').value=localStorage.getItem('ssm_c')||'all';
         document.getElementById('distFilter').value=localStorage.getItem('ssm_d')||'all';
       }
+      // ── Optimistic-update helpers (R2: no full-page reloads) ──
+      function resync(msg){ if(msg) alert(msg); location.reload(); }
+      function findItem(raceId){
+        return document.querySelector('.race-item[data-race-id="'+String(raceId).replace(/"/g,'')+'"]');
+      }
+      function refreshZonePlaceholders(){
+        document.querySelectorAll('.drop-zone').forEach(zone=>{
+          const isUnassigned=zone.getAttribute('data-drop-block')==='__unassigned__';
+          const hasItems=!!zone.querySelector('.race-item');
+          let ph=zone.querySelector(':scope > .note');
+          if(hasItems){ if(ph) ph.remove(); return; }
+          if(!ph){
+            ph=document.createElement('div');
+            ph.className='note'; ph.style.padding='8px';
+            zone.appendChild(ph);
+          }
+          ph.textContent=isUnassigned?'All races assigned.':'Drop races here…';
+        });
+      }
+      function renumberBlocks(){
+        let n=0;
+        document.querySelectorAll('.bb-left .block-card').forEach(card=>{
+          const el=card.querySelector('[data-role="block-num"]');
+          if(el) el.textContent='Block '+(++n);
+        });
+      }
+      function placeItem(zone,item){
+        zone.appendChild(item);
+        if(zone.id!=='unassignedZone') item.classList.remove('hidden');
+        refreshZonePlaceholders(); applyFilters();
+      }
+      function restoreItem(item,prevParent,prevNext){
+        if(prevParent) prevParent.insertBefore(item,prevNext);
+        if(item.parentElement&&item.parentElement.id!=='unassignedZone') item.classList.remove('hidden');
+        refreshZonePlaceholders(); applyFilters();
+      }
+      function updateDividerSub(id){
+        const card=document.getElementById('block-'+id);
+        if(!card) return;
+        const sub=card.querySelector('[data-role="divider-sub"]');
+        if(!sub) return;
+        const sel=card.querySelector('.divider-day-sel');
+        const inp=card.querySelector('.divider-notes-inp');
+        const day=sel?sel.value:'Day 1';
+        const notes=inp?inp.value.trim():'';
+        sub.textContent=day+(notes?' • '+notes:'');
+      }
       function attachDnD(){
         document.querySelectorAll('.race-item').forEach(el=>{
           if(el.getAttribute('draggable')!=='true') return;
@@ -326,9 +373,24 @@ function renderBlockBuilderView({ meet }) {
             e.preventDefault();zone.classList.remove('over');
             const raceId=e.dataTransfer.getData('text/plain')||dragRaceId;
             const destBlockId=zone.getAttribute('data-drop-block');
+            if(!raceId) return;
+            const item=findItem(raceId);
+            if(!item||zone===item.parentElement) return;
             saveFilters();
-            const res=await fetch('/api/meet/'+meetId+'/blocks/move-race',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({raceId,destBlockId})});
-            if(res.ok) location.reload(); else alert('Move failed');
+            const prevParent=item.parentElement, prevNext=item.nextSibling;
+            placeItem(zone,item); // optimistic: move in the DOM immediately
+            try{
+              const res=await fetch('/api/meet/'+meetId+'/blocks/move-race',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({raceId,destBlockId})});
+              if(!res.ok){
+                restoreItem(item,prevParent,prevNext);
+                const msg=(await res.text()).trim();
+                alert('Move failed'+(msg?' — '+msg:''));
+              }
+            }catch(err){
+              console.error(err);
+              restoreItem(item,prevParent,prevNext);
+              alert('Move failed — network error. Please try again.');
+            }
           });
         });
       }
@@ -380,24 +442,68 @@ function renderBlockBuilderView({ meet }) {
       function addDivider(button,type,name){
         return createBlock(button,'/api/meet/'+meetId+'/blocks/add-divider',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type,name})});
       }
-      async function renameBlock(id){const name=prompt('Name:');if(!name) return;saveFilters();const r=await fetch('/api/meet/'+meetId+'/blocks/update-meta',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({blockId:id,name})});if(r.ok) location.reload();}
-      async function deleteBlock(id){if(!confirm('Remove this?')) return;saveFilters();const r=await fetch('/api/meet/'+meetId+'/blocks/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({blockId:id})});if(r.ok) location.reload();}
+      async function renameBlock(id){
+        const name=prompt('Name:');if(!name) return;saveFilters();
+        try{
+          const r=await fetch('/api/meet/'+meetId+'/blocks/update-meta',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({blockId:id,name})});
+          if(!r.ok) return resync('Rename failed.');
+          const card=document.getElementById('block-'+id);
+          const el=card&&card.querySelector('[data-role="block-name"]');
+          if(el) el.textContent=name;
+        }catch(err){console.error(err);resync('Rename failed.');}
+      }
+      async function deleteBlock(id){
+        if(!confirm('Remove this?')) return;saveFilters();
+        try{
+          const r=await fetch('/api/meet/'+meetId+'/blocks/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({blockId:id})});
+          if(!r.ok) return resync('Delete failed.');
+          const card=document.getElementById('block-'+id);
+          if(card){
+            const uz=document.getElementById('unassignedZone');
+            if(uz) card.querySelectorAll('.race-item').forEach(el=>uz.appendChild(el));
+            card.remove();
+          }
+          // Server may auto-create a block (ensureAtLeastOneBlock) or we hit the
+          // empty state — reload once to pick up the server-rendered result.
+          if(!document.querySelector('.bb-left .block-card, .bb-left .divider-card')) return location.reload();
+          renumberBlocks(); refreshZonePlaceholders(); applyFilters();
+        }catch(err){console.error(err);resync('Delete failed.');}
+      }
       async function moveBlock(id,dir){
         saveFilters();
+        const card=document.getElementById('block-'+id);
+        const sib=card&&(dir==='up'?card.previousElementSibling:card.nextElementSibling);
+        if(!card||!sib) return; // already at the edge — nothing to do
+        const parent=card.parentElement;
+        if(dir==='up') parent.insertBefore(card,sib); else parent.insertBefore(sib,card);
+        renumberBlocks(); // optimistic: swap in the DOM immediately
         try{
           const r=await fetch('/api/meet/'+meetId+'/blocks/move',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({blockId:id,dir})});
-          if(r.ok){
-            const j=await r.json();
-            if(j&&j.ok) location.reload(); else if(j&&j.ok===false) location.reload(); else alert('Move failed');
-          } else {
-            alert('Move failed');
-          }
-        }catch(err){console.error(err);alert('Move failed');}
+          const j=r.ok?await r.json():null;
+          if(!j||j.ok!==true) resync('Move failed.');
+        }catch(err){console.error(err);resync('Move failed.');}
       }
       function moveBlockUp(id){ return moveBlock(id,'up'); }
       function moveBlockDown(id){ return moveBlock(id,'down'); }
-      async function setBlockDay(id,day){saveFilters();await fetch('/api/meet/'+meetId+'/blocks/update-meta',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({blockId:id,day})});}
-      async function setBlockNotes(id,notes){saveFilters();await fetch('/api/meet/'+meetId+'/blocks/update-meta',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({blockId:id,notes})});}
+      async function setBlockDay(id,day){
+        saveFilters();
+        const card=document.getElementById('block-'+id);
+        const el=card&&card.querySelector('[data-role="block-day"]');
+        if(el) el.textContent=day;
+        updateDividerSub(id);
+        try{
+          const r=await fetch('/api/meet/'+meetId+'/blocks/update-meta',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({blockId:id,day})});
+          if(!r.ok) resync('Saving the day failed.');
+        }catch(err){console.error(err);resync('Saving the day failed.');}
+      }
+      async function setBlockNotes(id,notes){
+        saveFilters();
+        updateDividerSub(id);
+        try{
+          const r=await fetch('/api/meet/'+meetId+'/blocks/update-meta',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({blockId:id,notes})});
+          if(!r.ok) resync('Saving notes failed.');
+        }catch(err){console.error(err);resync('Saving notes failed.');}
+      }
       function applyFilters(){
         saveFilters();
         const q=(document.getElementById('raceSearch').value||'').toLowerCase().trim();
