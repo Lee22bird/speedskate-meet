@@ -1159,6 +1159,24 @@ router.post('/api/meet/:meetId/blocks/move', requireRole('meet_director'), (req,
   res.json({ok:true});
 });
 
+// R4: drag-to-reorder. Accepts the full block order (each existing block id
+// exactly once) so a drop is one idempotent request. /blocks/move stays as the
+// keyboard-accessible one-slot fallback.
+router.post('/api/meet/:meetId/blocks/reorder', requireRole('meet_director'), (req, res) => {
+  const meet=getMeetOr404(req.db,req.params.meetId);
+  if(!meet||!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
+  const order=Array.isArray(req.body.order)?req.body.order.map(String):null;
+  if(!order||!order.length) return res.status(400).send('Order missing');
+  const blocks=meet.blocks||[];
+  const byId=new Map(blocks.map(b=>[String(b.id),b]));
+  if(order.length!==blocks.length||new Set(order).size!==order.length||!order.every(id=>byId.has(id)))
+    return res.status(400).send('Order must contain each existing block exactly once');
+  createDesktopBackupIfActive(req.db, 'before_block_generation', meet.id);
+  meet.blocks=order.map(id=>byId.get(id));
+  meet.updatedAt=nowIso(); saveDb(req.db);
+  res.json({ok:true});
+});
+
 
 router.post('/portal/meet/:meetId/blocks/auto-flow', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);

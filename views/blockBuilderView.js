@@ -77,7 +77,7 @@ function renderBlockBuilderView({ meet }) {
         data-race-id="${esc(race.id)}"
         data-group-label="${esc(String(race.groupLabel || '').toLowerCase())}"
         data-division="${esc(race.division)}"
-        data-day-index="${esc(race.dayIndex)}">
+        data-distance-index="${esc(race.dayIndex)}">
         <div class="race-label">${tag}${esc(race.groupLabel)} <span style="opacity:.6">•</span> ${esc(cap(race.division))}</div>
         <div class="race-meta">${esc(race.distanceLabel)} • D${esc(race.dayIndex)} • ${esc(raceDisplayStage(race))} • ${esc(cap(race.startType))}</div>
       </div>`;
@@ -92,7 +92,7 @@ function renderBlockBuilderView({ meet }) {
         data-item-type="time-trial-event"
         data-group-label="${esc(String(timeTrialEventTitle(event)).toLowerCase())}"
         data-division="time_trial"
-        data-day-index="tt">
+        data-distance-index="tt">
         <div class="race-label">⏱ ${esc(timeTrialEventTitle(event))}</div>
         <div class="race-meta">Queue event • ${completed}/${total} complete • Counts overall: ${event.countsForOverall ? 'Yes' : 'No'}</div>
         <div style="margin-top:6px"><a class="btn2 btn-sm" href="/portal/meet/${esc(meet.id)}/time-trials/${esc(event.id)}">Open Time Trial</a></div>
@@ -120,6 +120,7 @@ function renderBlockBuilderView({ meet }) {
       return dayHeader + `
         <div class="divider-card" id="block-${esc(block.id)}" data-block-day="${esc(dayKey)}">
           <div class="divider-card-inner">
+            <span class="block-drag-handle" draggable="true" data-drag-block="${esc(block.id)}" title="Drag to reorder">⠿</span>
             <div class="divider-icon">${icon}</div>
             <div class="divider-info">
               <div class="divider-name" data-role="block-name">${esc(block.name)}</div>
@@ -141,9 +142,12 @@ function renderBlockBuilderView({ meet }) {
     return dayHeader + `
       <div class="block-card" id="block-${esc(block.id)}" data-block-day="${esc(dayKey)}">
         <div class="block-head" style="margin-bottom:12px">
-          <div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <span class="block-drag-handle" draggable="true" data-drag-block="${esc(block.id)}" title="Drag to reorder">⠿</span>
+            <div>
             <div style="font-weight:700;font-size:17px;color:var(--navy)" data-role="block-num">Block ${displayNum}</div>
             <div class="note" data-role="block-day">${esc(dayLabel(block.day))}</div>
+            </div>
           </div>
           <div class="action-row">
             <a class="btn2 btn-sm" href="/portal/meet/${meet.id}/score-sheets/print?scope=block&blockId=${esc(block.id)}" target="_blank">🖨 Score Sheets</a>
@@ -295,6 +299,11 @@ function renderBlockBuilderView({ meet }) {
       .bb-day-header{margin:4px 0 12px;padding:9px 16px;border-radius:13px;background:var(--navy,#12335c);color:#fff;font-weight:800;font-size:13px;letter-spacing:.06em;text-transform:uppercase;display:flex;align-items:center;gap:9px;box-shadow:0 3px 10px rgba(15,23,42,.14);}
       .bb-day-header:before{content:'📅';font-size:15px;}
       .bb-day-header+.block-card,.bb-day-header+.divider-card{margin-top:0;}
+      .block-drag-handle{cursor:grab;user-select:none;color:#94a3b8;font-size:18px;line-height:1;padding:6px 4px;border-radius:8px;flex:0 0 auto;}
+      .block-drag-handle:hover{color:var(--navy);background:#f1f5f9;}
+      .block-drag-handle:active{cursor:grabbing;}
+      .dragging-block{opacity:.45;}
+      .block-drop-line{height:4px;border-radius:2px;background:#f97316;margin:6px 2px;box-shadow:0 0 0 2px rgba(249,115,22,.18);}
       .block-danger-zone{border-color:rgba(249,115,22,.22);background:linear-gradient(180deg,#fff,#fff7ed);}
       @media(max-width:1000px){.block-control-grid{grid-template-columns:1fr}.block-builder-hero{align-items:flex-start}.block-builder-control-card{padding:18px}.block-control-head{flex-direction:column}.block-summary-grid{grid-template-columns:1fr 1fr}}
       @media(max-width:640px){.block-summary-grid,.schedule-add-grid{grid-template-columns:1fr}.schedule-add-primary{grid-column:auto}.block-how-it-works{align-items:flex-start;flex-direction:column}.block-how-it-works span+span:before{content:'↓';margin-right:5px}.block-tool-buttons .btn2,.block-tool-buttons .btn-sm,.block-action-stack .btn2,.block-action-stack .btn-good{width:100%;justify-content:center}}
@@ -315,9 +324,11 @@ function renderBlockBuilderView({ meet }) {
                   </select>
                 </div>
                 <div><label>Distance</label>
+                  <!-- R10: race.dayIndex is the division's distance ordinal (Distance 1–4),
+                       NOT a meet day — legacy field name. This filter matches that ordinal. -->
                   <select id="distFilter" onchange="applyFilters()">
-                    <option value="all">All</option><option value="1">D1</option><option value="2">D2</option>
-                    <option value="3">D3</option><option value="4">D4</option>
+                    <option value="all">All</option><option value="1">Distance 1</option><option value="2">Distance 2</option>
+                    <option value="3">Distance 3</option><option value="4">Distance 4</option>
                   </select>
                 </div>
               </div>
@@ -331,7 +342,7 @@ function renderBlockBuilderView({ meet }) {
       </div>
     </div>
     <script>
-      let dragRaceId=null; const meetId=${JSON.stringify(meet.id)};
+      let dragRaceId=null; let dragBlockId=null; const meetId=${JSON.stringify(meet.id)};
       const dayLabels=${JSON.stringify(Object.fromEntries(meetDays.map(d => [d.value, d.label])))};
       function dayLabelJs(v){ return dayLabels[v]||v; }
       function refreshDayHeaders(){
@@ -439,9 +450,10 @@ function renderBlockBuilderView({ meet }) {
           el.addEventListener('dragstart',e=>{dragRaceId=el.getAttribute('data-race-id');e.dataTransfer.setData('text/plain',dragRaceId);saveFilters();});
         });
         document.querySelectorAll('.drop-zone').forEach(zone=>{
-          zone.addEventListener('dragover',e=>{e.preventDefault();zone.classList.add('over');});
+          zone.addEventListener('dragover',e=>{if(dragBlockId) return;e.preventDefault();zone.classList.add('over');});
           zone.addEventListener('dragleave',()=>zone.classList.remove('over'));
           zone.addEventListener('drop',async e=>{
+            if(dragBlockId) return; // a BLOCK is being dragged — let the schedule column handle it
             e.preventDefault();zone.classList.remove('over');
             const raceId=e.dataTransfer.getData('text/plain')||dragRaceId;
             const destBlockId=zone.getAttribute('data-drop-block');
@@ -464,6 +476,65 @@ function renderBlockBuilderView({ meet }) {
               alert('Move failed — network error. Please try again.');
             }
           });
+        });
+      }
+      // ── R4: drag blocks to reorder ──
+      let blockDropLine=null;
+      function blockOrderIds(){
+        return Array.from(document.querySelectorAll('.bb-left > .block-card, .bb-left > .divider-card')).map(c=>c.id.replace(/^block-/,''));
+      }
+      function blockAfterPointer(left,y){
+        const cards=Array.from(left.querySelectorAll(':scope > .block-card, :scope > .divider-card')).filter(c=>!c.classList.contains('dragging-block'));
+        for(const c of cards){ const r=c.getBoundingClientRect(); if(y < r.top + r.height/2) return c; }
+        return null; // past the last card — append at end
+      }
+      function showBlockDropLine(left,before){
+        if(!blockDropLine){ blockDropLine=document.createElement('div'); blockDropLine.className='block-drop-line'; }
+        if(before) left.insertBefore(blockDropLine,before); else left.appendChild(blockDropLine);
+      }
+      function clearBlockDropLine(){ if(blockDropLine&&blockDropLine.parentElement) blockDropLine.parentElement.removeChild(blockDropLine); }
+      function attachBlockDnD(){
+        document.querySelectorAll('.block-drag-handle').forEach(h=>{
+          h.addEventListener('dragstart',e=>{
+            dragBlockId=h.getAttribute('data-drag-block');
+            e.dataTransfer.setData('text/ssm-block',dragBlockId);
+            e.dataTransfer.effectAllowed='move';
+            const card=document.getElementById('block-'+dragBlockId);
+            if(card){ try{e.dataTransfer.setDragImage(card,24,24);}catch(err){} card.classList.add('dragging-block'); }
+          });
+          h.addEventListener('dragend',()=>{
+            const card=dragBlockId&&document.getElementById('block-'+dragBlockId);
+            if(card) card.classList.remove('dragging-block');
+            dragBlockId=null; clearBlockDropLine();
+          });
+        });
+        const left=document.querySelector('.bb-left');
+        if(!left) return;
+        left.addEventListener('dragover',e=>{
+          if(!dragBlockId) return;
+          e.preventDefault();
+          showBlockDropLine(left,blockAfterPointer(left,e.clientY));
+        });
+        left.addEventListener('drop',async e=>{
+          if(!dragBlockId) return;
+          e.preventDefault();
+          const id=dragBlockId; dragBlockId=null;
+          const card=document.getElementById('block-'+id);
+          const before=blockAfterPointer(left,e.clientY);
+          clearBlockDropLine();
+          if(card) card.classList.remove('dragging-block');
+          if(!card||before===card) return;
+          const prevOrder=blockOrderIds();
+          if(before) left.insertBefore(card,before); else left.appendChild(card);
+          renumberBlocks(); refreshDayHeaders(); // optimistic
+          const order=blockOrderIds();
+          if(order.join()===prevOrder.join()) return; // dropped back where it was
+          saveFilters();
+          try{
+            const r=await fetch('/api/meet/'+meetId+'/blocks/reorder',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({order})});
+            const j=r.ok?await r.json():null;
+            if(!j||j.ok!==true) resync('Reorder failed.');
+          }catch(err){console.error(err);resync('Reorder failed.');}
         });
       }
       let blockCreatePending=false;
@@ -593,12 +664,12 @@ function renderBlockBuilderView({ meet }) {
         for(const item of items){
           const mS=!q||(item.getAttribute('data-group-label')||'').includes(q);
           const mC=klass==='all'||item.getAttribute('data-division')===klass;
-          const mD=dist==='all'||item.getAttribute('data-day-index')===dist;
+          const mD=dist==='all'||item.getAttribute('data-distance-index')===dist;
           const show=mS&&mC&&mD; item.classList.toggle('hidden',!show); if(show) v++;
         }
         document.getElementById('unassignedChip').textContent=String(v);
       }
-      restoreFilters(); restoreBuilderScroll(); attachDnD(); applyFilters();
+      restoreFilters(); restoreBuilderScroll(); attachDnD(); attachBlockDnD(); applyFilters();
     </script>`;
 }
 
