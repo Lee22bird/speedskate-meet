@@ -1127,6 +1127,11 @@ router.post('/api/meet/:meetId/blocks/update-meta', requireRole('meet_director')
   if(typeof req.body.day==='string'&&req.body.day.trim()) block.day=String(req.body.day).trim();
   if(typeof req.body.type==='string'&&req.body.type.trim()) block.type=String(req.body.type).trim();
   if(typeof req.body.notes==='string') block.notes=String(req.body.notes);
+  // R5: optional per-block duration override in minutes (0/empty = automatic)
+  if(req.body.durationMin!==undefined){
+    const v=Number(req.body.durationMin);
+    block.durationMin=isFinite(v)&&v>0?Math.min(1440,Math.round(v)):0;
+  }
   meet.updatedAt=nowIso(); saveDb(req.db); res.json({ok:true});
 });
 

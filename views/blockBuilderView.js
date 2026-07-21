@@ -1,6 +1,7 @@
 const { esc, cap } = require('../utils/html');
 const { raceDisplayStage } = require('../services/raceDay');
 const { ensureTimeTrialEvent, timeTrialEventTitle } = require('../services/timeTrialEvents');
+const timeEstimates = require('../services/timeEstimates');
 
 function renderBlockBuilderView({ meet }) {
   const timeTrialEvent = ensureTimeTrialEvent(meet);
@@ -59,6 +60,9 @@ function renderBlockBuilderView({ meet }) {
     return days;
   }
   const meetDays = buildMeetDays();
+  // R5: pace from real closedAt history (fallback 3 min/race) + day start time
+  const racePaceMin = timeEstimates.estimateRacePaceMinutes(meet);
+  const dayStartMin = timeEstimates.dayStartMinutes(meet);
   const dayLabelByValue = new Map(meetDays.map(d => [d.value, d.label]));
   const dayLabel = day => { const v = String(day || 'Day 1'); return dayLabelByValue.get(v) || v; };
   function dayOptionsHtml(current) {
@@ -90,6 +94,7 @@ function renderBlockBuilderView({ meet }) {
       <div class="race-item tt-item" draggable="${draggable}"
         data-race-id="${esc(event.id)}"
         data-item-type="time-trial-event"
+        data-tt-count="${esc(total)}"
         data-group-label="${esc(String(timeTrialEventTitle(event)).toLowerCase())}"
         data-division="time_trial"
         data-distance-index="tt">
@@ -118,12 +123,12 @@ function renderBlockBuilderView({ meet }) {
     if (isBreak) {
       const icon = breakIcons[block.type] || '📌';
       return dayHeader + `
-        <div class="divider-card" id="block-${esc(block.id)}" data-block-day="${esc(dayKey)}">
+        <div class="divider-card" id="block-${esc(block.id)}" data-block-day="${esc(dayKey)}" data-block-type="${esc(block.type)}" data-duration-min="${esc(block.durationMin || '')}">
           <div class="divider-card-inner">
             <span class="block-drag-handle" draggable="true" data-drag-block="${esc(block.id)}" title="Drag to reorder">⠿</span>
             <div class="divider-icon">${icon}</div>
             <div class="divider-info">
-              <div class="divider-name" data-role="block-name">${esc(block.name)}</div>
+              <div class="divider-name" data-role="block-name">${esc(block.name)} <span class="time-chip" data-role="block-time"></span></div>
               <div class="note" data-role="divider-sub">${esc(dayLabel(block.day))}${block.notes ? ' • ' + esc(block.notes) : ''}</div>
             </div>
             <div class="action-row">
@@ -131,6 +136,7 @@ function renderBlockBuilderView({ meet }) {
                 ${dayOptionsHtml(block.day)}
               </select>
               <input class="divider-notes-inp" value="${esc(block.notes || '')}" placeholder="notes..." onblur="setBlockNotes('${esc(block.id)}',this.value)" style="max-width:140px" />
+              <input class="divider-min-inp" type="number" min="0" max="1440" value="${esc(block.durationMin || '')}" placeholder="min" title="Estimated minutes (blank = automatic)" onblur="setBlockDuration('${esc(block.id)}',this.value)" style="max-width:64px" />
               <button class="btn2 btn-sm" onclick="renameBlock('${esc(block.id)}')">Rename</button>
               <button class="btn-danger btn-sm" onclick="deleteBlock('${esc(block.id)}')">Remove</button>
             </div>
@@ -140,12 +146,12 @@ function renderBlockBuilderView({ meet }) {
 
     const displayNum = blockNumber[block.id] || '';
     return dayHeader + `
-      <div class="block-card" id="block-${esc(block.id)}" data-block-day="${esc(dayKey)}">
+      <div class="block-card" id="block-${esc(block.id)}" data-block-day="${esc(dayKey)}" data-duration-min="${esc(block.durationMin || '')}">
         <div class="block-head" style="margin-bottom:12px">
           <div style="display:flex;align-items:center;gap:10px">
             <span class="block-drag-handle" draggable="true" data-drag-block="${esc(block.id)}" title="Drag to reorder">⠿</span>
             <div>
-            <div style="font-weight:700;font-size:17px;color:var(--navy)" data-role="block-num">Block ${displayNum}</div>
+            <div style="font-weight:700;font-size:17px;color:var(--navy)"><span data-role="block-num">Block ${displayNum}</span> <span class="time-chip" data-role="block-time"></span></div>
             <div class="note" data-role="block-day">${esc(dayLabel(block.day))}</div>
             </div>
           </div>
@@ -157,13 +163,14 @@ function renderBlockBuilderView({ meet }) {
             <button class="btn-danger btn-sm" onclick="deleteBlock('${esc(block.id)}')">Delete</button>
           </div>
         </div>
-        <div class="form-grid cols-2" style="margin-bottom:12px">
+        <div class="form-grid cols-3" style="margin-bottom:12px">
           <div><label>Day</label>
             <select onchange="setBlockDay('${esc(block.id)}',this.value)">
               ${dayOptionsHtml(block.day)}
             </select>
           </div>
           <div><label>Notes</label><input value="${esc(block.notes || '')}" onblur="setBlockNotes('${esc(block.id)}',this.value)" placeholder="notes..." /></div>
+          <div><label>Est. minutes</label><input type="number" min="0" max="1440" value="${esc(block.durationMin || '')}" placeholder="auto (${esc(racePaceMin)}/race)" onblur="setBlockDuration('${esc(block.id)}',this.value)" /></div>
         </div>
         <div class="drop-zone" data-drop-block="${esc(block.id)}">
           ${(block.timeTrialEventIds || []).map(eid => {
@@ -207,7 +214,10 @@ function renderBlockBuilderView({ meet }) {
           <h2 style="margin:0">Schedule Control Center</h2>
           <div class="note">Build blocks, add breaks, rebuild race assignments, and keep race day flowing.</div>
         </div>
-        <span class="chip chip-orange">Unassigned: <strong id="unassignedChip">${unassigned.length}</strong></span>
+        <div class="action-row">
+          <span class="chip" id="timeStatusChip" style="display:none"></span>
+          <span class="chip chip-orange">Unassigned: <strong id="unassignedChip">${unassigned.length}</strong></span>
+        </div>
       </div>
 
       <div class="block-how-it-works">
@@ -317,6 +327,12 @@ function renderBlockBuilderView({ meet }) {
       .bulk-bar select{flex:1;min-width:0;}
       .bulk-hint{margin:0 0 8px;font-size:12px;}
       .bulk-hint a{color:#0284c7;font-weight:700;}
+      .time-chip{display:inline-block;font-size:11px;font-weight:800;color:#0369a1;background:#e0f2fe;border-radius:999px;padding:2px 9px;vertical-align:middle;white-space:nowrap;}
+      .time-chip:empty{display:none;}
+      .bb-day-header .day-total{margin-left:auto;font-size:12px;opacity:.85;font-weight:700;text-transform:none;letter-spacing:0;}
+      #timeStatusChip.time-ok{background:#dcfce7;color:#166534;}
+      #timeStatusChip.time-behind{background:#fee2e2;color:#b91c1c;}
+      #timeStatusChip.time-ahead{background:#e0f2fe;color:#0369a1;}
       .block-danger-zone{border-color:rgba(249,115,22,.22);background:linear-gradient(180deg,#fff,#fff7ed);}
       @media(max-width:1000px){.block-control-grid{grid-template-columns:1fr}.block-builder-hero{align-items:flex-start}.block-builder-control-card{padding:18px}.block-control-head{flex-direction:column}.block-summary-grid{grid-template-columns:1fr 1fr}}
       @media(max-width:640px){.block-summary-grid,.schedule-add-grid{grid-template-columns:1fr}.schedule-add-primary{grid-column:auto}.block-how-it-works{align-items:flex-start;flex-direction:column}.block-how-it-works span+span:before{content:'↓';margin-right:5px}.block-tool-buttons .btn2,.block-tool-buttons .btn-sm,.block-action-stack .btn2,.block-action-stack .btn-good{width:100%;justify-content:center}}
@@ -366,6 +382,99 @@ function renderBlockBuilderView({ meet }) {
       let dragRaceId=null; let dragBlockId=null; const meetId=${JSON.stringify(meet.id)};
       const dayLabels=${JSON.stringify(Object.fromEntries(meetDays.map(d => [d.value, d.label])))};
       function dayLabelJs(v){ return dayLabels[v]||v; }
+      // ── R5: time-awareness (all computed client-side from live DOM state) ──
+      const timeCfg=${JSON.stringify({
+        pace: racePaceMin,
+        divider: timeEstimates.DIVIDER_DEFAULT_MIN,
+        ttPerParticipant: timeEstimates.TT_MIN_PER_PARTICIPANT,
+        ttFloor: timeEstimates.TT_MIN_FLOOR,
+        dayStartMin: dayStartMin,
+      })};
+      function blockEstMinutes(card){
+        const override=parseFloat(card.getAttribute('data-duration-min'));
+        if(override>0) return override;
+        const type=card.getAttribute('data-block-type');
+        if(type&&timeCfg.divider[type]!=null) return timeCfg.divider[type];
+        let m=0;
+        card.querySelectorAll('.race-item').forEach(it=>{
+          const tt=parseInt(it.getAttribute('data-tt-count'),10);
+          m+=isFinite(tt)&&tt>=0&&it.getAttribute('data-item-type')==='time-trial-event'
+            ? Math.max(timeCfg.ttFloor,tt*timeCfg.ttPerParticipant)
+            : timeCfg.pace;
+        });
+        return m;
+      }
+      function fmtDur(min){
+        min=Math.round(min);
+        if(min<60) return min+'m';
+        const h=Math.floor(min/60), m=min%60;
+        return h+'h'+(m?' '+m+'m':'');
+      }
+      function fmtClock(min){
+        min=Math.round(min)%1440;
+        let h=Math.floor(min/60); const m=min%60;
+        const ap=h>=12?'pm':'am'; h=h%12||12;
+        return h+':'+String(m).padStart(2,'0')+ap;
+      }
+      function refreshTimeChips(){
+        const cum={}; const totals={};
+        document.querySelectorAll('.bb-left > .block-card, .bb-left > .divider-card').forEach(card=>{
+          const day=card.getAttribute('data-block-day')||'Day 1';
+          const before=cum[day]||0;
+          const mins=blockEstMinutes(card);
+          cum[day]=before+mins; totals[day]=cum[day];
+          const chip=card.querySelector('[data-role="block-time"]');
+          if(chip){
+            let txt='~'+fmtDur(mins);
+            if(timeCfg.dayStartMin!=null) txt+=' • '+fmtClock(timeCfg.dayStartMin+before);
+            chip.textContent=txt;
+          }
+        });
+        document.querySelectorAll('.bb-left > .bb-day-header').forEach(h=>{
+          const day=h.getAttribute('data-day');
+          let t=h.querySelector('.day-total');
+          if(!totals[day]){ if(t) t.remove(); return; }
+          if(!t){ t=document.createElement('span'); t.className='day-total'; h.appendChild(t); }
+          t.textContent='~'+fmtDur(totals[day])+(timeCfg.dayStartMin!=null?' • '+fmtClock(timeCfg.dayStartMin)+'–'+fmtClock(timeCfg.dayStartMin+totals[day]):'');
+        });
+        refreshTimeStatus();
+      }
+      function refreshTimeStatus(){
+        const chip=document.getElementById('timeStatusChip');
+        if(!chip) return;
+        const cur=document.querySelector('.bb-left .race-item.active-now');
+        const card=cur&&cur.closest('.block-card');
+        if(!cur||!card||timeCfg.dayStartMin==null){ chip.style.display='none'; return; }
+        const day=card.getAttribute('data-block-day');
+        let before=0;
+        for(const c of document.querySelectorAll('.bb-left > .block-card, .bb-left > .divider-card')){
+          if(c.getAttribute('data-block-day')!==day) continue;
+          if(c===card) break;
+          before+=blockEstMinutes(c);
+        }
+        for(const it of card.querySelectorAll('.race-item')){
+          if(it===cur) break;
+          before+=timeCfg.pace;
+        }
+        const est=timeCfg.dayStartMin+before;
+        const now=new Date();
+        const diff=Math.round((now.getHours()*60+now.getMinutes())-est);
+        chip.style.display='';
+        if(Math.abs(diff)<=3){ chip.className='chip time-ok'; chip.textContent='⏱ On schedule'; }
+        else if(diff>0){ chip.className='chip time-behind'; chip.textContent='⏱ '+fmtDur(diff)+' behind'; }
+        else { chip.className='chip time-ahead'; chip.textContent='⏱ '+fmtDur(-diff)+' ahead'; }
+      }
+      async function setBlockDuration(id,value){
+        saveFilters();
+        const card=document.getElementById('block-'+id);
+        const v=Number(value);
+        if(card) card.setAttribute('data-duration-min',isFinite(v)&&v>0?String(Math.round(v)):'');
+        refreshTimeChips();
+        try{
+          const r=await fetch('/api/meet/'+meetId+'/blocks/update-meta',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({blockId:id,durationMin:isFinite(v)&&v>0?Math.round(v):0})});
+          if(!r.ok) resync('Saving minutes failed.');
+        }catch(err){console.error(err);resync('Saving minutes failed.');}
+      }
       function refreshDayHeaders(){
         const left=document.querySelector('.bb-left');
         if(!left) return;
@@ -381,6 +490,7 @@ function renderBlockBuilderView({ meet }) {
           }
           prev=day;
         });
+        if(typeof refreshTimeChips==='function') refreshTimeChips();
       }
       function scrollStorageKey(){return 'ssm_block_scroll_'+meetId;}
       function unassignedScrollStorageKey(){return 'ssm_block_unassigned_scroll_'+meetId;}
@@ -436,6 +546,7 @@ function renderBlockBuilderView({ meet }) {
           }
           ph.textContent=isUnassigned?'All races assigned.':'Drop races here…';
         });
+        if(typeof refreshTimeChips==='function') refreshTimeChips();
       }
       function renumberBlocks(){
         let n=0;
@@ -806,6 +917,7 @@ function renderBlockBuilderView({ meet }) {
         document.getElementById('unassignedChip').textContent=String(v);
       }
       restoreFilters(); restoreBuilderScroll(); attachDnD(); attachBlockDnD(); attachBulkSelect(); applyFilters();
+      refreshTimeChips(); setInterval(refreshTimeStatus,30000);
     </script>`;
 }
 
