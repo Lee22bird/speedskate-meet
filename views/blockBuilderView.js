@@ -284,6 +284,7 @@ function renderBlockBuilderView({ meet }) {
           </div>
         </section>
       </div>
+      <div id="bbSuggestions" class="bb-suggestions" style="display:none"></div>
     </div>
 
     <style>
@@ -342,6 +343,13 @@ function renderBlockBuilderView({ meet }) {
       .time-chip:empty{display:none;}
       .warn-badge{display:inline-block;cursor:help;font-size:11px;font-weight:800;color:#b45309;background:#fef3c7;border:1px solid #fcd34d;border-radius:999px;padding:2px 8px;vertical-align:middle;white-space:nowrap;margin-left:5px;}
       .warn-badge:empty{display:none;}
+      .bb-suggestions{margin-top:16px;border:1px solid #bfdbfe;border-radius:14px;background:#eff6ff;padding:10px 13px;}
+      .bb-sugg-head{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#1d4ed8;margin-bottom:6px;}
+      .bb-sugg-row{display:flex;align-items:center;gap:10px;justify-content:space-between;padding:7px 2px;border-top:1px solid #dbeafe;flex-wrap:wrap;}
+      .bb-sugg-row:first-of-type{border-top:none;}
+      .bb-sugg-text{font-size:13px;font-weight:650;color:#1e3a5f;}
+      .bb-sugg-actions{display:flex;gap:6px;flex-shrink:0;}
+      .bb-sugg-x{opacity:.7;}
       .bb-day-header .day-total{margin-left:auto;font-size:12px;opacity:.85;font-weight:700;text-transform:none;letter-spacing:0;}
       #timeStatusChip.time-ok{background:#dcfce7;color:#166534;}
       #timeStatusChip.time-behind{background:#fee2e2;color:#b91c1c;}
@@ -453,6 +461,7 @@ function renderBlockBuilderView({ meet }) {
         });
         refreshTimeStatus();
         if(typeof refreshConflicts==='function') refreshConflicts();
+        if(typeof refreshSuggestions==='function') refreshSuggestions();
       }
       function refreshTimeStatus(){
         const chip=document.getElementById('timeStatusChip');
@@ -577,6 +586,60 @@ function renderBlockBuilderView({ meet }) {
           if(msgs&&msgs.length){ badge.textContent='⚠ '+msgs.length; badge.title=msgs.join('\\n'); badge.style.display=''; }
           else { badge.textContent=''; badge.removeAttribute('title'); badge.style.display='none'; }
         });
+      }
+      // ── R8: smart break/lunch/warm-up suggestions — derived from the R5
+      // timeline over live DOM, shown as dismissible one-tap affordances. Never
+      // auto-inserts; accepting reuses /blocks/add-divider with a position.
+      let currentSuggestions=[];
+      function suggDismissKey(sig){ return 'ssm_sugg_x_'+meetId+'_'+sig; }
+      function isSuggDismissed(sig){ try{ return sessionStorage.getItem(suggDismissKey(sig))==='1'; }catch(e){ return false; } }
+      function dismissSuggestion(sig){ try{ sessionStorage.setItem(suggDismissKey(sig),'1'); }catch(e){} refreshSuggestions(); }
+      async function acceptSuggestion(type,name,day,afterBlockId){
+        saveFilters();
+        try{
+          const r=await fetch('/api/meet/'+meetId+'/blocks/add-divider',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type,name,day,afterBlockId})});
+          if(!r.ok) return resync('Could not add that break.');
+          const j=await r.json();
+          location.replace('/portal/meet/'+encodeURIComponent(meetId)+'/blocks?created='+encodeURIComponent(j.blockId)+'#block-'+encodeURIComponent(j.blockId));
+        }catch(err){console.error(err);resync('Could not add that break.');}
+      }
+      function computeSuggestions(){
+        const cards=Array.from(document.querySelectorAll('.bb-left > .block-card, .bb-left > .divider-card'));
+        const days=[]; const byDay={};
+        cards.forEach(card=>{ const d=card.getAttribute('data-block-day')||'Day 1'; if(!byDay[d]){byDay[d]=[];days.push(d);} byDay[d].push(card); });
+        const out=[];
+        days.forEach((day,di)=>{
+          const list=byDay[day];
+          const raceBlocks=list.filter(c=>c.classList.contains('block-card'));
+          if(!raceBlocks.length) return; // no racing that day — nothing to suggest
+          const types={}; list.filter(c=>c.classList.contains('divider-card')).forEach(c=>{ types[c.getAttribute('data-block-type')||'']=1; });
+          const dayTotal=list.reduce((a,c)=>a+blockEstMinutes(c),0);
+          const prev=di>0?byDay[days[di-1]]:null;
+          const afterStart=prev?cardBlockId(prev[prev.length-1]):'__start__';
+          if(!types['practice']) out.push({sig:day+'|practice',label:'Warm-up at the start of '+dayLabelJs(day),type:'practice',name:'🛼 Warm-Up',day:day,after:afterStart});
+          if(!types['lunch'] && dayTotal>=240){
+            let cum=0, afterId=cardBlockId(raceBlocks[0]);
+            for(const c of list){ cum+=blockEstMinutes(c); if(cum>=dayTotal/2){ afterId=cardBlockId(c); break; } }
+            out.push({sig:day+'|lunch',label:'Lunch break mid-'+dayLabelJs(day)+' (long day, ~'+fmtDur(dayTotal)+')',type:'lunch',name:'🍽 Lunch',day:day,after:afterId});
+          }
+          const lastRaceDay=days.slice(di+1).every(d=>!byDay[d].some(c=>c.classList.contains('block-card')));
+          if(lastRaceDay && !types['awards']) out.push({sig:day+'|awards',label:'Awards at the end of '+dayLabelJs(day),type:'awards',name:'🏆 Awards',day:day,after:cardBlockId(list[list.length-1])});
+        });
+        return out.filter(s=>!isSuggDismissed(s.sig));
+      }
+      function refreshSuggestions(){
+        const box=document.getElementById('bbSuggestions');
+        if(!box) return;
+        currentSuggestions=computeSuggestions();
+        if(!currentSuggestions.length){ box.style.display='none'; box.innerHTML=''; return; }
+        const escH=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+        box.style.display='';
+        box.innerHTML='<div class="bb-sugg-head">💡 Smart suggestions</div>'+currentSuggestions.map((s,i)=>
+          '<div class="bb-sugg-row"><span class="bb-sugg-text">'+escH(s.label)+'</span>'
+          +'<span class="bb-sugg-actions"><button class="btn2 btn-sm" type="button" data-sugg-i="'+i+'">+ Insert</button>'
+          +'<button class="btn2 btn-sm bb-sugg-x" type="button" data-sugg-x="'+i+'">Dismiss</button></span></div>').join('');
+        box.querySelectorAll('[data-sugg-i]').forEach(b=>b.addEventListener('click',()=>{ const s=currentSuggestions[+b.getAttribute('data-sugg-i')]; if(s) acceptSuggestion(s.type,s.name,s.day,s.after); }));
+        box.querySelectorAll('[data-sugg-x]').forEach(b=>b.addEventListener('click',()=>{ const s=currentSuggestions[+b.getAttribute('data-sugg-x')]; if(s) dismissSuggestion(s.sig); }));
       }
       function scrollStorageKey(){return 'ssm_block_scroll_'+meetId;}
       function unassignedScrollStorageKey(){return 'ssm_block_unassigned_scroll_'+meetId;}

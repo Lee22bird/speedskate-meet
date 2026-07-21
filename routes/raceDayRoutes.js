@@ -1113,8 +1113,17 @@ router.post('/api/meet/:meetId/blocks/add-divider', requireRole('meet_director')
   createDesktopBackupIfActive(req.db, 'before_block_generation', meet.id);
   const type=String(req.body.type||'break');
   const name=String(req.body.name||'Break').trim();
-  const block={id:'b'+crypto.randomBytes(4).toString('hex'),name,day:'Day 1',type,notes:'',raceIds:[]};
-  meet.blocks.push(block);
+  // R8: optional day + insert position. Back-compat: with neither, this appends
+  // a Day 1 divider exactly as before (what the manual Break/Lunch buttons send).
+  const day=(typeof req.body.day==='string'&&req.body.day.trim())?String(req.body.day).trim():'Day 1';
+  const block={id:'b'+crypto.randomBytes(4).toString('hex'),name,day,type,notes:'',raceIds:[]};
+  const afterId=String(req.body.afterBlockId||'').trim();
+  if(afterId==='__start__'){
+    meet.blocks.unshift(block);
+  }else{
+    const at=afterId?(meet.blocks||[]).findIndex(b=>b.id===afterId):-1;
+    if(at>=0) meet.blocks.splice(at+1,0,block); else meet.blocks.push(block);
+  }
   meet.updatedAt=nowIso(); saveDb(req.db); res.json({ok:true,blockId:block.id});
 });
 
