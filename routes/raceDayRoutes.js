@@ -1192,6 +1192,24 @@ router.post('/api/meet/:meetId/blocks/reorder', requireRole('meet_director'), (r
   res.json({ok:true});
 });
 
+// R11: reorder races WITHIN a block. `order` must be a permutation of the block's
+// current raceIds (same validation shape as /blocks/reorder for whole blocks).
+router.post('/api/meet/:meetId/blocks/reorder-races', requireRole('meet_director'), (req, res) => {
+  const meet=getMeetOr404(req.db,req.params.meetId);
+  if(!meet||!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
+  const block=(meet.blocks||[]).find(b=>String(b.id)===String(req.body.blockId||''));
+  if(!block) return res.status(404).send('Block not found');
+  if((block.type||'race')!=='race') return res.status(400).send('Not a race block');
+  const order=Array.isArray(req.body.order)?req.body.order.map(String):null;
+  const current=(block.raceIds||[]).map(String);
+  if(!order||order.length!==current.length||new Set(order).size!==order.length||!order.every(id=>current.includes(id)))
+    return res.status(400).send('Order must contain each of the block\'s races exactly once');
+  createDesktopBackupIfActive(req.db, 'before_block_generation', meet.id);
+  block.raceIds=order;
+  meet.updatedAt=nowIso(); saveDb(req.db);
+  res.json({ok:true});
+});
+
 
 router.post('/portal/meet/:meetId/blocks/auto-flow', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
@@ -1248,7 +1266,13 @@ router.post('/api/meet/:meetId/blocks/move-race', requireRole('meet_director'), 
     const block=(meet.blocks||[]).find(b=>String(b.id)===destBlockId);
     if(!block) return res.status(404).send('Block not found');
     if((block.type||'race')!=='race') return res.status(400).send('Cannot drop races into non-race blocks');
-    if(!(block.raceIds||[]).map(String).includes(raceId)) block.raceIds.push(raceId);
+    block.raceIds=(block.raceIds||[]).map(String);
+    if(!block.raceIds.includes(raceId)){
+      // R11: optional drop-at-position — insert before beforeRaceId, else append (back-compat).
+      const beforeId=String(req.body.beforeRaceId||'').trim();
+      const at=beforeId?block.raceIds.indexOf(beforeId):-1;
+      if(at>=0) block.raceIds.splice(at,0,raceId); else block.raceIds.push(raceId);
+    }
   }
 
   ensureCurrentRace(meet);

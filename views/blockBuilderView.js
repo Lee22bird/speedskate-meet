@@ -332,6 +332,8 @@ function renderBlockBuilderView({ meet }) {
       .block-drag-handle:active{cursor:grabbing;}
       .dragging-block{opacity:.45;}
       .block-drop-line{height:4px;border-radius:2px;background:#f97316;margin:6px 2px;box-shadow:0 0 0 2px rgba(249,115,22,.18);}
+      .race-drop-line{height:3px;border-radius:2px;background:#f97316;margin:3px 6px;box-shadow:0 0 0 2px rgba(249,115,22,.18);pointer-events:none;}
+      .race-item.dragging-race{opacity:.45;}
       .race-item.selected{outline:2px solid #f97316;outline-offset:-2px;background:#fff7ed;}
       .race-item.selected .race-label:before{content:'✓ ';color:#ea580c;font-weight:900;}
       .bulk-bar{display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:8px 10px;border:1px solid #fdba74;border-radius:12px;background:#fff7ed;}
@@ -799,23 +801,51 @@ function renderBlockBuilderView({ meet }) {
         if(!items.length||!zone) return;
         bulkMove(items,zone,destBlockId);
       }
+      // ── R11: drag a race to a specific position within a block ──
+      let raceDropLine=null;
+      function zoneRaceIds(zone){
+        return Array.from(zone.querySelectorAll(':scope > .race-item'))
+          .filter(i=>i.getAttribute('data-item-type')!=='time-trial-event')
+          .map(i=>i.getAttribute('data-race-id'));
+      }
+      function raceAfterPointer(zone,y){
+        const items=Array.from(zone.querySelectorAll(':scope > .race-item'))
+          .filter(i=>!i.classList.contains('dragging-race')&&!i.classList.contains('hidden')&&i.getAttribute('data-item-type')!=='time-trial-event');
+        for(const it of items){ const r=it.getBoundingClientRect(); if(y < r.top + r.height/2) return it; }
+        return null; // past the last race — append at end
+      }
+      function showRaceDropLine(zone,before){
+        if(!raceDropLine){ raceDropLine=document.createElement('div'); raceDropLine.className='race-drop-line'; }
+        if(before) zone.insertBefore(raceDropLine,before); else zone.appendChild(raceDropLine);
+      }
+      function clearRaceDropLine(){ if(raceDropLine&&raceDropLine.parentElement) raceDropLine.parentElement.removeChild(raceDropLine); }
       function attachDnD(){
         document.querySelectorAll('.race-item').forEach(el=>{
           if(el.getAttribute('draggable')!=='true') return;
-          el.addEventListener('dragstart',e=>{dragRaceId=el.getAttribute('data-race-id');e.dataTransfer.setData('text/plain',dragRaceId);saveFilters();});
+          el.addEventListener('dragstart',e=>{dragRaceId=el.getAttribute('data-race-id');el.classList.add('dragging-race');e.dataTransfer.setData('text/plain',dragRaceId);saveFilters();});
+          el.addEventListener('dragend',()=>{el.classList.remove('dragging-race');clearRaceDropLine();dragRaceId=null;});
         });
         document.querySelectorAll('.drop-zone').forEach(zone=>{
-          zone.addEventListener('dragover',e=>{if(dragBlockId) return;e.preventDefault();zone.classList.add('over');});
+          zone.addEventListener('dragover',e=>{
+            if(dragBlockId) return;
+            e.preventDefault();zone.classList.add('over');
+            // R11: single-race drag into a real block -> show the insertion line
+            if(dragRaceId && zone.getAttribute('data-drop-block')!=='__unassigned__'){
+              const dragged=findItem(dragRaceId);
+              if(dragged&&dragged.classList.contains('selected')&&selectedItems().length>1){ clearRaceDropLine(); return; } // bulk drag appends
+              showRaceDropLine(zone, raceAfterPointer(zone,e.clientY));
+            }
+          });
           zone.addEventListener('dragleave',()=>zone.classList.remove('over'));
           zone.addEventListener('drop',async e=>{
             if(dragBlockId) return; // a BLOCK is being dragged — let the schedule column handle it
-            e.preventDefault();zone.classList.remove('over');
+            e.preventDefault();zone.classList.remove('over');clearRaceDropLine();
             const raceId=e.dataTransfer.getData('text/plain')||dragRaceId;
             const destBlockId=zone.getAttribute('data-drop-block');
             if(!raceId) return;
             const item=findItem(raceId);
             if(!item) return;
-            // dragging a selected item drags the whole selection
+            // dragging a selected item drags the whole selection (bulk still appends)
             if(item.classList.contains('selected')){
               const bulk=selectedItems();
               if(bulk.length>1){
@@ -823,13 +853,35 @@ function renderBlockBuilderView({ meet }) {
                 return bulkMove(bulk,zone,destBlockId);
               }
             }
-            if(zone===item.parentElement){ item.classList.remove('selected'); updateBulkBar(); return; }
-            saveFilters();
             item.classList.remove('selected'); updateBulkBar();
+            const isRealBlock=destBlockId!=='__unassigned__';
+            const before=isRealBlock?raceAfterPointer(zone,e.clientY):null; // a real race item to insert before, or null=end
+
+            if(zone===item.parentElement){
+              // R11: SAME-BLOCK reorder (Unassigned has no persisted order)
+              if(!isRealBlock) return;
+              const prevOrder=zoneRaceIds(zone);
+              if(before) zone.insertBefore(item,before); else zone.appendChild(item);
+              const order=zoneRaceIds(zone);
+              if(order.join()===prevOrder.join()) return; // dropped in place — no-op
+              refreshZonePlaceholders(); applyFilters(); saveFilters();
+              try{
+                const r=await fetch('/api/meet/'+meetId+'/blocks/reorder-races',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({blockId:destBlockId,order})});
+                const j=r.ok?await r.json():null;
+                if(!j||j.ok!==true) resync('Reorder failed.');
+              }catch(err){console.error(err);resync('Reorder failed.');}
+              return;
+            }
+
+            // CROSS-BLOCK: drop at position (real block) or move to/from Unassigned
+            saveFilters();
             const prevParent=item.parentElement, prevNext=item.nextSibling;
-            placeItem(zone,item); // optimistic: move in the DOM immediately
+            if(before) zone.insertBefore(item,before); else zone.appendChild(item); // optimistic
+            if(zone.id!=='unassignedZone') item.classList.remove('hidden');
+            refreshZonePlaceholders(); applyFilters();
+            const beforeRaceId=before?before.getAttribute('data-race-id'):null;
             try{
-              const res=await fetch('/api/meet/'+meetId+'/blocks/move-race',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({raceId,destBlockId})});
+              const res=await fetch('/api/meet/'+meetId+'/blocks/move-race',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({raceId,destBlockId,beforeRaceId})});
               if(!res.ok){
                 restoreItem(item,prevParent,prevNext);
                 const msg=(await res.text()).trim();
