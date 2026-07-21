@@ -7,6 +7,17 @@ function renderBlockBuilderView({ meet }) {
   const timeTrialEvent = ensureTimeTrialEvent(meet);
   const timeTrialEventById = new Map((meet.timeTrialEvents || []).filter(e => e.enabled).map(e => [e.id, e]));
   const raceById = new Map((meet.races || []).map(r => [r.id, r]));
+  // ── R7: per-race skater membership (compact [key,name] pairs) for client-side
+  // conflict detection. Relays are excluded — their laneEntries are teams, not
+  // individual skaters, so "back-to-back" doesn't apply the same way.
+  const raceSkaters = {};
+  for (const r of meet.races || []) {
+    if (r.isRelayRace) continue;
+    const skaters = (r.laneEntries || [])
+      .map(e => [String(e.registrationId || e.skaterName || '').trim(), String(e.skaterName || '').trim()])
+      .filter(s => s[0]);
+    if (skaters.length) raceSkaters[r.id] = skaters;
+  }
   const assigned = new Set();
   const assignedTimeTrialEvents = new Set();
   for (const block of meet.blocks || []) {
@@ -128,7 +139,7 @@ function renderBlockBuilderView({ meet }) {
             <span class="block-drag-handle" draggable="true" data-drag-block="${esc(block.id)}" title="Drag to reorder">⠿</span>
             <div class="divider-icon">${icon}</div>
             <div class="divider-info">
-              <div class="divider-name" data-role="block-name">${esc(block.name)} <span class="time-chip" data-role="block-time"></span></div>
+              <div class="divider-name" data-role="block-name">${esc(block.name)} <span class="time-chip" data-role="block-time"></span><span class="warn-badge" data-role="block-warn" style="display:none"></span></div>
               <div class="note" data-role="divider-sub">${esc(dayLabel(block.day))}${block.notes ? ' • ' + esc(block.notes) : ''}</div>
             </div>
             <div class="action-row">
@@ -151,7 +162,7 @@ function renderBlockBuilderView({ meet }) {
           <div style="display:flex;align-items:center;gap:10px">
             <span class="block-drag-handle" draggable="true" data-drag-block="${esc(block.id)}" title="Drag to reorder">⠿</span>
             <div>
-            <div style="font-weight:700;font-size:17px;color:var(--navy)"><span data-role="block-num">Block ${displayNum}</span> <span class="time-chip" data-role="block-time"></span></div>
+            <div style="font-weight:700;font-size:17px;color:var(--navy)"><span data-role="block-num">Block ${displayNum}</span> <span class="time-chip" data-role="block-time"></span><span class="warn-badge" data-role="block-warn" style="display:none"></span></div>
             <div class="note" data-role="block-day">${esc(dayLabel(block.day))}</div>
             </div>
           </div>
@@ -329,6 +340,8 @@ function renderBlockBuilderView({ meet }) {
       .bulk-hint a{color:#0284c7;font-weight:700;}
       .time-chip{display:inline-block;font-size:11px;font-weight:800;color:#0369a1;background:#e0f2fe;border-radius:999px;padding:2px 9px;vertical-align:middle;white-space:nowrap;}
       .time-chip:empty{display:none;}
+      .warn-badge{display:inline-block;cursor:help;font-size:11px;font-weight:800;color:#b45309;background:#fef3c7;border:1px solid #fcd34d;border-radius:999px;padding:2px 8px;vertical-align:middle;white-space:nowrap;margin-left:5px;}
+      .warn-badge:empty{display:none;}
       .bb-day-header .day-total{margin-left:auto;font-size:12px;opacity:.85;font-weight:700;text-transform:none;letter-spacing:0;}
       #timeStatusChip.time-ok{background:#dcfce7;color:#166534;}
       #timeStatusChip.time-behind{background:#fee2e2;color:#b91c1c;}
@@ -381,6 +394,7 @@ function renderBlockBuilderView({ meet }) {
     <script>
       let dragRaceId=null; let dragBlockId=null; const meetId=${JSON.stringify(meet.id)};
       const dayLabels=${JSON.stringify(Object.fromEntries(meetDays.map(d => [d.value, d.label])))};
+      const raceSkaters=${JSON.stringify(raceSkaters)}; // R7: raceId -> [[key,name],…]
       function dayLabelJs(v){ return dayLabels[v]||v; }
       // ── R5: time-awareness (all computed client-side from live DOM state) ──
       const timeCfg=${JSON.stringify({
@@ -438,6 +452,7 @@ function renderBlockBuilderView({ meet }) {
           t.textContent='~'+fmtDur(totals[day])+(timeCfg.dayStartMin!=null?' • '+fmtClock(timeCfg.dayStartMin)+'–'+fmtClock(timeCfg.dayStartMin+totals[day]):'');
         });
         refreshTimeStatus();
+        if(typeof refreshConflicts==='function') refreshConflicts();
       }
       function refreshTimeStatus(){
         const chip=document.getElementById('timeStatusChip');
@@ -491,6 +506,77 @@ function renderBlockBuilderView({ meet }) {
           prev=day;
         });
         if(typeof refreshTimeChips==='function') refreshTimeChips();
+      }
+      // ── R7: conflict detection — mirrors services/conflictDetection.js, run
+      // client-side (over live DOM) so badges stay truthful through R2/R3/R4
+      // optimistic edits without a reload. Passive/non-blocking: badges only.
+      function cardBlockId(card){ return (card.id||'').replace(/^block-/,''); }
+      function capWord(s){ s=String(s||''); return s?s[0].toUpperCase()+s.slice(1):s; }
+      function buildConflictItems(){
+        const items=[];
+        document.querySelectorAll('.bb-left > .block-card, .bb-left > .divider-card').forEach(card=>{
+          const isBreak=card.classList.contains('divider-card');
+          const races=[];
+          if(!isBreak){
+            card.querySelectorAll('.race-item').forEach(it=>{
+              const rid=it.getAttribute('data-race-id');
+              races.push({division:(it.getAttribute('data-division')||''),skaters:(raceSkaters[rid]||[])});
+            });
+          }
+          items.push({id:cardBlockId(card),isBreak,breakType:card.getAttribute('data-block-type')||null,day:card.getAttribute('data-block-day')||'Day 1',races});
+        });
+        return items;
+      }
+      function computeConflicts(items){
+        const byBlock={};
+        const push=(id,msg)=>{ (byBlock[id]=byBlock[id]||[]).push(msg); };
+        // Rule 1 — tight turnaround: skater in two races with <1 race of rest.
+        const flat=[];
+        items.forEach(it=>{ if(!it.isBreak) it.races.forEach(r=>flat.push({blockId:it.id,skaters:r.skaters})); });
+        const lastPos={}, perBlock={};
+        for(let i=0;i<flat.length;i++){
+          for(const s of flat[i].skaters){
+            const key=s[0]; if(!key) continue;
+            if(lastPos[key]!=null && (i-lastPos[key]-1)<1){ (perBlock[flat[i].blockId]=perBlock[flat[i].blockId]||{})[key]=s[1]||key; }
+            lastPos[key]=i;
+          }
+        }
+        Object.keys(perBlock).forEach(id=>{
+          const list=Object.keys(perBlock[id]).map(k=>perBlock[id][k]);
+          const shown=list.slice(0,3).join(', ')+(list.length>3?(' +'+(list.length-3)+' more'):'');
+          push(id,'Tight turnaround — '+list.length+' skater'+(list.length===1?'':'s')+' racing again with little rest: '+shown);
+        });
+        // Rule 2 — division split across a break (same day).
+        const byDay={};
+        items.forEach((it,idx)=>{ const d=it.day||'Day 1'; (byDay[d]=byDay[d]||[]).push(idx); });
+        Object.keys(byDay).forEach(d=>{
+          const idxs=byDay[d];
+          for(let b=0;b<idxs.length;b++){
+            const brk=items[idxs[b]]; if(!brk.isBreak) continue;
+            const before={};
+            for(let k=0;k<b;k++){ const it=items[idxs[k]]; if(it.isBreak) continue; it.races.forEach(r=>{ if(r.division) before[r.division.toLowerCase()]=1; }); }
+            const split=[];
+            for(let k=b+1;k<idxs.length;k++){ const it=items[idxs[k]]; if(it.isBreak) break; it.races.forEach(r=>{ const dv=(r.division||'').toLowerCase(); if(dv&&before[dv]&&split.indexOf(dv)<0) split.push(dv); }); }
+            if(split.length) push(brk.id,'Division split — '+split.map(capWord).join(', ')+' race'+(split.length===1?'s':'')+' again after this '+(brk.breakType||'break'));
+          }
+        });
+        // Rule 3 — heavy block vs the meet average.
+        const raceBlocks=items.filter(it=>!it.isBreak);
+        if(raceBlocks.length>=3){
+          const mean=raceBlocks.reduce((a,it)=>a+it.races.length,0)/raceBlocks.length;
+          if(mean>0) raceBlocks.forEach(it=>{ const n=it.races.length; if(n>mean*1.6&&n>=mean+3) push(it.id,'Heavy block — '+n+' races (meet average is ~'+Math.round(mean)+')'); });
+        }
+        return byBlock;
+      }
+      function refreshConflicts(){
+        const byBlock=computeConflicts(buildConflictItems());
+        document.querySelectorAll('.bb-left > .block-card, .bb-left > .divider-card').forEach(card=>{
+          const badge=card.querySelector('[data-role="block-warn"]');
+          if(!badge) return;
+          const msgs=byBlock[cardBlockId(card)];
+          if(msgs&&msgs.length){ badge.textContent='⚠ '+msgs.length; badge.title=msgs.join('\\n'); badge.style.display=''; }
+          else { badge.textContent=''; badge.removeAttribute('title'); badge.style.display='none'; }
+        });
       }
       function scrollStorageKey(){return 'ssm_block_scroll_'+meetId;}
       function unassignedScrollStorageKey(){return 'ssm_block_unassigned_scroll_'+meetId;}
