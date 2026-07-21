@@ -139,7 +139,7 @@ function renderBlockBuilderView({ meet }) {
             <span class="block-drag-handle" draggable="true" data-drag-block="${esc(block.id)}" title="Drag to reorder">⠿</span>
             <div class="divider-icon">${icon}</div>
             <div class="divider-info">
-              <div class="divider-name" data-role="block-name">${esc(block.name)} <span class="time-chip" data-role="block-time"></span><span class="warn-badge" data-role="block-warn" style="display:none"></span></div>
+              <div class="divider-name" data-role="block-name"><span data-role="block-name-text">${esc(block.name)}</span> <span class="time-chip" data-role="block-time"></span><span class="warn-badge" data-role="block-warn" style="display:none"></span></div>
               <div class="note" data-role="divider-sub">${esc(dayLabel(block.day))}${block.notes ? ' • ' + esc(block.notes) : ''}</div>
             </div>
             <div class="action-row">
@@ -162,7 +162,7 @@ function renderBlockBuilderView({ meet }) {
           <div style="display:flex;align-items:center;gap:10px">
             <span class="block-drag-handle" draggable="true" data-drag-block="${esc(block.id)}" title="Drag to reorder">⠿</span>
             <div>
-            <div style="font-weight:700;font-size:17px;color:var(--navy)"><span data-role="block-num">Block ${displayNum}</span> <span class="time-chip" data-role="block-time"></span><span class="warn-badge" data-role="block-warn" style="display:none"></span></div>
+            <div style="font-weight:700;font-size:17px;color:var(--navy)"><span data-role="block-num">${/^Block \d+$/.test(String(block.name || '').trim()) || !block.name ? ('Block ' + displayNum) : esc(block.name)}</span> <span class="time-chip" data-role="block-time"></span><span class="warn-badge" data-role="block-warn" style="display:none"></span></div>
             <div class="note" data-role="block-day">${esc(dayLabel(block.day))}</div>
             </div>
           </div>
@@ -350,6 +350,7 @@ function renderBlockBuilderView({ meet }) {
       .bb-sugg-text{font-size:13px;font-weight:650;color:#1e3a5f;}
       .bb-sugg-actions{display:flex;gap:6px;flex-shrink:0;}
       .bb-sugg-x{opacity:.7;}
+      .bb-rename-input{font:inherit;font-weight:700;color:var(--navy);border:1px solid #7dd3fc;border-radius:8px;padding:1px 8px;max-width:220px;background:#fff;}
       .bb-day-header .day-total{margin-left:auto;font-size:12px;opacity:.85;font-weight:700;text-transform:none;letter-spacing:0;}
       #timeStatusChip.time-ok{background:#dcfce7;color:#166534;}
       #timeStatusChip.time-behind{background:#fee2e2;color:#b91c1c;}
@@ -701,7 +702,9 @@ function renderBlockBuilderView({ meet }) {
         let n=0;
         document.querySelectorAll('.bb-left .block-card').forEach(card=>{
           const el=card.querySelector('[data-role="block-num"]');
-          if(el) el.textContent='Block '+(++n);
+          n++;
+          // R9: only auto-numbered labels renumber; a custom name is preserved.
+          if(el && /^Block \d+$/.test((el.textContent||'').trim())) el.textContent='Block '+n;
         });
       }
       function placeItem(zone,item){
@@ -981,15 +984,33 @@ function renderBlockBuilderView({ meet }) {
       function addDivider(button,type,name){
         return createBlock(button,'/api/meet/'+meetId+'/blocks/add-divider',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type,name})});
       }
-      async function renameBlock(id){
-        const name=prompt('Name:');if(!name) return;saveFilters();
-        try{
-          const r=await fetch('/api/meet/'+meetId+'/blocks/update-meta',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({blockId:id,name})});
-          if(!r.ok) return resync('Rename failed.');
-          const card=document.getElementById('block-'+id);
-          const el=card&&card.querySelector('[data-role="block-name"]');
-          if(el) el.textContent=name;
-        }catch(err){console.error(err);resync('Rename failed.');}
+      // R9: inline rename — no more prompt(). Swaps the label for an input,
+      // commits on Enter/blur, cancels on Esc; persists via /blocks/update-meta.
+      function renameBlock(id){
+        const card=document.getElementById('block-'+id);
+        if(!card) return;
+        const labelEl=card.querySelector('[data-role="block-name-text"]')||card.querySelector('[data-role="block-num"]');
+        if(!labelEl||card.querySelector('.bb-rename-input')) return; // already editing
+        const current=(labelEl.textContent||'').trim();
+        const input=document.createElement('input');
+        input.type='text'; input.className='bb-rename-input'; input.value=current; input.setAttribute('aria-label','Block name');
+        labelEl.style.display='none';
+        labelEl.parentNode.insertBefore(input,labelEl);
+        input.focus(); input.select();
+        let done=false;
+        function finish(save){
+          if(done) return; done=true;
+          const val=input.value.trim();
+          input.remove(); labelEl.style.display='';
+          if(!save||!val||val===current) return;
+          labelEl.textContent=val;
+          saveFilters();
+          fetch('/api/meet/'+meetId+'/blocks/update-meta',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({blockId:id,name:val})})
+            .then(r=>{ if(!r.ok) resync('Rename failed.'); })
+            .catch(err=>{ console.error(err); resync('Rename failed.'); });
+        }
+        input.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); finish(true); } else if(e.key==='Escape'){ e.preventDefault(); finish(false); } });
+        input.addEventListener('blur',()=>finish(true));
       }
       async function deleteBlock(id){
         if(!confirm('Remove this?')) return;saveFilters();
