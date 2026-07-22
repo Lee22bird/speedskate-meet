@@ -416,7 +416,7 @@ module.exports = {
     {
      "rank": "2",
      "num": "303",
-     "name": "Koralyn Hick",
+     "name": "Koralyne Hick",
      "team": "Midwest Racing",
      "total": "151.500",
      "places": [
@@ -1640,7 +1640,7 @@ module.exports = {
     {
      "rank": "5",
      "num": "427",
-     "name": "Elizabeth Deglinger",
+     "name": "Elizabeth Dehlinger",
      "team": "Badger State Racing",
      "total": "36.125",
      "places": [
@@ -2572,7 +2572,7 @@ module.exports = {
      "rank": "4",
      "num": "121",
      "name": "Francisco Ramirez",
-     "team": "Frenchtown Speed Team",
+     "team": "Frenchtown Spe2e:d07.319",
      "total": "88.000",
      "places": [
       {
@@ -3303,6 +3303,1373 @@ module.exports = {
       {
        "m": "1000",
        "place": "6"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "division": "Quad Primary Girls",
+   "skaters": [
+    {
+     "rank": "1",
+     "num": "306",
+     "name": "Leeanna Gonser",
+     "team": "Midwest Racing",
+     "total": "324.750",
+     "places": [
+      {
+       "m": "200",
+       "place": "1"
+      },
+      {
+       "m": "300",
+       "place": "1"
+      },
+      {
+       "m": "400",
+       "place": "1"
+      }
+     ]
+    },
+    {
+     "rank": "2",
+     "num": "297",
+     "name": "Jordanna Gonser",
+     "team": "Midwest Racing",
+     "total": "216.500",
+     "places": [
+      {
+       "m": "200",
+       "place": "2"
+      },
+      {
+       "m": "300",
+       "place": "2"
+      },
+      {
+       "m": "400",
+       "place": "2"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "division": "Quad Elementary Girls",
+   "skaters": [
+    {
+     "rank": "1",
+     "num": "90",
+     "name": "Jabree Scott",
+     "team": "Midwest Racing",
+     "total": "324.750",
+     "places": [
+      {
+       "m": "300",
+       "place": "1"
+      },
+      {
+       "m": "500",
+       "place": "1"
+      },
+      {
+       "m": "700",
+       "place": "1"
+      }
+     ]
+    },
+    {
+     "rank": "2",
+     "num": "127",
+     "name": "McKinley Nigh",
+     "team": "Midwest Racing",
+     "total": "180.500",
+     "places": [
+      {
+       "m": "300",
+       "place": "2"
+      },
+      {
+       "m": "500",
+       "place": "2"
+      },
+      {
+       "m": "700",
+       "place": "3"
+      }
+     ]
+    },
+    {
+     "rank": "3",
+     "num": "303",
+     "name": "Koralyne Hick",
+     "team": "Midwest Racing",
+     "total": "112.250",
+     "places": [
+      {
+       "m": "300",
+       "place": "DQ"
+      },
+      {
+       "m": "500",
+       "place": "3"
+      },
+      {
+       "m": "700",
+       "place": "2"
+      }
+     ]
+    },
+    {
+     "rank": "4",
+     "num": "302",
+     "name": "Kenishka Sudhakar",
+     "team": "Midwest Racing",
+     "total": "70.125",
+     "places": [
+      {
+       "m": "300",
+       "place": "3"
+      },
+      {
+       "m": "500",
+       "place": "4"
+      },
+      {
+       "m": "700",
+       "place": "4"
+      }
+     ]
+    },
+    {
+     "rank": "5",
+     "num": "309",
+     "name": "Masiey Hughes-Reece",
+     "team": "Midwest Racing",
+     "total": "16.000",
+     "places": [
+      {
+       "m": "300",
+       "place": "4"
+      },
+      {
+       "m": "500",
+       "place": "5"
+      },
+      {
+       "m": "700",
+       "place": "5"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "division": "Quad Elementary Boys",
+   "skaters": [
+    {
+     "rank": "1",
+     "num": "452",
+     "name": "Joshua Brown",
+     "team": "Synergy Speed Skati1n:g11.897",
+     "total": "292.750",
+     "places": [
+      {
+       "m": "300",
+       "place": "2"
+      },
+      {
+       "m": "500",
+       "place": "1"
+      },
+      {
+       "m": "700",
+       "place": "1"
+      }
+     ]
+    },
+    {
+     "rank": "2",
+     "num": "497",
+     "name": "Matthew Towne II",
+     "team": "Midwest Racing",
+     "total": "248.500",
+     "places": [
+      {
+       "m": "300",
+       "place": "1"
+      },
+      {
+       "m": "500",
+       "place": "2"
+      },
+      {
+       "m": "700",
+       "place": "2"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "division": "Quad Freshman Girls",
+   "skaters": [
+    {
+     "rank": "1",
+     "num": "453",
+     "name": "Kennedy Layton",
+     "team": "Carolina Gold Rush",
+     "total": "252.750",
+     "places": [
+      {
+       "m": "300",
+       "place": "1"
+      },
+      {
+       "m": "500",
+       "place": "1"
+      },
+      {
+       "m": "1000",
+       "place": "3"
+      }
+     ]
+    },
+    {
+     "rank": "2",
+     "num": "129",
+     "name": "Lilliann Salizar",
+     "team": "Piedmont/Omni",
+     "total": "172.000",
+     "places": [
+      {
+       "m": "300",
+       "place": "2"
+      },
+      {
+       "m": "500",
+       "place": "6"
+      },
+      {
+       "m": "1000",
+       "place": "1"
+      }
+     ]
+    },
+    {
+     "rank": "3",
+     "num": "402",
+     "name": "Skyler Lopez",
+     "team": "Inside Edge Racing",
+     "total": "128.250",
+     "places": [
+      {
+       "m": "300",
+       "place": "4"
+      },
+      {
+       "m": "500",
+       "place": "3"
+      },
+      {
+       "m": "1000",
+       "place": "2"
+      }
+     ]
+    },
+    {
+     "rank": "4",
+     "num": "299",
+     "name": "Journie Warkentin",
+     "team": "Midwest Racing",
+     "total": "98.500",
+     "places": [
+      {
+       "m": "500",
+       "place": "2"
+      },
+      {
+       "m": "1000",
+       "place": "4"
+      }
+     ]
+    },
+    {
+     "rank": "5",
+     "num": "369",
+     "name": "Emery Schamberg",
+     "team": "Piedmont/Omni",
+     "total": "52.125",
+     "places": [
+      {
+       "m": "300",
+       "place": "3"
+      },
+      {
+       "m": "500",
+       "place": "4"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "division": "Quad Freshman Boys",
+   "skaters": [
+    {
+     "rank": "1",
+     "num": "298",
+     "name": "Josef Steven",
+     "team": "Midwest Racing",
+     "total": "324.750",
+     "places": [
+      {
+       "m": "300",
+       "place": "1"
+      },
+      {
+       "m": "500",
+       "place": "1"
+      },
+      {
+       "m": "1000",
+       "place": "1"
+      }
+     ]
+    },
+    {
+     "rank": "2",
+     "num": "286",
+     "name": "Brentley Berg-Fudge",
+     "team": "Midwest Racing",
+     "total": "144.500",
+     "places": [
+      {
+       "m": "300",
+       "place": "2"
+      },
+      {
+       "m": "500",
+       "place": "2"
+      },
+      {
+       "m": "1000",
+       "place": "DQ"
+      }
+     ]
+    },
+    {
+     "rank": "3",
+     "num": "39",
+     "name": "Landon Thomas",
+     "team": "CC Speed",
+     "total": "108.125",
+     "places": [
+      {
+       "m": "300",
+       "place": "4"
+      },
+      {
+       "m": "500",
+       "place": "4"
+      },
+      {
+       "m": "1000",
+       "place": "2"
+      }
+     ]
+    },
+    {
+     "rank": "4",
+     "num": "37",
+     "name": "Brayden Thomas",
+     "team": "CC Speed",
+     "total": "72.250",
+     "places": [
+      {
+       "m": "300",
+       "place": "3"
+      },
+      {
+       "m": "500",
+       "place": "3"
+      },
+      {
+       "m": "1000",
+       "place": "DQ"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "division": "Quad Junior Ladies",
+   "skaters": [
+    {
+     "rank": "1",
+     "num": "40",
+     "name": "Isabella Salazar",
+     "team": "Piedmont/Omni",
+     "total": "292.750",
+     "places": [
+      {
+       "m": "500",
+       "place": "2"
+      },
+      {
+       "m": "1000",
+       "place": "1"
+      },
+      {
+       "m": "1500",
+       "place": "1"
+      }
+     ]
+    },
+    {
+     "rank": "2",
+     "num": "304",
+     "name": "Laney Stevens",
+     "team": "Midwest Racing",
+     "total": "212.500",
+     "places": [
+      {
+       "m": "500",
+       "place": "1"
+      },
+      {
+       "m": "1000",
+       "place": "2"
+      },
+      {
+       "m": "1500",
+       "place": "3"
+      }
+     ]
+    },
+    {
+     "rank": "3",
+     "num": "360",
+     "name": "Victoria Phelps",
+     "team": "Carolina Gold Rush",
+     "total": "144.250",
+     "places": [
+      {
+       "m": "500",
+       "place": "3"
+      },
+      {
+       "m": "1000",
+       "place": "3"
+      },
+      {
+       "m": "1500",
+       "place": "2"
+      }
+     ]
+    },
+    {
+     "rank": "4",
+     "num": "311",
+     "name": "Milla Pham",
+     "team": "Midwest Racing",
+     "total": "54.125",
+     "places": [
+      {
+       "m": "500",
+       "place": "4"
+      },
+      {
+       "m": "1000",
+       "place": "4"
+      },
+      {
+       "m": "1500",
+       "place": "4"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "division": "Quad Junior Men",
+   "skaters": [
+    {
+     "rank": "1",
+     "num": "491",
+     "name": "Issac Armstrong",
+     "team": "Badger State Racing",
+     "total": "324.750",
+     "places": [
+      {
+       "m": "500",
+       "place": "1"
+      },
+      {
+       "m": "1000",
+       "place": "1"
+      },
+      {
+       "m": "1500",
+       "place": "1"
+      }
+     ]
+    },
+    {
+     "rank": "2",
+     "num": "358",
+     "name": "Alexander Rucker",
+     "team": "Carolina Gold Rush",
+     "total": "216.500",
+     "places": [
+      {
+       "m": "500",
+       "place": "2"
+      },
+      {
+       "m": "1000",
+       "place": "2"
+      },
+      {
+       "m": "1500",
+       "place": "2"
+      }
+     ]
+    },
+    {
+     "rank": "3",
+     "num": "288",
+     "name": "Damion See",
+     "team": "Midwest Racing",
+     "total": "108.250",
+     "places": [
+      {
+       "m": "500",
+       "place": "3"
+      },
+      {
+       "m": "1000",
+       "place": "3"
+      },
+      {
+       "m": "1500",
+       "place": "3"
+      }
+     ]
+    },
+    {
+     "rank": "4",
+     "num": "444",
+     "name": "Logan McCombs",
+     "team": "Premier Racing",
+     "total": "38.125",
+     "places": [
+      {
+       "m": "1000",
+       "place": "4"
+      },
+      {
+       "m": "1500",
+       "place": "4"
+      }
+     ]
+    },
+    {
+     "rank": "5",
+     "num": "355",
+     "name": "Daniel Handzic",
+     "team": "SS2-Wolverines",
+     "total": "16.000",
+     "places": [
+      {
+       "m": "500",
+       "place": "4"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "division": "Quad Senior Ladies",
+   "skaters": [
+    {
+     "rank": "1",
+     "num": "368",
+     "name": "Destanie Vileno",
+     "team": "Piedmont/Omni",
+     "total": "324.750",
+     "places": [
+      {
+       "m": "500",
+       "place": "1"
+      },
+      {
+       "m": "1000",
+       "place": "1"
+      },
+      {
+       "m": "2000",
+       "place": "1"
+      }
+     ]
+    },
+    {
+     "rank": "2",
+     "num": "427",
+     "name": "Elizabeth Dehlinger",
+     "team": "Badger State Racing",
+     "total": "216.500",
+     "places": [
+      {
+       "m": "500",
+       "place": "2"
+      },
+      {
+       "m": "1000",
+       "place": "2"
+      },
+      {
+       "m": "2000",
+       "place": "2"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "division": "Quad Senior Men",
+   "skaters": [
+    {
+     "rank": "1",
+     "num": "490",
+     "name": "Jayden Kesler",
+     "team": "Premier Racing",
+     "total": "288.750",
+     "places": [
+      {
+       "m": "500",
+       "place": "1"
+      },
+      {
+       "m": "1500",
+       "place": "1"
+      },
+      {
+       "m": "3000",
+       "place": "2"
+      }
+     ]
+    },
+    {
+     "rank": "2",
+     "num": "494",
+     "name": "Caiden Haynes",
+     "team": "Midwest Racing",
+     "total": "252.500",
+     "places": [
+      {
+       "m": "500",
+       "place": "2"
+      },
+      {
+       "m": "1500",
+       "place": "2"
+      },
+      {
+       "m": "3000",
+       "place": "1"
+      }
+     ]
+    },
+    {
+     "rank": "3",
+     "num": "442",
+     "name": "Richard Nance",
+     "team": "Piedmont/Omni",
+     "total": "108.250",
+     "places": [
+      {
+       "m": "500",
+       "place": "3"
+      },
+      {
+       "m": "1500",
+       "place": "3"
+      },
+      {
+       "m": "3000",
+       "place": "3"
+      }
+     ]
+    },
+    {
+     "rank": "4",
+     "num": "428",
+     "name": "Lucas Kisiolek",
+     "team": "Badger State Racing",
+     "total": "54.125",
+     "places": [
+      {
+       "m": "500",
+       "place": "4"
+      },
+      {
+       "m": "1500",
+       "place": "4"
+      },
+      {
+       "m": "3000",
+       "place": "4"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "division": "Quad Classic Ladies",
+   "skaters": [
+    {
+     "rank": "1",
+     "num": "437",
+     "name": "Stephanie Smith",
+     "team": "Premier Racing",
+     "total": "284.500",
+     "places": [
+      {
+       "m": "500",
+       "place": "1"
+      },
+      {
+       "m": "1000",
+       "place": "2"
+      },
+      {
+       "m": "2000",
+       "place": "1"
+      }
+     ]
+    },
+    {
+     "rank": "2",
+     "num": "93",
+     "name": "Kimberly Dreath",
+     "team": "Texas Speed Club2:34.697",
+     "total": "256.750",
+     "places": [
+      {
+       "m": "500",
+       "place": "2"
+      },
+      {
+       "m": "1000",
+       "place": "1"
+      },
+      {
+       "m": "2000",
+       "place": "2"
+      }
+     ]
+    },
+    {
+     "rank": "3",
+     "num": "431",
+     "name": "Amy Torpey",
+     "team": "Premier Racing",
+     "total": "108.250",
+     "places": [
+      {
+       "m": "500",
+       "place": "3"
+      },
+      {
+       "m": "1000",
+       "place": "3"
+      },
+      {
+       "m": "2000",
+       "place": "3"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "division": "Quad Classic Men",
+   "skaters": [
+    {
+     "rank": "1",
+     "num": "121",
+     "name": "Francisco Ramirez",
+     "team": "Frenchtown Spe2e:d07.319",
+     "total": "324.750",
+     "places": [
+      {
+       "m": "500",
+       "place": "1"
+      },
+      {
+       "m": "1000",
+       "place": "1"
+      },
+      {
+       "m": "2000",
+       "place": "1"
+      }
+     ]
+    },
+    {
+     "rank": "2",
+     "num": "365",
+     "name": "Branden Willard",
+     "team": "Piedmont/Omni",
+     "total": "216.500",
+     "places": [
+      {
+       "m": "500",
+       "place": "2"
+      },
+      {
+       "m": "1000",
+       "place": "2"
+      },
+      {
+       "m": "2000",
+       "place": "2"
+      }
+     ]
+    },
+    {
+     "rank": "3",
+     "num": "41",
+     "name": "Donald Thomas",
+     "team": "Oaks Skating Club",
+     "total": "108.250",
+     "places": [
+      {
+       "m": "500",
+       "place": "3"
+      },
+      {
+       "m": "1000",
+       "place": "3"
+      },
+      {
+       "m": "2000",
+       "place": "3"
+      }
+     ]
+    },
+    {
+     "rank": "4",
+     "num": "224",
+     "name": "Nick Chrissan",
+     "team": "Stardust Racing",
+     "total": "54.125",
+     "places": [
+      {
+       "m": "500",
+       "place": "4"
+      },
+      {
+       "m": "1000",
+       "place": "4"
+      },
+      {
+       "m": "2000",
+       "place": "4"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "division": "Quad Masters Ladies",
+   "skaters": [
+    {
+     "rank": "1",
+     "num": "376",
+     "name": "Jennifer Meyer",
+     "team": "Piedmont/Omni",
+     "total": "324.750",
+     "places": [
+      {
+       "m": "300",
+       "place": "1"
+      },
+      {
+       "m": "700",
+       "place": "1"
+      },
+      {
+       "m": "1000",
+       "place": "1"
+      }
+     ]
+    },
+    {
+     "rank": "2",
+     "num": "500",
+     "name": "Jessica Jacobson",
+     "team": "Midwest Racing",
+     "total": "216.500",
+     "places": [
+      {
+       "m": "300",
+       "place": "2"
+      },
+      {
+       "m": "700",
+       "place": "2"
+      },
+      {
+       "m": "1000",
+       "place": "2"
+      }
+     ]
+    },
+    {
+     "rank": "3",
+     "num": "319",
+     "name": "Shannon Degenhardt",
+     "team": "Midwest Racing",
+     "total": "108.250",
+     "places": [
+      {
+       "m": "300",
+       "place": "3"
+      },
+      {
+       "m": "700",
+       "place": "3"
+      },
+      {
+       "m": "1000",
+       "place": "3"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "division": "Quad Masters Men",
+   "skaters": [
+    {
+     "rank": "1",
+     "num": "43",
+     "name": "William Culhane",
+     "team": "California Speed",
+     "total": "324.750",
+     "places": [
+      {
+       "m": "300",
+       "place": "1"
+      },
+      {
+       "m": "700",
+       "place": "1"
+      },
+      {
+       "m": "1000",
+       "place": "1"
+      }
+     ]
+    },
+    {
+     "rank": "2",
+     "num": "160",
+     "name": "Tony Jones",
+     "team": "Diamond State Racing",
+     "total": "216.500",
+     "places": [
+      {
+       "m": "300",
+       "place": "2"
+      },
+      {
+       "m": "700",
+       "place": "2"
+      },
+      {
+       "m": "1000",
+       "place": "2"
+      }
+     ]
+    },
+    {
+     "rank": "3",
+     "num": "451",
+     "name": "Matthew Mason",
+     "team": "Synergy Speed Skating",
+     "total": "108.250",
+     "places": [
+      {
+       "m": "300",
+       "place": "3"
+      },
+      {
+       "m": "700",
+       "place": "3"
+      },
+      {
+       "m": "1000",
+       "place": "3"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "division": "Quad Veteran Ladies",
+   "skaters": [
+    {
+     "rank": "1",
+     "num": "45",
+     "name": "Jennifer Foster",
+     "team": "Texas Speed Club No Time",
+     "total": "234.750",
+     "places": [
+      {
+       "m": "300",
+       "place": "1"
+      },
+      {
+       "m": "500",
+       "place": "1"
+      },
+      {
+       "m": "700",
+       "place": "4"
+      }
+     ]
+    },
+    {
+     "rank": "2",
+     "num": "96",
+     "name": "Jennifer Keppler",
+     "team": "Texas Speed Club",
+     "total": "180.250",
+     "places": [
+      {
+       "m": "300",
+       "place": "3"
+      },
+      {
+       "m": "500",
+       "place": "3"
+      },
+      {
+       "m": "700",
+       "place": "1"
+      }
+     ]
+    },
+    {
+     "rank": "3",
+     "num": "409",
+     "name": "Robbin Joynes",
+     "team": "DFW Speed",
+     "total": "156.125",
+     "places": [
+      {
+       "m": "300",
+       "place": "2"
+      },
+      {
+       "m": "500",
+       "place": "4"
+      },
+      {
+       "m": "700",
+       "place": "2"
+      }
+     ]
+    },
+    {
+     "rank": "4",
+     "num": "230",
+     "name": "Tracy Putnam",
+     "team": "Stardust Racing",
+     "total": "132.500",
+     "places": [
+      {
+       "m": "300",
+       "place": "4"
+      },
+      {
+       "m": "500",
+       "place": "2"
+      },
+      {
+       "m": "700",
+       "place": "3"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "division": "Quad Veteran Men",
+   "skaters": [
+    {
+     "rank": "1",
+     "num": "370",
+     "name": "Eric Schamberg",
+     "team": "Piedmont/Omni No Time",
+     "total": "324.750",
+     "places": [
+      {
+       "m": "300",
+       "place": "1"
+      },
+      {
+       "m": "500",
+       "place": "1"
+      },
+      {
+       "m": "700",
+       "place": "1"
+      }
+     ]
+    },
+    {
+     "rank": "2",
+     "num": "95",
+     "name": "Damon Atherton",
+     "team": "Texas Speed Club",
+     "total": "144.250",
+     "places": [
+      {
+       "m": "300",
+       "place": "3"
+      },
+      {
+       "m": "500",
+       "place": "3"
+      },
+      {
+       "m": "700",
+       "place": "2"
+      }
+     ]
+    },
+    {
+     "rank": "3",
+     "num": "389",
+     "name": "Trampass Butcher",
+     "team": "Piedmont/Omni",
+     "total": "120.125",
+     "places": [
+      {
+       "m": "300",
+       "place": "2"
+      },
+      {
+       "m": "500",
+       "place": "4"
+      },
+      {
+       "m": "700",
+       "place": "3"
+      }
+     ]
+    },
+    {
+     "rank": "4",
+     "num": "496",
+     "name": "Brian Carpenter",
+     "team": "Premier Racing",
+     "total": "96.500",
+     "places": [
+      {
+       "m": "300",
+       "place": "4"
+      },
+      {
+       "m": "500",
+       "place": "2"
+      },
+      {
+       "m": "700",
+       "place": ""
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "division": "Quad Esquire Ladies",
+   "skaters": [
+    {
+     "rank": "1",
+     "num": "47",
+     "name": "Rebecca Caruso",
+     "team": "Texas Speed Club",
+     "total": "324.750",
+     "places": [
+      {
+       "m": "300",
+       "place": "1"
+      },
+      {
+       "m": "500",
+       "place": "1"
+      },
+      {
+       "m": "700",
+       "place": "1"
+      }
+     ]
+    },
+    {
+     "rank": "2",
+     "num": "98",
+     "name": "Starr Heckel",
+     "team": "DFW Speed",
+     "total": "176.250",
+     "places": [
+      {
+       "m": "300",
+       "place": "2"
+      },
+      {
+       "m": "500",
+       "place": "3"
+      },
+      {
+       "m": "700",
+       "place": "2"
+      }
+     ]
+    },
+    {
+     "rank": "3",
+     "num": "406",
+     "name": "Lisa Walker",
+     "team": "DFW Speed",
+     "total": "148.500",
+     "places": [
+      {
+       "m": "300",
+       "place": "3"
+      },
+      {
+       "m": "500",
+       "place": "2"
+      },
+      {
+       "m": "700",
+       "place": "3"
+      }
+     ]
+    },
+    {
+     "rank": "4",
+     "num": "388",
+     "name": "Tammy Lawson",
+     "team": "Piedmont/Omni",
+     "total": "54.125",
+     "places": [
+      {
+       "m": "300",
+       "place": "4"
+      },
+      {
+       "m": "500",
+       "place": "4"
+      },
+      {
+       "m": "700",
+       "place": "4"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "division": "Quad Esquire Men",
+   "skaters": [
+    {
+     "rank": "1",
+     "num": "97",
+     "name": "Stacy Suter",
+     "team": "Piedmont/Omni",
+     "total": "292.750",
+     "places": [
+      {
+       "m": "300",
+       "place": "2"
+      },
+      {
+       "m": "500",
+       "place": "1"
+      },
+      {
+       "m": "700",
+       "place": "1"
+      }
+     ]
+    },
+    {
+     "rank": "2",
+     "num": "134",
+     "name": "Danny Willard",
+     "team": "Piedmont/Omni",
+     "total": "248.500",
+     "places": [
+      {
+       "m": "300",
+       "place": "1"
+      },
+      {
+       "m": "500",
+       "place": "2"
+      },
+      {
+       "m": "700",
+       "place": "2"
+      }
+     ]
+    },
+    {
+     "rank": "3",
+     "num": "495",
+     "name": "James Albrecht",
+     "team": "Texas Speed Club",
+     "total": "88.125",
+     "places": [
+      {
+       "m": "300",
+       "place": "3"
+      },
+      {
+       "m": "500",
+       "place": "4"
+      },
+      {
+       "m": "700",
+       "place": "3"
+      }
+     ]
+    },
+    {
+     "rank": "4",
+     "num": "498",
+     "name": "Brian Meyers",
+     "team": "Texas Speed Club",
+     "total": "74.250",
+     "places": [
+      {
+       "m": "300",
+       "place": "4"
+      },
+      {
+       "m": "500",
+       "place": "3"
+      },
+      {
+       "m": "700",
+       "place": "4"
       }
      ]
     }

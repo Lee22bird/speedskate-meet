@@ -3,7 +3,14 @@ sys.path.insert(0, os.path.dirname(__file__))
 from parse_heats import parse_sheet
 from relay_parse import parse_relay_sheet
 
-ROOT = "/Users/leebird/Documents/GitHub/IDN 2026"
+# Source drops, OLDEST -> NEWEST. A later drop overrides an earlier one per
+# (division, distance, phase), so the final-results export wins — while a sheet
+# that exists ONLY in an earlier drop (e.g. a heat the re-export dropped) is
+# still kept. Add the next drop to the end of this list.
+ROOTS = [
+    "/Users/leebird/Documents/GitHub/IDN 2026",
+    "/Users/leebird/Documents/GitHub/IDN 2026 #2",
+]
 SCHED_JS = "/Users/leebird/Documents/GitHub/speedskate-meet/data/nationals2026.js"
 OUT = "/Users/leebird/Documents/GitHub/speedskate-meet/data/nationals_heats.js"
 
@@ -37,10 +44,10 @@ def round_label(rnd):
     if r == "heat": return f"Heat {rnd['number']}".strip()
     return r.capitalize()
 
-def build_lut_for(disc, top):
+def build_lut_for(disc, top, src_root):
     # key: discipline|division_lower|meters -> {heats:[rounds], semis:[rounds], final:[rounds]}
     lut = {}
-    base = os.path.join(ROOT, top)
+    base = os.path.join(src_root, top)
     if not os.path.isdir(base):
         return lut
     for pdf in glob.glob(os.path.join(base, "**", "*.pdf"), recursive=True):
@@ -70,20 +77,20 @@ def build_lut_for(disc, top):
             b[k].sort(key=lambda r: r["label"])
     return lut
 
-def _relay_raw(top):
+def _relay_raw(top, src_root, disc="inline"):
     # Parse "{top}/00 Relays" into key -> {heats,semis,final} (all rounds, no
     # finalize). The PDF header division ("Senior 2 Men", "Masters 2 Ladies", …)
     # + meters matches the schedule's relay events. Each TEAM is one row:
     # club+color as the name, member names as the muted detail.
     lut = {}
-    root = os.path.join(ROOT, top, "00 Relays")
+    root = os.path.join(src_root, top, "00 Relays")
     if not os.path.isdir(root):
         return lut
     for pdf in glob.glob(os.path.join(root, "**", "*.pdf"), recursive=True):
         p = parse_relay_sheet(pdf)
         if not p["division"] or not p["rounds"]:
             continue
-        key = f"inline|{p['division'].lower().strip()}|{p['meters']}"
+        key = f"{disc}|{p['division'].lower().strip()}|{p['meters']}"
         bucket = lut.setdefault(key, {"heats": [], "semis": [], "final": []})
         for rnd in p["rounds"]:
             lab = round_label(rnd)
@@ -104,13 +111,22 @@ def build_relay_lut():
     # Merge oldest->newest so released results override earlier lineups, exactly
     # like the individual races.
     merged = {}
-    for top in ("Inlines", "Inlines2", "Inlines3", "Inlines4", "Inlines5", "Inlines6", "Inlines7", "Inlines8"):
-        newer = _relay_raw(top)
-        for key, batch in newer.items():
+
+    def absorb(batch_lut):
+        for key, batch in batch_lut.items():
             base = merged.setdefault(key, {"heats": [], "semis": [], "final": []})
             for phase, rounds in batch.items():
                 if rounds:
                     base[phase] = rounds
+
+    for src_root in ROOTS:
+        for top in ("Inlines", "Inlines2", "Inlines3", "Inlines4", "Inlines5", "Inlines6", "Inlines7", "Inlines8"):
+            absorb(_relay_raw(top, src_root, "inline"))
+        # QUAD relays live in "Quads/00 Relays". They were previously never parsed:
+        # build_lut_for() skips any path containing "relay", and this loop only
+        # walked Inlines*. They also must key off the quad discipline, since
+        # build() looks up "quad|<division>|<meters>" on quad days.
+        absorb(_relay_raw("Quads", src_root, "quad"))
     lut = merged
     for b in lut.values():
         if any(r.get("results") for r in b["final"]):
@@ -140,17 +156,24 @@ def build_lineups():
     # Inline precedence (oldest -> newest): Inlines (base) < Inlines2 < ... < Inlines8.
     # Each newer batch wins per (division, distance, phase) where it has data,
     # so the latest final RESULTS override the earlier pre-race lineups. Quad from Quads.
-    inline = build_lut_for("inline", "Inlines")
-    for top in ("Inlines2", "Inlines3", "Inlines4", "Inlines5", "Inlines6", "Inlines7", "Inlines8"):
-        newer = build_lut_for("inline", top)
-        for key, batch in newer.items():
-            base = inline.setdefault(key, {"heats": [], "semis": [], "final": []})
+    def merge_into(dest, batch_lut):
+        for key, batch in batch_lut.items():
+            base = dest.setdefault(key, {"heats": [], "semis": [], "final": []})
             for phase, rounds in batch.items():
                 if rounds:
                     base[phase] = rounds
+
+    inline, quad = {}, {}
+    for src_root in ROOTS:
+        for top in ("Inlines", "Inlines2", "Inlines3", "Inlines4", "Inlines5", "Inlines6", "Inlines7", "Inlines8"):
+            merge_into(inline, build_lut_for("inline", top, src_root))
+        # Quads are merged the same way (not a wholesale replace) so a quad heat
+        # present only in an earlier drop survives a later re-export.
+        merge_into(quad, build_lut_for("quad", "Quads", src_root))
+
     lut = {}
     lut.update(inline)
-    lut.update(build_lut_for("quad", "Quads"))
+    lut.update(quad)
     lut.update(build_relay_lut())  # relay keys ("senior 2 men") don't collide with individual
     return lut
 

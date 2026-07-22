@@ -18273,22 +18273,22 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "skaters": [
           {
            "helmet": "306",
            "name": "Leeanna Gonser",
            "team": "Midwest Racing",
            "scratched": false,
-           "place": "",
-           "time": ""
+           "place": "1",
+           "time": "1:05.738"
           },
           {
            "helmet": "297",
            "name": "Jordanna Gonser",
            "team": "Midwest Racing",
            "scratched": false,
-           "place": "",
+           "place": "2",
            "time": ""
           }
          ]
@@ -18305,30 +18305,22 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "skaters": [
-          {
-           "helmet": "309",
-           "name": "Masiey Hughes-Reece",
-           "team": "Midwest Racing",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
           {
            "helmet": "90",
            "name": "Jabree Scott",
            "team": "Midwest Racing",
            "scratched": false,
-           "place": "",
-           "time": ""
+           "place": "1",
+           "time": "1:32.463"
           },
           {
-           "helmet": "302",
-           "name": "Kenishka Sudhakar",
+           "helmet": "303",
+           "name": "Koralyne Hick",
            "team": "Midwest Racing",
            "scratched": false,
-           "place": "",
+           "place": "2",
            "time": ""
           },
           {
@@ -18336,15 +18328,23 @@ module.exports = {
            "name": "McKinley Nigh",
            "team": "Midwest Racing",
            "scratched": false,
-           "place": "",
+           "place": "3",
            "time": ""
           },
           {
-           "helmet": "303",
-           "name": "Koralyne Hick",
+           "helmet": "302",
+           "name": "Kenishka Sudhakar",
            "team": "Midwest Racing",
            "scratched": false,
-           "place": "",
+           "place": "4",
+           "time": ""
+          },
+          {
+           "helmet": "309",
+           "name": "Masiey Hughes-Reece",
+           "team": "Midwest Racing",
+           "scratched": false,
+           "place": "5",
            "time": ""
           }
          ]
@@ -18361,22 +18361,22 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "skaters": [
+          {
+           "helmet": "452",
+           "name": "Joshua Brown",
+           "team": "Synergy Speed Skati1n:g36.002",
+           "scratched": false,
+           "place": "1",
+           "time": ""
+          },
           {
            "helmet": "497",
            "name": "Matthew Towne II",
            "team": "Midwest Racing",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "452",
-           "name": "Joshua Brown",
-           "team": "Synergy Speed Skating",
-           "scratched": false,
-           "place": "",
+           "place": "2",
            "time": ""
           }
          ]
@@ -18391,63 +18391,32 @@ module.exports = {
        "qualify": "Final",
        "rounds": [
         {
-         "label": "Heat 1",
-         "toQualify": "3",
-         "results": false,
+         "label": "Final",
+         "toQualify": "",
+         "results": true,
          "skaters": [
-          {
-           "helmet": "453",
-           "name": "Kennedy Layton",
-           "team": "Carolina Gold Rush",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "356",
-           "name": "Kaidyn Handzic",
-           "team": "SS2-Wolverines",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "320",
-           "name": "Skyler Kirkhart",
-           "team": "Midwest Racing",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
           {
            "helmet": "129",
            "name": "Lilliann Salizar",
            "team": "Piedmont/Omni",
            "scratched": false,
-           "place": "",
+           "place": "1",
+           "time": "2:07.278"
+          },
+          {
+           "helmet": "402",
+           "name": "Skyler Lopez",
+           "team": "Inside Edge Racing",
+           "scratched": false,
+           "place": "2",
            "time": ""
           },
           {
-           "helmet": "441",
-           "name": "Bree Campbell",
-           "team": "Synergy Speed Skating",
+           "helmet": "453",
+           "name": "Kennedy Layton",
+           "team": "Carolina Gold Rush",
            "scratched": false,
-           "place": "",
-           "time": ""
-          }
-         ]
-        },
-        {
-         "label": "Heat 2",
-         "toQualify": "3",
-         "results": false,
-         "skaters": [
-          {
-           "helmet": "434",
-           "name": "Josefina Orines",
-           "team": "CC Speed",
-           "scratched": false,
-           "place": "",
+           "place": "3",
            "time": ""
           },
           {
@@ -18455,31 +18424,23 @@ module.exports = {
            "name": "Journie Warkentin",
            "team": "Midwest Racing",
            "scratched": false,
-           "place": "",
+           "place": "4",
            "time": ""
           },
           {
-           "helmet": "313",
-           "name": "Patricia Balirigi",
+           "helmet": "434",
+           "name": "Josefina Orines",
+           "team": "CC Speed",
+           "scratched": false,
+           "place": "5",
+           "time": ""
+          },
+          {
+           "helmet": "320",
+           "name": "Skyler Kirkhart",
            "team": "Midwest Racing",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "369",
-           "name": "Emery Schamberg",
-           "team": "Piedmont/Omni",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "402",
-           "name": "Skyler Lopez",
-           "team": "Inside Edge Racing",
-           "scratched": false,
-           "place": "",
+           "place": "6",
            "time": ""
           }
          ]
@@ -18496,36 +18457,36 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "skaters": [
           {
-           "helmet": "37",
-           "name": "Brayden Thomas",
-           "team": "CC Speed",
+           "helmet": "298",
+           "name": "Josef Steven",
+           "team": "Midwest Racing",
            "scratched": false,
-           "place": "",
-           "time": ""
+           "place": "1",
+           "time": "2:10.439"
           },
           {
            "helmet": "39",
            "name": "Landon Thomas",
            "team": "CC Speed",
            "scratched": false,
-           "place": "",
+           "place": "2",
            "time": ""
           },
           {
            "helmet": "286",
            "name": "Brentley Berg-Fudge",
-           "team": "Midwest Racing",
+           "team": "Midwest Racing Riding Out/Riding Out/Riding Out",
            "scratched": false,
            "place": "",
            "time": ""
           },
           {
-           "helmet": "298",
-           "name": "Josef Steven",
-           "team": "Midwest Racing",
+           "helmet": "37",
+           "name": "Brayden Thomas",
+           "team": "CC Speed Did Not Finish",
            "scratched": false,
            "place": "",
            "time": ""
@@ -18544,22 +18505,22 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "skaters": [
+          {
+           "helmet": "40",
+           "name": "Isabella Salazar",
+           "team": "Piedmont/Omni",
+           "scratched": false,
+           "place": "1",
+           "time": "3:16.569"
+          },
           {
            "helmet": "360",
            "name": "Victoria Phelps",
            "team": "Carolina Gold Rush",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "311",
-           "name": "Milla Pham",
-           "team": "Midwest Racing",
-           "scratched": false,
-           "place": "",
+           "place": "2",
            "time": ""
           },
           {
@@ -18567,15 +18528,15 @@ module.exports = {
            "name": "Laney Stevens",
            "team": "Midwest Racing",
            "scratched": false,
-           "place": "",
+           "place": "3",
            "time": ""
           },
           {
-           "helmet": "40",
-           "name": "Isabella Salazar",
-           "team": "Piedmont/Omni",
+           "helmet": "311",
+           "name": "Milla Pham",
+           "team": "Midwest Racing",
            "scratched": false,
-           "place": "",
+           "place": "4",
            "time": ""
           }
          ]
@@ -18590,71 +18551,24 @@ module.exports = {
        "qualify": "Final",
        "rounds": [
         {
-         "label": "Heat 1",
-         "toQualify": "3",
-         "results": false,
+         "label": "Final",
+         "toQualify": "",
+         "results": true,
          "skaters": [
-          {
-           "helmet": "430",
-           "name": "Alexander Rucker",
-           "team": "Carolina Gold Rush",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
           {
            "helmet": "491",
            "name": "Issac Armstrong",
-           "team": "Badger State Racing",
+           "team": "Badger State Racin3g:10.582",
            "scratched": false,
-           "place": "",
+           "place": "1",
            "time": ""
           },
           {
-           "helmet": "292",
-           "name": "Gavin Howe",
-           "team": "Midwest Racing",
+           "helmet": "358",
+           "name": "Alexander Rucker",
+           "team": "Carolina Gold Rush",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "300",
-           "name": "Karan Sudhakar",
-           "team": "Midwest Racing",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          }
-         ]
-        },
-        {
-         "label": "Heat 2",
-         "toQualify": "3",
-         "results": false,
-         "skaters": [
-          {
-           "helmet": "444",
-           "name": "Logan McCombs",
-           "team": "Premier Racing",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "355",
-           "name": "Daniel Handzic",
-           "team": "SS2-Wolverines",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "435",
-           "name": "Richie Cabrera",
-           "team": "Midwest Racing",
-           "scratched": false,
-           "place": "",
+           "place": "2",
            "time": ""
           },
           {
@@ -18662,7 +18576,31 @@ module.exports = {
            "name": "Damion See",
            "team": "Midwest Racing",
            "scratched": false,
-           "place": "",
+           "place": "3",
+           "time": ""
+          },
+          {
+           "helmet": "444",
+           "name": "Logan McCombs",
+           "team": "Premier Racing",
+           "scratched": false,
+           "place": "4",
+           "time": ""
+          },
+          {
+           "helmet": "295",
+           "name": "Gavin Howe",
+           "team": "Midwest Racing",
+           "scratched": false,
+           "place": "5",
+           "time": ""
+          },
+          {
+           "helmet": "435",
+           "name": "Richie Cabrera",
+           "team": "Midwest Racing",
+           "scratched": false,
+           "place": "6",
            "time": ""
           }
          ]
@@ -18679,22 +18617,22 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "skaters": [
-          {
-           "helmet": "427",
-           "name": "Elizabeth Deglinger",
-           "team": "Badger State Racing",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
           {
            "helmet": "368",
            "name": "Destanie Vileno",
            "team": "Piedmont/Omni",
            "scratched": false,
-           "place": "",
+           "place": "1",
+           "time": "4:43.844"
+          },
+          {
+           "helmet": "427",
+           "name": "Elizabeth Deglinger",
+           "team": "Badger State Racing",
+           "scratched": false,
+           "place": "2",
            "time": ""
           }
          ]
@@ -18711,46 +18649,22 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "skaters": [
-          {
-           "helmet": "490",
-           "name": "Jayden Kesler",
-           "team": "Premier Racing",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "428",
-           "name": "Lucas Kisiolek",
-           "team": "Badger State Racing",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "493",
-           "name": "Christopher Cazares",
-           "team": "CC Speed",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
           {
            "helmet": "494",
            "name": "Caiden Haynes",
            "team": "Midwest Racing",
            "scratched": false,
-           "place": "",
-           "time": ""
+           "place": "1",
+           "time": "6:37.153"
           },
           {
-           "helmet": "373",
-           "name": "Ethan Valance",
-           "team": "Piedmont/Omni",
+           "helmet": "490",
+           "name": "Jayden Kesler",
+           "team": "Premier Racing",
            "scratched": false,
-           "place": "",
+           "place": "2",
            "time": ""
           },
           {
@@ -18758,15 +18672,31 @@ module.exports = {
            "name": "Richard Nance",
            "team": "Piedmont/Omni",
            "scratched": false,
-           "place": "",
+           "place": "3",
            "time": ""
           },
           {
-           "helmet": "121",
-           "name": "Francisco Ramirez",
-           "team": "Frenchtown Speed",
+           "helmet": "428",
+           "name": "Lucas Kisiolek",
+           "team": "Badger State Racing",
            "scratched": false,
-           "place": "",
+           "place": "4",
+           "time": ""
+          },
+          {
+           "helmet": "373",
+           "name": "Ethan Valance",
+           "team": "Piedmont/Omni",
+           "scratched": false,
+           "place": "5",
+           "time": ""
+          },
+          {
+           "helmet": "493",
+           "name": "Christopher Cazares",
+           "team": "CC Speed",
+           "scratched": false,
+           "place": "6",
            "time": ""
           }
          ]
@@ -18783,14 +18713,22 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "skaters": [
+          {
+           "helmet": "437",
+           "name": "Stephanie Smith",
+           "team": "Premier Racing",
+           "scratched": false,
+           "place": "1",
+           "time": "5:26.948"
+          },
           {
            "helmet": "93",
            "name": "Kimberly Dreath",
            "team": "Texas Speed Club",
            "scratched": false,
-           "place": "",
+           "place": "2",
            "time": ""
           },
           {
@@ -18798,15 +18736,7 @@ module.exports = {
            "name": "Amy Torpey",
            "team": "Premier Racing",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "437",
-           "name": "Stephanie Smith",
-           "team": "Premier Racing",
-           "scratched": false,
-           "place": "",
+           "place": "3",
            "time": ""
           }
          ]
@@ -18823,22 +18753,14 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "skaters": [
           {
-           "helmet": "41",
-           "name": "Donald Thomas",
-           "team": "Oaks Skating Club",
+           "helmet": "121",
+           "name": "Francisco Ramirez",
+           "team": "Frenchtown Spe4e:d12.957",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "450",
-           "name": "Glen Decker",
-           "team": "Midwest Racing",
-           "scratched": false,
-           "place": "",
+           "place": "1",
            "time": ""
           },
           {
@@ -18846,7 +18768,31 @@ module.exports = {
            "name": "Branden Willard",
            "team": "Piedmont/Omni",
            "scratched": false,
-           "place": "",
+           "place": "2",
+           "time": ""
+          },
+          {
+           "helmet": "41",
+           "name": "Donald Thomas",
+           "team": "Oaks Skating Club",
+           "scratched": false,
+           "place": "3",
+           "time": ""
+          },
+          {
+           "helmet": "224",
+           "name": "Nick Chrissan",
+           "team": "Stardust Racing",
+           "scratched": false,
+           "place": "4",
+           "time": ""
+          },
+          {
+           "helmet": "450",
+           "name": "Glen Decker",
+           "team": "Midwest Racing",
+           "scratched": false,
+           "place": "5",
            "time": ""
           }
          ]
@@ -18863,29 +18809,37 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "skaters": [
+          {
+           "helmet": "376",
+           "name": "Jennifer Meyer",
+           "team": "Piedmont/Omni",
+           "scratched": false,
+           "place": "1",
+           "time": "2:22.847"
+          },
+          {
+           "helmet": "500",
+           "name": "Jessica Jacobson",
+           "team": "Midwest Racing",
+           "scratched": false,
+           "place": "2",
+           "time": ""
+          },
           {
            "helmet": "319",
            "name": "Shannon Degenhardt",
            "team": "Midwest Racing",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "376",
-           "name": "Jennifer Meyers",
-           "team": "Piedmont/Omni",
-           "scratched": false,
-           "place": "",
+           "place": "3",
            "time": ""
           },
           {
            "helmet": "42",
            "name": "Shannon Dunning",
            "team": "Piedmont/Omni",
-           "scratched": false,
+           "scratched": true,
            "place": "",
            "time": ""
           }
@@ -18903,36 +18857,36 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "skaters": [
-          {
-           "helmet": "160",
-           "name": "Tony Jones",
-           "team": "Diamond State Racing",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "492",
-           "name": "Steven \"Chad\" Smith",
-           "team": "Premier Racing",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
           {
            "helmet": "43",
            "name": "William Culhane",
            "team": "California Speed",
            "scratched": false,
-           "place": "",
+           "place": "1",
+           "time": "2:06.781"
+          },
+          {
+           "helmet": "160",
+           "name": "Tony Jones",
+           "team": "Diamond State Racing",
+           "scratched": false,
+           "place": "2",
            "time": ""
           },
           {
            "helmet": "451",
            "name": "Matthew Mason",
            "team": "Synergy Speed Skating",
+           "scratched": false,
+           "place": "3",
+           "time": ""
+          },
+          {
+           "helmet": "492",
+           "name": "Steven \"Chad\" Smith",
+           "team": "Premier Racing Did Not Finish/Skating Inside Pylon",
            "scratched": false,
            "place": "",
            "time": ""
@@ -18951,22 +18905,14 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "skaters": [
           {
            "helmet": "96",
            "name": "Jennifer Keppler",
-           "team": "Texas Speed Club",
+           "team": "Texas Speed Club1:35.391",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "45",
-           "name": "Jennifer Foster",
-           "team": "Texas Speed Club",
-           "scratched": false,
-           "place": "",
+           "place": "1",
            "time": ""
           },
           {
@@ -18974,7 +18920,7 @@ module.exports = {
            "name": "Robbin Joynes",
            "team": "DFW Speed",
            "scratched": false,
-           "place": "",
+           "place": "2",
            "time": ""
           },
           {
@@ -18982,7 +18928,15 @@ module.exports = {
            "name": "Tracy Putnam",
            "team": "Stardust Racing",
            "scratched": false,
-           "place": "",
+           "place": "3",
+           "time": ""
+          },
+          {
+           "helmet": "45",
+           "name": "Jennifer Foster",
+           "team": "Texas Speed Club",
+           "scratched": false,
+           "place": "4",
            "time": ""
           }
          ]
@@ -18999,29 +18953,37 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "skaters": [
+          {
+           "helmet": "370",
+           "name": "Eric Schamberg",
+           "team": "Piedmont/Omni",
+           "scratched": false,
+           "place": "1",
+           "time": "1:30.500"
+          },
           {
            "helmet": "95",
            "name": "Damon Atherton",
            "team": "Texas Speed Club",
            "scratched": false,
-           "place": "",
+           "place": "2",
+           "time": ""
+          },
+          {
+           "helmet": "389",
+           "name": "Trampass Butcher",
+           "team": "Piedmont/Omni",
+           "scratched": false,
+           "place": "3",
            "time": ""
           },
           {
            "helmet": "496",
            "name": "Brian Carpenter",
            "team": "Premier Racing",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "370",
-           "name": "Eric Schamberg",
-           "team": "Piedmont/Omni",
-           "scratched": false,
+           "scratched": true,
            "place": "",
            "time": ""
           }
@@ -19039,14 +19001,14 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "skaters": [
           {
            "helmet": "47",
            "name": "Rebecca Caruso",
-           "team": "Texas Speed Club",
+           "team": "Texas Speed Club1:33.788",
            "scratched": false,
-           "place": "",
+           "place": "1",
            "time": ""
           },
           {
@@ -19054,7 +19016,7 @@ module.exports = {
            "name": "Starr Heckel",
            "team": "DFW Speed",
            "scratched": false,
-           "place": "",
+           "place": "2",
            "time": ""
           },
           {
@@ -19062,7 +19024,7 @@ module.exports = {
            "name": "Lisa Walker",
            "team": "DFW Speed",
            "scratched": false,
-           "place": "",
+           "place": "3",
            "time": ""
           },
           {
@@ -19070,7 +19032,7 @@ module.exports = {
            "name": "Tammy Lawson",
            "team": "Piedmont/Omni",
            "scratched": false,
-           "place": "",
+           "place": "4",
            "time": ""
           }
          ]
@@ -19085,16 +19047,40 @@ module.exports = {
        "qualify": "Final",
        "rounds": [
         {
-         "label": "Heat 1",
-         "toQualify": "3",
-         "results": false,
+         "label": "Final",
+         "toQualify": "",
+         "results": true,
          "skaters": [
+          {
+           "helmet": "97",
+           "name": "Stacy Suter",
+           "team": "Piedmont/Omni",
+           "scratched": false,
+           "place": "1",
+           "time": "1:27.494"
+          },
+          {
+           "helmet": "134",
+           "name": "Danny Willard",
+           "team": "Piedmont/Omni",
+           "scratched": false,
+           "place": "2",
+           "time": ""
+          },
+          {
+           "helmet": "495",
+           "name": "James Albrecht",
+           "team": "Texas Speed Club",
+           "scratched": false,
+           "place": "3",
+           "time": ""
+          },
           {
            "helmet": "498",
            "name": "Brian Meyers",
            "team": "Texas Speed Club",
            "scratched": false,
-           "place": "",
+           "place": "4",
            "time": ""
           },
           {
@@ -19102,54 +19088,7 @@ module.exports = {
            "name": "Taz Leonard",
            "team": "DFW Speed",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "97",
-           "name": "Stacy Suter",
-           "team": "Piedmont/Omni",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "134",
-           "name": "Danny Willard",
-           "team": "Piedmont/Omni",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          }
-         ]
-        },
-        {
-         "label": "Heat 2",
-         "toQualify": "3",
-         "results": false,
-         "skaters": [
-          {
-           "helmet": "495",
-           "name": "James Albrecht",
-           "team": "Texas Speed Club",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "224",
-           "name": "Nick Chrissan",
-           "team": "Stardust Racing",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "389",
-           "name": "Trampass Butcher",
-           "team": "Piedmont/Omni",
-           "scratched": false,
-           "place": "",
+           "place": "5",
            "time": ""
           },
           {
@@ -19157,7 +19096,7 @@ module.exports = {
            "name": "Ed Park",
            "team": "Carson Victory Rollers",
            "scratched": false,
-           "place": "",
+           "place": "6",
            "time": ""
           }
          ]
@@ -19174,30 +19113,22 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "skaters": [
+          {
+           "helmet": "135",
+           "name": "Mark Thornton",
+           "team": "DFW Speed 1:32.212 -New Record",
+           "scratched": false,
+           "place": "1",
+           "time": ""
+          },
           {
            "helmet": "99",
            "name": "Tommy Atkins",
            "team": "Texas Speed Club",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "135",
-           "name": "Mark Thornton",
-           "team": "DFW Speed",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "289",
-           "name": "Danny Clarkson",
-           "team": "Midwest Racing",
-           "scratched": false,
-           "place": "",
+           "place": "2",
            "time": ""
           },
           {
@@ -19205,7 +19136,15 @@ module.exports = {
            "name": "Erich Schmiede",
            "team": "Piedmont/Omni",
            "scratched": false,
-           "place": "",
+           "place": "3",
+           "time": ""
+          },
+          {
+           "helmet": "289",
+           "name": "Danny Clarkson",
+           "team": "Midwest Racing",
+           "scratched": false,
+           "place": "4",
            "time": ""
           }
          ]
@@ -19222,22 +19161,22 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "skaters": [
           {
            "helmet": "306",
            "name": "Leeanna Gonser",
            "team": "Midwest Racing",
            "scratched": false,
-           "place": "",
-           "time": ""
+           "place": "1",
+           "time": "0:32.878"
           },
           {
            "helmet": "297",
            "name": "Jordanna Gonser",
            "team": "Midwest Racing",
            "scratched": false,
-           "place": "",
+           "place": "2",
            "time": ""
           }
          ]
@@ -19254,22 +19193,22 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "skaters": [
-          {
-           "helmet": "309",
-           "name": "Masiey Hughes-Reece",
-           "team": "Midwest Racing",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
           {
            "helmet": "90",
            "name": "Jabree Scott",
            "team": "Midwest Racing",
            "scratched": false,
-           "place": "",
+           "place": "1",
+           "time": "0:37.640"
+          },
+          {
+           "helmet": "127",
+           "name": "McKinley Nigh",
+           "team": "Midwest Racing",
+           "scratched": false,
+           "place": "2",
            "time": ""
           },
           {
@@ -19277,21 +19216,21 @@ module.exports = {
            "name": "Kenishka Sudhakar",
            "team": "Midwest Racing",
            "scratched": false,
-           "place": "",
+           "place": "3",
            "time": ""
           },
           {
-           "helmet": "127",
-           "name": "McKinley Nigh",
+           "helmet": "309",
+           "name": "Masiey Hughes-Reece",
            "team": "Midwest Racing",
            "scratched": false,
-           "place": "",
+           "place": "4",
            "time": ""
           },
           {
            "helmet": "303",
            "name": "Koralyne Hick",
-           "team": "Midwest Racing",
+           "team": "Midwest Racing Blocking/Blocking",
            "scratched": false,
            "place": "",
            "time": ""
@@ -19310,22 +19249,22 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "skaters": [
           {
            "helmet": "497",
            "name": "Matthew Towne II",
            "team": "Midwest Racing",
            "scratched": false,
-           "place": "",
-           "time": ""
+           "place": "1",
+           "time": "0:40.041"
           },
           {
            "helmet": "452",
            "name": "Joshua Brown",
            "team": "Synergy Speed Skating",
            "scratched": false,
-           "place": "",
+           "place": "2",
            "time": ""
           }
          ]
@@ -19340,79 +19279,24 @@ module.exports = {
        "qualify": "Final",
        "rounds": [
         {
-         "label": "Heat 1",
-         "toQualify": "3",
-         "results": false,
+         "label": "Final",
+         "toQualify": "",
+         "results": true,
          "skaters": [
           {
            "helmet": "453",
            "name": "Kennedy Layton",
-           "team": "Carolina Gold Rush",
+           "team": "Carolina Gold Rush0:35.455",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "356",
-           "name": "Kaidyn Handzic",
-           "team": "SS2-Wolverines",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "320",
-           "name": "Skyler Kirkhart",
-           "team": "Midwest Racing",
-           "scratched": false,
-           "place": "",
+           "place": "1",
            "time": ""
           },
           {
            "helmet": "129",
-           "name": "Lilliann Salizar",
+           "name": "Lilliann Salazar",
            "team": "Piedmont/Omni",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "441",
-           "name": "Bree Campbell",
-           "team": "Synergy Speed Skating",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          }
-         ]
-        },
-        {
-         "label": "Heat 2",
-         "toQualify": "3",
-         "results": false,
-         "skaters": [
-          {
-           "helmet": "434",
-           "name": "Josefina Orines",
-           "team": "CC Speed",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "299",
-           "name": "Journie Warkentin",
-           "team": "Midwest Racing",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "313",
-           "name": "Patricia Balirigi",
-           "team": "Midwest Racing",
-           "scratched": false,
-           "place": "",
+           "place": "2",
            "time": ""
           },
           {
@@ -19420,13 +19304,29 @@ module.exports = {
            "name": "Emery Schamberg",
            "team": "Piedmont/Omni",
            "scratched": false,
-           "place": "",
+           "place": "3",
            "time": ""
           },
           {
            "helmet": "402",
            "name": "Skyler Lopez",
            "team": "Inside Edge Racing",
+           "scratched": false,
+           "place": "4",
+           "time": ""
+          },
+          {
+           "helmet": "434",
+           "name": "Josefina Orines",
+           "team": "CC Speed",
+           "scratched": false,
+           "place": "5",
+           "time": ""
+          },
+          {
+           "helmet": "320",
+           "name": "Skyler Kirkhart",
+           "team": "Midwest Racing Riding Out",
            "scratched": false,
            "place": "",
            "time": ""
@@ -19445,14 +19345,30 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "skaters": [
+          {
+           "helmet": "298",
+           "name": "Josef Steven",
+           "team": "Midwest Racing",
+           "scratched": false,
+           "place": "1",
+           "time": "0:37.815"
+          },
+          {
+           "helmet": "286",
+           "name": "Brentley Berg-Fudge",
+           "team": "Midwest Racing",
+           "scratched": false,
+           "place": "2",
+           "time": ""
+          },
           {
            "helmet": "37",
            "name": "Brayden Thomas",
            "team": "CC Speed",
            "scratched": false,
-           "place": "",
+           "place": "3",
            "time": ""
           },
           {
@@ -19460,23 +19376,7 @@ module.exports = {
            "name": "Landon Thomas",
            "team": "CC Speed",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "286",
-           "name": "Brentley Berg-Fudge",
-           "team": "Midwest Racing",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "298",
-           "name": "Josef Steven",
-           "team": "Midwest Racing",
-           "scratched": false,
-           "place": "",
+           "place": "4",
            "time": ""
           }
          ]
@@ -19493,14 +19393,30 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "skaters": [
+          {
+           "helmet": "304",
+           "name": "Laney Stevens",
+           "team": "Midwest Racing",
+           "scratched": false,
+           "place": "1",
+           "time": "1:01.763"
+          },
+          {
+           "helmet": "40",
+           "name": "Isabella Salazar",
+           "team": "Piedmont/Omni",
+           "scratched": false,
+           "place": "2",
+           "time": ""
+          },
           {
            "helmet": "360",
            "name": "Victoria Phelps",
            "team": "Carolina Gold Rush",
            "scratched": false,
-           "place": "",
+           "place": "3",
            "time": ""
           },
           {
@@ -19508,23 +19424,7 @@ module.exports = {
            "name": "Milla Pham",
            "team": "Midwest Racing",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "304",
-           "name": "Laney Stevens",
-           "team": "Midwest Racing",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "40",
-           "name": "Isabella Salazar",
-           "team": "Piedmont/Omni",
-           "scratched": false,
-           "place": "",
+           "place": "4",
            "time": ""
           }
          ]
@@ -19539,71 +19439,24 @@ module.exports = {
        "qualify": "Final",
        "rounds": [
         {
-         "label": "Heat 1",
-         "toQualify": "3",
-         "results": false,
+         "label": "Final",
+         "toQualify": "",
+         "results": true,
          "skaters": [
-          {
-           "helmet": "430",
-           "name": "Alexander Rucker",
-           "team": "Carolina Gold Rush",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
           {
            "helmet": "491",
            "name": "Issac Armstrong",
-           "team": "Badger State Racing",
+           "team": "Badger State Racin0g:57.773",
            "scratched": false,
-           "place": "",
+           "place": "1",
            "time": ""
           },
           {
-           "helmet": "292",
-           "name": "Gavin Howe",
-           "team": "Midwest Racing",
+           "helmet": "358",
+           "name": "Alexander Rucker",
+           "team": "Carolina Gold Rush",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "300",
-           "name": "Karan Sudhakar",
-           "team": "Midwest Racing",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          }
-         ]
-        },
-        {
-         "label": "Heat 2",
-         "toQualify": "3",
-         "results": false,
-         "skaters": [
-          {
-           "helmet": "444",
-           "name": "Logan McCombs",
-           "team": "Premier Racing",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "355",
-           "name": "Daniel Handzic",
-           "team": "SS2-Wolverines",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "435",
-           "name": "Richie Cabrera",
-           "team": "Midwest Racing",
-           "scratched": false,
-           "place": "",
+           "place": "2",
            "time": ""
           },
           {
@@ -19611,7 +19464,31 @@ module.exports = {
            "name": "Damion See",
            "team": "Midwest Racing",
            "scratched": false,
-           "place": "",
+           "place": "3",
+           "time": ""
+          },
+          {
+           "helmet": "355",
+           "name": "Daniel Handzic",
+           "team": "SS2-Wolverines",
+           "scratched": false,
+           "place": "4",
+           "time": ""
+          },
+          {
+           "helmet": "295",
+           "name": "Gavin Howe",
+           "team": "Midwest Racing",
+           "scratched": false,
+           "place": "5",
+           "time": ""
+          },
+          {
+           "helmet": "435",
+           "name": "Richie Cabrera",
+           "team": "Midwest Racing",
+           "scratched": false,
+           "place": "6",
            "time": ""
           }
          ]
@@ -19628,22 +19505,22 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "skaters": [
-          {
-           "helmet": "427",
-           "name": "Elizabeth Deglinger",
-           "team": "Badger State Racing",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
           {
            "helmet": "368",
            "name": "Destanie Vileno",
            "team": "Piedmont/Omni",
            "scratched": false,
-           "place": "",
+           "place": "1",
+           "time": "1:00.211"
+          },
+          {
+           "helmet": "427",
+           "name": "Elizabeth Deglinger",
+           "team": "Badger State Racing",
+           "scratched": false,
+           "place": "2",
            "time": ""
           }
          ]
@@ -19660,30 +19537,14 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "skaters": [
           {
            "helmet": "490",
            "name": "Jayden Kesler",
-           "team": "Premier Racing",
+           "team": "Premier Racing 0:55.359 -New Record",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "428",
-           "name": "Lucas Kisiolek",
-           "team": "Badger State Racing",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "493",
-           "name": "Christopher Cazares",
-           "team": "CC Speed",
-           "scratched": false,
-           "place": "",
+           "place": "1",
            "time": ""
           },
           {
@@ -19691,15 +19552,7 @@ module.exports = {
            "name": "Caiden Haynes",
            "team": "Midwest Racing",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "373",
-           "name": "Ethan Valance",
-           "team": "Piedmont/Omni",
-           "scratched": false,
-           "place": "",
+           "place": "2",
            "time": ""
           },
           {
@@ -19707,15 +19560,31 @@ module.exports = {
            "name": "Richard Nance",
            "team": "Piedmont/Omni",
            "scratched": false,
-           "place": "",
+           "place": "3",
            "time": ""
           },
           {
-           "helmet": "121",
-           "name": "Francisco Ramirez",
-           "team": "Frenchtown Speed",
+           "helmet": "428",
+           "name": "Lucas Kisiolek",
+           "team": "Badger State Racing",
            "scratched": false,
-           "place": "",
+           "place": "4",
+           "time": ""
+          },
+          {
+           "helmet": "493",
+           "name": "Christopher Cazares",
+           "team": "CC Speed",
+           "scratched": false,
+           "place": "5",
+           "time": ""
+          },
+          {
+           "helmet": "373",
+           "name": "Ethan Valance",
+           "team": "Piedmont/Omni",
+           "scratched": false,
+           "place": "6",
            "time": ""
           }
          ]
@@ -19732,14 +19601,22 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "skaters": [
+          {
+           "helmet": "437",
+           "name": "Stephanie Smith",
+           "team": "Premier Racing",
+           "scratched": false,
+           "place": "1",
+           "time": "1:12.435"
+          },
           {
            "helmet": "93",
            "name": "Kimberly Dreath",
            "team": "Texas Speed Club",
            "scratched": false,
-           "place": "",
+           "place": "2",
            "time": ""
           },
           {
@@ -19747,15 +19624,7 @@ module.exports = {
            "name": "Amy Torpey",
            "team": "Premier Racing",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "437",
-           "name": "Stephanie Smith",
-           "team": "Premier Racing",
-           "scratched": false,
-           "place": "",
+           "place": "3",
            "time": ""
           }
          ]
@@ -19772,22 +19641,14 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "skaters": [
           {
-           "helmet": "41",
-           "name": "Donald Thomas",
-           "team": "Oaks Skating Club",
+           "helmet": "121",
+           "name": "Francisco Ramirez",
+           "team": "Frenchtown Spe0e:d58.989",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "450",
-           "name": "Glen Decker",
-           "team": "Midwest Racing",
-           "scratched": false,
-           "place": "",
+           "place": "1",
            "time": ""
           },
           {
@@ -19795,7 +19656,78 @@ module.exports = {
            "name": "Branden Willard",
            "team": "Piedmont/Omni",
            "scratched": false,
-           "place": "",
+           "place": "2",
+           "time": ""
+          },
+          {
+           "helmet": "41",
+           "name": "Donald Thomas",
+           "team": "Oaks Skating Club",
+           "scratched": false,
+           "place": "3",
+           "time": ""
+          },
+          {
+           "helmet": "224",
+           "name": "Nick Chrissan",
+           "team": "Stardust Racing",
+           "scratched": false,
+           "place": "4",
+           "time": ""
+          },
+          {
+           "helmet": "450",
+           "name": "Glen Decker",
+           "team": "Midwest Racing",
+           "scratched": false,
+           "place": "5",
+           "time": ""
+          }
+         ]
+        },
+        {
+         "label": "Final",
+         "toQualify": "",
+         "results": true,
+         "skaters": [
+          {
+           "helmet": "121",
+           "name": "Francisco Ramirez",
+           "team": "Frenchtown Spe0e:d58.989",
+           "scratched": false,
+           "place": "1",
+           "time": ""
+          },
+          {
+           "helmet": "365",
+           "name": "Branden Willard",
+           "team": "Piedmont/Omni",
+           "scratched": false,
+           "place": "2",
+           "time": ""
+          },
+          {
+           "helmet": "41",
+           "name": "Donald Thomas",
+           "team": "Oaks Skating Club",
+           "scratched": false,
+           "place": "3",
+           "time": ""
+          },
+          {
+           "helmet": "224",
+           "name": "Nick Chrissan",
+           "team": "Stardust Racing",
+           "scratched": false,
+           "place": "4",
+           "time": ""
+          },
+          {
+           "helmet": "450",
+           "name": "Glen Decker",
+           "team": "Midwest Racing",
+           "scratched": false,
+           "place": "5",
            "time": ""
           }
          ]
@@ -19812,29 +19744,37 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "skaters": [
+          {
+           "helmet": "376",
+           "name": "Jennifer Meyer",
+           "team": "Piedmont/Omni",
+           "scratched": false,
+           "place": "1",
+           "time": "0:40.170"
+          },
+          {
+           "helmet": "500",
+           "name": "Jessica Jacobson",
+           "team": "Midwest Racing",
+           "scratched": false,
+           "place": "2",
+           "time": ""
+          },
           {
            "helmet": "319",
            "name": "Shannon Degenhardt",
            "team": "Midwest Racing",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "376",
-           "name": "Jennifer Meyers",
-           "team": "Piedmont/Omni",
-           "scratched": false,
-           "place": "",
+           "place": "3",
            "time": ""
           },
           {
            "helmet": "42",
            "name": "Shannon Dunning",
            "team": "Piedmont/Omni",
-           "scratched": false,
+           "scratched": true,
            "place": "",
            "time": ""
           }
@@ -19852,30 +19792,22 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "skaters": [
-          {
-           "helmet": "160",
-           "name": "Tony Jones",
-           "team": "Diamond State Racing",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "492",
-           "name": "Steven \"Chad\" Smith",
-           "team": "Premier Racing",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
           {
            "helmet": "43",
            "name": "William Culhane",
            "team": "California Speed",
            "scratched": false,
-           "place": "",
+           "place": "1",
+           "time": "0:35.991"
+          },
+          {
+           "helmet": "160",
+           "name": "Tony Jones",
+           "team": "Diamond State Racing",
+           "scratched": false,
+           "place": "2",
            "time": ""
           },
           {
@@ -19883,6 +19815,14 @@ module.exports = {
            "name": "Matthew Mason",
            "team": "Synergy Speed Skating",
            "scratched": false,
+           "place": "3",
+           "time": ""
+          },
+          {
+           "helmet": "492",
+           "name": "Steven \"Chad\" Smith",
+           "team": "Premier Racing",
+           "scratched": true,
            "place": "",
            "time": ""
           }
@@ -19900,30 +19840,30 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "skaters": [
-          {
-           "helmet": "96",
-           "name": "Jennifer Keppler",
-           "team": "Texas Speed Club",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
           {
            "helmet": "45",
            "name": "Jennifer Foster",
            "team": "Texas Speed Club",
            "scratched": false,
-           "place": "",
-           "time": ""
+           "place": "1",
+           "time": "0:38.328"
           },
           {
            "helmet": "409",
            "name": "Robbin Joynes",
            "team": "DFW Speed",
            "scratched": false,
-           "place": "",
+           "place": "2",
+           "time": ""
+          },
+          {
+           "helmet": "96",
+           "name": "Jennifer Keppler",
+           "team": "Texas Speed Club",
+           "scratched": false,
+           "place": "3",
            "time": ""
           },
           {
@@ -19931,7 +19871,7 @@ module.exports = {
            "name": "Tracy Putnam",
            "team": "Stardust Racing",
            "scratched": false,
-           "place": "",
+           "place": "4",
            "time": ""
           }
          ]
@@ -19948,14 +19888,30 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "skaters": [
+          {
+           "helmet": "370",
+           "name": "Eric Schamberg",
+           "team": "Piedmont/Omni",
+           "scratched": false,
+           "place": "1",
+           "time": "0:35.933"
+          },
+          {
+           "helmet": "389",
+           "name": "Trampass Butcher",
+           "team": "Piedmont/Omni",
+           "scratched": false,
+           "place": "2",
+           "time": ""
+          },
           {
            "helmet": "95",
            "name": "Damon Atherton",
            "team": "Texas Speed Club",
            "scratched": false,
-           "place": "",
+           "place": "3",
            "time": ""
           },
           {
@@ -19963,15 +19919,7 @@ module.exports = {
            "name": "Brian Carpenter",
            "team": "Premier Racing",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "370",
-           "name": "Eric Schamberg",
-           "team": "Piedmont/Omni",
-           "scratched": false,
-           "place": "",
+           "place": "4",
            "time": ""
           }
          ]
@@ -19988,14 +19936,14 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "skaters": [
           {
            "helmet": "47",
            "name": "Rebecca Caruso",
-           "team": "Texas Speed Club",
+           "team": "Texas Speed Club0:38.573",
            "scratched": false,
-           "place": "",
+           "place": "1",
            "time": ""
           },
           {
@@ -20003,7 +19951,7 @@ module.exports = {
            "name": "Starr Heckel",
            "team": "DFW Speed",
            "scratched": false,
-           "place": "",
+           "place": "2",
            "time": ""
           },
           {
@@ -20011,7 +19959,7 @@ module.exports = {
            "name": "Lisa Walker",
            "team": "DFW Speed",
            "scratched": false,
-           "place": "",
+           "place": "3",
            "time": ""
           },
           {
@@ -20019,7 +19967,7 @@ module.exports = {
            "name": "Tammy Lawson",
            "team": "Piedmont/Omni",
            "scratched": false,
-           "place": "",
+           "place": "4",
            "time": ""
           }
          ]
@@ -20034,16 +19982,40 @@ module.exports = {
        "qualify": "Final",
        "rounds": [
         {
-         "label": "Heat 1",
-         "toQualify": "3",
-         "results": false,
+         "label": "Final",
+         "toQualify": "",
+         "results": true,
          "skaters": [
+          {
+           "helmet": "134",
+           "name": "Danny Willard",
+           "team": "Piedmont/Omni",
+           "scratched": false,
+           "place": "1",
+           "time": "0:36.455"
+          },
+          {
+           "helmet": "97",
+           "name": "Stacy Suter",
+           "team": "Piedmont/Omni",
+           "scratched": false,
+           "place": "2",
+           "time": ""
+          },
+          {
+           "helmet": "495",
+           "name": "James Albrecht",
+           "team": "Texas Speed Club",
+           "scratched": false,
+           "place": "3",
+           "time": ""
+          },
           {
            "helmet": "498",
            "name": "Brian Meyers",
            "team": "Texas Speed Club",
            "scratched": false,
-           "place": "",
+           "place": "4",
            "time": ""
           },
           {
@@ -20051,54 +20023,7 @@ module.exports = {
            "name": "Taz Leonard",
            "team": "DFW Speed",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "97",
-           "name": "Stacy Suter",
-           "team": "Piedmont/Omni",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "134",
-           "name": "Danny Willard",
-           "team": "Piedmont/Omni",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          }
-         ]
-        },
-        {
-         "label": "Heat 2",
-         "toQualify": "3",
-         "results": false,
-         "skaters": [
-          {
-           "helmet": "495",
-           "name": "James Albrecht",
-           "team": "Texas Speed Club",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "224",
-           "name": "Nick Chrissan",
-           "team": "Stardust Racing",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "389",
-           "name": "Trampass Butcher",
-           "team": "Piedmont/Omni",
-           "scratched": false,
-           "place": "",
+           "place": "5",
            "time": ""
           },
           {
@@ -20106,7 +20031,7 @@ module.exports = {
            "name": "Ed Park",
            "team": "Carson Victory Rollers",
            "scratched": false,
-           "place": "",
+           "place": "6",
            "time": ""
           }
          ]
@@ -20123,22 +20048,22 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "skaters": [
+          {
+           "helmet": "135",
+           "name": "Mark Thornton",
+           "team": "DFW Speed 0:37.348 -New Record",
+           "scratched": false,
+           "place": "1",
+           "time": ""
+          },
           {
            "helmet": "99",
            "name": "Tommy Atkins",
            "team": "Texas Speed Club",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "135",
-           "name": "Mark Thornton",
-           "team": "DFW Speed",
-           "scratched": false,
-           "place": "",
+           "place": "2",
            "time": ""
           },
           {
@@ -20146,13 +20071,13 @@ module.exports = {
            "name": "Danny Clarkson",
            "team": "Midwest Racing",
            "scratched": false,
-           "place": "",
+           "place": "3",
            "time": ""
           },
           {
            "helmet": "371",
            "name": "Erich Schmiede",
-           "team": "Piedmont/Omni",
+           "team": "Piedmont/Omni Charging",
            "scratched": false,
            "place": "",
            "time": ""
@@ -20171,22 +20096,22 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "skaters": [
           {
            "helmet": "306",
            "name": "Leeanna Gonser",
            "team": "Midwest Racing",
            "scratched": false,
-           "place": "",
-           "time": ""
+           "place": "1",
+           "time": "0:50.182"
           },
           {
            "helmet": "297",
            "name": "Jordanna Gonser",
            "team": "Midwest Racing",
            "scratched": false,
-           "place": "",
+           "place": "2",
            "time": ""
           }
          ]
@@ -20203,38 +20128,22 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "skaters": [
-          {
-           "helmet": "309",
-           "name": "Masiey Hughes-Reece",
-           "team": "Midwest Racing",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
           {
            "helmet": "90",
            "name": "Jabree Scott",
            "team": "Midwest Racing",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "302",
-           "name": "Kenishka Sudhakar",
-           "team": "Midwest Racing",
-           "scratched": false,
-           "place": "",
-           "time": ""
+           "place": "1",
+           "time": "1:04.236"
           },
           {
            "helmet": "127",
            "name": "McKinley Nigh",
            "team": "Midwest Racing",
            "scratched": false,
-           "place": "",
+           "place": "2",
            "time": ""
           },
           {
@@ -20242,7 +20151,23 @@ module.exports = {
            "name": "Koralyne Hick",
            "team": "Midwest Racing",
            "scratched": false,
-           "place": "",
+           "place": "3",
+           "time": ""
+          },
+          {
+           "helmet": "302",
+           "name": "Kenishka Sudhakar",
+           "team": "Midwest Racing",
+           "scratched": false,
+           "place": "4",
+           "time": ""
+          },
+          {
+           "helmet": "309",
+           "name": "Masiey Hughes-Reece",
+           "team": "Midwest Racing",
+           "scratched": false,
+           "place": "5",
            "time": ""
           }
          ]
@@ -20259,22 +20184,22 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "skaters": [
+          {
+           "helmet": "452",
+           "name": "Joshua Brown",
+           "team": "Synergy Speed Skati1n:g11.897",
+           "scratched": false,
+           "place": "1",
+           "time": ""
+          },
           {
            "helmet": "497",
            "name": "Matthew Towne II",
            "team": "Midwest Racing",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "452",
-           "name": "Joshua Brown",
-           "team": "Synergy Speed Skating",
-           "scratched": false,
-           "place": "",
+           "place": "2",
            "time": ""
           }
          ]
@@ -20289,63 +20214,16 @@ module.exports = {
        "qualify": "Final",
        "rounds": [
         {
-         "label": "Heat 1",
-         "toQualify": "3",
-         "results": false,
+         "label": "Final",
+         "toQualify": "",
+         "results": true,
          "skaters": [
           {
            "helmet": "453",
            "name": "Kennedy Layton",
-           "team": "Carolina Gold Rush",
+           "team": "Carolina Gold Rush1:01.088",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "356",
-           "name": "Kaidyn Handzic",
-           "team": "SS2-Wolverines",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "320",
-           "name": "Skyler Kirkhart",
-           "team": "Midwest Racing",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "129",
-           "name": "Lilliann Salizar",
-           "team": "Piedmont/Omni",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "441",
-           "name": "Bree Campbell",
-           "team": "Synergy Speed Skating",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          }
-         ]
-        },
-        {
-         "label": "Heat 2",
-         "toQualify": "3",
-         "results": false,
-         "skaters": [
-          {
-           "helmet": "434",
-           "name": "Josefina Orines",
-           "team": "CC Speed",
-           "scratched": false,
-           "place": "",
+           "place": "1",
            "time": ""
           },
           {
@@ -20353,23 +20231,7 @@ module.exports = {
            "name": "Journie Warkentin",
            "team": "Midwest Racing",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "313",
-           "name": "Patricia Balirigi",
-           "team": "Midwest Racing",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "369",
-           "name": "Emery Schamberg",
-           "team": "Piedmont/Omni",
-           "scratched": false,
-           "place": "",
+           "place": "2",
            "time": ""
           },
           {
@@ -20377,7 +20239,31 @@ module.exports = {
            "name": "Skyler Lopez",
            "team": "Inside Edge Racing",
            "scratched": false,
-           "place": "",
+           "place": "3",
+           "time": ""
+          },
+          {
+           "helmet": "369",
+           "name": "Emery Schamberg",
+           "team": "Piedmont/Omni",
+           "scratched": false,
+           "place": "4",
+           "time": ""
+          },
+          {
+           "helmet": "320",
+           "name": "Skyler Kirkhart",
+           "team": "Midwest Racing",
+           "scratched": false,
+           "place": "5",
+           "time": ""
+          },
+          {
+           "helmet": "129",
+           "name": "Lilliann Salazar",
+           "team": "Piedmont/Omni",
+           "scratched": false,
+           "place": "6",
            "time": ""
           }
          ]
@@ -20394,14 +20280,30 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "skaters": [
+          {
+           "helmet": "298",
+           "name": "Josef Steven",
+           "team": "Midwest Racing",
+           "scratched": false,
+           "place": "1",
+           "time": "1:02.941"
+          },
+          {
+           "helmet": "286",
+           "name": "Brentley Berg-Fudge",
+           "team": "Midwest Racing",
+           "scratched": false,
+           "place": "2",
+           "time": ""
+          },
           {
            "helmet": "37",
            "name": "Brayden Thomas",
            "team": "CC Speed",
            "scratched": false,
-           "place": "",
+           "place": "3",
            "time": ""
           },
           {
@@ -20409,23 +20311,7 @@ module.exports = {
            "name": "Landon Thomas",
            "team": "CC Speed",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "286",
-           "name": "Brentley Berg-Fudge",
-           "team": "Midwest Racing",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "298",
-           "name": "Josef Steven",
-           "team": "Midwest Racing",
-           "scratched": false,
-           "place": "",
+           "place": "4",
            "time": ""
           }
          ]
@@ -20442,14 +20328,30 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "skaters": [
+          {
+           "helmet": "40",
+           "name": "Isabella Salazar",
+           "team": "Piedmont/Omni",
+           "scratched": false,
+           "place": "1",
+           "time": "2:09.293"
+          },
+          {
+           "helmet": "304",
+           "name": "Laney Stevens",
+           "team": "Midwest Racing",
+           "scratched": false,
+           "place": "2",
+           "time": ""
+          },
           {
            "helmet": "360",
            "name": "Victoria Phelps",
            "team": "Carolina Gold Rush",
            "scratched": false,
-           "place": "",
+           "place": "3",
            "time": ""
           },
           {
@@ -20457,23 +20359,7 @@ module.exports = {
            "name": "Milla Pham",
            "team": "Midwest Racing",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "304",
-           "name": "Laney Stevens",
-           "team": "Midwest Racing",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "40",
-           "name": "Isabella Salazar",
-           "team": "Piedmont/Omni",
-           "scratched": false,
-           "place": "",
+           "place": "4",
            "time": ""
           }
          ]
@@ -20488,71 +20374,24 @@ module.exports = {
        "qualify": "Final",
        "rounds": [
         {
-         "label": "Heat 1",
-         "toQualify": "3",
-         "results": false,
+         "label": "Final",
+         "toQualify": "",
+         "results": true,
          "skaters": [
-          {
-           "helmet": "430",
-           "name": "Alexander Rucker",
-           "team": "Carolina Gold Rush",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
           {
            "helmet": "491",
            "name": "Issac Armstrong",
-           "team": "Badger State Racing",
+           "team": "Badger State Racin2g:06.869",
            "scratched": false,
-           "place": "",
+           "place": "1",
            "time": ""
           },
           {
-           "helmet": "292",
-           "name": "Gavin Howe",
-           "team": "Midwest Racing",
+           "helmet": "358",
+           "name": "Alexander Rucker",
+           "team": "Carolina Gold Rush",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "300",
-           "name": "Karan Sudhakar",
-           "team": "Midwest Racing",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          }
-         ]
-        },
-        {
-         "label": "Heat 2",
-         "toQualify": "3",
-         "results": false,
-         "skaters": [
-          {
-           "helmet": "444",
-           "name": "Logan McCombs",
-           "team": "Premier Racing",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "355",
-           "name": "Daniel Handzic",
-           "team": "SS2-Wolverines",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "435",
-           "name": "Richie Cabrera",
-           "team": "Midwest Racing",
-           "scratched": false,
-           "place": "",
+           "place": "2",
            "time": ""
           },
           {
@@ -20560,7 +20399,31 @@ module.exports = {
            "name": "Damion See",
            "team": "Midwest Racing",
            "scratched": false,
-           "place": "",
+           "place": "3",
+           "time": ""
+          },
+          {
+           "helmet": "444",
+           "name": "Logan McCombs",
+           "team": "Premier Racing",
+           "scratched": false,
+           "place": "4",
+           "time": ""
+          },
+          {
+           "helmet": "295",
+           "name": "Gavin Howe",
+           "team": "Midwest Racing",
+           "scratched": false,
+           "place": "5",
+           "time": ""
+          },
+          {
+           "helmet": "435",
+           "name": "Richie Cabrera",
+           "team": "Midwest Racing",
+           "scratched": false,
+           "place": "6",
            "time": ""
           }
          ]
@@ -20577,22 +20440,22 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "skaters": [
-          {
-           "helmet": "427",
-           "name": "Elizabeth Deglinger",
-           "team": "Badger State Racing",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
           {
            "helmet": "368",
            "name": "Destanie Vileno",
            "team": "Piedmont/Omni",
            "scratched": false,
-           "place": "",
+           "place": "1",
+           "time": "2:15.023"
+          },
+          {
+           "helmet": "427",
+           "name": "Elizabeth Dehlinger",
+           "team": "Badger State Racing",
+           "scratched": false,
+           "place": "2",
            "time": ""
           }
          ]
@@ -20609,46 +20472,22 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "skaters": [
           {
            "helmet": "490",
            "name": "Jayden Kesler",
            "team": "Premier Racing",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "428",
-           "name": "Lucas Kisiolek",
-           "team": "Badger State Racing",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "493",
-           "name": "Christopher Cazares",
-           "team": "CC Speed",
-           "scratched": false,
-           "place": "",
-           "time": ""
+           "place": "1",
+           "time": "3:04.979"
           },
           {
            "helmet": "494",
            "name": "Caiden Haynes",
            "team": "Midwest Racing",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "373",
-           "name": "Ethan Valance",
-           "team": "Piedmont/Omni",
-           "scratched": false,
-           "place": "",
+           "place": "2",
            "time": ""
           },
           {
@@ -20656,15 +20495,31 @@ module.exports = {
            "name": "Richard Nance",
            "team": "Piedmont/Omni",
            "scratched": false,
-           "place": "",
+           "place": "3",
            "time": ""
           },
           {
-           "helmet": "121",
-           "name": "Francisco Ramirez",
-           "team": "Frenchtown Speed",
+           "helmet": "428",
+           "name": "Lucas Kisiolek",
+           "team": "Badger State Racing",
            "scratched": false,
-           "place": "",
+           "place": "4",
+           "time": ""
+          },
+          {
+           "helmet": "493",
+           "name": "Christopher Cazares",
+           "team": "CC Speed",
+           "scratched": false,
+           "place": "5",
+           "time": ""
+          },
+          {
+           "helmet": "373",
+           "name": "Ethan Valance",
+           "team": "Piedmont/Omni",
+           "scratched": false,
+           "place": "6",
            "time": ""
           }
          ]
@@ -20681,22 +20536,14 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "skaters": [
           {
            "helmet": "93",
            "name": "Kimberly Dreath",
-           "team": "Texas Speed Club",
+           "team": "Texas Speed Club2:34.697",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "431",
-           "name": "Amy Torpey",
-           "team": "Premier Racing",
-           "scratched": false,
-           "place": "",
+           "place": "1",
            "time": ""
           },
           {
@@ -20704,7 +20551,15 @@ module.exports = {
            "name": "Stephanie Smith",
            "team": "Premier Racing",
            "scratched": false,
-           "place": "",
+           "place": "2",
+           "time": ""
+          },
+          {
+           "helmet": "431",
+           "name": "Amy Torpey",
+           "team": "Premier Racing",
+           "scratched": false,
+           "place": "3",
            "time": ""
           }
          ]
@@ -20721,22 +20576,14 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "skaters": [
           {
-           "helmet": "41",
-           "name": "Donald Thomas",
-           "team": "Oaks Skating Club",
+           "helmet": "121",
+           "name": "Francisco Ramirez",
+           "team": "Frenchtown Spe2e:d07.319",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "450",
-           "name": "Glen Decker",
-           "team": "Midwest Racing",
-           "scratched": false,
-           "place": "",
+           "place": "1",
            "time": ""
           },
           {
@@ -20744,7 +20591,31 @@ module.exports = {
            "name": "Branden Willard",
            "team": "Piedmont/Omni",
            "scratched": false,
-           "place": "",
+           "place": "2",
+           "time": ""
+          },
+          {
+           "helmet": "41",
+           "name": "Donald Thomas",
+           "team": "Oaks Skating Club",
+           "scratched": false,
+           "place": "3",
+           "time": ""
+          },
+          {
+           "helmet": "224",
+           "name": "Nick Chrissan",
+           "team": "Stardust Racing",
+           "scratched": false,
+           "place": "4",
+           "time": ""
+          },
+          {
+           "helmet": "450",
+           "name": "Glen Decker",
+           "team": "Midwest Racing",
+           "scratched": false,
+           "place": "5",
            "time": ""
           }
          ]
@@ -20761,29 +20632,37 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "skaters": [
+          {
+           "helmet": "376",
+           "name": "Jennifer Meyer",
+           "team": "Piedmont/Omni",
+           "scratched": false,
+           "place": "1",
+           "time": "1:38.133"
+          },
+          {
+           "helmet": "500",
+           "name": "Jessica Jacobson",
+           "team": "Midwest Racing",
+           "scratched": false,
+           "place": "2",
+           "time": ""
+          },
           {
            "helmet": "319",
            "name": "Shannon Degenhardt",
            "team": "Midwest Racing",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "376",
-           "name": "Jennifer Meyers",
-           "team": "Piedmont/Omni",
-           "scratched": false,
-           "place": "",
+           "place": "3",
            "time": ""
           },
           {
            "helmet": "42",
            "name": "Shannon Dunning",
            "team": "Piedmont/Omni",
-           "scratched": false,
+           "scratched": true,
            "place": "",
            "time": ""
           }
@@ -20801,30 +20680,22 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "skaters": [
-          {
-           "helmet": "160",
-           "name": "Tony Jones",
-           "team": "Diamond State Racing",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "492",
-           "name": "Steven \"Chad\" Smith",
-           "team": "Premier Racing",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
           {
            "helmet": "43",
            "name": "William Culhane",
            "team": "California Speed",
            "scratched": false,
-           "place": "",
+           "place": "1",
+           "time": "1:25.583"
+          },
+          {
+           "helmet": "160",
+           "name": "Tony Jones",
+           "team": "Diamond State Racing",
+           "scratched": false,
+           "place": "2",
            "time": ""
           },
           {
@@ -20832,6 +20703,14 @@ module.exports = {
            "name": "Matthew Mason",
            "team": "Synergy Speed Skating",
            "scratched": false,
+           "place": "3",
+           "time": ""
+          },
+          {
+           "helmet": "492",
+           "name": "Steven \"Chad\" Smith",
+           "team": "Premier Racing",
+           "scratched": true,
            "place": "",
            "time": ""
           }
@@ -20849,30 +20728,14 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "skaters": [
-          {
-           "helmet": "96",
-           "name": "Jennifer Keppler",
-           "team": "Texas Speed Club",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
           {
            "helmet": "45",
            "name": "Jennifer Foster",
-           "team": "Texas Speed Club",
+           "team": "Texas Speed Club No Time",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "409",
-           "name": "Robbin Joynes",
-           "team": "DFW Speed",
-           "scratched": false,
-           "place": "",
+           "place": "1",
            "time": ""
           },
           {
@@ -20880,7 +20743,23 @@ module.exports = {
            "name": "Tracy Putnam",
            "team": "Stardust Racing",
            "scratched": false,
-           "place": "",
+           "place": "2",
+           "time": ""
+          },
+          {
+           "helmet": "96",
+           "name": "Jennifer Keppler",
+           "team": "Texas Speed Club",
+           "scratched": false,
+           "place": "3",
+           "time": ""
+          },
+          {
+           "helmet": "409",
+           "name": "Robbin Joynes",
+           "team": "DFW Speed",
+           "scratched": false,
+           "place": "4",
            "time": ""
           }
          ]
@@ -20897,14 +20776,14 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "skaters": [
           {
-           "helmet": "95",
-           "name": "Damon Atherton",
-           "team": "Texas Speed Club",
+           "helmet": "370",
+           "name": "Eric Schamberg",
+           "team": "Piedmont/Omni No Time",
            "scratched": false,
-           "place": "",
+           "place": "1",
            "time": ""
           },
           {
@@ -20912,15 +20791,23 @@ module.exports = {
            "name": "Brian Carpenter",
            "team": "Premier Racing",
            "scratched": false,
-           "place": "",
+           "place": "2",
            "time": ""
           },
           {
-           "helmet": "370",
-           "name": "Eric Schamberg",
+           "helmet": "95",
+           "name": "Damon Atherton",
+           "team": "Texas Speed Club",
+           "scratched": false,
+           "place": "3",
+           "time": ""
+          },
+          {
+           "helmet": "389",
+           "name": "Trampass Butcher",
            "team": "Piedmont/Omni",
            "scratched": false,
-           "place": "",
+           "place": "4",
            "time": ""
           }
          ]
@@ -20937,22 +20824,14 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "skaters": [
           {
            "helmet": "47",
            "name": "Rebecca Caruso",
-           "team": "Texas Speed Club",
+           "team": "Texas Speed Club1:07.548",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "98",
-           "name": "Starr Heckel",
-           "team": "DFW Speed",
-           "scratched": false,
-           "place": "",
+           "place": "1",
            "time": ""
           },
           {
@@ -20960,7 +20839,15 @@ module.exports = {
            "name": "Lisa Walker",
            "team": "DFW Speed",
            "scratched": false,
-           "place": "",
+           "place": "2",
+           "time": ""
+          },
+          {
+           "helmet": "98",
+           "name": "Starr Heckel",
+           "team": "DFW Speed",
+           "scratched": false,
+           "place": "3",
            "time": ""
           },
           {
@@ -20968,7 +20855,7 @@ module.exports = {
            "name": "Tammy Lawson",
            "team": "Piedmont/Omni",
            "scratched": false,
-           "place": "",
+           "place": "4",
            "time": ""
           }
          ]
@@ -20983,16 +20870,40 @@ module.exports = {
        "qualify": "Final",
        "rounds": [
         {
-         "label": "Heat 1",
-         "toQualify": "3",
-         "results": false,
+         "label": "Final",
+         "toQualify": "",
+         "results": true,
          "skaters": [
+          {
+           "helmet": "97",
+           "name": "Stacy Suter",
+           "team": "Piedmont/Omni",
+           "scratched": false,
+           "place": "1",
+           "time": "1:01.699"
+          },
+          {
+           "helmet": "134",
+           "name": "Danny Willard",
+           "team": "Piedmont/Omni",
+           "scratched": false,
+           "place": "2",
+           "time": ""
+          },
           {
            "helmet": "498",
            "name": "Brian Meyers",
            "team": "Texas Speed Club",
            "scratched": false,
-           "place": "",
+           "place": "3",
+           "time": ""
+          },
+          {
+           "helmet": "495",
+           "name": "James Albrecht",
+           "team": "Texas Speed Club",
+           "scratched": false,
+           "place": "4",
            "time": ""
           },
           {
@@ -21000,54 +20911,7 @@ module.exports = {
            "name": "Taz Leonard",
            "team": "DFW Speed",
            "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "97",
-           "name": "Stacy Suter",
-           "team": "Piedmont/Omni",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "134",
-           "name": "Danny Willard",
-           "team": "Piedmont/Omni",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          }
-         ]
-        },
-        {
-         "label": "Heat 2",
-         "toQualify": "3",
-         "results": false,
-         "skaters": [
-          {
-           "helmet": "495",
-           "name": "James Albrecht",
-           "team": "Texas Speed Club",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "224",
-           "name": "Nick Chrissan",
-           "team": "Stardust Racing",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
-          {
-           "helmet": "389",
-           "name": "Trampass Butcher",
-           "team": "Piedmont/Omni",
-           "scratched": false,
-           "place": "",
+           "place": "5",
            "time": ""
           },
           {
@@ -21055,7 +20919,7 @@ module.exports = {
            "name": "Ed Park",
            "team": "Carson Victory Rollers",
            "scratched": false,
-           "place": "",
+           "place": "6",
            "time": ""
           }
          ]
@@ -21072,30 +20936,22 @@ module.exports = {
         {
          "label": "Final",
          "toQualify": "",
-         "results": false,
+         "results": true,
          "skaters": [
-          {
-           "helmet": "99",
-           "name": "Tommy Atkins",
-           "team": "Texas Speed Club",
-           "scratched": false,
-           "place": "",
-           "time": ""
-          },
           {
            "helmet": "135",
            "name": "Mark Thornton",
            "team": "DFW Speed",
            "scratched": false,
-           "place": "",
-           "time": ""
+           "place": "1",
+           "time": "1:04.847"
           },
           {
-           "helmet": "289",
-           "name": "Danny Clarkson",
-           "team": "Midwest Racing",
+           "helmet": "99",
+           "name": "Tommy Atkins",
+           "team": "Texas Speed Club",
            "scratched": false,
-           "place": "",
+           "place": "2",
            "time": ""
           },
           {
@@ -21103,7 +20959,15 @@ module.exports = {
            "name": "Erich Schmiede",
            "team": "Piedmont/Omni",
            "scratched": false,
-           "place": "",
+           "place": "3",
+           "time": ""
+          },
+          {
+           "helmet": "289",
+           "name": "Danny Clarkson",
+           "team": "Midwest Racing",
+           "scratched": false,
+           "place": "4",
            "time": ""
           }
          ]
@@ -21126,7 +20990,40 @@ module.exports = {
        "distance": "1200 Meters Relay",
        "format": "",
        "qualify": "Final",
-       "rounds": []
+       "rounds": [
+        {
+         "label": "Final",
+         "toQualify": "",
+         "results": true,
+         "relay": true,
+         "skaters": [
+          {
+           "helmet": "1",
+           "name": "Midwest Racing Red",
+           "team": "McKinley Nigh, Jabree Scott",
+           "scratched": false,
+           "place": "1",
+           "time": "2:34.005"
+          },
+          {
+           "helmet": "2",
+           "name": "Midwest Racing #2 Yellow",
+           "team": "Koralyne Hick, Kenishka Sudhakar",
+           "scratched": false,
+           "place": "2",
+           "time": ""
+          },
+          {
+           "helmet": "3",
+           "name": "Midwest Racing #3 Blue",
+           "team": "Masiey Hughes-Reece, Leeanna Gonser",
+           "scratched": false,
+           "place": "3",
+           "time": ""
+          }
+         ]
+        }
+       ]
       },
       {
        "num": "56",
@@ -21134,7 +21031,40 @@ module.exports = {
        "distance": "2000 Meters Relay",
        "format": "",
        "qualify": "Final",
-       "rounds": []
+       "rounds": [
+        {
+         "label": "Final",
+         "toQualify": "",
+         "results": true,
+         "relay": true,
+         "skaters": [
+          {
+           "helmet": "7",
+           "name": "Midwest Racing Pink",
+           "team": "Journie Warkentin, Skyler Kirkhart",
+           "scratched": false,
+           "place": "1",
+           "time": "4:08.926"
+          },
+          {
+           "helmet": "8",
+           "name": "Piedmont/Omni Grey",
+           "team": "Emery Schamberg, Lilliann Salizar",
+           "scratched": false,
+           "place": "2",
+           "time": ""
+          },
+          {
+           "helmet": "9",
+           "name": "SS2-Wolverines Black",
+           "team": "Rae Castorina, Kaidyn Hanseck",
+           "scratched": false,
+           "place": "3",
+           "time": ""
+          }
+         ]
+        }
+       ]
       },
       {
        "num": "57",
@@ -21142,7 +21072,32 @@ module.exports = {
        "distance": "2000 Meters Relay",
        "format": "",
        "qualify": "Final",
-       "rounds": []
+       "rounds": [
+        {
+         "label": "Final",
+         "toQualify": "",
+         "results": true,
+         "relay": true,
+         "skaters": [
+          {
+           "helmet": "6",
+           "name": "Midwest Racing Purple",
+           "team": "Brentley Berg-Fudge, Josef Steven",
+           "scratched": false,
+           "place": "1",
+           "time": "4:14.006"
+          },
+          {
+           "helmet": "5",
+           "name": "CC Speed Orange",
+           "team": "Brayden Thomas, Landon Thomas",
+           "scratched": false,
+           "place": "2",
+           "time": ""
+          }
+         ]
+        }
+       ]
       },
       {
        "num": "58",
@@ -21150,7 +21105,32 @@ module.exports = {
        "distance": "3000 Meters Relay",
        "format": "",
        "qualify": "Final",
-       "rounds": []
+       "rounds": [
+        {
+         "label": "Final",
+         "toQualify": "",
+         "results": true,
+         "relay": true,
+         "skaters": [
+          {
+           "helmet": "15",
+           "name": "Piedmont/Omni Purple",
+           "team": "Destanie Vileno, Isabella Salazar",
+           "scratched": false,
+           "place": "1",
+           "time": "6:25.320"
+          },
+          {
+           "helmet": "14",
+           "name": "Midwest Racing Orange",
+           "team": "Milla Pham, Laney Stevens",
+           "scratched": false,
+           "place": "2",
+           "time": ""
+          }
+         ]
+        }
+       ]
       },
       {
        "num": "59",
@@ -21158,7 +21138,48 @@ module.exports = {
        "distance": "5000 Meters Relay",
        "format": "",
        "qualify": "Final",
-       "rounds": []
+       "rounds": [
+        {
+         "label": "Final",
+         "toQualify": "",
+         "results": true,
+         "relay": true,
+         "skaters": [
+          {
+           "helmet": "11",
+           "name": "Midwest Racing Yellow",
+           "team": "Caiden Haynes, Damion See",
+           "scratched": false,
+           "place": "1",
+           "time": "9:56.264"
+          },
+          {
+           "helmet": "9",
+           "name": "Premier Racing Black",
+           "team": "Jayden Kesler, Logan McCombs",
+           "scratched": false,
+           "place": "2",
+           "time": ""
+          },
+          {
+           "helmet": "13",
+           "name": "Piedmont/Omni Green",
+           "team": "Ethan Valance, Richard Nance",
+           "scratched": false,
+           "place": "3",
+           "time": ""
+          },
+          {
+           "helmet": "12",
+           "name": "Midwest Racing #2 Blue",
+           "team": "Gavin Howe, Karan Sudhakar, DQ #10 Badger State Racing Riding Out/Charging/Riding Out, Lucas Kisiolek, Issac Armstrong",
+           "scratched": false,
+           "place": "4",
+           "time": ""
+          }
+         ]
+        }
+       ]
       },
       {
        "num": "60",
@@ -21166,7 +21187,24 @@ module.exports = {
        "distance": "2000 Meters Relay",
        "format": "",
        "qualify": "Final",
-       "rounds": []
+       "rounds": [
+        {
+         "label": "Final",
+         "toQualify": "",
+         "results": true,
+         "relay": true,
+         "skaters": [
+          {
+           "helmet": "19",
+           "name": "Midwest Racing Red",
+           "team": "Shannon Degenhardt, Jessica Jacobson, SC #20 Piedmont/Omni Blue, Shannon Dunning, Jennifer Meyers",
+           "scratched": false,
+           "place": "1",
+           "time": "4:52.286"
+          }
+         ]
+        }
+       ]
       },
       {
        "num": "61",
@@ -21174,7 +21212,32 @@ module.exports = {
        "distance": "2000 Meters Relay",
        "format": "",
        "qualify": "Final",
-       "rounds": []
+       "rounds": [
+        {
+         "label": "Final",
+         "toQualify": "",
+         "results": true,
+         "relay": true,
+         "skaters": [
+          {
+           "helmet": "17",
+           "name": "Premier Racing Grey",
+           "team": "Steven \"Chad\" Smith, Brian Carpenter",
+           "scratched": false,
+           "place": "1",
+           "time": "5:11.753"
+          },
+          {
+           "helmet": "18",
+           "name": "Midwest Racing Black",
+           "team": "Danny Clarkson, Glen Decker",
+           "scratched": false,
+           "place": "2",
+           "time": ""
+          }
+         ]
+        }
+       ]
       },
       {
        "num": "62",
@@ -21182,7 +21245,32 @@ module.exports = {
        "distance": "2000 Meters Relay",
        "format": "",
        "qualify": "Final",
-       "rounds": []
+       "rounds": [
+        {
+         "label": "Final",
+         "toQualify": "",
+         "results": true,
+         "relay": true,
+         "skaters": [
+          {
+           "helmet": "22",
+           "name": "Texas Speed Club Green",
+           "team": "Jennifer Foster, Rebecca Caruso",
+           "scratched": false,
+           "place": "1",
+           "time": "4:34.679"
+          },
+          {
+           "helmet": "23",
+           "name": "Texas Speed Club #2 Orange",
+           "team": "Jinnifer Keppler, Kimberly Dreath",
+           "scratched": false,
+           "place": "2",
+           "time": ""
+          }
+         ]
+        }
+       ]
       },
       {
        "num": "63",
@@ -21190,7 +21278,32 @@ module.exports = {
        "distance": "2000 Meters Relay",
        "format": "",
        "qualify": "Final",
-       "rounds": []
+       "rounds": [
+        {
+         "label": "Final",
+         "toQualify": "",
+         "results": true,
+         "relay": true,
+         "skaters": [
+          {
+           "helmet": "21",
+           "name": "Texas Speed Club Blue",
+           "team": "Damon Atherton, James Albrecht",
+           "scratched": false,
+           "place": "1",
+           "time": "4:11.109"
+          },
+          {
+           "helmet": "14",
+           "name": "Piedmont/Omni Orange",
+           "team": "Eric Schamberg, Danny Willard",
+           "scratched": false,
+           "place": "2",
+           "time": ""
+          }
+         ]
+        }
+       ]
       },
       {
        "num": "64",
@@ -21198,7 +21311,24 @@ module.exports = {
        "distance": "2000 Meters Relay",
        "format": "",
        "qualify": "Final",
-       "rounds": []
+       "rounds": [
+        {
+         "label": "Final",
+         "toQualify": "",
+         "results": true,
+         "relay": true,
+         "skaters": [
+          {
+           "helmet": "27",
+           "name": "DFW Speed Black",
+           "team": "Lisa Walker, Robbin Joynes",
+           "scratched": false,
+           "place": "1",
+           "time": "4:52.31"
+          }
+         ]
+        }
+       ]
       },
       {
        "num": "65",
@@ -21206,7 +21336,40 @@ module.exports = {
        "distance": "2000 Meters Relay",
        "format": "",
        "qualify": "Final",
-       "rounds": []
+       "rounds": [
+        {
+         "label": "Final",
+         "toQualify": "",
+         "results": true,
+         "relay": true,
+         "skaters": [
+          {
+           "helmet": "24",
+           "name": "Texas Speed Club Purple",
+           "team": "Brian Meyers, Tommy Atkins",
+           "scratched": false,
+           "place": "1",
+           "time": "4:25.937"
+          },
+          {
+           "helmet": "26",
+           "name": "Piedmont/Omni Grey",
+           "team": "Erich Schmiede, Stacy Suter",
+           "scratched": false,
+           "place": "2",
+           "time": ""
+          },
+          {
+           "helmet": "25",
+           "name": "DFW Speed Pink",
+           "team": "Mark Thornton, Taz Leonard",
+           "scratched": false,
+           "place": "3",
+           "time": ""
+          }
+         ]
+        }
+       ]
       },
       {
        "num": "66",
@@ -21214,7 +21377,24 @@ module.exports = {
        "distance": "1200 Meters Relay",
        "format": "",
        "qualify": "Final",
-       "rounds": []
+       "rounds": [
+        {
+         "label": "Final",
+         "toQualify": "",
+         "results": true,
+         "relay": true,
+         "skaters": [
+          {
+           "helmet": "4",
+           "name": "Midwest Racing Green-New Record",
+           "team": "Jabree Scott, Matthew Towne II",
+           "scratched": false,
+           "place": "1",
+           "time": "2:33.57"
+          }
+         ]
+        }
+       ]
       },
       {
        "num": "67",
@@ -21222,7 +21402,40 @@ module.exports = {
        "distance": "2000 Meters Relay",
        "format": "",
        "qualify": "Final",
-       "rounds": []
+       "rounds": [
+        {
+         "label": "Final",
+         "toQualify": "",
+         "results": true,
+         "relay": true,
+         "skaters": [
+          {
+           "helmet": "29",
+           "name": "Midwest Racing Yellow",
+           "team": "Journie Warkentin, Brentley Berg-Fudge",
+           "scratched": false,
+           "place": "1",
+           "time": "4:08.527"
+          },
+          {
+           "helmet": "30",
+           "name": "Midwest Racing #2 Blue",
+           "team": "Skyler Kirkhart, Josef Steven",
+           "scratched": false,
+           "place": "2",
+           "time": ""
+          },
+          {
+           "helmet": "28",
+           "name": "CC Speed Red",
+           "team": "Josefina Orines, Brayden Thomas",
+           "scratched": false,
+           "place": "3",
+           "time": ""
+          }
+         ]
+        }
+       ]
       },
       {
        "num": "68",
@@ -21230,7 +21443,64 @@ module.exports = {
        "distance": "3000 Meters Relay",
        "format": "",
        "qualify": "Final",
-       "rounds": []
+       "rounds": [
+        {
+         "label": "Final",
+         "toQualify": "",
+         "results": true,
+         "relay": true,
+         "skaters": [
+          {
+           "helmet": "35",
+           "name": "Piedmont/Omni #2 Grey",
+           "team": "Isabella Salazar, Richard Nance",
+           "scratched": false,
+           "place": "1",
+           "time": "6:05.390"
+          },
+          {
+           "helmet": "31",
+           "name": "Badger State Racing Green",
+           "team": "Elizabeth Dehlinger, Issac Armstrong",
+           "scratched": false,
+           "place": "2",
+           "time": ""
+          },
+          {
+           "helmet": "32",
+           "name": "Midwest Racing Orange",
+           "team": "Laney Stevens, Caiden Haynes",
+           "scratched": false,
+           "place": "3",
+           "time": ""
+          },
+          {
+           "helmet": "34",
+           "name": "Piedmont/Omni Pink",
+           "team": "Destanie Vileno, Ethan Valance",
+           "scratched": false,
+           "place": "4",
+           "time": ""
+          },
+          {
+           "helmet": "1",
+           "name": "Carolina Gold Rush Red",
+           "team": "Victoria Phelps, Alexander Rucker",
+           "scratched": false,
+           "place": "5",
+           "time": ""
+          },
+          {
+           "helmet": "33",
+           "name": "Midwest Racing #2 Purple",
+           "team": "Milla Pham, Karan Sudhakar",
+           "scratched": false,
+           "place": "6",
+           "time": ""
+          }
+         ]
+        }
+       ]
       },
       {
        "num": "69",
@@ -21238,7 +21508,40 @@ module.exports = {
        "distance": "2000 Meters Relay",
        "format": "",
        "qualify": "Final",
-       "rounds": []
+       "rounds": [
+        {
+         "label": "Final",
+         "toQualify": "",
+         "results": true,
+         "relay": true,
+         "skaters": [
+          {
+           "helmet": "2",
+           "name": "Piedmont/Omni Yellow",
+           "team": "Jennifer Meyers, Stacy Suter",
+           "scratched": false,
+           "place": "1",
+           "time": "4:34.215"
+          },
+          {
+           "helmet": "1",
+           "name": "Midwest Racing Red",
+           "team": "Shannon Degenhardt, Glen Decker",
+           "scratched": false,
+           "place": "2",
+           "time": ""
+          },
+          {
+           "helmet": "8",
+           "name": "Midwest Racing #2 Grey",
+           "team": "Jessica Jacobson, Danny Clarkson, SC #3 Piedmont/Omni #2 Blue, Shannon Dunning, Eric Schamberg",
+           "scratched": false,
+           "place": "3",
+           "time": ""
+          }
+         ]
+        }
+       ]
       },
       {
        "num": "70",
@@ -21246,7 +21549,48 @@ module.exports = {
        "distance": "2000 Meters Relay",
        "format": "",
        "qualify": "Final",
-       "rounds": []
+       "rounds": [
+        {
+         "label": "Final",
+         "toQualify": "",
+         "results": true,
+         "relay": true,
+         "skaters": [
+          {
+           "helmet": "37",
+           "name": "Frenchtown Speed Red",
+           "team": "Carole Olinger, Francisco Ramirez",
+           "scratched": false,
+           "place": "1",
+           "time": "4:13.917"
+          },
+          {
+           "helmet": "4",
+           "name": "Texas Speed Club Green",
+           "team": "Jennifer Foster, James Albrecht",
+           "scratched": false,
+           "place": "2",
+           "time": ""
+          },
+          {
+           "helmet": "5",
+           "name": "Texas Speed Club #2 Orange",
+           "team": "Jinnifer Keppler, Brian Meyers",
+           "scratched": false,
+           "place": "3",
+           "time": ""
+          },
+          {
+           "helmet": "6",
+           "name": "Texas Speed Club #3 Purple",
+           "team": "Kimberly Dreath, Damon Atherton",
+           "scratched": false,
+           "place": "4",
+           "time": ""
+          }
+         ]
+        }
+       ]
       },
       {
        "num": "71",
@@ -21254,7 +21598,48 @@ module.exports = {
        "distance": "2000 Meters Relay",
        "format": "",
        "qualify": "Final",
-       "rounds": []
+       "rounds": [
+        {
+         "label": "Final",
+         "toQualify": "",
+         "results": true,
+         "relay": true,
+         "skaters": [
+          {
+           "helmet": "11",
+           "name": "DFW Speed #2 Yellow",
+           "team": "Starr Heckel, Mark Thornton",
+           "scratched": false,
+           "place": "1",
+           "time": "4:28.030"
+          },
+          {
+           "helmet": "9",
+           "name": "Texas Speed Club Black",
+           "team": "Rebecca Caruso, Tommy Atkins",
+           "scratched": false,
+           "place": "2",
+           "time": ""
+          },
+          {
+           "helmet": "10",
+           "name": "DFW Speed Red",
+           "team": "Robbin Joynes, Taz Leonard",
+           "scratched": false,
+           "place": "3",
+           "time": ""
+          },
+          {
+           "helmet": "12",
+           "name": "Piedmont/Omni Blue",
+           "team": "Tammy Lawson, Erich Schmiede",
+           "scratched": false,
+           "place": "4",
+           "time": ""
+          }
+         ]
+        }
+       ]
       },
       {
        "num": "72",
@@ -21262,7 +21647,40 @@ module.exports = {
        "distance": "1200 Meters Relay",
        "format": "",
        "qualify": "Final",
-       "rounds": []
+       "rounds": [
+        {
+         "label": "Final",
+         "toQualify": "",
+         "results": true,
+         "relay": true,
+         "skaters": [
+          {
+           "helmet": "14",
+           "name": "Midwest Racing Orange-New Record",
+           "team": "McKinley Nigh, Journie Warkentin, Jabree Scott",
+           "scratched": false,
+           "place": "1",
+           "time": "2:30.628"
+          },
+          {
+           "helmet": "15",
+           "name": "Midwest Racing #2 Purple",
+           "team": "Koralyne Hick, Kenishka Sudhakar, Skyler Kirkhart",
+           "scratched": false,
+           "place": "2",
+           "time": ""
+          },
+          {
+           "helmet": "16",
+           "name": "Midwest Racing #3 Pink",
+           "team": "Leeanna Gonser, Masiey Hughes-Reece, Patricia Balirigi",
+           "scratched": false,
+           "place": "3",
+           "time": ""
+          }
+         ]
+        }
+       ]
       },
       {
        "num": "73",
@@ -21270,7 +21688,24 @@ module.exports = {
        "distance": "1200 Meters Relay",
        "format": "",
        "qualify": "Final",
-       "rounds": []
+       "rounds": [
+        {
+         "label": "Final",
+         "toQualify": "",
+         "results": true,
+         "relay": true,
+         "skaters": [
+          {
+           "helmet": "13",
+           "name": "Midwest Racing Green",
+           "team": "Josef Steven, Brentley Berg-Fudge, Matthew Towne II",
+           "scratched": false,
+           "place": "1",
+           "time": "2:31.892"
+          }
+         ]
+        }
+       ]
       },
       {
        "num": "74",
@@ -21278,7 +21713,24 @@ module.exports = {
        "distance": "3000 Meters Relay",
        "format": "",
        "qualify": "Final",
-       "rounds": []
+       "rounds": [
+        {
+         "label": "Final",
+         "toQualify": "",
+         "results": true,
+         "relay": true,
+         "skaters": [
+          {
+           "helmet": "20",
+           "name": "Piedmont/Omni Yellow",
+           "team": "Destanie Vileno, Isabella Salazar, Jennifer Meyer",
+           "scratched": false,
+           "place": "1",
+           "time": "6:31.908"
+          }
+         ]
+        }
+       ]
       },
       {
        "num": "75",
@@ -21286,7 +21738,40 @@ module.exports = {
        "distance": "3000 Meters Relay",
        "format": "",
        "qualify": "Final",
-       "rounds": []
+       "rounds": [
+        {
+         "label": "Final",
+         "toQualify": "",
+         "results": true,
+         "relay": true,
+         "skaters": [
+          {
+           "helmet": "18",
+           "name": "Midwest Racing Black",
+           "team": "Caiden Haynes, Damion See, Karan Sudhakar",
+           "scratched": false,
+           "place": "1",
+           "time": "5:55.234"
+          },
+          {
+           "helmet": "19",
+           "name": "Piedmont/Omni Red",
+           "team": "Branden Willard, Ethan Valance, Richard Nance",
+           "scratched": false,
+           "place": "2",
+           "time": ""
+          },
+          {
+           "helmet": "17",
+           "name": "Premier Racing Grey",
+           "team": "Steven \"Chad\" Smith, Jayden Kesler, Logan McCombs",
+           "scratched": false,
+           "place": "3",
+           "time": ""
+          }
+         ]
+        }
+       ]
       },
       {
        "num": "76",
@@ -21294,7 +21779,32 @@ module.exports = {
        "distance": "1500 Meters Relay",
        "format": "",
        "qualify": "Final",
-       "rounds": []
+       "rounds": [
+        {
+         "label": "Final",
+         "toQualify": "",
+         "results": true,
+         "relay": true,
+         "skaters": [
+          {
+           "helmet": "23",
+           "name": "Texas Speed Club Orange-New Record",
+           "team": "Jennifer Foster, Rebecca Caruso, Kimberly Dreath",
+           "scratched": false,
+           "place": "1",
+           "time": "3:26.168"
+          },
+          {
+           "helmet": "24",
+           "name": "DFW Speed Purple",
+           "team": "Lisa Walker, Robbin Joynes, Starr Heckel",
+           "scratched": false,
+           "place": "2",
+           "time": ""
+          }
+         ]
+        }
+       ]
       },
       {
        "num": "77",
@@ -21302,7 +21812,32 @@ module.exports = {
        "distance": "1500 Meters Relay",
        "format": "",
        "qualify": "Final",
-       "rounds": []
+       "rounds": [
+        {
+         "label": "Final",
+         "toQualify": "",
+         "results": true,
+         "relay": true,
+         "skaters": [
+          {
+           "helmet": "22",
+           "name": "Piedmont/Omni Green",
+           "team": "Danny Willard, Eric Schamberg, Stacy Suter",
+           "scratched": false,
+           "place": "1",
+           "time": "3:03.768"
+          },
+          {
+           "helmet": "21",
+           "name": "Texas Speed Club Blue",
+           "team": "Damon Atherton, James Albrecht, Tommy Atkins",
+           "scratched": false,
+           "place": "2",
+           "time": ""
+          }
+         ]
+        }
+       ]
       },
       {
        "num": "78",
@@ -21310,7 +21845,40 @@ module.exports = {
        "distance": "1200 Meters Relay",
        "format": "",
        "qualify": "Final",
-       "rounds": []
+       "rounds": [
+        {
+         "label": "Final",
+         "toQualify": "",
+         "results": true,
+         "relay": true,
+         "skaters": [
+          {
+           "helmet": "26",
+           "name": "Midwest Racing Grey-New Record",
+           "team": "Jabree Scott, Brentley Berg-Fudge, Josef Steven",
+           "scratched": false,
+           "place": "1",
+           "time": "2:28.478"
+          },
+          {
+           "helmet": "25",
+           "name": "CC Speed Pink",
+           "team": "Josefina Orines, Landon Thomas, Brayden Thomas",
+           "scratched": false,
+           "place": "2",
+           "time": ""
+          },
+          {
+           "helmet": "27",
+           "name": "Midwest Racing #2 Black",
+           "team": "McKinley Nigh, Journie Warkentin, Matthew Towne II",
+           "scratched": false,
+           "place": "3",
+           "time": ""
+          }
+         ]
+        }
+       ]
       },
       {
        "num": "79",
@@ -21318,7 +21886,48 @@ module.exports = {
        "distance": "3000 Meters Relay",
        "format": "",
        "qualify": "Final",
-       "rounds": []
+       "rounds": [
+        {
+         "label": "Final",
+         "toQualify": "",
+         "results": true,
+         "relay": true,
+         "skaters": [
+          {
+           "helmet": "29",
+           "name": "Midwest Racing Yellow",
+           "team": "Laney Stevens, Caiden Haynes, Damion See",
+           "scratched": false,
+           "place": "1",
+           "time": "5:47.314"
+          },
+          {
+           "helmet": "16",
+           "name": "Badger State Racing Pink",
+           "team": "Elizabeth Dehlinger, Issac Armstrong, Lucas Kisiolek",
+           "scratched": false,
+           "place": "2",
+           "time": ""
+          },
+          {
+           "helmet": "32",
+           "name": "Piedmont/Omni #2 Orange",
+           "team": "Isabella Salazar, Eric Schamberg, Ethan Valance",
+           "scratched": false,
+           "place": "3",
+           "time": ""
+          },
+          {
+           "helmet": "30",
+           "name": "Midwest Racing #2 Blue",
+           "team": "Milla Pham, Karan Sudhakar, Richie Cabrera, DQ #31 Piedmont/Omni Incorrect Relay/Incorrect Relay, Destanie Vileno, Danny Willard, Richard Nance, SC #28 Premier Racing Red, Stephanie Smith, Jayden Kesler, Logan McCombs",
+           "scratched": false,
+           "place": "4",
+           "time": ""
+          }
+         ]
+        }
+       ]
       },
       {
        "num": "80",
@@ -21326,7 +21935,56 @@ module.exports = {
        "distance": "1500 Meters Relay",
        "format": "",
        "qualify": "Final",
-       "rounds": []
+       "rounds": [
+        {
+         "label": "Final",
+         "toQualify": "",
+         "results": true,
+         "relay": true,
+         "skaters": [
+          {
+           "helmet": "2",
+           "name": "Texas Speed Club Yellow",
+           "team": "Damon Atherton, Jennifer Foster, James Albrecht",
+           "scratched": false,
+           "place": "1",
+           "time": "3:09.937"
+          },
+          {
+           "helmet": "3",
+           "name": "Piedmont/Omni Blue",
+           "team": "Jennifer Meyers, Stacy Suter, Trampass Butcher",
+           "scratched": false,
+           "place": "2",
+           "time": ""
+          },
+          {
+           "helmet": "33",
+           "name": "Texas Speed Club #2 Purple",
+           "team": "Jinnifer Keppler, Rebecca Caruso, Brian Meyers",
+           "scratched": false,
+           "place": "3",
+           "time": ""
+          },
+          {
+           "helmet": "35",
+           "name": "DFW Speed Grey",
+           "team": "Starr Heckel, Mark Thornton, Taz Leonard",
+           "scratched": false,
+           "place": "4",
+           "time": ""
+          },
+          {
+           "helmet": "34",
+           "name": "Premier Racing Pink",
+           "team": "Steven \"Chad\" Smith, Brian Carpenter, Amy Torpey, DQ #37 Midwest Racing Wrong # of Laps, Shannon Degenhardt, Jessica Jacobson, Glen Decker, SC #36 Stardust Racing Black, Tracy Putnam, Nick Chrissan, Brian Simpson",
+           "scratched": false,
+           "place": "5",
+           "time": ""
+          }
+         ]
+        }
+       ]
       }
      ]
     }
