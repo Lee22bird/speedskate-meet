@@ -11,7 +11,7 @@ function isOpenDivision(div) {
 }
 
 function computeMeetStandings(meet) {
-  const tbMode = meet.tiebreaker || 'd2';
+  const tbMode = meet.tiebreaker || 'sr832';
   const standings = {};
   const divisions = {};
   const regMap = new Map((meet.registrations || []).map(r => [Number(r.id), r]));

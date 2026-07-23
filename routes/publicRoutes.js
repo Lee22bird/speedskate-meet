@@ -30,7 +30,7 @@ module.exports = function createPublicRoutes(deps = {}) {
             <div class="toggle-row"><div><div class="toggle-row-label">🏗️ Meet Builder</div><div class="toggle-row-desc">Set up divisions, distances, and registration — all in one place. Inline, Open, Quad, Time Trial, and Relay support.</div></div></div>
             <div class="toggle-row"><div><div class="toggle-row-label">🧱 Block Builder</div><div class="toggle-row-desc">Drag and drop races into blocks. Add breaks, lunch, and awards. Print your race list in one click.</div></div></div>
             <div class="toggle-row"><div><div class="toggle-row-label">🏁 Race Day</div><div class="toggle-row-desc">Director, judges, and announcer panels. Live scoreboard. TV display for AirPlay. Text alerts for parents.</div></div></div>
-            <div class="toggle-row"><div><div class="toggle-row-label">📊 Standings</div><div class="toggle-row-desc">Automatic points, tiebreaker support (D2 and SR832), and real-time standings updated as races close.</div></div></div>
+            <div class="toggle-row"><div><div class="toggle-row-label">📊 Standings</div><div class="toggle-row-desc">Automatic USARS points, the official SR832 tiebreaker, and real-time standings updated as races close.</div></div></div>
             <div class="toggle-row"><div><div class="toggle-row-label">📲 Text Alerts</div><div class="toggle-row-desc">Parents sign up and get a text when their skater is 2 races away, in staging, and when results post.</div></div></div>
           </div>
         </div>
@@ -227,7 +227,7 @@ module.exports = function createPublicRoutes(deps = {}) {
           <div class="hr"></div>
           <div><h3>What is "Challenge Up"?</h3><p style="line-height:1.7;color:var(--text)">Challenge Up allows a skater to race in a higher age division than their own. It's optional and the director controls whether it's available for their meet.</p></div>
           <div class="hr"></div>
-          <div><h3>What is the Tiebreaker setting?</h3><p style="line-height:1.7;color:var(--text)">When two skaters are tied on total points, the tiebreaker determines the winner. D2 (default) uses the skater's place in the middle distance race. SR832 uses the full USARS SR832 formula with weighted scores across all three distances.</p></div>
+          <div><h3>How are ties broken?</h3><p style="line-height:1.7;color:var(--text)">When two skaters tie on total points, SSM applies the official USARS SR832 formula: weighted scores for each place across the division's races, with different weights for the short, middle, and long distances. The higher weighted total wins. This is the USARS rule and applies to every meet — there is nothing to configure.</p></div>
         </div>
       </div>
 
@@ -348,9 +348,8 @@ module.exports = function createPublicRoutes(deps = {}) {
           <div class="hr"></div>
           <div><h3>What counts toward overall standings?</h3><p style="line-height:1.7;color:var(--text)">Only standard inline races (D1, D2, D3) count toward overall standings. Open races, Quad races, Time Trials, and Relay races are all placement-only and have their own separate results sections.</p></div>
           <div class="hr"></div>
-          <div><h3>How does the D2 tiebreaker work?</h3><p style="line-height:1.7;color:var(--text)">When two skaters are tied on total points, the system looks at their place in the D2 (middle distance) race. The skater who placed higher in D2 wins the tiebreaker. This is the default and most commonly used method at local meets.</p></div>
           <div class="hr"></div>
-          <div><h3>How does the SR832 tiebreaker work?</h3><p style="line-height:1.7;color:var(--text)">SR832 is the full USARS tiebreaker formula. It assigns weighted scores to each place across all three distance races, with different weights for short, middle, and long distances. The skater with the higher weighted total wins. Enable SR832 in Meet Builder under Tiebreaker Settings.</p></div>
+          <div><h3>How does the SR832 tiebreaker work?</h3><p style="line-height:1.7;color:var(--text)">SR832 is the full USARS tiebreaker formula. It assigns weighted scores to each place across all three distance races, with different weights for short, middle, and long distances. The skater with the higher weighted total wins. It is always on — SSM uses the USARS tiebreaker for every meet.</p></div>
           <div class="hr"></div>
           <div><h3>What does the TB badge mean on standings?</h3><p style="line-height:1.7;color:var(--text)">The TB (Tiebreaker) badge on the results page means two or more skaters were tied on points and the tiebreaker was used to determine final placement. If skaters are still tied after the tiebreaker, a run-off race is required.</p></div>
         </div>

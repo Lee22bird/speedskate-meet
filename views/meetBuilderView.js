@@ -375,10 +375,9 @@ function renderMeetBuilderView({ db, meet, user = null, query = {} }) {
                   <div>
                     <label>Tiebreaker Rule</label>
                     <select name="tiebreaker">
-                      <option value="d2"    ${(meet.tiebreaker||'d2')==='d2'   ?'selected':''}>D2 Middle Race (local standard)</option>
-                      <option value="sr832" ${meet.tiebreaker==='sr832'?'selected':''}>USARS SR832 Formula (regionals/nationals)</option>
+                      <option value="sr832" selected>USARS SR832 Formula</option>
                     </select>
-                    <div class="setup-help-note">D2 is the most common local setup. SR832 uses the official weighted formula for regionals/nationals.</div>
+                    <div class="setup-help-note">Ties are broken by the official USARS SR832 weighted formula across the division's races — the USARS rule, applied to every meet. (The old &ldquo;D2 middle race&rdquo; option was a legacy SSM setting, not a USARS rule, and has been removed.)</div>
                   </div>
                 </div>
               </div>

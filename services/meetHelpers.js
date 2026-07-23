@@ -266,7 +266,7 @@ function defaultMeet(ownerUser) {
     meet_staff_assignments:[], staffAssignments:[],
     timeTrialsEnabled:false, timeTrialEvent:{enabled:false,distance:'100m',runOrder:'youngest_oldest',countsForOverall:false}, timeTrialEvents:[], relayEnabled:false, judgesPanelRequired:true,
     desktop_pin_hash:'', desktop_pin_created_at:'', desktop_pin_expires_at:'',
-    notes:'', scheduleNotes:'', relayNotes:'', isPublic:false, status:'draft', tiebreaker:'d2',
+    notes:'', scheduleNotes:'', relayNotes:'', isPublic:false, status:'draft', tiebreaker:'sr832',
     ...defaultPricingFields(),
     groups:baseGroups(), openGroups:makeOpenGroupsTemplate(), quadGroups:makeQuadGroupsTemplate(),
     races:[], blocks:[], registrations:[], additionalGroups:makeAdditionalRaceSlots([]), additionalRaceGroups:makeAdditionalRaceSlots([]), additionalRaces:makeAdditionalRaceSlots([]), skateabilityGroups:makeAdditionalRaceSlots([]),
@@ -328,7 +328,7 @@ function migrateMeet(meet,fallbackOwnerId) {
   if(typeof meet.desktop_pin_expires_at!=='string') meet.desktop_pin_expires_at='';
   if(typeof meet.notes!=='string') meet.notes='';
   if(typeof meet.scheduleNotes!=='string') meet.scheduleNotes='';
-  if(!meet.tiebreaker) meet.tiebreaker='d2';
+  if(!meet.tiebreaker) meet.tiebreaker='sr832';
   if(typeof meet.relayNotes!=='string') meet.relayNotes='';
   if(typeof meet.isPublic!=='boolean') meet.isPublic=false;
   if(typeof meet.status!=='string') meet.status='draft';
@@ -482,7 +482,7 @@ function makeSetupPresetFromMeet(db, meet, name, ownerUserId) {
     createdAt: nowIso(),
     updatedAt: nowIso(),
     sourceMeetId: meet.id,
-    tiebreaker: meet.tiebreaker || 'd2',
+    tiebreaker: meet.tiebreaker || 'sr832',
     baseEntryFee: Number(meet.baseEntryFee || 0),
     noviceEventFee: Number(meet.noviceEventFee || 0),
     eliteEventFee: Number(meet.eliteEventFee || 0),
@@ -1549,7 +1549,7 @@ function raceAuditTableHtml(race, standingsRows, options = {}) {
 
 function resultsSectionHtml(section, meet, options = {}) {
   const print = options.print === true;
-  const tbMode = section.tbMode || 'd2';
+  const tbMode = section.tbMode || 'sr832';
   const tbLabel = tbMode==='sr832' ? 'SR832 Formula' : 'D2 Middle Race';
   const title = options.title || `${esc(section.groupLabel)} <span class="text-orange">—</span> ${esc(cap(section.division))}`;
   const printTitle = options.printTitle || `${esc(section.groupLabel)} — ${esc(cap(section.division))}`;

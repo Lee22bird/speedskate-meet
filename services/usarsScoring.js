@@ -86,15 +86,12 @@ function computeTiebreakerScore(raceScores, races, mode) {
 
   const raceOrder = new Map(sorted.map((r, i) => [r.id, i]));
 
-  if (mode === 'd2') {
-    const midRace = sorted[1] || sorted[0];
-    if (!midRace) return 0;
-
-    const midScore = raceScores.find(s => s.raceId === midRace.id);
-
-    return -(midScore?.place || 999);
-  }
-
+  // USARS SR832 is the ONLY tiebreaker. The old 'd2' (middle-race place) rule
+  // was a legacy SSM invention, not a USARS rule — it resolves genuine ties to
+  // the wrong skater. Verified against the official 2026 Indoor Nationals
+  // results: under d2 the Masters Men title went to the wrong skater; under
+  // SR832 all 50 division champions reproduce exactly.
+  // `mode` is retained for call-signature compatibility and ignored.
   let total = 0;
 
   for (const rs of raceScores) {
