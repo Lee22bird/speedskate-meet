@@ -79,6 +79,37 @@ function scoreRaceByStandardPoints(race) {
   return scored;
 }
 
+// ── Novice divisions (league only) ──────────────────────────────────────────
+// Novice runs only TWO distances (vs Elite's three), and USARS breaks a novice
+// overall tie on the LONGEST distance — the skater with the better finish in the
+// long race wins. This is a deliberate simplification off the 3-distance SR832
+// rule. Nationals has no Novice (every division is named, e.g. "Juvenile Boys"),
+// so this path never touches the championship/SR832 reconciliation.
+function distanceMeters(label) {
+  const m = /(\d+)/.exec(String(label || ''));
+  return m ? Number(m[1]) : 0;
+}
+
+function isNoviceDivision(division, races) {
+  if (String(division || '').toLowerCase() === 'novice') return true;
+  return (races || []).some(r => String(r.class || '').toLowerCase() === 'novice');
+}
+
+// A skater's place in the division's longest-distance race (Infinity if unplaced).
+// LOWER is better — opposite of SR832's higher-is-better weighted score.
+function noviceTiebreakerPlace(raceScores, races) {
+  let longRace = null;
+  let longMeters = -1;
+  for (const r of races || []) {
+    const m = distanceMeters(r.distanceLabel);
+    if (m > longMeters) { longMeters = m; longRace = r; }
+  }
+  if (!longRace) return Infinity;
+  const rs = (raceScores || []).find(s => s.raceId === longRace.id);
+  const place = rs ? Number(rs.place || 0) : 0;
+  return place > 0 ? place : Infinity;
+}
+
 function computeTiebreakerScore(raceScores, races, mode) {
   const sorted = [...races].sort(
     (a, b) => Number(a.dayIndex || 0) - Number(b.dayIndex || 0)
@@ -116,4 +147,7 @@ module.exports = {
   raceCountsForUsarsStandardOverall,
   scoreRaceByStandardPoints,
   computeTiebreakerScore,
+  isNoviceDivision,
+  noviceTiebreakerPlace,
+  distanceMeters,
 };

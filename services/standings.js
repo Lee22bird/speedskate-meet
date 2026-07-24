@@ -4,6 +4,8 @@ const {
   scoreRaceByStandardPoints,
   computeTiebreakerScore,
   raceCountsForUsarsStandardOverall,
+  isNoviceDivision,
+  noviceTiebreakerPlace,
 } = require('./usarsScoring');
 
 function isOpenDivision(div) {
@@ -76,26 +78,36 @@ function computeMeetStandings(meet) {
 
       const allRows = Object.values(standings[key] || {});
 
+      // Novice (league only) breaks ties on the longest distance; Elite/nationals
+      // uses the SR832 weighted score. Detection is division-scoped, so it can
+      // never alter the named-division championship (SR832) path.
+      const novice = isNoviceDivision(divisions[key].division, divRaces);
+
       allRows.sort((a, b) => {
         if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
 
-        const tbA = computeTiebreakerScore(a.raceScores, divRaces, tbMode);
-        const tbB = computeTiebreakerScore(b.raceScores, divRaces, tbMode);
-
-        if (tbA !== tbB) return tbB - tbA;
+        if (novice) {
+          const pa = noviceTiebreakerPlace(a.raceScores, divRaces);
+          const pb = noviceTiebreakerPlace(b.raceScores, divRaces);
+          if (pa !== pb) return pa - pb; // lower place in the long race wins
+        } else {
+          const tbA = computeTiebreakerScore(a.raceScores, divRaces, tbMode);
+          const tbB = computeTiebreakerScore(b.raceScores, divRaces, tbMode);
+          if (tbA !== tbB) return tbB - tbA;
+        }
 
         return String(a.skaterName || '').localeCompare(String(b.skaterName || ''));
       });
 
+      const tbValue = rs => novice
+        ? noviceTiebreakerPlace(rs, divRaces)
+        : computeTiebreakerScore(rs, divRaces, tbMode);
+
       const rows = allRows.map((row, idx, arr) => {
         const prev = arr[idx - 1];
         const isTied = prev && prev.totalPoints === row.totalPoints;
-        const tbA = isTied
-          ? computeTiebreakerScore(row.raceScores, divRaces, tbMode)
-          : null;
-        const tbB = isTied
-          ? computeTiebreakerScore(prev.raceScores, divRaces, tbMode)
-          : null;
+        const tbA = isTied ? tbValue(row.raceScores) : null;
+        const tbB = isTied ? tbValue(prev.raceScores) : null;
 
         const tbResolved = isTied && tbA !== tbB;
         const runoffNeeded = isTied && tbA === tbB;
@@ -104,11 +116,10 @@ function computeMeetStandings(meet) {
           ...row,
           overallPlace: idx + 1,
           tiebreakerUsed: tbResolved,
-          tiebreakerScore: isTied
-            ? tbMode === 'sr832'
-              ? computeTiebreakerScore(row.raceScores, divRaces, 'sr832')
-              : null
-            : null,
+          // For novice this is the long-race place (lower = better); for elite
+          // it's the SR832 weighted score (higher = better).
+          tiebreakerScore: isTied ? tbValue(row.raceScores) : null,
+          tiebreakerKind: isTied ? (novice ? 'novice_long' : tbMode) : null,
           runoffNeeded,
         };
       });
