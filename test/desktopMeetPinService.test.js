@@ -26,6 +26,14 @@ function reqFromSetCookie(header) {
   return { headers: { cookie: cookie.split(';')[0] } };
 }
 
+// A PIN's expiry is anchored to the meet's date + 7 days (see
+// defaultPinExpiresAt). The fixture meet is dated 2026-06-21, so its PINs
+// expire 2026-06-28. Any check that reads validity must therefore pin the
+// clock to a moment INSIDE that window — otherwise the test depends on the
+// real wall clock and a freshly generated PIN reads as (correctly) expired.
+// This mirrors the explicit-clock pattern already used by the expiry test.
+const WITHIN_PIN_WINDOW = new Date('2026-06-22T00:00:00.000Z');
+
 test('generates a 6-digit desktop PIN and stores only the hash', () => {
   const m = meet();
   const result = generatePinForMeet(m);
@@ -43,9 +51,9 @@ test('verifies valid PINs and rejects invalid PINs', () => {
   const { pin } = generatePinForMeet(m);
   const badPin = pin === '000000' ? '000001' : '000000';
 
-  assert.deepEqual(verifyDesktopPin(m, pin), { ok: true, reason: 'verified' });
-  assert.equal(verifyDesktopPin(m, badPin).reason, 'invalid_pin');
-  assert.equal(verifyDesktopPin(m, 'abc123').reason, 'invalid_format');
+  assert.deepEqual(verifyDesktopPin(m, pin, WITHIN_PIN_WINDOW), { ok: true, reason: 'verified' });
+  assert.equal(verifyDesktopPin(m, badPin, WITHIN_PIN_WINDOW).reason, 'invalid_pin');
+  assert.equal(verifyDesktopPin(m, 'abc123', WITHIN_PIN_WINDOW).reason, 'invalid_format');
 });
 
 test('rejects expired desktop PINs', () => {
@@ -61,8 +69,8 @@ test('resetting a PIN invalidates the previous PIN', () => {
   let second = generatePinForMeet(m);
   while (second.pin === first.pin) second = generatePinForMeet(m);
 
-  assert.equal(verifyDesktopPin(m, first.pin).reason, 'invalid_pin');
-  assert.equal(verifyDesktopPin(m, second.pin).ok, true);
+  assert.equal(verifyDesktopPin(m, first.pin, WITHIN_PIN_WINDOW).reason, 'invalid_pin');
+  assert.equal(verifyDesktopPin(m, second.pin, WITHIN_PIN_WINDOW).ok, true);
 });
 
 test('clearing a PIN removes hash and timestamp fields', () => {
@@ -79,16 +87,16 @@ test('clearing a PIN removes hash and timestamp fields', () => {
 test('desktop unlock marker works for the same meet and is invalidated by PIN reset', () => {
   const m = meet();
   const { pin } = generatePinForMeet(m);
-  assert.equal(verifyDesktopPin(m, pin).ok, true);
+  assert.equal(verifyDesktopPin(m, pin, WITHIN_PIN_WINDOW).ok, true);
 
   let header = '';
   const res = { setHeader(name, value) { if (name === 'Set-Cookie') header = value; } };
   setDesktopMeetUnlockCookie(res, m);
 
   const req = reqFromSetCookie(header);
-  assert.equal(isDesktopMeetUnlocked(req, m), true);
-  assert.equal(isDesktopMeetUnlocked(req, meet({ id: 'other', desktop_pin_hash: m.desktop_pin_hash, desktop_pin_expires_at: m.desktop_pin_expires_at })), false);
+  assert.equal(isDesktopMeetUnlocked(req, m, WITHIN_PIN_WINDOW), true);
+  assert.equal(isDesktopMeetUnlocked(req, meet({ id: 'other', desktop_pin_hash: m.desktop_pin_hash, desktop_pin_expires_at: m.desktop_pin_expires_at }), WITHIN_PIN_WINDOW), false);
 
   generatePinForMeet(m);
-  assert.equal(isDesktopMeetUnlocked(req, m), false);
+  assert.equal(isDesktopMeetUnlocked(req, m, WITHIN_PIN_WINDOW), false);
 });
