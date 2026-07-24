@@ -423,7 +423,7 @@ function importSpringFlingTestRoster(meet, { replace = true, checkedIn = true, p
   return meet.registrations.filter(r => r.importSource === 'spring_fling_2026_test').length;
 }
 
-// Real 2026 Indoor Nationals field: 314 skaters, national-sized age groups
+// Real 2026 Indoor Nationals field: 362 skaters, national-sized age groups
 // (Elementary Girls 29, Senior Men 21, …) for stress-testing race generation
 // against the actual bracket paths (direct final / heats / heats+semis).
 function importNationalsRoster(meet, { replace = true, checkedIn = true, paid = true } = {}) {
@@ -609,9 +609,9 @@ router.get('/portal/meet/:meetId/dev/import-spring-fling', requireRole('super_ad
         </div>
       </form>
 
-      <h2 style="margin-top:24px">2026 Nationals Roster (314 skaters)</h2>
+      <h2 style="margin-top:24px">2026 Nationals Roster (362 skaters)</h2>
       <div class="note">Real 2026 Indoor Nationals field — national-sized age groups (Elementary Girls 29, Senior Men 21, …) for stress-testing race generation across every bracket path. Flip <strong>USARS National divisions</strong> on in Meet Builder first so the full division set is available.</div>
-      <form method="POST" action="/portal/meet/${meet.id}/dev/import-nationals" class="stack" onsubmit="return confirm('Import the 2026 Nationals roster (314 skaters)? This can replace current registrations, but it will preserve your block layout.');">
+      <form method="POST" action="/portal/meet/${meet.id}/dev/import-nationals" class="stack" onsubmit="return confirm('Import the 2026 Nationals roster (362 skaters)? This can replace current registrations, but it will preserve your block layout.');">
         <div class="toggle-group">
           <div class="toggle-row"><div><div class="toggle-row-label">Replace current registrations</div><div class="toggle-row-desc">Recommended when testing the full national meet workflow.</div></div>${toggleSwitch('replace', true)}</div>
           <div class="toggle-row"><div><div class="toggle-row-label">Mark skaters paid</div></div>${toggleSwitch('paid', true)}</div>
