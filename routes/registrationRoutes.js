@@ -11,6 +11,7 @@ const {
   generateAdditionalRacesForMeet, generateConfiguredRacesForMeet, ensureAtLeastOneBlock,
   buildRegistrationPricingPreview,
   hasRelayEvents,
+  baseGroupsUSARS, makeQuadGroupsTemplate,
 } = require('../services/meetHelpers');
 const { calcRegistrationCost } = require('../services/pricing');
 const {
@@ -564,7 +565,25 @@ router.get('/portal/meet/:meetId/dev/import-spring-fling', requireRole('super_ad
   const trainingCount = (meet.registrations || []).filter(r => r.importSource === TRAINING_ROSTER_SOURCE).length;
   res.send(pageShell({ title: 'Dev Import', user: req.user, meet, activeTab: 'registered', bodyHtml: `
     <div class="page-header"><h1>Dev Import Mode</h1><div class="sub">${esc(meet.meetName)} • Training and race-generation rosters</div></div>
-    <div class="card card-accent">
+    ${req.query.usarsSetup ? `<div class="card" style="border-left:5px solid #16a34a;background:rgba(22,163,74,.07);margin-bottom:18px"><strong>✓ Full USARS meet set up.</strong> All ${baseGroupsUSARS().length} age divisions and ${makeQuadGroupsTemplate().length} quad divisions are enabled with the SR832 tiebreaker. Import the 2026 Nationals roster below, then generate races.</div>` : ''}
+    <div class="card" style="border-left:5px solid var(--orange)">
+      <div class="chip chip-orange" style="margin-bottom:8px">Step 1 · One-click setup</div>
+      <h2 style="margin:0">Set up a full USARS meet</h2>
+      <p class="note" style="margin-top:10px">Turns this meet into a complete USARS national setup in one click: all <strong>age divisions</strong> (Tiny Tot → Premier, elite), all <strong>quad divisions</strong>, and relays enabled — the tiebreaker set to USARS SR832. Then use <strong>Import 2026 Nationals Roster</strong> below and generate races.</p>
+      <div class="stat-grid" style="margin:16px 0">
+        <div class="stat-card navy"><div class="stat-label">Age divisions</div><div class="stat-value">${baseGroupsUSARS().length}</div></div>
+        <div class="stat-card sky"><div class="stat-label">Quad divisions</div><div class="stat-value">${makeQuadGroupsTemplate().length}</div></div>
+        <div class="stat-card orange"><div class="stat-label">Currently enabled</div><div class="stat-value">${(meet.groups||[]).filter(g=>g.divisions&&(g.divisions.elite?.enabled||g.divisions.novice?.enabled)).length}</div></div>
+      </div>
+      <p class="note" style="color:var(--muted)">Note: individual + quad races generate automatically from the imported roster. <strong>Inline relays</strong> are built in the Relay Builder (teams are assigned by hand). <strong>Quad relays</strong> are not supported yet.</p>
+      <form method="POST" action="/portal/meet/${meet.id}/dev/setup-usars" class="stack" onsubmit="return confirm('Set up a full USARS meet? This enables every age + quad division and relays on this meet, and sets the SR832 tiebreaker. It does not touch registrations.');">
+        <div class="action-row">
+          <button class="btn-orange" type="submit">Set Up Full USARS Meet</button>
+          <a class="btn2" href="/portal/meet/${meet.id}/builder">Open Meet Builder</a>
+        </div>
+      </form>
+    </div>
+    <div class="card card-accent" style="margin-top:18px">
       <h2>Load realistic test registrations</h2>
       <p class="note">Imports ${SPRING_FLING_TEST_ROSTER.length} deterministic test skaters, including 6, 7, 8, 12, and 14-skater cohorts. This preserves saved blocks/templates, then rebuilds race lane entries for testing.</p>
       <div class="stat-grid" style="margin:18px 0">
@@ -624,6 +643,25 @@ router.get('/portal/meet/:meetId/dev/import-spring-fling', requireRole('super_ad
         </div>
       </form>
     </div>` }));
+});
+
+// One-click full USARS national setup: every age division (elite) + every quad
+// division, relays enabled, SR832 tiebreaker. Individual + quad races then
+// generate from the imported roster; inline relays are built in the Relay
+// Builder; quad relays are not supported yet. Does not touch registrations.
+router.post('/portal/meet/:meetId/dev/setup-usars', requireRole('super_admin'), (req, res) => {
+  const meet = getMeetOr404(req.db, req.params.meetId);
+  if (!meet) return res.redirect('/portal');
+  if (!canEditMeet(req.user, meet)) return res.status(403).send('Forbidden');
+  createDesktopBackupIfActive(req.db, 'before_usars_setup', meet.id);
+  meet.groups = baseGroupsUSARS();
+  meet.quadGroups = (makeQuadGroupsTemplate() || []).map(g => ({ ...g, enabled: true }));
+  meet.relayEnabled = true;
+  meet.tiebreaker = 'sr832';
+  ensureAtLeastOneBlock(meet);
+  meet.updatedAt = nowIso();
+  saveDb(req.db);
+  return res.redirect(`/portal/meet/${meet.id}/dev/import-spring-fling?usarsSetup=1`);
 });
 
 router.post('/portal/meet/:meetId/dev/import-spring-fling', requireRole('super_admin'), (req, res) => {
