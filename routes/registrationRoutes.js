@@ -11,7 +11,7 @@ const {
   generateAdditionalRacesForMeet, generateConfiguredRacesForMeet, ensureAtLeastOneBlock,
   buildRegistrationPricingPreview,
   hasRelayEvents,
-  baseGroupsUSARS, makeQuadGroupsTemplate,
+  baseGroupsUSARS, makeQuadGroupsTemplate, defaultMeet,
 } = require('../services/meetHelpers');
 const { calcRegistrationCost } = require('../services/pricing');
 const {
@@ -642,6 +642,15 @@ router.get('/portal/meet/:meetId/dev/import-spring-fling', requireRole('super_ad
           <a class="btn2" href="/portal/meet/${meet.id}/registered">Back to Registered</a>
         </div>
       </form>
+
+      <h2 style="margin-top:24px">2026 Nationals — Golden Master (real results, scored)</h2>
+      <div class="note">Loads the <strong>real 2026 Indoor Nationals bracket with actual finishes</strong> as a brand-new meet, then SSM's own standings engine crowns the divisions. This is the browser-drivable twin of the golden-master reconciliation — the Results page should reproduce the official champions (50/50). Creates a <strong>separate</strong> meet; your current meet is untouched.</div>
+      <form method="POST" action="/portal/meet/${meet.id}/dev/load-nationals-scored" class="stack" onsubmit="return confirm('Create a new fully-scored 2026 Nationals meet (real results)? This does not touch the current meet.');">
+        <div class="action-row">
+          <button class="btn-orange" type="submit">Load Scored 2026 Nationals → New Meet</button>
+          <a class="btn2" href="/portal/meet/${meet.id}/registered">Back to Registered</a>
+        </div>
+      </form>
     </div>` }));
 });
 
@@ -758,6 +767,52 @@ router.post('/portal/meet/:meetId/dev/import-nationals', requireRole('super_admi
   });
   saveDb(req.db);
   return res.redirect(`/portal/meet/${meet.id}/registered?devImported=${count}`);
+});
+
+// Golden-master (browser-drivable): build the REAL scored 2026 Nationals as a
+// fresh meet, so the live Results page reproduces the official champions using
+// SSM's own standings code. Identical pipeline to
+// tools/nationals/reconcile_nationals.js (nationals_heats -> IR -> meet ->
+// computeMeetStandings) — the only added logic is persisting the built meet.
+// Creates a NEW meet and never mutates the meet it was launched from.
+router.post('/portal/meet/:meetId/dev/load-nationals-scored', requireRole('super_admin'), (req, res) => {
+  const launchMeet = getMeetOr404(req.db, req.params.meetId);
+  if (!launchMeet) return res.redirect('/portal');
+  if (!canEditMeet(req.user, launchMeet)) return res.status(403).send('Forbidden');
+
+  // Lazy-require the heavy Nationals data + adapters so app boot stays fast.
+  const nationalsHeats = require('../data/nationals_heats.js');
+  const { nationalsToIR } = require('../services/importAdapters/nationalsAdapter');
+  const { buildMeetFromIR } = require('../services/meetImport');
+
+  const { ir } = nationalsToIR(nationalsHeats);
+  const built = buildMeetFromIR(ir);
+
+  const base = defaultMeet(req.user);
+  const meet = {
+    ...base,
+    ...built.meet,
+    id: nextId(req.db.meets),
+    meetName: '2026 Nationals — Golden Master',
+    leagueAssociation: 'USARS', league: 'USARS',
+    status: 'published', isPublic: false,
+    tiebreaker: 'sr832',
+    // Re-assert ownership + timestamps (built.meet may carry blank/owner fields).
+    createdByUserId: base.createdByUserId,
+    meet_owner_user_id: base.meet_owner_user_id,
+    meet_owner_ssl_id: base.meet_owner_ssl_id,
+    meet_owner_name: base.meet_owner_name,
+    ownership_locked: true,
+    createdAt: nowIso(), updatedAt: nowIso(),
+    goldenMaster: true,
+  };
+  // Make the meet portal-complete without disturbing scoring (verified: still 50/50).
+  ensureAtLeastOneBlock(meet);
+  ensureCurrentRace(meet);
+
+  req.db.meets.push(meet);
+  saveDb(req.db);
+  return res.redirect(`/portal/meet/${meet.id}/results?goldenMaster=1`);
 });
 
 
