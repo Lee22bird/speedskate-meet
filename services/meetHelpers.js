@@ -1529,10 +1529,16 @@ function raceAuditTableHtml(race, standingsRows, options = {}) {
     .filter(({ score }) => score && Number(score.place) > 0)
     .sort((a, b) => Number(a.score.place) - Number(b.score.place));
 
+  // 🏅 Skaters who set a new record in THIS race (flagged at results entry).
+  const recordByReg = new Map(
+    (race.laneEntries || []).filter(l => l.record).map(l => [String(l.registrationId), true])
+  );
+  const recordBadge = `<span title="New record" style="display:inline-block;background:#f59e0b;color:#fff;font-size:11px;font-weight:800;letter-spacing:.02em;padding:1px 8px;border-radius:999px;margin-left:6px;vertical-align:middle;white-space:nowrap">🏅 New Record</span>`;
+
   const tableRows = rows.map(({ row, score }) => `
     <tr>
       <td><strong>${score.place}</strong></td>
-      <td>${esc(row.skaterName || '')}${print ? '' : sponsorLineHtml(row.sponsor)}</td>
+      <td>${esc(row.skaterName || '')}${recordByReg.has(String(row.registrationId)) ? ' ' + recordBadge : ''}${print ? '' : sponsorLineHtml(row.sponsor)}</td>
       <td>${esc(row.team || '')}</td>
       <td><strong>${formatAuditPoints(score.points)}</strong></td>
     </tr>`).join('');

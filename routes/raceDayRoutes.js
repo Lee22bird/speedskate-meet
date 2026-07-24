@@ -173,6 +173,12 @@ function laneResultFromBody(existing, lane, body, user) {
     time: String(body[`time_${lane}`] ?? existing.time ?? '').trim(),
     status,
   };
+  // 🏅 New-record flag. A checkbox only POSTs when checked, so distinguish
+  // "unchecked" from "this lane wasn't in the submitted form": if the lane's text
+  // inputs are present (a rendered lane always submits skaterName/place/time),
+  // read the checkbox; otherwise keep whatever was stored.
+  const laneRendered = body[`time_${lane}`] != null || body[`place_${lane}`] != null || body[`skaterName_${lane}`] != null;
+  result.record = laneRendered ? (body[`record_${lane}`] != null) : !!existing.record;
   // Preserve relay-team identity on generated relay entries (this editor otherwise
   // rebuilds entries from a fixed field list and would drop these).
   if (existing.relayTeamId != null) result.relayTeamId = existing.relayTeamId;
@@ -928,7 +934,7 @@ function renderCorrectionRaceForm(meet, race, regMap, user, error = '', ok = '')
         </div>
         <div style="overflow-x:auto">
           <table class="table">
-            <thead><tr><th>Lane</th><th>Helmet</th><th>Skater</th><th>Team</th><th>Place</th><th>Time</th><th>Status</th></tr></thead>
+            <thead><tr><th>Lane</th><th>Helmet</th><th>Skater</th><th>Team</th><th>Place</th><th>Time</th><th>🏅 Rec</th><th>Status</th></tr></thead>
             <tbody>${lanes.map(l => { const reg = regMap.get(Number(l.registrationId)); return `<tr>
               <td>${esc(l.lane)}</td>
               <td>${l.helmetNumber ? '#' + esc(l.helmetNumber) : ''}</td>
@@ -936,6 +942,7 @@ function renderCorrectionRaceForm(meet, race, regMap, user, error = '', ok = '')
               <td><input name="team_${esc(l.lane)}" value="${esc(l.team)}" /></td>
               <td><input name="place_${esc(l.lane)}" value="${esc(l.place)}" /></td>
               <td><input name="time_${esc(l.lane)}" value="${esc(l.time)}" /></td>
+              <td style="text-align:center"><input type="checkbox" name="record_${esc(l.lane)}" ${l.record ? 'checked' : ''} title="New record set in this race" /></td>
               <td><select class="race-status-select" data-lane="${esc(l.lane)}" name="status_${esc(l.lane)}">${raceStatusOptionsHtml(l.status)}</select>${dqMetadataFields(l, l.lane)}</td>
             </tr>`; }).join('')}</tbody>
           </table>
@@ -1650,13 +1657,14 @@ router.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','j
             </div>
             <div style="overflow-x:auto">
               <table class="table">
-                <thead><tr><th>Lane</th><th>Helmet</th><th>Skater</th><th>Team</th><th>Place</th><th>Time</th><th>Status</th></tr></thead>
+                <thead><tr><th>Lane</th><th>Helmet</th><th>Skater</th><th>Team</th><th>Place</th><th>Time</th><th>🏅 Rec</th><th>Status</th></tr></thead>
                 <tbody>${currentLanes.map(l=>{const reg=regMap.get(Number(l.registrationId));return`<tr>
                   <td>${l.lane}</td><td>${l.helmetNumber?'#'+esc(l.helmetNumber):''}</td>
                   <td><div style="display:flex;align-items:center;gap:10px">${skaterAvatarHtml(l, reg, 'small')}<div style="flex:1"><input name="skaterName_${l.lane}" value="${esc(l.skaterName)}" />${reg?.sponsor?`<div class="sponsor-line">Sponsor: ${esc(reg.sponsor)}</div>`:''}</div></div></td>
                   <td><input name="team_${l.lane}"       value="${esc(l.team)}"       /></td>
                   <td><input name="place_${l.lane}"      value="${esc(l.place)}"      /></td>
                   <td><input name="time_${l.lane}"       value="${esc(l.time)}"       /></td>
+                  <td style="text-align:center"><input type="checkbox" name="record_${l.lane}" ${l.record?'checked':''} title="New record set in this race" /></td>
                   <td><select class="race-status-select" data-lane="${esc(l.lane)}" name="status_${esc(l.lane)}">${raceStatusOptionsHtml(l.status)}</select>${dqMetadataFields(l, l.lane)}</td>
                 </tr>`;}).join('')}</tbody>
               </table>
