@@ -88,13 +88,28 @@ function nationalsToIR(nationals) {
             // Relay "skaters" are TEAMS (name = club, team = member list); they
             // are not individual registrations, but we still register them so the
             // relay race has resolvable entries.
+            const teamRaw = String(s.team || '').trim();
             if (!skaters.has(helmet)) {
               skaters.set(helmet, {
                 helmet,
                 name: String(s.name || '').trim(),
-                team: String(s.team || '').trim(),
+                team: teamRaw,
                 division,
               });
+            } else {
+              // A handful of official-sheet rows overlapped the team column with
+              // the record time + "New Record" note (e.g. "Astro Speed 1:05.361
+              // -New Record", or the interleaved "Emerald Coast Spe2e:d27.486
+              // -New Record"). Those aren't recoverable by string surgery, but the
+              // same skater raced other distances where the team is clean — so if
+              // the stored team is a polluted record-row and this row is clean,
+              // backfill the clean name. Detect pollution by the "New Record"
+              // marker only (never by digits — real teams like "SS2-Wolverines"
+              // legitimately contain them).
+              const cur = skaters.get(helmet);
+              const curPolluted = /new record/i.test(cur.team || '');
+              const newClean = teamRaw && !/new record/i.test(teamRaw);
+              if (curPolluted && newClean) cur.team = teamRaw;
             }
 
             entries.push({
@@ -129,6 +144,30 @@ function nationalsToIR(nationals) {
         }
       }
     }
+  }
+
+  // Fallback for the rare skater whose EVERY row was a record row (no clean team
+  // to backfill from): recover the real team by longest-common-prefix against the
+  // clean team names seen elsewhere in the meet. This correctly rebuilds even the
+  // interleaved cases — "Emerald Coast Spe2e:d27.486 -New Record" shares the
+  // prefix "Emerald Coast Spe" with the clean "Emerald Coast Speed".
+  const cleanTeams = Array.from(new Set(
+    Array.from(skaters.values()).map(s => s.team).filter(t => t && !/new record/i.test(t))
+  ));
+  const commonPrefixLen = (a, b) => {
+    let i = 0;
+    while (i < a.length && i < b.length && a[i].toLowerCase() === b[i].toLowerCase()) i++;
+    return i;
+  };
+  for (const sk of skaters.values()) {
+    if (!/new record/i.test(sk.team || '')) continue;
+    let best = '', bestLen = 0;
+    for (const t of cleanTeams) {
+      const l = commonPrefixLen(sk.team, t);
+      if (l > bestLen && l >= 4) { bestLen = l; best = t; }
+    }
+    // Last resort if nothing matches: strip the time + record note off the tail.
+    sk.team = best || sk.team.replace(/\s*\d.*$/, '').replace(/\s*-?\s*New Record.*$/i, '').trim();
   }
 
   const ir = {
