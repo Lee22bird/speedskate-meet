@@ -65,8 +65,9 @@ function normalizeRelayTemplates(saved) {
 }
 
 // ── Race factory ──────────────────────────────────────────────────────────────
-function makeRelayRace({ name, distance, notes, relayType='', ageGroup='', ageRange='' }) {
+function makeRelayRace({ name, distance, notes, relayType='', ageGroup='', ageRange='', quad=false }) {
   const raceToken = crypto.randomBytes(6).toString('hex');
+  const isQuad = !!quad;
   return {
     id: 'r'+raceToken,
     orderHint: 9800,
@@ -89,7 +90,9 @@ function makeRelayRace({ name, distance, notes, relayType='', ageGroup='', ageRa
     isFinal: true,
     closedAt: '',
     isOpenRace: false,
-    isQuadRace: false,
+    // A quad relay is still a relay (placement-only, never scores an overall);
+    // isQuadRace only marks the discipline so it's not confused with inline.
+    isQuadRace: isQuad,
     isTimeTrial: false,
     isRelayRace: true,
     relayType: String(relayType||'').trim(),

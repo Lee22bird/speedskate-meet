@@ -59,7 +59,59 @@ const RELAY_DIVISIONS = [
   { id: 'r4_master_mixed',    size: 4, label: 'Master 4 Mixed',      ageRange: '35 & older', gender: 'mixed', distance: '2000m' },
 ];
 
-const RELAY_DIVISION_BY_ID = new Map(RELAY_DIVISIONS.map(d => [d.id, d]));
+// ── QUAD relays (nationals / regionals — leagues don't run these) ─────────────
+// Seeded from the 26 quad-relay divisions in the official 2026 Indoor Nationals
+// data (division names + distances are authoritative). Age ranges MIRROR the
+// inline USARS relay brackets for the same division+size — verify against the
+// quad relay rulebook if it diverges. Quad relays are placement-only and never
+// score toward any overall (same as inline relays).
+const QUAD_RELAY_DIVISIONS = [
+  // ── 2-person ──
+  { id: 'q2_juvenile_girls', size: 2, label: 'Juvenile 2 Girls', ageRange: '9 & under',  gender: 'girls', distance: '1200m' },
+  { id: 'q2_juvenile_mixed', size: 2, label: 'Juvenile 2 Mixed', ageRange: '9 & under',  gender: 'mixed', distance: '1200m' },
+  { id: 'q2_freshman_girls', size: 2, label: 'Freshman 2 Girls', ageRange: '10-13',      gender: 'girls', distance: '2000m' },
+  { id: 'q2_freshman_boys',  size: 2, label: 'Freshman 2 Boys',  ageRange: '10-13',      gender: 'boys',  distance: '2000m' },
+  { id: 'q2_freshman_mixed', size: 2, label: 'Freshman 2 Mixed', ageRange: '10-13',      gender: 'mixed', distance: '2000m' },
+  { id: 'q2_senior_ladies',  size: 2, label: 'Senior 2 Ladies',  ageRange: '16 & older', gender: 'girls', distance: '3000m' },
+  { id: 'q2_senior_men',     size: 2, label: 'Senior 2 Men',     ageRange: '16 & older', gender: 'boys',  distance: '5000m' },
+  { id: 'q2_senior_mixed',   size: 2, label: 'Senior 2 Mixed',   ageRange: '16 & older', gender: 'mixed', distance: '3000m' },
+  { id: 'q2_masters_ladies', size: 2, label: 'Masters 2 Ladies', ageRange: '35 & older', gender: 'girls', distance: '2000m' },
+  { id: 'q2_masters_men',    size: 2, label: 'Masters 2 Men',    ageRange: '35 & older', gender: 'boys',  distance: '2000m' },
+  { id: 'q2_masters_mixed',  size: 2, label: 'Masters 2 Mixed',  ageRange: '35 & older', gender: 'mixed', distance: '2000m' },
+  { id: 'q2_veteran_ladies', size: 2, label: 'Veteran 2 Ladies', ageRange: '45 & older', gender: 'girls', distance: '2000m' },
+  { id: 'q2_veteran_men',    size: 2, label: 'Veteran 2 Men',    ageRange: '45 & older', gender: 'boys',  distance: '2000m' },
+  { id: 'q2_veteran_mixed',  size: 2, label: 'Veteran 2 Mixed',  ageRange: '45 & older', gender: 'mixed', distance: '2000m' },
+  { id: 'q2_esquire_ladies', size: 2, label: 'Esquire 2 Ladies', ageRange: '55 & older', gender: 'girls', distance: '2000m' },
+  { id: 'q2_esquire_men',    size: 2, label: 'Esquire 2 Men',    ageRange: '55 & older', gender: 'boys',  distance: '2000m' },
+  { id: 'q2_esquire_mixed',  size: 2, label: 'Esquire 2 Mixed',  ageRange: '55 & older', gender: 'mixed', distance: '2000m' },
+  // ── 3-person ──
+  { id: 'q3_freshman_girls', size: 3, label: 'Freshman 3 Girls', ageRange: '10-13',      gender: 'girls', distance: '1200m' },
+  { id: 'q3_freshman_boys',  size: 3, label: 'Freshman 3 Boys',  ageRange: '10-13',      gender: 'boys',  distance: '1200m' },
+  { id: 'q3_freshman_mixed', size: 3, label: 'Freshman 3 Mixed', ageRange: '10-13',      gender: 'mixed', distance: '1200m' },
+  { id: 'q3_senior_ladies',  size: 3, label: 'Senior 3 Ladies',  ageRange: '14 & older', gender: 'girls', distance: '3000m' },
+  { id: 'q3_senior_men',     size: 3, label: 'Senior 3 Men',     ageRange: '14 & older', gender: 'boys',  distance: '3000m' },
+  { id: 'q3_senior_mixed',   size: 3, label: 'Senior 3 Mixed',   ageRange: '14 & older', gender: 'mixed', distance: '3000m' },
+  { id: 'q3_masters_ladies', size: 3, label: 'Masters 3 Ladies', ageRange: '25 & older', gender: 'girls', distance: '1500m' },
+  { id: 'q3_masters_men',    size: 3, label: 'Masters 3 Men',    ageRange: '25 & older', gender: 'boys',  distance: '1500m' },
+  { id: 'q3_masters_mixed',  size: 3, label: 'Masters 3 Mixed',  ageRange: '25 & older', gender: 'mixed', distance: '1500m' },
+];
+
+// Tag discipline so a division always self-describes. RELAY_DIVISIONS keeps its
+// meaning of "inline relay divisions" — existing consumers (the inline relay
+// builder) are unchanged; quad divisions live in their own list until the
+// Builder UI is discipline-aware.
+for (const d of RELAY_DIVISIONS) d.discipline = 'inline';
+for (const d of QUAD_RELAY_DIVISIONS) d.discipline = 'quad';
+
+const ALL_RELAY_DIVISIONS = [...RELAY_DIVISIONS, ...QUAD_RELAY_DIVISIONS];
+
+// Divisions for a discipline ('inline' | 'quad'); defaults to inline.
+function relayDivisionsForDiscipline(discipline) {
+  const want = String(discipline || 'inline').toLowerCase() === 'quad' ? 'quad' : 'inline';
+  return ALL_RELAY_DIVISIONS.filter(d => d.discipline === want);
+}
+
+const RELAY_DIVISION_BY_ID = new Map(ALL_RELAY_DIVISIONS.map(d => [d.id, d]));
 
 function relayGenderOk(divGender, skaterGender) {
   if (divGender === 'mixed' || divGender === 'open') return true;
@@ -75,4 +127,4 @@ function eligibleForRelayDivision(div, skaters) {
   return (skaters || []).filter(s => ageMatch(div.ageRange, Number(s.age)) && relayGenderOk(div.gender, s.gender));
 }
 
-module.exports = { RELAY_DIVISIONS, RELAY_DIVISION_BY_ID, relayGenderOk, eligibleForRelayDivision };
+module.exports = { RELAY_DIVISIONS, QUAD_RELAY_DIVISIONS, ALL_RELAY_DIVISIONS, RELAY_DIVISION_BY_ID, relayGenderOk, eligibleForRelayDivision, relayDivisionsForDiscipline };
