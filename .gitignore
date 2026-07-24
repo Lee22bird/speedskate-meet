@@ -10,3 +10,6 @@ dist/
 .venv/
 __pycache__/
 *.py[co]
+
+# Generated Nationals answer-key (reproduce with tools/nationals/gen_answer_key.js)
+tools/nationals/nationals_answer_key.html
