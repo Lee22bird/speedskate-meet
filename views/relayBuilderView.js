@@ -49,8 +49,10 @@ function renderRelayBuilderView({ meet, saved = false, added = '', gen = null })
       </td>
     </tr>`).join('');
 
-  const templateGroups = ['3 Person', '2 Person', '4 Person'].map(type => {
-    const rows = meet.relayTemplates.map((row, idx) => ({ row, idx })).filter(x => x.row.type === type);
+  const groupsFor = (discipline, types) => types.map(type => {
+    const rows = meet.relayTemplates.map((row, idx) => ({ row, idx }))
+      .filter(x => (x.row.discipline || 'inline') === discipline && x.row.type === type);
+    if (!rows.length) return '';
     return `
       <div class="relay-type-card">
         <div class="row between center" style="margin-bottom:12px">
@@ -82,6 +84,9 @@ function renderRelayBuilderView({ meet, saved = false, added = '', gen = null })
         </div>
       </div>`;
   }).join('');
+
+  const inlineGroups = groupsFor('inline', ['3 Person', '2 Person', '4 Person']);
+  const quadGroups = groupsFor('quad', ['2 Person', '3 Person']);
 
   return `
     <div class="builder-banner" style="background:linear-gradient(135deg,#1d4ed8 0%,#3b82f6 100%);margin-bottom:18px">
@@ -131,7 +136,15 @@ function renderRelayBuilderView({ meet, saved = false, added = '', gen = null })
         </div>
       </div>
       <form id="relayBuilderForm" method="POST" action="/portal/meet/${meet.id}/relay-builder/add-template">
-        ${templateGroups}
+        ${inlineGroups}
+        ${quadGroups ? `
+        <div class="quad-relay-block" style="margin-top:22px;padding-top:8px;border-top:2px dashed rgba(15,31,61,.16)">
+          <div style="margin:12px 0 4px">
+            <h2 style="margin:0">🛼 Quad Relays</h2>
+            <div class="note">Nationals / regionals only — leagues don't run these. Team fill-in works exactly like inline relays; placement-only, no overall points.</div>
+          </div>
+          ${quadGroups}
+        </div>` : ''}
         <div class="action-row" style="margin-top:16px">
           <button class="btn-sky" type="submit">Save Relay Builder</button>
         </div>

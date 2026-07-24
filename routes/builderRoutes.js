@@ -136,7 +136,7 @@ function saveMeetFields(meet, body, db) {
   meet.scheduleNotes=String(body.scheduleNotes||'');
   meet.relayNotes=String(body.relayNotes||'');
   meet.relayDeadline=String(body.relayDeadline||'').trim(); // free text shown to coaches; locks the coach relay form once passed
-  meet.tiebreaker='sr832'; // USARS SR832 is the only tiebreaker (d2 was legacy)
+  meet.tiebreaker=String(body.tiebreaker||'d2')==='sr832'?'sr832':'d2';
   meet.baseEntryFee=Number(String(body.baseEntryFee||'0').trim()||0);
   meet.additionalRaceFee=Number(String(body.additionalRaceFee||'0').trim()||0);
   meet.maxRegistrationFee=Number(String(body.maxRegistrationFee||'0').trim()||0);
@@ -484,8 +484,10 @@ router.post('/portal/meet/:meetId/relay-builder/add-template', requireRole('meet
     const distance=String(req.body[`distance_${idx}`]||base.distance).trim();
     const notes=String(req.body[`notes_${idx}`]||base.notes).trim();
 
+    const isQuad = base.discipline === 'quad';
+
     if(enabled){
-      const name=[ageGroup, relayType, 'Relay'].filter(Boolean).join(' ');
+      const name=(isQuad?'Quad ':'')+[ageGroup, relayType, 'Relay'].filter(Boolean).join(' ');
       // Match by relayDivisionId first so the builder and the coach-form generator
       // (services/relayGenerator.js) share one race per division; fall back to
       // name+distance for legacy relay races created before divisionId existed.
@@ -505,7 +507,7 @@ router.post('/portal/meet/:meetId/relay-builder/add-template', requireRole('meet
         race.notes = notes;
         if(base.divisionId) race.relayDivisionId = base.divisionId;
       } else if(name && distance){
-        race=makeRelayRace({ name, distance, notes, relayType, ageGroup, ageRange });
+        race=makeRelayRace({ name, distance, notes, relayType, ageGroup, ageRange, quad: isQuad });
         if(base.divisionId) race.relayDivisionId = base.divisionId;
         race.orderHint=9800+(meet.races||[]).filter(r=>r.isRelayRace).length+added;
         meet.races.push(race);
@@ -521,6 +523,7 @@ router.post('/portal/meet/:meetId/relay-builder/add-template', requireRole('meet
       distance,
       notes,
       divisionId: base.divisionId,
+      discipline: base.discipline || 'inline',
     };
   });
 

@@ -2,7 +2,7 @@ const crypto = require('crypto');
 const { esc } = require('../utils/html');
 const { ageMatch } = require('./meetHelpers');
 const { ageForReg } = require('./meetHelpers');
-const { RELAY_DIVISIONS } = require('./relayDivisions');
+const { ALL_RELAY_DIVISIONS } = require('./relayDivisions');
 
 // ── Relay template rows ───────────────────────────────────────────────────────
 // The full USARS relay division set (services/relayDivisions.js) — one row per
@@ -10,8 +10,9 @@ const { RELAY_DIVISIONS } = require('./relayDivisions');
 // split, age bracket, and rulebook distance (single source of truth shared with
 // the coach relay form + relay generator). `age` = the division label minus the
 // size token, gender kept: "Primary 2 Boys" -> "Primary Boys", "Juvenile 3 Person"
-// -> "Juvenile".
-const RELAY_TEMPLATE_ROWS = RELAY_DIVISIONS.map(d => ({
+// -> "Juvenile". Includes both inline and quad divisions; `discipline` tags each
+// so the builder can render/route them separately.
+const RELAY_TEMPLATE_ROWS = ALL_RELAY_DIVISIONS.map(d => ({
   type: `${d.size} Person`,
   age: d.label.replace(/ \d+ /, ' ').replace(/ Person$/, '').trim(),
   ageRange: d.ageRange,
@@ -19,6 +20,7 @@ const RELAY_TEMPLATE_ROWS = RELAY_DIVISIONS.map(d => ({
   notes: '',
   divisionId: d.id,
   gender: d.gender,
+  discipline: d.discipline || 'inline',
 }));
 
 // ── Normalizers ───────────────────────────────────────────────────────────────
@@ -60,6 +62,7 @@ function normalizeRelayTemplates(saved) {
       notes: String(row.notes || def.notes || ''),
       divisionId: def.divisionId,
       gender: def.gender,
+      discipline: def.discipline || 'inline',
     };
   });
 }
