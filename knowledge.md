@@ -140,8 +140,13 @@ Relay advancement is the parallel engine in `relayGenerator.js`
   → final. 2p/4p qualify by **place** (SR505.3/.4); **3-person by time (SR505.9)**.
 - **Race day**: relay races are placement-only, manual team fill-in; the tabulator
   shows eligible/assigned teams and a `🛼 Quad` marker for quad.
-- **KNOWN GAP**: 3-person relays with 8+ teams (`advanceThreePersonRelay`, SR505.9
-  win-and-in + fastest times) is **not built** — falls to manual.
+- **3-person relays (SR505.9 times system) — BUILT & VERIFIED.** 8+ team 3-person
+  divisions use `advanceThreePersonRelay` + `planThreePersonRelaySizing`: **win-and-in
+  + fastest times** (each heat/semi winner advances directly; remaining slots go to
+  the fastest times). Heats/semis record `resultsMode:'times'`. 8–21 teams → heats →
+  6-team final; 22+ → heats → 2 semis → final. Verified headless AND live (24 teams →
+  4 heats → 2 semis → final, champion crowned). It was written but never run — it
+  only started working after the `relayDivisionId` migrate fix (§10).
 
 ---
 
@@ -275,11 +280,11 @@ On the Registered → **Dev Import** page (`/portal/meet/:id/dev/import-spring-f
 - 🏅 Records feature (capture + badge).
 - **Quad relay engine end to end**: registration → per-club team building →
   bracket generation → heats→final advancement → champion. Proven live.
+- **3-person relay times system (SR505.9)**: win-and-in + fastest times, heats →
+  2 semis → final. Proven live (24 teams).
 - Persistence (mounted disk), public Live view, repo out of iCloud, 107/107 tests.
 
 **Known remaining gaps:**
-- **3-person relay times system (SR505.9)** — 8+ team 3-person relays fall to manual;
-  `advanceThreePersonRelay` not built. **(Next up.)**
 - **5+ heat individual divisions** (quarterfinals) stay manual by design.
 - **Google Sheets importer** for Jessica's race-day sheet — not built (needs a
   sample sheet). This is the biggest real-world unblock left.

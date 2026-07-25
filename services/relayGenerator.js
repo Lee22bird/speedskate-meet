@@ -4,8 +4,11 @@
 // Stage 4b: 2- & 4-person divisions with >7 teams -> heats -> (2 semis) -> final,
 //   reusing the individual SR505.3/.4 PLACE-BASED engine (contestant TEAMS as the
 //   entries). Semis are created lazily on the last heat close, same as individuals.
-//   3-PERSON relays with >7 teams use SR505.9 win-and-in + fastest TIMES — a
-//   different system not built here yet (reported as needsHeats).
+//   3-PERSON relays with >7 teams use SR505.9 WIN-AND-IN + fastest TIMES — a
+//   separate times-based engine (advanceThreePersonRelay + planThreePersonRelaySizing):
+//   the winner of each heat/semi advances directly, remaining slots go to the
+//   fastest times. Its heats/semis record times (resultsMode:'times'). Verified
+//   headless + live (24 teams -> 4 heats -> 2 semis -> final).
 //
 // The advancement here mirrors meetHelpers' individual engine but keys the family
 // by relayDivisionId and preserves relay-team identity. meetHelpers is accessed
