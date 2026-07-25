@@ -575,7 +575,7 @@ router.get('/portal/meet/:meetId/dev/import-spring-fling', requireRole('super_ad
         <div class="stat-card sky"><div class="stat-label">Quad divisions</div><div class="stat-value">${makeQuadGroupsTemplate().length}</div></div>
         <div class="stat-card orange"><div class="stat-label">Currently enabled</div><div class="stat-value">${(meet.groups||[]).filter(g=>g.divisions&&(g.divisions.elite?.enabled||g.divisions.novice?.enabled)).length}</div></div>
       </div>
-      <p class="note" style="color:var(--muted)">Note: individual + quad races generate automatically from the imported roster. <strong>Inline relays</strong> are built in the Relay Builder (teams are assigned by hand). <strong>Quad relays</strong> are not supported yet.</p>
+      <p class="note" style="color:var(--muted)">Note: individual + quad races generate automatically from the imported roster. <strong>Inline and quad relays</strong> are built in the Relay Builder (teams are assigned by hand).</p>
       <form method="POST" action="/portal/meet/${meet.id}/dev/setup-usars" class="stack" onsubmit="return confirm('Set up a full USARS meet? This enables every age + quad division and relays on this meet, and sets the SR832 tiebreaker. It does not touch registrations.');">
         <div class="action-row">
           <button class="btn-orange" type="submit">Set Up Full USARS Meet</button>
@@ -656,8 +656,8 @@ router.get('/portal/meet/:meetId/dev/import-spring-fling', requireRole('super_ad
 
 // One-click full USARS national setup: every age division (elite) + every quad
 // division, relays enabled, SR832 tiebreaker. Individual + quad races then
-// generate from the imported roster; inline relays are built in the Relay
-// Builder; quad relays are not supported yet. Does not touch registrations.
+// generate from the imported roster; inline and quad relays are built in the
+// Relay Builder (teams assigned by hand). Does not touch registrations.
 router.post('/portal/meet/:meetId/dev/setup-usars', requireRole('super_admin'), (req, res) => {
   const meet = getMeetOr404(req.db, req.params.meetId);
   if (!meet) return res.redirect('/portal');

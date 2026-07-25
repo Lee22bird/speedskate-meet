@@ -13,7 +13,7 @@
 const crypto = require('crypto');
 const { nowIso } = require('../utils/date');
 const { DIRECT_FINAL_MAX, planRelayRaceSizing, planThreePersonRelaySizing, distributeByTeam } = require('./raceSizing');
-const { RELAY_DIVISIONS, RELAY_DIVISION_BY_ID } = require('./relayDivisions');
+const { RELAY_DIVISIONS, ALL_RELAY_DIVISIONS, RELAY_DIVISION_BY_ID } = require('./relayDivisions');
 const { makeRelayRace } = require('./relayHelpers');
 const mh = require('./meetHelpers'); // lazy access: mh.semiSeedingPlan / orderedFinishers / numericPlace
 
@@ -58,6 +58,9 @@ function makeRelayStageRace(div, order) {
     relayType: div.size + ' Person',
     ageGroup: div.label,
     ageRange: div.ageRange,
+    // Tag quad-relay races so they carry the quad discipline through race day
+    // (placement-only, same lifecycle as inline relays — just marked isQuadRace).
+    quad: div.discipline === 'quad',
   });
   race.relayDivisionId = div.id;
   race.orderHint = order;
@@ -81,17 +84,20 @@ function buildRelayRacesFromTeams(meet) {
 
   const created = [], updated = [], skipped = [], needsHeats = [], bracketed = [];
 
-  for (const div of RELAY_DIVISIONS) {
+  // Iterate every relay division — inline AND quad. Quad relays flow through the
+  // exact same generation + placement lifecycle; makeRelayStageRace tags them
+  // isQuadRace so race day/results keep them on the quad discipline.
+  for (const div of ALL_RELAY_DIVISIONS) {
     const divTeams = byDiv.get(div.id);
     if (!divTeams || !divTeams.length) continue;
-    const info = { divisionId: div.id, label: div.label, teamCount: divTeams.length };
+    const info = { divisionId: div.id, label: div.label, teamCount: divTeams.length, discipline: div.discipline || 'inline' };
 
     const existing = meet.races.filter(r => r.isRelayRace && r.relayDivisionId === div.id);
     // Never clobber a division whose races already have results entered.
     if (existing.some(raceHasResults)) { skipped.push(info); continue; }
 
     const laneEntries = divTeams.map((t, i) => teamLaneEntry(t, i + 1, regById));
-    const base = 9800 + RELAY_DIVISIONS.indexOf(div);
+    const base = 9800 + ALL_RELAY_DIVISIONS.indexOf(div);
 
     // Rebuild this division's (resultless) relay races from scratch.
     meet.races = meet.races.filter(r => !(r.isRelayRace && r.relayDivisionId === div.id));

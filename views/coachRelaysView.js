@@ -1,4 +1,4 @@
-const { RELAY_DIVISIONS, eligibleForRelayDivision } = require('../services/relayDivisions');
+const { RELAY_DIVISIONS, ALL_RELAY_DIVISIONS, eligibleForRelayDivision } = require('../services/relayDivisions');
 
 function esc(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -40,7 +40,7 @@ function renderCoachRelaysView({ meet, club, skaters, locked, savedCount, teamPi
   const byDiv = new Map();
   myTeams.forEach(t => { const a = byDiv.get(t.divisionId) || []; a.push(t); byDiv.set(t.divisionId, a); });
 
-  const fieldable = RELAY_DIVISIONS
+  const fieldable = ALL_RELAY_DIVISIONS
     .map(d => ({ d, elig: eligibleForRelayDivision(d, skaters) }))
     .filter(x => x.elig.length >= x.d.size || (byDiv.get(x.d.id) || []).length);
 
@@ -65,6 +65,7 @@ function renderCoachRelaysView({ meet, club, skaters, locked, savedCount, teamPi
       <section class="rl-div">
         <div class="rl-div-head">
           <strong>${esc(d.label)}</strong>
+          ${d.discipline === 'quad' ? `<span class="chip" style="background:#ede9fe;color:#6d28d9">🛼 Quad</span>` : ''}
           <span class="rl-dist">${esc(d.distance)} · ${d.size}-person</span>
           <span class="chip">${elig.length} eligible</span>
         </div>
