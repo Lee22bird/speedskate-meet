@@ -437,7 +437,7 @@ function importSpringFlingTestRoster(meet, { replace = true, checkedIn = true, p
 // Girls 29, Senior Men 21, …) for stress-testing race generation against the
 // actual bracket paths (direct final / heats / heats+semis). Each skater imports
 // under their REAL Nationals helmet number with their real event participation.
-function importNationalsRoster(meet, { replace = true, checkedIn = true, paid = true } = {}) {
+function importNationalsRoster(meet, { replace = true, checkedIn = true, paid = true, mergeDisciplines = false } = {}) {
   const previousBlocks = JSON.parse(JSON.stringify(meet.blocks || []));
   const previousRaces = JSON.parse(JSON.stringify(meet.races || []));
 
@@ -450,7 +450,7 @@ function importNationalsRoster(meet, { replace = true, checkedIn = true, paid = 
   let nextRegId = nextId(meet.registrations || []);
   let nextMeetNumber = (meet.registrations || []).reduce((max, r) => Math.max(max, Number(r.meetNumber) || 0), 0) + 1;
 
-  for (const row of buildNationalsDevRoster()) {
+  for (const row of buildNationalsDevRoster({ mergeDisciplines })) {
     const gender = testRosterGenderForAge(row);
     const age = Number(row.age || 0);
     const baseGroup = findAgeGroup(meet.groups || [], age, gender);
@@ -651,6 +651,7 @@ router.get('/portal/meet/:meetId/dev/import-spring-fling', requireRole('super_ad
           <div class="toggle-row"><div><div class="toggle-row-label">Replace current registrations</div><div class="toggle-row-desc">Recommended when testing the full national meet workflow.</div></div>${toggleSwitch('replace', true)}</div>
           <div class="toggle-row"><div><div class="toggle-row-label">Mark skaters paid</div></div>${toggleSwitch('paid', true)}</div>
           <div class="toggle-row"><div><div class="toggle-row-label">Mark skaters checked in</div></div>${toggleSwitch('checkedIn', true)}</div>
+          <div class="toggle-row"><div><div class="toggle-row-label">One profile per skater (demo mode)</div><div class="toggle-row-desc">Combines a dual-discipline skater's inline + quad + relays onto ONE registration under their inline number — no duplicate names at check-in (how real SSM registrations look). Leave OFF for Nationals-faithful per-discipline entries that match the printed sheets and answer key by helmet.</div></div>${toggleSwitch('mergeProfiles', false)}</div>
         </div>
         <div class="action-row">
           <button class="btn-orange" type="submit" name="action" value="import">Import 2026 Nationals Roster</button>
@@ -781,6 +782,7 @@ router.post('/portal/meet/:meetId/dev/import-nationals', requireRole('super_admi
     replace: !!req.body.replace,
     checkedIn: !!req.body.checkedIn,
     paid: !!req.body.paid,
+    mergeDisciplines: !!req.body.mergeProfiles,
   });
   saveDb(req.db);
   return res.redirect(`/portal/meet/${meet.id}/registered?devImported=${count}`);

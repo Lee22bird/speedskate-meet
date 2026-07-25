@@ -207,6 +207,33 @@ test('nationals dev roster: one row per (person × discipline), per-discipline h
     'no polluted team names in the dev roster');
 });
 
+test('nationals merged (one-profile) demo mode: no duplicate names, disciplines combined', () => {
+  // For demos (check-in walkthroughs) — how a real SSM registration looks: one
+  // person, one profile, everything they race on it. Faithful per-discipline
+  // mode stays the DEFAULT for answer-key work.
+  const merged = buildNationalsDevRoster({ mergeDisciplines: true });
+  assert.equal(merged.length, 353, 'one row per PERSON');
+  assert.equal(new Set(merged.map(r => r.name.trim().toLowerCase())).size, 353, 'no duplicate names');
+
+  // Towne: single profile under his inline number with ALL his participation.
+  const towne = merged.find(r => /towne/i.test(r.name));
+  assert.equal(towne.helmet, '497');
+  for (const o of ['elite', 'quad', 'relay2Person', 'relay3Person', 'relay4Person', 'quadRelay2Person', 'quadRelay3Person']) {
+    assert.ok(towne.options.includes(o), `merged Towne missing ${o}`);
+  }
+  // Lilliann: inline number (#64) wins as the profile number; quad participation folds in.
+  const lilliann = merged.find(r => /lilliann/i.test(r.name));
+  assert.equal(lilliann.helmet, '64');
+  assert.ok(lilliann.options.includes('elite') && lilliann.options.includes('quad'));
+  assert.ok(lilliann.options.includes('quadRelay2Person'));
+  // Quad-only skaters keep their quad row/number and still never enter inline.
+  const brayden = merged.find(r => /brayden thomas/i.test(r.name));
+  assert.equal(brayden.helmet, '37');
+  assert.ok(brayden.options.includes('quad') && !brayden.options.includes('elite'));
+  // Default (faithful) mode is unchanged.
+  assert.equal(buildNationalsDevRoster().length, 386, 'default stays per-discipline');
+});
+
 test('nationals import enters skaters under their REAL helmet numbers into a full USARS meet', () => {
   const meet = defaultMeet({ id: 1, displayName: 'Developer', roles: ['super_admin'] });
   meet.id = 1;
