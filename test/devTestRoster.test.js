@@ -178,6 +178,10 @@ test('nationals dev roster mirrors real IDN 2026 participation (helmets, inline/
   const qrOnly = rows.filter(r => !r.options.includes('quad') &&
     (r.options.includes('quadRelay2Person') || r.options.includes('quadRelay3Person')));
   assert.ok(qrOnly.length > 0, 'quad-relay-only skaters exist and are not over-entered in quad individual');
+  // Team names are clean — the generator backfills PDF pollution (record times,
+  // DNF notes) the same way the golden-master adapter does.
+  assert.ok(rows.every(r => !/new record|did not finish|\d:\d\d\.\d/i.test(r.team)),
+    'no polluted team names in the dev roster');
 });
 
 test('nationals import enters skaters under their REAL helmet numbers into a full USARS meet', () => {

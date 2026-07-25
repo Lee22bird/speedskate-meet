@@ -136,6 +136,39 @@ function build() {
     }
   }
 
+  // CLEAN TEAM NAMES — the PDF parser overlapped the team column with record
+  // times / DNF notes on ~10 rows ("Stallions Racing1:59.111", "CC Speed Did Not
+  // Finish", "Emerald Coast Spe2e:d27.486 -New Record"). Same technique as the
+  // golden-master adapter (nationalsAdapter): detect pollution, backfill by
+  // longest-common-prefix against the clean team names seen elsewhere, else
+  // strip the polluted tail.
+  const POLLUTED = /new record|did not finish|\d:\d\d\.\d/i;
+  const cleanTeams = Array.from(new Set(
+    Array.from(people.values()).map(p => p.team).filter(t => t && !POLLUTED.test(t))
+  ));
+  const lcp = (a, b) => { let i = 0; while (i < a.length && i < b.length && a[i].toLowerCase() === b[i].toLowerCase()) i++; return i; };
+  let teamsCleaned = 0;
+  for (const p of people.values()) {
+    if (!POLLUTED.test(p.team || '')) continue;
+    let best = '', bestLen = 0;
+    for (const t of cleanTeams) { const l = lcp(p.team, t); if (l > bestLen && l >= 4) { bestLen = l; best = t; } }
+    p.team = best || p.team.replace(/\s*\d.*$/, '').replace(/\s*-?\s*(New Record|Did Not Finish).*$/i, '').trim();
+    teamsCleaned++;
+  }
+
+  // KNOWN SHEET TYPOS — surgical, documented corrections where the official
+  // sheets themselves are inconsistent. Lilliann appears as both "Salizar" and
+  // "Salazar" across her own rows (inline #64 AND quad #129); her sister
+  // Isabella Salazar (same club) is consistent, so Salazar is the real spelling
+  // — but "Salizar" happens to be the sheets' MAJORITY spelling, so frequency
+  // can't decide it. Owner-confirmed cleanup, not an inference rule.
+  const NAME_FIXES = new Map([
+    ['Lilliann Salizar', 'Lilliann Salazar'],
+  ]);
+  for (const p of people.values()) {
+    if (NAME_FIXES.has(p.name)) p.name = NAME_FIXES.get(p.name);
+  }
+
   // Emit in the existing file's shape (only the fields the importer reads).
   const rows = Array.from(people.values())
     .sort((a, b) => Number(a.helmet) - Number(b.helmet) || a.name.localeCompare(b.name))
@@ -169,6 +202,7 @@ function build() {
   console.log(`  skaters: ${rows.length}   quad entrants: ${rows.filter(r => r.quad).length}   quad-only: ${rows.filter(r => r.inline === false).length}`);
   console.log(`  with inline relays: ${rows.filter(r => r.relays).length}   with quad relays: ${rows.filter(r => r.quadRelays).length}`);
   console.log(`  relay members matched to a helmet: ${relayMatched}   unmatched (relay-only / name mismatch): ${relayUnmatched}`);
+  console.log(`  polluted team names cleaned: ${teamsCleaned}`);
   console.log(`  multi-number people merged: ${mergeLog.length}`);
   for (const m of mergeLog) console.log(`    ${m}`);
 }

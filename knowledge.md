@@ -255,12 +255,14 @@ next load.** And always do at least one live round-trip test, not just headless.
   onto the number they raced the deepest stage under → **347 real people**, each
   imported under their REAL helmet number. Scoring/reconciliation was never
   affected (standings read finals-only rows, which carry the final number).
-- **Dev-roster team names** carry a cosmetic pollution artifact for record-setters
-  (e.g. `"Astro Speed 1:05.361 -New Record"`) — the PDF parser overlapped the team
-  column with the record time. Cleaned in the golden-master adapter path
-  (`nationalsAdapter`) via clean-team backfill; the dev-roster path
-  (`data/nationalsRoster.js`) still has it. Cosmetic only; real meets use clean
-  registration data.
+- **Team-name pollution from the PDFs** (record times / DNF notes overlapping the
+  team column, e.g. `"Astro Speed 1:05.361 -New Record"`, `"CC Speed Did Not
+  Finish"`) is cleaned in BOTH paths now: the golden-master adapter
+  (`nationalsAdapter`) and the dev-roster generator (`gen_dev_roster.js`) both
+  backfill via longest-common-prefix against clean team names. The generator also
+  carries a documented known-typo map (the sheets spell the same skater
+  "Salizar"/"Salazar" across her own rows; her sister's consistent spelling
+  decides it — frequency can't, the typo is the majority spelling).
 - **Public "Live" view**: a meet appears on `/live` (and `/meet/:id/live`,
   `/meet/:id/results`) when `isPublic && status==='published' && !archivedAt`.
   Publishing is done via the Meet Builder status control (`/builder/save`), which
