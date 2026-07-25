@@ -113,6 +113,7 @@ const {
   registrationMatchesRelayAgeRange,
   relayEligibleRegistrationsForRace,
   renderRelayEligibleSkatersHtml,
+  MIXED_RELAY_SCOPE,
 } = require('./services/relayHelpers');
 
 const { renderPortalHome } = require('./views/portalView');
@@ -1807,19 +1808,28 @@ function effectiveCoachTeam(req, meet) {
   }
   return String(req.user.team || '').trim();
 }
+// Skaters a relay build scope may draw from. Normal scope = one club (per-club
+// USARS relays). MIXED scope (league scratch relays) = everybody in the meet, so
+// a director can build cross-club teams. Either way the view's per-division
+// age/gender/quad-option filter still applies, so the dropdown for a division
+// shows exactly the eligible skaters in that age group.
+function relayScopePool(meet, scope) {
+  return scope === MIXED_RELAY_SCOPE ? (meet.registrations || []) : coachTeamRegistrations(meet, scope);
+}
 
 app.get('/portal/meet/:meetId/coach/relays', requireRole('coach','meet_director','super_admin'), (req, res) => {
   const meet = getMeetOr404(req.db, req.params.meetId);
   if (!meet) return res.redirect('/portal');
   const club = effectiveCoachTeam(req, meet);
-  const skaters = coachTeamRegistrations(meet, club);
+  const isMixed = club === MIXED_RELAY_SCOPE;
+  const skaters = relayScopePool(meet, club);
   const savedCount = req.query.saved != null ? Number(req.query.saved) : null;
   res.send(pageShell({
     title: 'Relay Teams',
     user: req.user,
     meet,
-    bodyHtml: renderCoachRelaysView({ meet, club, skaters, locked: relayDeadlinePassed(meet), savedCount,
-      teamPicker: canPickCoachTeam(req.user) ? { teams: meetTeamNames(meet), selected: club } : null }),
+    bodyHtml: renderCoachRelaysView({ meet, club, skaters, mixed: isMixed, locked: relayDeadlinePassed(meet), savedCount,
+      teamPicker: canPickCoachTeam(req.user) ? { teams: meetTeamNames(meet), selected: isMixed ? '' : club, allowMixed: true, mixed: isMixed } : null }),
   }));
 });
 
@@ -1827,10 +1837,11 @@ app.post('/portal/meet/:meetId/coach/relays', requireRole('coach','meet_director
   const meet = getMeetOr404(req.db, req.params.meetId);
   if (!meet) return res.redirect('/portal');
   const club = effectiveCoachTeam(req, meet);
+  const isMixed = club === MIXED_RELAY_SCOPE;
   const teamQ = canPickCoachTeam(req.user) && club ? `&team=${encodeURIComponent(club)}` : '';
   if (relayDeadlinePassed(meet)) return res.redirect(`/portal/meet/${meet.id}/coach/relays?locked=1${teamQ}`);
 
-  const validIds = new Set(coachTeamRegistrations(meet, club).map(s => String(s.id)));
+  const validIds = new Set(relayScopePool(meet, club).map(s => String(s.id)));
   // Parse t_<divisionId>_<teamIndex>_<slot> fields -> teams.
   const teamsMap = new Map();
   for (const [key, val] of Object.entries(req.body || {})) {
@@ -1851,11 +1862,16 @@ app.post('/portal/meet/:meetId/coach/relays', requireRole('coach','meet_director
   for (const { divId, members } of teamsMap.values()) {
     const div = RELAY_DIVISION_BY_ID.get(divId);
     if (!div || members.length !== div.size) continue;
-    newTeams.push({ id: nextTeamId++, divisionId: divId, club, memberRegIds: members, color: '', updatedAt: nowIso() });
+    // Mixed (league scratch) teams belong to no club — identity/label ride on
+    // members, not club (see relayGenerator teamLabel). The `mixed` marker keeps
+    // them separate from per-club teams so each scope's save replaces only itself.
+    newTeams.push({ id: nextTeamId++, divisionId: divId, club: isMixed ? '' : club, mixed: isMixed, memberRegIds: members, color: '', updatedAt: nowIso() });
   }
-  // Replace this club's teams with the submitted set.
+  // Replace only THIS scope's teams with the submitted set: mixed saves replace
+  // the mixed teams, a club's save replaces that club's teams — neither disturbs
+  // the other (so per-club USARS relays and league scratch relays coexist).
   meet.relayTeams = (meet.relayTeams || [])
-    .filter(t => String(t.club || '').trim().toLowerCase() !== club.toLowerCase())
+    .filter(t => isMixed ? !t.mixed : (t.mixed || String(t.club || '').trim().toLowerCase() !== club.toLowerCase()))
     .concat(newTeams);
   saveDb(req.db);
   res.redirect(`/portal/meet/${meet.id}/coach/relays?saved=${newTeams.length}${teamQ}`);

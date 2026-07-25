@@ -4,6 +4,15 @@ const { ageMatch } = require('./meetHelpers');
 const { ageForReg } = require('./meetHelpers');
 const { ALL_RELAY_DIVISIONS } = require('./relayDivisions');
 
+// Relay build scope sentinel. A coach builds relays scoped to ONE club (the
+// per-club USARS model). This reserved "club" value instead means "no club —
+// draw from every skater in the meet", used for league scratch relays where a
+// single team rarely has enough same-age skaters and directors mix across clubs.
+// Shared by server.js (routing) and coachRelaysView.js (the picker option) so
+// the value never drifts. It is not a real team name (double-underscored), so it
+// can't collide with a club and never appears in meetTeamNames().
+const MIXED_RELAY_SCOPE = '__mixed__';
+
 // ── Relay template rows ───────────────────────────────────────────────────────
 // The full USARS relay division set (services/relayDivisions.js) — one row per
 // division, so the Relay Builder lists EVERY division with its correct gender
@@ -223,6 +232,7 @@ function renderRelayEligibleSkatersHtml(meet, race) {
 }
 
 module.exports = {
+  MIXED_RELAY_SCOPE,
   RELAY_TEMPLATE_ROWS,
   normalizeRelayEligibleGroupIds,
   normalizeRelayAgeRange,

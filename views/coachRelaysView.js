@@ -1,4 +1,5 @@
 const { RELAY_DIVISIONS, ALL_RELAY_DIVISIONS, eligibleForRelayDivision } = require('../services/relayDivisions');
+const { MIXED_RELAY_SCOPE } = require('../services/relayHelpers');
 
 function esc(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -24,19 +25,25 @@ function formatRelayDeadline(val) {
 // eligible skaters via dropdowns; each filled team is saved as a relay entry.
 // No-split-club is automatic (only this club's skaters appear). Color is left
 // to the tabulator. Locks after the meet's relay deadline.
-function renderCoachRelaysView({ meet, club, skaters, locked, savedCount, teamPicker = null }) {
-  const teamQ = teamPicker && teamPicker.selected ? `?team=${encodeURIComponent(teamPicker.selected)}` : '';
+function renderCoachRelaysView({ meet, club, skaters, mixed = false, locked, savedCount, teamPicker = null }) {
+  // Keep the build scope (a club name, or the MIXED sentinel) on every self-link
+  // so the POST + navigation stay in the same scope the dropdown was built for.
+  const teamQ = teamPicker ? `?team=${encodeURIComponent(club)}` : '';
   const pickerHtml = teamPicker ? `
     <div class="card" style="margin-bottom:12px;border-left:4px solid var(--sky2)">
       <div class="row between center" style="flex-wrap:wrap;gap:10px">
-        <div><strong>Viewing club</strong> <span class="note">— admin view, switch to any team</span></div>
-        <select onchange="location.href='/portal/meet/${esc(meet.id)}/coach/relays?team='+encodeURIComponent(this.value)" style="min-width:200px;padding:8px 10px;border:1px solid var(--border2);border-radius:8px">
-          ${(teamPicker.teams || []).map(t => `<option value="${esc(t)}"${t === teamPicker.selected ? ' selected' : ''}>${esc(t)}</option>`).join('') || '<option value="">(no teams registered)</option>'}
+        <div><strong>Building relays for</strong> <span class="note">— admin view; switch club, or mix across clubs</span></div>
+        <select onchange="location.href='/portal/meet/${esc(meet.id)}/coach/relays?team='+encodeURIComponent(this.value)" style="min-width:220px;padding:8px 10px;border:1px solid var(--border2);border-radius:8px">
+          ${(teamPicker.allowMixed ? `<option value="${esc(MIXED_RELAY_SCOPE)}"${teamPicker.mixed ? ' selected' : ''}>🔀 All skaters (mixed relays)</option>` : '')
+            + ((teamPicker.teams || []).map(t => `<option value="${esc(t)}"${(!teamPicker.mixed && t === teamPicker.selected) ? ' selected' : ''}>${esc(t)}</option>`).join('')
+               || (teamPicker.allowMixed ? '' : '<option value="">(no teams registered)</option>'))}
         </select>
       </div>
     </div>` : '';
   const clubKey = String(club || '').trim().toLowerCase();
-  const myTeams = (meet.relayTeams || []).filter(t => String(t.club || '').trim().toLowerCase() === clubKey);
+  const myTeams = mixed
+    ? (meet.relayTeams || []).filter(t => t.mixed)
+    : (meet.relayTeams || []).filter(t => !t.mixed && String(t.club || '').trim().toLowerCase() === clubKey);
   const byDiv = new Map();
   myTeams.forEach(t => { const a = byDiv.get(t.divisionId) || []; a.push(t); byDiv.set(t.divisionId, a); });
 
@@ -79,8 +86,10 @@ function renderCoachRelaysView({ meet, club, skaters, locked, savedCount, teamPi
 
   return `
     <div class="page-header">
-      <h1>Relay Teams — ${esc(club || 'Your Club')}</h1>
-      <div class="sub">Build your relay teams from your club's skaters. Pick each team's members; only your own skaters appear (no split-club teams). Colors are assigned by the tabulator on race day.</div>
+      <h1>Relay Teams — ${esc(mixed ? 'Mixed (all clubs)' : (club || 'Your Club'))}</h1>
+      <div class="sub">${mixed
+        ? `League scratch relays — pick any skater in each division's age group, across clubs. Colors are assigned by the tabulator on race day.`
+        : `Build your relay teams from your club's skaters. Pick each team's members; only your own skaters appear (no split-club teams). Colors are assigned by the tabulator on race day.`}</div>
     </div>
     ${pickerHtml}
     ${savedCount != null ? `<div class="card" style="border-left:4px solid var(--green)"><div class="good">✅ Saved ${esc(savedCount)} relay team${savedCount === 1 ? '' : 's'}.</div></div>` : ''}
@@ -89,7 +98,7 @@ function renderCoachRelaysView({ meet, club, skaters, locked, savedCount, teamPi
       <form method="POST" action="/portal/meet/${esc(meet.id)}/coach/relays${teamQ}">
         ${sections}
         ${locked ? '' : `<div class="action-row" style="margin-top:16px"><button class="btn-orange" type="submit">Save Relay Teams</button><a class="btn2" href="/portal/meet/${esc(meet.id)}/coach${teamQ}">Back to Coach Portal</a></div>`}
-      </form>` : `<div class="card"><div class="muted">${teamPicker ? 'This club has' : 'None of your registered skaters are'} no relay-eligible skaters registered yet.</div></div>`}
+      </form>` : `<div class="card"><div class="muted">${mixed ? 'No age group has enough skaters to field a relay yet.' : (teamPicker ? 'This club has no relay-eligible skaters registered yet.' : 'None of your registered skaters are relay-eligible yet.')}</div></div>`}
 
     <style>
       .rl-deadline{display:inline-block;font-weight:800;font-size:14px;color:var(--navy);background:#f0f9ff;border:1px solid #bae6fd;border-radius:12px;padding:8px 14px;margin-bottom:14px}
