@@ -664,6 +664,11 @@ router.post('/portal/meet/:meetId/dev/setup-usars', requireRole('super_admin'), 
   if (!canEditMeet(req.user, meet)) return res.status(403).send('Forbidden');
   createDesktopBackupIfActive(req.db, 'before_usars_setup', meet.id);
   meet.groups = baseGroupsUSARS();
+  // Mark this as a USARS-division meet so race-day semi auto-advancement turns on
+  // (semiAdvancementEnabled gates on meet.usarsDivisions). Mirrors the Meet Builder
+  // USARS toggle (/division-scheme) so the dev shortcut and the real toggle behave
+  // the same — without it, 3-4 heat divisions never spawn semis on race day.
+  meet.usarsDivisions = true;
   meet.quadGroups = (makeQuadGroupsTemplate() || []).map(g => ({ ...g, enabled: true }));
   meet.relayEnabled = true;
   meet.tiebreaker = 'sr832';
