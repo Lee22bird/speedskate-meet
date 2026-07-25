@@ -1,11 +1,18 @@
-// Division-scheme heal: clicking "USARS National" must (re)build the FULL 34-group
-// national set — including Grand Classic/Masters/Veteran/Esquire + Premier — even
-// on a meet already flagged usarsDivisions=true with an incomplete group list.
+// Division-scheme: the Meet Builder "USARS National" button must produce the
+// COMPLETE race-ready national preset — not just an age-group list.
 //
-// Regression: the /division-scheme route only rebuilt groups when the flag FLIPPED
-// (`if (wantUsars !== !!meet.usarsDivisions)`), so a stale meet whose groups were
-// set before the set grew to 34 could never be healed — the button did nothing and
-// Grand Classic et al. never appeared. applyDivisionScheme now always rebuilds.
+// Regression history (both bit for real):
+//  1. The /division-scheme route only rebuilt groups when the usars flag FLIPPED,
+//     so a meet already flagged usarsDivisions=true with a stale group list could
+//     never be healed (Grand Classic/Masters/Veteran/Esquire + Premier missing).
+//  2. Even when it did rebuild, it set ONLY meet.groups — no elite enablement, no
+//     quad divisions, no relays, no SR832 — while the dev "Set Up Full USARS
+//     Meet" shortcut set all of it. The two paths drifted; Meet Builder "USARS"
+//     meets looked configured but weren't raceable (elite off everywhere, no quad
+//     relays, no inline relay options).
+//
+// applyDivisionScheme is now the single source of truth for BOTH paths and
+// always rebuilds the full preset.
 //
 //   node --test test/divisionScheme.test.js
 
@@ -14,7 +21,9 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 
 const ROOT = path.join(__dirname, '..');
-const { applyDivisionScheme, baseGroups, baseGroupsUSARS, migrateMeet } = require(path.join(ROOT, 'services', 'meetHelpers'));
+const {
+  applyDivisionScheme, baseGroups, baseGroupsUSARS, makeQuadGroupsTemplate, migrateMeet,
+} = require(path.join(ROOT, 'services', 'meetHelpers'));
 
 const GRAND_AND_PREMIER = [
   'grand_classic_ladies', 'grand_classic_men',
@@ -24,63 +33,90 @@ const GRAND_AND_PREMIER = [
   'premier_ladies', 'premier_men',
 ];
 
+// A stale "USARS" meet the way the old builder button left it: flagged usars but
+// only the standard-ish group subset, elite off, no quads, no relays, d2 tiebreak.
+function staleMeet() {
+  return {
+    usarsDivisions: true,
+    groups: baseGroupsUSARS().filter(g => !/^grand_|^premier_/.test(g.id))
+      .map(g => ({ ...g, divisions: { ...g.divisions, elite: { enabled: false, cost: 0, distances: ['', '', '', ''] } } })),
+    quadGroups: makeQuadGroupsTemplate(), // all disabled
+    relayEnabled: false,
+    tiebreaker: 'd2',
+  };
+}
+
 test('the USARS national set defines all 34 divisions incl. Grand + Premier', () => {
   const ids = baseGroupsUSARS().map(g => g.id);
   assert.strictEqual(ids.length, 34, 'expected 34 USARS divisions');
   for (const id of GRAND_AND_PREMIER) assert.ok(ids.includes(id), `USARS set missing ${id}`);
 });
 
-test('applying USARS heals a stale meet (flagged usars, missing Grand/Premier) and preserves settings', () => {
-  // Simulate Lee's broken test meet: usarsDivisions=true but the group list is the
-  // pre-Grand/Premier subset (24), so Grand Classic etc. are absent.
-  const stale = {
-    usarsDivisions: true,
-    groups: baseGroupsUSARS().filter(g => !/^grand_|^premier_/.test(g.id)),
-  };
-  assert.strictEqual(stale.groups.length, 24, 'stale fixture should start incomplete');
+test('USARS National = the complete race-ready preset (heals a stale incomplete meet)', () => {
+  const meet = staleMeet();
+  applyDivisionScheme(meet, true);
 
-  // Director had customized a surviving division — must not be clobbered.
-  const tg = stale.groups.find(g => g.id === 'tiny_tot_girls');
-  tg.divisions.elite.distances = ['111m', '222m', '333m', ''];
-  tg.divisions.novice = { enabled: true, cost: 7, distances: ['50m', '', '', ''] };
-
-  applyDivisionScheme(stale, true);
-
-  // Full set now present, including every Grand + Premier division.
-  assert.strictEqual(stale.groups.length, 34, 'clicking USARS should rebuild to 34');
-  const ids = stale.groups.map(g => g.id);
+  // 1. All 34 age divisions, including every Grand + Premier.
+  assert.strictEqual(meet.groups.length, 34, 'expected the full 34-group national set');
+  const ids = meet.groups.map(g => g.id);
   for (const id of GRAND_AND_PREMIER) assert.ok(ids.includes(id), `heal did not add ${id}`);
 
-  // Surviving division kept its custom settings.
-  const healedTg = stale.groups.find(g => g.id === 'tiny_tot_girls');
-  assert.strictEqual(healedTg.divisions.elite.distances[0], '111m', 'custom elite distance lost');
-  assert.strictEqual(healedTg.divisions.novice.cost, 7, 'custom novice setting lost');
+  // 2. ELITE enabled on EVERY group, with the official distances filled in.
+  for (const g of meet.groups) {
+    assert.ok(g.divisions?.elite?.enabled, `elite not enabled on ${g.id}`);
+    assert.ok((g.divisions.elite.distances || []).some(Boolean), `no elite distances on ${g.id}`);
+  }
 
-  // Newly-added division has the race-ready USARS elite template (not blank).
-  const gc = stale.groups.find(g => g.id === 'grand_classic_men');
-  assert.ok(gc.divisions.elite.enabled, 'Grand Classic Men should be elite-enabled');
-  assert.ok(gc.divisions.elite.distances.some(Boolean), 'Grand Classic Men should have distances');
+  // 3. Every quad division enabled.
+  assert.ok(Array.isArray(meet.quadGroups) && meet.quadGroups.length > 0, 'quadGroups missing');
+  for (const q of meet.quadGroups) assert.ok(q.enabled, `quad division not enabled: ${q.id}`);
+
+  // 4. Relays on (Relay Builder then offers inline + quad relay divisions).
+  assert.strictEqual(meet.relayEnabled, true, 'relays not enabled');
+
+  // 5. USARS tiebreaker + flag.
+  assert.strictEqual(meet.tiebreaker, 'sr832');
+  assert.strictEqual(meet.usarsDivisions, true);
 });
 
-test('applying standard yields the 24-division set (no Grand/Premier)', () => {
-  const meet = { usarsDivisions: true, groups: baseGroupsUSARS() };
+test('re-clicking USARS National is idempotent (same complete preset)', () => {
+  const meet = staleMeet();
+  applyDivisionScheme(meet, true);
+  const once = JSON.parse(JSON.stringify(meet));
+  applyDivisionScheme(meet, true);
+  assert.deepStrictEqual(meet, once, 'second click changed the meet');
+});
+
+test('Standard rebuilds the 24 standard groups, preserves settings, leaves quads/relays/tiebreaker alone', () => {
+  const meet = { usarsDivisions: true, groups: baseGroupsUSARS(), quadGroups: makeQuadGroupsTemplate().map(g => ({ ...g, enabled: true })), relayEnabled: true, tiebreaker: 'sr832' };
+  // Customize a division that survives the switch.
+  meet.groups.find(g => g.id === 'tiny_tot_girls').divisions.novice = { enabled: true, cost: 7, distances: ['50m', '', '', ''] };
+
   applyDivisionScheme(meet, false);
+
   assert.strictEqual(meet.usarsDivisions, false);
   assert.strictEqual(meet.groups.length, baseGroups().length);
   const ids = meet.groups.map(g => g.id);
   for (const id of GRAND_AND_PREMIER) assert.ok(!ids.includes(id), `standard set should not contain ${id}`);
+  assert.strictEqual(meet.groups.find(g => g.id === 'tiny_tot_girls').divisions.novice.cost, 7, 'surviving settings lost');
+  // Standard is groups-only: quads/relays/tiebreaker untouched.
+  assert.ok(meet.quadGroups.every(q => q.enabled), 'standard switch should not disable quads');
+  assert.strictEqual(meet.relayEnabled, true, 'standard switch should not turn relays off');
+  assert.strictEqual(meet.tiebreaker, 'sr832', 'standard switch should not change tiebreaker');
 });
 
-test('healed USARS groups survive a migrateMeet reload round-trip', () => {
-  const meet = { usarsDivisions: true, groups: baseGroupsUSARS().filter(g => !/^grand_|^premier_/.test(g.id)) };
+test('the complete USARS preset survives a migrateMeet reload round-trip (§10 guard)', () => {
+  const meet = staleMeet();
   applyDivisionScheme(meet, true);
 
   const reloaded = JSON.parse(JSON.stringify(meet));
   migrateMeet(reloaded, 'owner');
 
   const ids = reloaded.groups.map(g => g.id);
-  for (const id of GRAND_AND_PREMIER) assert.ok(ids.includes(id), `migrateMeet dropped ${id} on reload`);
-  // Grand Classic keeps a readable label after the whitelist rebuild.
-  const gc = reloaded.groups.find(g => g.id === 'grand_classic_men');
-  assert.strictEqual(gc.label, 'Grand Classic Men');
+  for (const id of GRAND_AND_PREMIER) assert.ok(ids.includes(id), `migrateMeet dropped ${id}`);
+  for (const g of reloaded.groups) assert.ok(g.divisions?.elite?.enabled, `reload disabled elite on ${g.id}`);
+  assert.ok(reloaded.quadGroups.every(q => q.enabled), 'reload disabled quad divisions');
+  assert.strictEqual(reloaded.relayEnabled, true, 'reload turned relays off');
+  assert.strictEqual(reloaded.tiebreaker, 'sr832', 'reload changed tiebreaker');
+  assert.strictEqual(reloaded.groups.find(g => g.id === 'grand_classic_men').label, 'Grand Classic Men');
 });

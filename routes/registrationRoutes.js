@@ -11,7 +11,7 @@ const {
   generateAdditionalRacesForMeet, generateConfiguredRacesForMeet, ensureAtLeastOneBlock,
   buildRegistrationPricingPreview,
   hasRelayEvents,
-  baseGroupsUSARS, makeQuadGroupsTemplate, defaultMeet,
+  baseGroupsUSARS, makeQuadGroupsTemplate, applyDivisionScheme, defaultMeet,
 } = require('../services/meetHelpers');
 const { calcRegistrationCost } = require('../services/pricing');
 const {
@@ -671,15 +671,11 @@ router.post('/portal/meet/:meetId/dev/setup-usars', requireRole('super_admin'), 
   if (!meet) return res.redirect('/portal');
   if (!canEditMeet(req.user, meet)) return res.status(403).send('Forbidden');
   createDesktopBackupIfActive(req.db, 'before_usars_setup', meet.id);
-  meet.groups = baseGroupsUSARS();
-  // Mark this as a USARS-division meet so race-day semi auto-advancement turns on
-  // (semiAdvancementEnabled gates on meet.usarsDivisions). Mirrors the Meet Builder
-  // USARS toggle (/division-scheme) so the dev shortcut and the real toggle behave
-  // the same — without it, 3-4 heat divisions never spawn semis on race day.
-  meet.usarsDivisions = true;
-  meet.quadGroups = (makeQuadGroupsTemplate() || []).map(g => ({ ...g, enabled: true }));
-  meet.relayEnabled = true;
-  meet.tiebreaker = 'sr832';
+  // Same single source of truth as the Meet Builder "USARS National" button
+  // (applyDivisionScheme): full 34 elite-enabled age divisions, all quads, relays,
+  // SR832, usarsDivisions flag. They drifted once — the builder button set only
+  // the age groups, producing incomplete "USARS" meets — never let them diverge.
+  applyDivisionScheme(meet, true);
   ensureAtLeastOneBlock(meet);
   meet.updatedAt = nowIso();
   saveDb(req.db);

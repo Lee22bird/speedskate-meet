@@ -238,22 +238,38 @@ function baseGroupsUSARS() {
   });
 }
 
-// Apply a division scheme ('usars' national vs standard) to a meet: (re)build the
-// FULL age-group template for that scheme, preserving each surviving division's
-// per-class settings (enabled/cost/distances) by id. It ALWAYS rebuilds — so it
-// also HEALS a meet whose group list is incomplete (e.g. an older USARS meet that
-// was flagged usarsDivisions=true before the set grew to include the Grand/Premier
-// divisions, so Grand Classic/Grand Masters/Grand Veteran/Grand Esquire/Premier
-// were missing and the "USARS National" button — which used to only act on a flag
-// flip — could never add them). Sets meet.usarsDivisions to match.
+// Apply a division scheme to a meet. ALWAYS rebuilds (never gated on a flag flip),
+// so it also HEALS meets left incomplete by older versions of this toggle.
+//
+// 'usars' = the COMPLETE race-ready national preset — the single source of truth
+// shared by the Meet Builder "USARS National" button and the dev "Set Up Full
+// USARS Meet" shortcut (they drifted once: the builder button set only the age
+// groups — no elite enablement, no quads, no relays, no SR832 — which produced
+// incomplete "USARS" meets that looked configured but weren't raceable):
+//   - all 34 USARS age divisions (incl. Grand Classic/Masters/Veteran/Esquire +
+//     Premier), each with ELITE ENABLED and the official rulebook distances
+//     (fresh template — an explicit "make this a USARS national meet" reset, per
+//     the button's confirm dialog; it does not preserve prior per-group tweaks)
+//   - every quad division enabled
+//   - relays enabled (Relay Builder then offers ALL divisions, inline AND quad)
+//   - SR832 tiebreaker (the USARS rule; 'd2' was a legacy SSM invention)
+//
+// 'standard' = rebuild the 24 standard age groups, preserving each surviving
+// division's per-class settings by id; quads/relays/tiebreaker are left alone.
 function applyDivisionScheme(meet, wantUsars) {
   meet.usarsDivisions = !!wantUsars;
-  const nextBase = wantUsars ? baseGroupsUSARS() : baseGroups();
-  const prev = new Map((meet.groups || []).map(g => [g.id, g]));
-  meet.groups = nextBase.map(g => {
-    const old = prev.get(g.id);
-    return old && old.divisions ? { ...g, divisions: old.divisions } : g;
-  });
+  if (wantUsars) {
+    meet.groups = baseGroupsUSARS();
+    meet.quadGroups = (makeQuadGroupsTemplate() || []).map(g => ({ ...g, enabled: true }));
+    meet.relayEnabled = true;
+    meet.tiebreaker = 'sr832';
+  } else {
+    const prev = new Map((meet.groups || []).map(g => [g.id, g]));
+    meet.groups = baseGroups().map(g => {
+      const old = prev.get(g.id);
+      return old && old.divisions ? { ...g, divisions: old.divisions } : g;
+    });
+  }
   return meet;
 }
 
