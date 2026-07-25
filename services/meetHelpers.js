@@ -303,8 +303,13 @@ function applyDivisionScheme(meet, wantUsars) {
     // those stayed off, so "USARS National" looked like it hadn't turned relays on.
     // Enable every division row (all inline + quad relays). Require at call time:
     // relayHelpers requires meetHelpers, so a top-level require would be circular.
-    const { normalizeRelayTemplates } = require('./relayHelpers');
+    const { normalizeRelayTemplates, ensureRelayRacesForEnabledTemplates } = require('./relayHelpers');
     meet.relayTemplates = normalizeRelayTemplates(meet.relayTemplates).map(r => ({ ...r, enabled: true }));
+    // ...and MATERIALIZE the relay races themselves (find-or-create per division).
+    // Enabled toggles alone schedule nothing: the Block Builder can only place
+    // races that exist, and relay races were otherwise only created when someone
+    // clicked Save Relay Builder.
+    ensureRelayRacesForEnabledTemplates(meet);
     meet.tiebreaker = 'sr832';
   } else {
     const prev = new Map((meet.groups || []).map(g => [g.id, g]));

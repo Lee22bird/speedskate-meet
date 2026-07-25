@@ -468,7 +468,7 @@ function renderMeetBuilderView({ db, meet, user = null, query = {} }) {
             onclick="return confirm('Switch to the Standard division set (24 age groups)?\\n\\nThis rebuilds the age-group list. Save any other settings changes first.');">Standard</button>
           <button type="submit" formaction="/portal/meet/${meet.id}/division-scheme" formmethod="post" name="scheme" value="usars"
             class="${meet.usarsDivisions ? 'btn-good' : 'btn2'}"
-            onclick="return confirm('Set up the complete USARS National meet?\\n\\n• All 34 age divisions (incl. Grand + Premier), Elite enabled with official distances\\n• All quad divisions enabled\\n• Relays enabled (inline + quad, in the Relay Builder)\\n• SR832 tiebreaker\\n\\nThis rebuilds the age-group list from the USARS template (custom per-group tweaks reset). Save any other settings changes first.');">USARS National</button>
+            onclick="return confirm('Set up the complete USARS National meet?\\n\\n• All 34 age divisions (incl. Grand + Premier), Elite enabled with official distances\\n• All quad divisions enabled\\n• All relay races created (inline + quad) — schedulable in Block Builder\\n• SR832 tiebreaker\\n\\nThis rebuilds the age-group list from the USARS template (custom per-group tweaks reset). Save any other settings changes first.');">USARS National</button>
           <span class="note" style="margin:0">${meet.usarsDivisions ? '34 USARS divisions' : '24 standard divisions'}</span>
         </div>
       </div>

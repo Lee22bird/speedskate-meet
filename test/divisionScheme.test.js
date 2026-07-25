@@ -22,7 +22,7 @@ const assert = require('node:assert');
 
 const ROOT = path.join(__dirname, '..');
 const {
-  applyDivisionScheme, baseGroups, baseGroupsUSARS, makeQuadGroupsTemplate, migrateMeet,
+  applyDivisionScheme, baseGroups, baseGroupsUSARS, makeQuadGroupsTemplate, migrateMeet, defaultMeet,
 } = require(path.join(ROOT, 'services', 'meetHelpers'));
 
 const GRAND_AND_PREMIER = [
@@ -94,9 +94,33 @@ test('USARS National = the complete race-ready preset (heals a stale incomplete 
   assert.ok(meet.relayTemplates.some(t => t.discipline === 'inline'), 'no inline relay rows');
   assert.ok(meet.relayTemplates.some(t => t.discipline === 'quad'), 'no quad relay rows');
 
-  // 5. USARS tiebreaker + flag.
+  // 5. Relay RACES materialized — enabled toggles alone schedule nothing; the
+  // Block Builder can only place races that EXIST (they were otherwise only
+  // created when someone clicked Save Relay Builder).
+  const relayRaces = meet.races.filter(r => r.isRelayRace);
+  assert.strictEqual(relayRaces.length, meet.relayTemplates.length, 'one relay race per enabled division');
+  assert.strictEqual(relayRaces.filter(r => r.isQuadRace).length, 26, '26 quad relay races');
+  assert.strictEqual(relayRaces.filter(r => !r.isQuadRace).length, 49, '49 inline relay races');
+  assert.strictEqual(new Set(relayRaces.map(r => r.relayDivisionId)).size, relayRaces.length,
+    'each relay race keyed to its own division');
+  for (const r of relayRaces) {
+    assert.ok(r.isFinal, `relay race should be a final: ${r.groupLabel}`);
+    assert.strictEqual(r.countsForOverall, false, `relay race must never score the overall: ${r.groupLabel}`);
+  }
+
+  // 6. USARS tiebreaker + flag.
   assert.strictEqual(meet.tiebreaker, 'sr832');
   assert.strictEqual(meet.usarsDivisions, true);
+});
+
+test('Block Builder lists the preset relay races as schedulable items', () => {
+  const { renderBlockBuilderView } = require(path.join(ROOT, 'views', 'blockBuilderView'));
+  const meet = defaultMeet('owner');
+  meet.id = 9;
+  applyDivisionScheme(meet, true);
+  const html = renderBlockBuilderView({ meet });
+  assert.match(html, /🔄 /, 'relay items render in the unassigned list');
+  assert.ok(html.includes('Quad '), 'quad relay races present in the list');
 });
 
 test('re-clicking USARS National is idempotent (same complete preset)', () => {
@@ -144,6 +168,12 @@ test('the complete USARS preset survives a migrateMeet reload round-trip (§10 g
   const renormalized = normalizeRelayTemplates(reloaded.relayTemplates);
   assert.ok(renormalized.length > 0 && renormalized.every(t => t.enabled),
     'relay division toggles did not survive reload + relay-builder normalization');
+  // The materialized relay races survive too, with their division keys (§10:
+  // relayDivisionId is whitelisted only under isRelayRace — prove it holds).
+  const reloadedRelays = reloaded.races.filter(r => r.isRelayRace);
+  assert.strictEqual(reloadedRelays.length, 75, 'relay races survived reload');
+  assert.ok(reloadedRelays.every(r => String(r.relayDivisionId || '').trim()),
+    'relayDivisionId survived migrateMeet');
   assert.strictEqual(reloaded.tiebreaker, 'sr832', 'reload changed tiebreaker');
   assert.strictEqual(reloaded.groups.find(g => g.id === 'grand_classic_men').label, 'Grand Classic Men');
 });

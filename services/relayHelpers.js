@@ -113,6 +113,46 @@ function makeRelayRace({ name, distance, notes, relayType='', ageGroup='', ageRa
   };
 }
 
+// Materialize one relay race per ENABLED template row — find-or-create keyed by
+// relayDivisionId (with the same name+distance fallback the Relay Builder's
+// add-template save uses, so the two can never double-create a division's race).
+// Used by the USARS preset: enabling 75 relay toggles is not enough — the Block
+// Builder can only schedule races that EXIST, and relay races were otherwise only
+// created when someone clicked Save Relay Builder. Returns how many were created.
+function ensureRelayRacesForEnabledTemplates(meet) {
+  const templates = Array.isArray(meet.relayTemplates) ? meet.relayTemplates : [];
+  meet.races = Array.isArray(meet.races) ? meet.races : [];
+  let added = 0;
+  for (const row of templates) {
+    if (!row || !row.enabled || !row.divisionId) continue;
+    const isQuad = (row.discipline || 'inline') === 'quad';
+    const name = (isQuad ? 'Quad ' : '') + [row.age, row.type, 'Relay'].filter(Boolean).join(' ');
+    let race = meet.races.find(r => r.isRelayRace && r.relayDivisionId === row.divisionId)
+      || meet.races.find(r => r.isRelayRace &&
+          String(r.groupLabel || '').trim().toLowerCase() === name.trim().toLowerCase() &&
+          String(r.distanceLabel || '').trim().toLowerCase() === String(row.distance || '').trim().toLowerCase());
+    if (race) {
+      if (!race.relayDivisionId) race.relayDivisionId = row.divisionId;
+      continue;
+    }
+    if (!name.trim() || !String(row.distance || '').trim()) continue;
+    race = makeRelayRace({
+      name,
+      distance: row.distance,
+      notes: row.notes,
+      relayType: row.type,
+      ageGroup: row.age,
+      ageRange: row.ageRange,
+      quad: isQuad,
+    });
+    race.relayDivisionId = row.divisionId;
+    race.orderHint = 9800 + meet.races.filter(r => r.isRelayRace).length;
+    meet.races.push(race);
+    added += 1;
+  }
+  return added;
+}
+
 function relayRaceExists(meet, name, distance) {
   const keyName = String(name||'').trim().toLowerCase();
   const keyDist = String(distance||'').trim().toLowerCase();
@@ -238,6 +278,7 @@ module.exports = {
   normalizeRelayAgeRange,
   normalizeRelayTemplates,
   makeRelayRace,
+  ensureRelayRacesForEnabledTemplates,
   relayRaceExists,
   relayOptionKeyForRace,
   relayAgeRangeForRace,
