@@ -238,6 +238,25 @@ function baseGroupsUSARS() {
   });
 }
 
+// Apply a division scheme ('usars' national vs standard) to a meet: (re)build the
+// FULL age-group template for that scheme, preserving each surviving division's
+// per-class settings (enabled/cost/distances) by id. It ALWAYS rebuilds — so it
+// also HEALS a meet whose group list is incomplete (e.g. an older USARS meet that
+// was flagged usarsDivisions=true before the set grew to include the Grand/Premier
+// divisions, so Grand Classic/Grand Masters/Grand Veteran/Grand Esquire/Premier
+// were missing and the "USARS National" button — which used to only act on a flag
+// flip — could never add them). Sets meet.usarsDivisions to match.
+function applyDivisionScheme(meet, wantUsars) {
+  meet.usarsDivisions = !!wantUsars;
+  const nextBase = wantUsars ? baseGroupsUSARS() : baseGroups();
+  const prev = new Map((meet.groups || []).map(g => [g.id, g]));
+  meet.groups = nextBase.map(g => {
+    const old = prev.get(g.id);
+    return old && old.divisions ? { ...g, divisions: old.divisions } : g;
+  });
+  return meet;
+}
+
 function ownerNameForUser(user) {
   return String(user?.displayName || user?.name || user?.username || user?.email || '').trim();
 }
@@ -1685,6 +1704,7 @@ module.exports = {
   makeDivisionsTemplate,
   baseGroups,
   baseGroupsUSARS,
+  applyDivisionScheme,
   defaultMeet,
   normalizeDivisionSet,
   normalizeOpenGroups,

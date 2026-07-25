@@ -13,7 +13,7 @@ const {
   combineDateTime,
   OPEN_GROUP_DEFAULTS, QUAD_GROUP_DEFAULTS,
   coachVisibleMeets,
-  baseGroups, baseGroupsUSARS,
+  applyDivisionScheme,
 } = require('../services/meetHelpers');
 const {
   normalizeRelayEligibleGroupIds, normalizeRelayAgeRange,
@@ -221,16 +221,13 @@ router.post('/portal/meet/:meetId/division-scheme', requireRole('meet_director')
   const meet = getMeetOr404(req.db, req.params.meetId);
   if (!meet || !canEditMeet(req.user, meet)) return res.redirect('/portal');
   const wantUsars = String(req.body.scheme || '') === 'usars';
-  if (wantUsars !== !!meet.usarsDivisions) {
-    meet.usarsDivisions = wantUsars;
-    const nextBase = wantUsars ? baseGroupsUSARS() : baseGroups();
-    const prev = new Map((meet.groups || []).map(g => [g.id, g]));
-    meet.groups = nextBase.map(g => {
-      const old = prev.get(g.id);
-      return old && old.divisions ? { ...g, divisions: old.divisions } : g;
-    });
-    saveDb(req.db);
-  }
+  // Always (re)apply the chosen scheme's full template — not only on a flag flip.
+  // A meet already flagged usarsDivisions=true but carrying an incomplete group
+  // list (stale meets missing Grand Classic/Masters/Veteran/Esquire + Premier)
+  // could never be healed by the old guard; re-applying rebuilds the full set and
+  // preserves each surviving division's settings by id.
+  applyDivisionScheme(meet, wantUsars);
+  saveDb(req.db);
   res.redirect(`/portal/meet/${meet.id}/builder?schemeSwitched=${wantUsars ? 'usars' : 'standard'}`);
 });
 
