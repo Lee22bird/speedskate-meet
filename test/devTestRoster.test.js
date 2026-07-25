@@ -132,55 +132,78 @@ test('training import route builds a complete 115-skater simulated meet', () => 
   assert.match(redirect, /devImported=115$/);
 });
 
-test('nationals dev roster mirrors real IDN 2026 participation (helmets, inline/quad split, quad relays)', () => {
+test('nationals dev roster: one row per (person × discipline), per-discipline helmets and divisions', () => {
   const rows = buildNationalsDevRoster();
-  // 347 PEOPLE — the official sheets list 15 skaters under two numbers (heat-vs-
-  // final renumbering like Towne #13->#497, separate inline/quad numbers, sibling
-  // PDF swaps); the generator merges them by name onto the number they raced
-  // finals under. Relay rows carry temporary grouped TEAM numbers and never
-  // contribute identities at all.
-  assert.equal(rows.length, 347, 'all real people, name-merged');
+  // THE IDENTITY MODEL (owner-confirmed, answer-key-verified): each discipline is
+  // its own registration with its OWN helmet and its OWN age-division label.
+  // 386 rows = 353 people (33 raced both disciplines). Relay rows carry temp
+  // TEAM numbers and never contribute identities.
+  assert.equal(rows.length, 386, 'one row per person per discipline');
+  assert.equal(new Set(rows.map(r => r.name.trim().toLowerCase())).size, 353, '353 real people');
   assert.ok(rows.every(r => String(r.helmet || '').trim()), 'every row carries its real helmet');
-  assert.equal(new Set(rows.map(r => r.helmet)).size, rows.length, 'helmets unique');
-  assert.equal(new Set(rows.map(r => r.name.trim().toLowerCase())).size, rows.length, 'one row per person');
 
-  const byHelmet = new Map(rows.map(r => [r.helmet, r]));
-  // #13 was Towne's HEAT-sheet number (and elsewhere a relay team temp number) —
-  // it must not exist as a person.
-  assert.ok(!byHelmet.has('13'), 'phantom heat-number identity must be merged away');
-  // Matthew Towne II raced everything under #497: inline Juvenile Boys, inline
-  // relays 2/3/4, quad individual (Elementary Boys, quad day), quad relays 2/3.
-  const towne = byHelmet.get('497');
-  assert.ok(towne && /towne/i.test(towne.name));
-  assert.ok(towne.options.includes('elite'));
-  assert.ok(towne.options.includes('quad'), 'Towne raced quad individual as #497');
-  for (const o of ['relay2Person', 'relay3Person', 'relay4Person', 'quadRelay2Person', 'quadRelay3Person']) {
-    assert.ok(towne.options.includes(o), `Towne missing ${o}`);
-  }
-  // #37 Brayden Thomas: QUAD-ONLY at real Nationals — must NOT be entered inline.
-  const brayden = byHelmet.get('37');
-  assert.ok(brayden && /brayden/i.test(brayden.name));
-  assert.ok(!brayden.options.includes('elite'), 'quad-only skater must not be entered inline');
-  assert.ok(brayden.options.includes('quad'));
-  assert.ok(brayden.options.includes('quadRelay2Person') && brayden.options.includes('quadRelay3Person'));
-  // The Velli siblings each keep their own number (their stray swapped PDF rows
-  // must not merge them into one person).
-  assert.ok(/harshini/i.test(byHelmet.get('333')?.name || ''), 'Harshini Velli stays #333');
-  assert.ok(/hemtej/i.test(byHelmet.get('334')?.name || ''), 'Hemtej Velli Rajesh stays #334');
-  // #25 Eddie Wilcox: ordinary inline skater with all three inline relay sizes.
-  const wilcox = byHelmet.get('25');
-  assert.ok(wilcox.options.includes('elite'));
-  for (const o of ['relay2Person', 'relay3Person', 'relay4Person']) assert.ok(wilcox.options.includes(o), `Wilcox missing ${o}`);
-  // Quad-only people (no inline individual entry) — 40 after the name merge.
-  assert.equal(rows.filter(r => !r.options.includes('elite')).length, 40);
-  // Quad-relay participation never implies quad INDIVIDUAL entry: skaters with
-  // quadRelay options but no quad option must exist (they raced quad relays only).
+  const inline = rows.filter(r => r.discipline !== 'quad');
+  const quad = rows.filter(r => r.discipline === 'quad');
+  assert.equal(quad.length, 77, '77 quad individual entries');
+  // Discipline drives options: inline rows enter inline (elite), quad rows enter
+  // quad — never each other.
+  assert.ok(inline.every(r => r.options.includes('elite') && !r.options.includes('quad')));
+  assert.ok(quad.every(r => r.options.includes('quad') && !r.options.includes('elite')));
+
+  // Matthew Towne II — answer key lists him as #497 in BOTH Juvenile Boys and
+  // Quad Elementary Boys (his #13 was a stale heat-sheet number: collapsed).
+  const townes = rows.filter(r => /towne/i.test(r.name));
+  assert.equal(townes.length, 2, 'Towne = two per-discipline rows');
+  const towneInline = townes.find(r => r.discipline !== 'quad');
+  const towneQuad = townes.find(r => r.discipline === 'quad');
+  assert.equal(towneInline.helmet, '497');
+  assert.equal(towneQuad.helmet, '497');
+  for (const o of ['relay2Person', 'relay3Person', 'relay4Person']) assert.ok(towneInline.options.includes(o));
+  assert.ok(towneQuad.options.includes('quadRelay2Person') && towneQuad.options.includes('quadRelay3Person'));
+  // The quad row carries the QUAD division label — a DIFFERENT age group than
+  // his inline division (this is the crux: quads age-group differently).
+  assert.ok(towneQuad.age > towneInline.age, 'quad row ages from the quad division (Elementary), inline from Juvenile');
+  assert.ok(!rows.some(r => r.helmet === '13'), 'stale heat-sheet #13 never becomes an identity');
+
+  // Lilliann Salazar — answer key: #64 inline Freshman Girls, #129 Quad Freshman
+  // Girls. Two rows, two numbers, one person (sheet typo Salizar canonicalized).
+  const lilliann = rows.filter(r => /lilliann/i.test(r.name));
+  assert.deepEqual(lilliann.map(r => r.helmet).sort(), ['129', '64']);
+  assert.ok(lilliann.every(r => /salazar/i.test(r.name)), 'sheet typo canonicalized');
+  assert.equal(lilliann.find(r => r.helmet === '64').discipline, 'inline');
+  assert.equal(lilliann.find(r => r.helmet === '129').discipline, 'quad');
+
+  // Isabella Salazar — #374 inline Sophomore Ladies, #40 Quad Junior Ladies
+  // (quad division NAME differs from inline for the same person).
+  const isabella = rows.filter(r => /isabella salazar/i.test(r.name));
+  assert.deepEqual(isabella.map(r => r.helmet).sort(), ['374', '40']);
+  assert.equal(isabella.find(r => r.helmet === '40').division, 'Junior Ladies');
+  assert.equal(isabella.find(r => r.helmet === '374').division, 'Sophomore Ladies');
+
+  // #37 Brayden Thomas: quad-only person — exactly one row, quad, never inline.
+  const brayden = rows.filter(r => /brayden thomas/i.test(r.name));
+  assert.equal(brayden.length, 1);
+  assert.equal(brayden[0].discipline, 'quad');
+
+  // Velli siblings stay distinct (#333/#334 despite their swapped stray rows).
+  assert.ok(/harshini/i.test(rows.find(r => r.helmet === '333')?.name || ''));
+  assert.ok(/hemtej/i.test(rows.find(r => r.helmet === '334')?.name || ''));
+
+  // Helmets are unique within a discipline EXCEPT the two real shared-number
+  // pairs the sheets contain (#182 Bella Daddy / Marnie Alapati, #183 Brandon
+  // Gray / Matthew Tseng — different people, different teams and divisions).
+  const dupes = list => { const m = new Map(); for (const r of list) m.set(r.helmet, (m.get(r.helmet) || 0) + 1); return [...m].filter(([, n]) => n > 1).map(([h]) => h).sort(); };
+  assert.deepEqual(dupes(inline), ['182', '183'], 'only the known shared-number pairs');
+  assert.deepEqual(dupes(quad), []);
+
+  // Quad-relay-only people carry quadRelay options on their inline row without
+  // ever entering quad individual.
   const qrOnly = rows.filter(r => !r.options.includes('quad') &&
     (r.options.includes('quadRelay2Person') || r.options.includes('quadRelay3Person')));
   assert.ok(qrOnly.length > 0, 'quad-relay-only skaters exist and are not over-entered in quad individual');
-  // Team names are clean — the generator backfills PDF pollution (record times,
-  // DNF notes) the same way the golden-master adapter does.
-  assert.ok(rows.every(r => !/new record|did not finish|\d:\d\d\.\d/i.test(r.team)),
+
+  // Team names are clean (golden-master-style backfill).
+  assert.ok(rows.every(r => !/new record|did not finish|did not start|\d:\d\d\.\d/i.test(r.team)),
     'no polluted team names in the dev roster');
 });
 
@@ -217,24 +240,53 @@ test('nationals import enters skaters under their REAL helmet numbers into a ful
     send() {},
   });
 
-  assert.equal(meet.registrations.length, 347);
+  assert.equal(meet.registrations.length, 386);
   assert.ok(meet.registrations.every(r => r.importSource === 'nationals_2026_roster'));
-  // Real helmet number rides on BOTH meetNumber and helmetNumber (1:1 with the
-  // printed heat sheets / answer key), and stays unique.
+  // Real per-discipline helmet rides on BOTH meetNumber and helmetNumber, so the
+  // live meet cross-references the printed sheets and answer key 1:1.
   const brayden = meet.registrations.find(r => /brayden thomas/i.test(r.name));
   assert.equal(Number(brayden.meetNumber), 37);
   assert.equal(Number(brayden.helmetNumber), 37);
-  assert.equal(new Set(meet.registrations.map(r => Number(r.meetNumber))).size, 347, 'meet numbers unique');
-  // Participation flags survive the option-object mapping.
   assert.equal(brayden.options.elite, false);
   assert.equal(brayden.options.quad, true);
   assert.equal(brayden.options.quadRelay2Person, true);
-  // Towne imports once, under his real #497, with his full real participation.
+
+  // Towne imports TWICE — one registration per discipline, both under his real
+  // #497 (as the answer key lists him), landing in DIFFERENT age groups: inline
+  // in Juvenile Boys, quad in Elementary Boys (quads age-group differently).
   const townes = meet.registrations.filter(r => /matthew towne/i.test(r.name));
-  assert.equal(townes.length, 1, 'Towne must import exactly once (not under #13 too)');
-  assert.equal(Number(townes[0].meetNumber), 497);
-  assert.equal(townes[0].options.elite, true);
-  assert.equal(townes[0].options.quad, true);
-  assert.equal(townes[0].options.quadRelay2Person, true);
+  assert.equal(townes.length, 2, 'one registration per discipline');
+  assert.ok(townes.every(r => Number(r.meetNumber) === 497 && Number(r.helmetNumber) === 497));
+  const towneInline = townes.find(r => r.options.elite);
+  const towneQuad = townes.find(r => r.options.quad);
+  assert.ok(towneInline && towneQuad && towneInline !== towneQuad);
+  assert.equal(towneInline.options.quad, false);
+  assert.equal(towneQuad.options.elite, false);
+  assert.match(towneInline.divisionGroupLabel, /Juvenile Boys/i, 'inline row in the inline age group');
+  assert.match(towneQuad.divisionGroupLabel, /Elementary Boys/i, 'quad row in the QUAD age group as raced');
+  assert.equal(towneQuad.options.quadRelay2Person, true);
+
+  // Lilliann: two registrations, two REAL numbers (#64 inline / #129 quad).
+  const lilliann = meet.registrations.filter(r => /lilliann/i.test(r.name));
+  assert.deepEqual(lilliann.map(r => Number(r.meetNumber)).sort((a, b) => a - b), [64, 129]);
+  assert.equal(lilliann.find(r => Number(r.meetNumber) === 64).options.elite, true);
+  assert.equal(lilliann.find(r => Number(r.meetNumber) === 129).options.quad, true);
   assert.ok(meet.races.length > 0, 'races generated');
+
+  // LIVE ROUND-TRIP (§10 — the bug class that was green in unit tests and broke
+  // on load, twice): serialize like saveDb, reload through the REAL migrateMeet,
+  // and re-check helmets, options, and division groups survived.
+  const reloaded = JSON.parse(JSON.stringify(meet));
+  const { migrateMeet } = require('../services/meetHelpers');
+  migrateMeet(reloaded, 'roundtrip-owner');
+  assert.equal(reloaded.registrations.length, 386, 'registrations survived reload');
+  const rTownes = reloaded.registrations.filter(r => /matthew towne/i.test(r.name));
+  assert.equal(rTownes.length, 2);
+  assert.ok(rTownes.every(r => Number(r.helmetNumber) === 497 && Number(r.meetNumber) === 497), 'helmets survived reload');
+  const rQuad = rTownes.find(r => r.options.quad);
+  assert.ok(rQuad && rQuad.options.elite === false, 'discipline options survived reload');
+  assert.equal(rQuad.options.quadRelay2Person, true, 'quad-relay option survived reload (whitelisted)');
+  assert.match(rQuad.divisionGroupLabel, /Elementary Boys/i, 'quad division group survived reload');
+  const rLil = reloaded.registrations.filter(r => /lilliann/i.test(r.name));
+  assert.deepEqual(rLil.map(r => Number(r.helmetNumber)).sort((a, b) => a - b), [64, 129], 'per-discipline helmets survived reload');
 });

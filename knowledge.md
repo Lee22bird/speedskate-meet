@@ -248,13 +248,26 @@ next load.** And always do at least one live round-trip test, not just headless.
   TEAM for that one event, not a person, and freely collides with real individual
   numbers (relay team "#37" vs skater #37 Brayden Thomas). Never derive skater
   identity from relay rows — `gen_dev_roster.js` matches relay members by NAME only.
-- **One skater can appear under TWO numbers in the official individual sheets**:
-  heats-vs-finals renumbering (Towne raced heats as #13, semis/finals/quad as
-  #497), separate inline vs quad numbers (~10 skaters), and sibling number swaps
-  on single PDF rows (Velli #333/#334). `gen_dev_roster.js` merges people by name
-  onto the number they raced the deepest stage under → **347 real people**, each
-  imported under their REAL helmet number. Scoring/reconciliation was never
-  affected (standings read finals-only rows, which carry the final number).
+- **⚠ THE SKATER IDENTITY MODEL** (owner-confirmed; answer-key-verified): ONE
+  person competes across disciplines, and EACH DISCIPLINE is its own registration
+  with its OWN helmet number and its OWN (differently named) age division —
+  Lilliann Salazar is #64 inline "Freshman Girls" AND #129 quad; Towne is inline
+  "Juvenile Boys" but quad "Elementary Boys" (both #497). NEVER key a skater by
+  helmet or a single division; NEVER collapse the rows into one registration.
+  `gen_dev_roster.js` emits one row per (person × discipline) → **386 rows, 353
+  people, 33 dual-discipline** — the dev import creates one registration per row
+  under its real per-discipline number, so the live app cross-references the
+  printed sheets and answer key 1:1.
+- **Sheet quirks the generator absorbs** (each logged on regen): within-discipline
+  renumbering (Towne inline heats #13 → finals #497; the key only uses #497),
+  sibling number swaps on single rows (Velli #333/#334), spelling variants merged
+  ONLY under same discipline + helmet + team + division + edit-distance ≤ 2
+  (Pricilla/Priscilla Yang), a known-typo map applied at ingest (Salizar →
+  Salazar), and two REAL shared numbers between different people (inline #182
+  Bella Daddy / Marnie Alapati, #183 Brandon Gray / Matthew Tseng — different
+  teams AND divisions; kept separate — "one number = one skater" is FALSE even
+  within a discipline). Scoring/reconciliation never affected (standings read
+  finals-only rows, which carry the final numbers).
 - **Team-name pollution from the PDFs** (record times / DNF notes overlapping the
   team column, e.g. `"Astro Speed 1:05.361 -New Record"`, `"CC Speed Did Not
   Finish"`) is cleaned in BOTH paths now: the golden-master adapter

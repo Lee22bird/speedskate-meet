@@ -22,23 +22,31 @@ function buildNationalsDevRoster() {
   for (const r of NATIONALS_ROSTER) {
     const g = byLabel.get(String(r.division || '').trim().toLowerCase());
     if (!g) continue; // division outside the USARS set — skip
-    // Options carry the skater's real IDN 2026 entries, exactly as raced:
-    //   - elite (inline individual) ONLY if this helmet raced an inline event —
-    //     quad-only helmets (inline:false) must not inflate inline fields/heats;
-    //   - each inline relay size they raced (relay2/3/4Person);
-    //   - quad ONLY for real quad INDIVIDUAL entrants (a quad-relay-only skater
-    //     must not be entered in quad individual races they never skated);
-    //   - each quad relay size they raced (quadRelay2/3Person — quad-relay
-    //     eligibility keys on these, not on `quad`).
+    // ONE ROW PER (person × discipline) — the owner-confirmed identity model,
+    // verified against the answer key: each discipline is its own registration
+    // with its OWN helmet number and its OWN age-division label (Lilliann is #64
+    // inline "Freshman Girls" AND #129 quad; Towne is inline "Juvenile Boys" but
+    // quad "Elementary Boys"). The row's division drives the row's AGE, so an
+    // inline row lands in the inline age group as raced and a quad row lands in
+    // the quad age group as raced — never collapse them into one registration.
+    const isQuad = r.discipline === 'quad';
     const options = [];
-    if (r.inline !== false) options.push('elite');
+    if (isQuad) {
+      options.push('quad');
+    } else {
+      options.push('elite');
+    }
+    // Relay sizes attach to the row the generator chose (inline relays on the
+    // inline row, quad relays on the quad row, falling back to whichever row the
+    // person has — eligibility keys on the option + age/gender, not discipline).
     for (const n of (r.relays || [])) options.push(`relay${n}Person`);
-    if (r.quad) options.push('quad');
     for (const n of (r.quadRelays || [])) options.push(`quadRelay${n}Person`);
     rows.push({
-      // Real Nationals helmet number — the importer uses it as the skater's
-      // meet/helmet number so the dev meet cross-references the printed heat
-      // sheets and answer key (#37 in SSM = #37 on the official sheets).
+      // Real per-discipline Nationals helmet number — the importer uses it as
+      // the skater's meet/helmet number so the dev meet cross-references the
+      // printed heat sheets and answer key (#129 in SSM = #129 on the quad
+      // sheets). Dual-discipline skaters legitimately import twice, once per
+      // discipline, sometimes under the same number (Towne #497 in both).
       helmet: String(r.helmet || '').trim(),
       name: r.name,
       team: r.team || 'Independent',
@@ -47,6 +55,10 @@ function buildNationalsDevRoster() {
       // to men/women for 16+ automatically.
       gender: (g.gender === 'boys' || g.gender === 'men') ? 'boys' : 'girls',
       options,
+      discipline: isQuad ? 'quad' : 'inline',
+      // The division label AS RACED in this discipline (source of this row's
+      // age) — kept for display/debugging and answer-key cross-referencing.
+      division: String(r.division || '').trim(),
       quadRelays: r.quadRelays || [],
     });
   }
