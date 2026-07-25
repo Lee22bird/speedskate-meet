@@ -67,9 +67,22 @@ test('USARS National = the complete race-ready preset (heals a stale incomplete 
     assert.ok((g.divisions.elite.distances || []).some(Boolean), `no elite distances on ${g.id}`);
   }
 
-  // 3. Every quad division enabled.
-  assert.ok(Array.isArray(meet.quadGroups) && meet.quadGroups.length > 0, 'quadGroups missing');
-  for (const q of meet.quadGroups) assert.ok(q.enabled, `quad division not enabled: ${q.id}`);
+  // 3. The FULL quad division set — quads mirror the inline age structure
+  // (verified vs real 2026 Nationals), not the legacy 8-entry wide-band list.
+  assert.strictEqual(meet.quadGroups.length, 34, 'expected the full 34-division quad set');
+  const quadIds = meet.quadGroups.map(q => q.id);
+  for (const id of GRAND_AND_PREMIER) {
+    assert.ok(quadIds.includes(`quad_${id}`), `quad set missing quad_${id}`);
+  }
+  for (const q of meet.quadGroups) {
+    assert.ok(q.enabled, `quad division not enabled: ${q.id}`);
+    assert.strictEqual((q.distances || []).filter(Boolean).length, 3, `${q.id} should race 3 distances`);
+  }
+  // Quad-specific distance tables (not the inline ones) — spot-check against what
+  // these divisions actually raced at Nationals.
+  assert.deepStrictEqual(meet.quadGroups.find(q => q.id === 'quad_veteran_men').distances, ['300m', '500m', '700m']);
+  assert.deepStrictEqual(meet.quadGroups.find(q => q.id === 'quad_junior_men').distances, ['500m', '1000m', '1500m']);
+  assert.deepStrictEqual(meet.quadGroups.find(q => q.id === 'quad_masters_ladies').distances, ['300m', '700m', '1000m']);
 
   // 4. Relays on (Relay Builder then offers inline + quad relay divisions).
   assert.strictEqual(meet.relayEnabled, true, 'relays not enabled');
@@ -115,6 +128,7 @@ test('the complete USARS preset survives a migrateMeet reload round-trip (§10 g
   const ids = reloaded.groups.map(g => g.id);
   for (const id of GRAND_AND_PREMIER) assert.ok(ids.includes(id), `migrateMeet dropped ${id}`);
   for (const g of reloaded.groups) assert.ok(g.divisions?.elite?.enabled, `reload disabled elite on ${g.id}`);
+  assert.strictEqual(reloaded.quadGroups.length, 34, 'reload changed the quad division count');
   assert.ok(reloaded.quadGroups.every(q => q.enabled), 'reload disabled quad divisions');
   assert.strictEqual(reloaded.relayEnabled, true, 'reload turned relays off');
   assert.strictEqual(reloaded.tiebreaker, 'sr832', 'reload changed tiebreaker');

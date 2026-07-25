@@ -76,15 +76,51 @@ function makeOpenGroupsTemplate() {
   }));
 }
 
+// Full USARS quad division set — quads mirror the SAME age divisions as inline
+// (verified against the real 2026 Indoor Nationals: Quad Primary Girls … Quad
+// Esquire Men, each racing THREE distances). The old 8-entry wide-band list
+// ("9 & Under", "35 & Older", 2 distances) was a legacy SSM condensation — same
+// category of legacy as the 'd2' tiebreaker — and made USARS meets impossible to
+// configure correctly. Distances are quad-specific (NOT always the inline table:
+// e.g. Quad Veteran races 300/500/700 where inline Veteran races 500/700/1000;
+// Quad Junior Men 500/1000/1500 vs inline 500/1000/2000) — taken from what each
+// division actually raced at Nationals, mirrored across genders / Grand twins
+// for divisions that didn't field there.
 const QUAD_GROUP_DEFAULTS = [
-  { id: 'quad_juv_girls',   label: 'Quad Juvenile Girls',  ages: '9 & Under',  gender: 'girls', distances: ['200m', '500m'] },
-  { id: 'quad_juv_boys',    label: 'Quad Juvenile Boys',   ages: '9 & Under',  gender: 'boys',  distances: ['200m', '500m'] },
-  { id: 'quad_fresh_girls', label: 'Quad Freshman Girls',  ages: '10-13',      gender: 'girls', distances: ['300m', '700m'] },
-  { id: 'quad_fresh_boys',  label: 'Quad Freshman Boys',   ages: '10-13',      gender: 'boys',  distances: ['300m', '700m'] },
-  { id: 'quad_sr_ladies',   label: 'Quad Senior Ladies',   ages: '14 & Older', gender: 'women', distances: ['300m', '1000m'] },
-  { id: 'quad_sr_men',      label: 'Quad Senior Men',      ages: '14 & Older', gender: 'men',   distances: ['300m', '1000m'] },
-  { id: 'quad_mast_ladies', label: 'Quad Masters Ladies',  ages: '35 & Older', gender: 'women', distances: ['300m', '1000m'] },
-  { id: 'quad_mast_men',    label: 'Quad Masters Men',     ages: '35 & Older', gender: 'men',   distances: ['300m', '1000m'] },
+  { id: 'quad_tiny_tot_girls',       label: 'Quad Tiny Tot Girls',       ages: '5 & under', gender: 'girls', distances: ['100m', '200m', '300m'] },
+  { id: 'quad_tiny_tot_boys',        label: 'Quad Tiny Tot Boys',        ages: '5 & under', gender: 'boys',  distances: ['100m', '200m', '300m'] },
+  { id: 'quad_primary_girls',        label: 'Quad Primary Girls',        ages: '6-7',       gender: 'girls', distances: ['200m', '300m', '400m'] },
+  { id: 'quad_primary_boys',         label: 'Quad Primary Boys',         ages: '6-7',       gender: 'boys',  distances: ['200m', '300m', '400m'] },
+  { id: 'quad_juvenile_girls',       label: 'Quad Juvenile Girls',       ages: '8-9',       gender: 'girls', distances: ['200m', '300m', '500m'] },
+  { id: 'quad_juvenile_boys',        label: 'Quad Juvenile Boys',        ages: '8-9',       gender: 'boys',  distances: ['200m', '300m', '500m'] },
+  { id: 'quad_elementary_girls',     label: 'Quad Elementary Girls',     ages: '10-11',     gender: 'girls', distances: ['300m', '500m', '700m'] },
+  { id: 'quad_elementary_boys',      label: 'Quad Elementary Boys',      ages: '10-11',     gender: 'boys',  distances: ['300m', '500m', '700m'] },
+  { id: 'quad_freshman_girls',       label: 'Quad Freshman Girls',       ages: '12-13',     gender: 'girls', distances: ['300m', '500m', '1000m'] },
+  { id: 'quad_freshman_boys',        label: 'Quad Freshman Boys',        ages: '12-13',     gender: 'boys',  distances: ['300m', '500m', '1000m'] },
+  { id: 'quad_sophomore_ladies',     label: 'Quad Sophomore Ladies',     ages: '14-15',     gender: 'women', distances: ['500m', '1000m', '1500m'] },
+  { id: 'quad_sophomore_men',        label: 'Quad Sophomore Men',        ages: '14-15',     gender: 'men',   distances: ['500m', '1000m', '1500m'] },
+  { id: 'quad_junior_ladies',        label: 'Quad Junior Ladies',        ages: '16-17',     gender: 'women', distances: ['500m', '1000m', '1500m'] },
+  { id: 'quad_junior_men',           label: 'Quad Junior Men',           ages: '16-17',     gender: 'men',   distances: ['500m', '1000m', '1500m'] },
+  { id: 'quad_senior_ladies',        label: 'Quad Senior Ladies',        ages: '18-24',     gender: 'women', distances: ['500m', '1000m', '2000m'] },
+  { id: 'quad_senior_men',           label: 'Quad Senior Men',           ages: '18-24',     gender: 'men',   distances: ['500m', '1500m', '3000m'] },
+  { id: 'quad_classic_ladies',       label: 'Quad Classic Ladies',       ages: '25-29',     gender: 'women', distances: ['500m', '1000m', '2000m'] },
+  { id: 'quad_classic_men',          label: 'Quad Classic Men',          ages: '25-29',     gender: 'men',   distances: ['500m', '1000m', '2000m'] },
+  { id: 'quad_grand_classic_ladies', label: 'Quad Grand Classic Ladies', ages: '30-34',     gender: 'women', distances: ['500m', '1000m', '2000m'] },
+  { id: 'quad_grand_classic_men',    label: 'Quad Grand Classic Men',    ages: '30-34',     gender: 'men',   distances: ['500m', '1000m', '2000m'] },
+  { id: 'quad_masters_ladies',       label: 'Quad Masters Ladies',       ages: '35-39',     gender: 'women', distances: ['300m', '700m', '1000m'] },
+  { id: 'quad_masters_men',          label: 'Quad Masters Men',          ages: '35-39',     gender: 'men',   distances: ['300m', '700m', '1000m'] },
+  { id: 'quad_grand_masters_ladies', label: 'Quad Grand Masters Ladies', ages: '40-44',     gender: 'women', distances: ['300m', '700m', '1000m'] },
+  { id: 'quad_grand_masters_men',    label: 'Quad Grand Masters Men',    ages: '40-44',     gender: 'men',   distances: ['300m', '700m', '1000m'] },
+  { id: 'quad_veteran_ladies',       label: 'Quad Veteran Ladies',       ages: '45-49',     gender: 'women', distances: ['300m', '500m', '700m'] },
+  { id: 'quad_veteran_men',          label: 'Quad Veteran Men',          ages: '45-49',     gender: 'men',   distances: ['300m', '500m', '700m'] },
+  { id: 'quad_grand_veteran_ladies', label: 'Quad Grand Veteran Ladies', ages: '50-54',     gender: 'women', distances: ['300m', '500m', '700m'] },
+  { id: 'quad_grand_veteran_men',    label: 'Quad Grand Veteran Men',    ages: '50-54',     gender: 'men',   distances: ['300m', '500m', '700m'] },
+  { id: 'quad_esquire_ladies',       label: 'Quad Esquire Ladies',       ages: '55-59',     gender: 'women', distances: ['300m', '500m', '700m'] },
+  { id: 'quad_esquire_men',          label: 'Quad Esquire Men',          ages: '55-59',     gender: 'men',   distances: ['300m', '500m', '700m'] },
+  { id: 'quad_grand_esquire_ladies', label: 'Quad Grand Esquire Ladies', ages: '60-64',     gender: 'women', distances: ['300m', '500m', '700m'] },
+  { id: 'quad_grand_esquire_men',    label: 'Quad Grand Esquire Men',    ages: '60-64',     gender: 'men',   distances: ['300m', '500m', '700m'] },
+  { id: 'quad_premier_ladies',       label: 'Quad Premier Ladies',       ages: '65+',       gender: 'women', distances: ['300m', '500m', '700m'] },
+  { id: 'quad_premier_men',          label: 'Quad Premier Men',          ages: '65+',       gender: 'men',   distances: ['300m', '500m', '700m'] },
 ];
 
 function makeQuadGroupsTemplate() {
