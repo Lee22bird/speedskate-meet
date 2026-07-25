@@ -75,6 +75,8 @@ function registrationOptionLabels(meet, opts = {}) {
   if (opts.relay2Person) labels.push('2 Person Relay');
   if (opts.relay3Person) labels.push('3 Person Relay');
   if (opts.relay4Person) labels.push('4 Person Relay');
+  if (opts.quadRelay2Person) labels.push('Quad 2 Person Relay');
+  if (opts.quadRelay3Person) labels.push('Quad 3 Person Relay');
   return labels;
 }
 
@@ -96,6 +98,8 @@ function registrationOptionsFromBody(meet, body = {}) {
     relay3Person: !!body.relay3Person,
     relay4Person: !!body.relay4Person,
     relays: !!(body.relay2Person || body.relay3Person || body.relay4Person),
+    quadRelay2Person: !!body.quadRelay2Person,
+    quadRelay3Person: !!body.quadRelay3Person,
   };
 }
 
@@ -156,6 +160,7 @@ router.get('/meet/:meetId/register', (req, res) => {
             ${(meet.quadGroups||[]).some(g=>g.enabled)?`<div class="toggle-row"><div><div class="toggle-row-label">Quad</div></div>${toggleSwitch('quad',false)}</div>`:''}
             ${timeTrialAvailable?`<div class="toggle-row"><div><div class="toggle-row-label">${esc(timeTrialLabel)}</div></div>${toggleSwitch('timeTrials',false)}</div>`:''}
             ${relayEventsAvailable?`<div class="toggle-row"><div><div class="toggle-row-label">2 Person Relay</div></div>${toggleSwitch('relay2Person',false)}</div><div class="toggle-row"><div><div class="toggle-row-label">3 Person Relay</div></div>${toggleSwitch('relay3Person',false)}</div><div class="toggle-row"><div><div class="toggle-row-label">4 Person Relay</div></div>${toggleSwitch('relay4Person',false)}</div>`:''}
+            ${relayEventsAvailable&&(meet.quadGroups||[]).some(g=>g.enabled)?`<div class="toggle-row"><div><div class="toggle-row-label">🛼 Quad 2 Person Relay</div></div>${toggleSwitch('quadRelay2Person',false)}</div><div class="toggle-row"><div><div class="toggle-row-label">🛼 Quad 3 Person Relay</div></div>${toggleSwitch('quadRelay3Person',false)}</div>`:''}
             ${(meet.additionalGroups||meet.additionalRaceGroups||meet.additionalRaces||meet.skateabilityGroups||[]).length?`
               <div class="toggle-row"><div><div class="toggle-row-label">Additional Races</div><div class="toggle-row-desc">Extra race division — select your group below if enabled</div></div>${toggleSwitch('additional',false)}</div>
               <div id="additional-group-row" style="display:none">
@@ -301,6 +306,7 @@ function registrationForm(meet,reg,action,title) {
             ${(meet.quadGroups||[]).some(g=>g.enabled)?`<div class="toggle-row"><div><div class="toggle-row-label">Quad</div></div>${toggleSwitch('quad',!!reg.options?.quad)}</div>`:''}
             ${timeTrialAvailable?`<div class="toggle-row"><div><div class="toggle-row-label">${esc(timeTrialLabel)}</div></div>${toggleSwitch('timeTrials',timeTrialSelected)}</div>`:''}
             ${relayEventsAvailable?`<div class="toggle-row"><div><div class="toggle-row-label">2 Person Relay</div></div>${toggleSwitch('relay2Person',!!reg.options?.relay2Person)}</div><div class="toggle-row"><div><div class="toggle-row-label">3 Person Relay</div></div>${toggleSwitch('relay3Person',!!reg.options?.relay3Person)}</div><div class="toggle-row"><div><div class="toggle-row-label">4 Person Relay</div></div>${toggleSwitch('relay4Person',!!reg.options?.relay4Person)}</div>`:''}
+            ${relayEventsAvailable&&(meet.quadGroups||[]).some(g=>g.enabled)?`<div class="toggle-row"><div><div class="toggle-row-label">🛼 Quad 2 Person Relay</div></div>${toggleSwitch('quadRelay2Person',!!reg.options?.quadRelay2Person)}</div><div class="toggle-row"><div><div class="toggle-row-label">🛼 Quad 3 Person Relay</div></div>${toggleSwitch('quadRelay3Person',!!reg.options?.quadRelay3Person)}</div>`:''}
             ${(meet.additionalGroups||meet.additionalRaceGroups||meet.additionalRaces||meet.skateabilityGroups||[]).length?`
               <div class="toggle-row"><div><div class="toggle-row-label">Additional Races</div><div class="toggle-row-desc">Extra race division</div></div>${toggleSwitch('additional',!!(reg.options?.additional||reg.options?.skateability))}</div>
               <div id="edit-additional-group-row" style="${(reg.options?.additional||reg.options?.skateability)?'':'display:none'}">
@@ -362,6 +368,8 @@ function springFlingOptionObject(row, meet) {
     relay3Person: opts.has('relay3Person'),
     relay4Person: opts.has('relay4Person'),
     relays: opts.has('relay2Person') || opts.has('relay3Person') || opts.has('relay4Person'),
+    quadRelay2Person: opts.has('quadRelay2Person'),
+    quadRelay3Person: opts.has('quadRelay3Person'),
     additional: opts.has('additional'),
     additionalGroupId: opts.has('additional') && firstAdditional ? String(firstAdditional.id || '') : '',
     // temporary compatibility aliases for older screens/calculators

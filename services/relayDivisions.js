@@ -124,7 +124,16 @@ function relayGenderOk(divGender, skaterGender) {
 // Skaters (registration rows) eligible for a relay division: age in range + gender match.
 function eligibleForRelayDivision(div, skaters) {
   if (!div) return [];
-  return (skaters || []).filter(s => ageMatch(div.ageRange, Number(s.age)) && relayGenderOk(div.gender, s.gender));
+  // Quad-relay divisions draw only from skaters who registered for the matching
+  // quad relay (quadRelay2Person / quadRelay3Person). Inline divisions are
+  // unchanged (age + gender only), so inline callers keep working even if their
+  // skater objects carry no options.
+  const needsQuadOpt = div.discipline === 'quad' ? `quadRelay${div.size}Person` : null;
+  return (skaters || []).filter(s =>
+    ageMatch(div.ageRange, Number(s.age)) &&
+    relayGenderOk(div.gender, s.gender) &&
+    (!needsQuadOpt || !!(s.options && s.options[needsQuadOpt]))
+  );
 }
 
 module.exports = { RELAY_DIVISIONS, QUAD_RELAY_DIVISIONS, ALL_RELAY_DIVISIONS, RELAY_DIVISION_BY_ID, relayGenderOk, eligibleForRelayDivision, relayDivisionsForDiscipline };

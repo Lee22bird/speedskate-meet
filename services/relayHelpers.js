@@ -119,10 +119,14 @@ function relayOptionKeyForRace(race) {
   const text = [race?.relayType, race?.groupLabel, race?.division, race?.distanceLabel]
     .map(x => String(x || '').toLowerCase())
     .join(' ');
-  if (text.includes('4 person') || text.includes('4-person') || text.includes('4person')) return 'relay4Person';
-  if (text.includes('2 person') || text.includes('2-person') || text.includes('2person')) return 'relay2Person';
-  if (text.includes('3 person') || text.includes('3-person') || text.includes('3person')) return 'relay3Person';
-  return 'relays';
+  // Quad relays draw from their own registration option so inline-relay entrants
+  // aren't offered for a quad team (and vice-versa). Quad divisions are 2- or 3-person.
+  const q = race?.isQuadRace ? 'quad' : '';
+  const key = (n) => q ? `quadRelay${n}Person` : `relay${n}Person`;
+  if (text.includes('4 person') || text.includes('4-person') || text.includes('4person')) return key(4);
+  if (text.includes('2 person') || text.includes('2-person') || text.includes('2person')) return key(2);
+  if (text.includes('3 person') || text.includes('3-person') || text.includes('3person')) return key(3);
+  return q ? 'quadRelays' : 'relays';
 }
 
 function relayAgeRangeForRace(meet, race) {
@@ -152,7 +156,9 @@ function relayEligibleRegistrationsForRace(meet, race) {
     const opts = reg.options || {};
     const relayOptionOk = optionKey === 'relays'
       ? !!(opts.relays || opts.relay2Person || opts.relay3Person || opts.relay4Person)
-      : !!opts[optionKey];
+      : optionKey === 'quadRelays'
+        ? !!(opts.quadRelay2Person || opts.quadRelay3Person)
+        : !!opts[optionKey];
     if (!relayOptionOk) return false;
     return registrationMatchesRelayAgeRange(reg, meet, ageRange);
   });

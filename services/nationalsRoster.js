@@ -29,6 +29,9 @@ function buildNationalsDevRoster() {
     const options = ['elite'];
     for (const n of (r.relays || [])) options.push(`relay${n}Person`);
     if (r.quad || (r.quadRelays || []).length) options.push('quad');
+    // Real quad-relay entries (2- & 3-person) -> their own registration options so
+    // quad-relay eligibility can require an actual quad-relay registration.
+    for (const n of (r.quadRelays || [])) options.push(`quadRelay${n}Person`);
     rows.push({
       name: r.name,
       team: r.team || 'Independent',
