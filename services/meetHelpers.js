@@ -405,7 +405,7 @@ function migrateMeet(meet,fallbackOwnerId) {
       timeTrialEventIds:Array.isArray(reg.timeTrialEventIds)
         ? reg.timeTrialEventIds.map(String).filter(Boolean)
         : (Array.isArray(reg.options?.timeTrialEventIds) ? reg.options.timeTrialEventIds.map(String).filter(Boolean) : []),
-      relays:!!reg.options?.relays, relay2Person:!!reg.options?.relay2Person, relay3Person:!!reg.options?.relay3Person, relay4Person:!!reg.options?.relay4Person, additional:!!(reg.options?.additional || reg.options?.skateability), additionalGroupId:String(reg.options?.additionalGroupId || reg.options?.skateabilityGroupId || ''), skateability:!!(reg.options?.additional || reg.options?.skateability), skateabilityGroupId:String(reg.options?.additionalGroupId || reg.options?.skateabilityGroupId || '')},
+      relays:!!reg.options?.relays, relay2Person:!!reg.options?.relay2Person, relay3Person:!!reg.options?.relay3Person, relay4Person:!!reg.options?.relay4Person, quadRelay2Person:!!reg.options?.quadRelay2Person, quadRelay3Person:!!reg.options?.quadRelay3Person, additional:!!(reg.options?.additional || reg.options?.skateability), additionalGroupId:String(reg.options?.additionalGroupId || reg.options?.skateabilityGroupId || ''), skateability:!!(reg.options?.additional || reg.options?.skateability), skateabilityGroupId:String(reg.options?.additionalGroupId || reg.options?.skateabilityGroupId || '')},
   }));
 }
 
