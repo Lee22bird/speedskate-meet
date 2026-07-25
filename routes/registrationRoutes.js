@@ -453,6 +453,12 @@ function importNationalsRoster(meet, { replace = true, checkedIn = true, paid = 
     const age = Number(row.age || 0);
     const baseGroup = findAgeGroup(meet.groups || [], age, gender);
     const options = springFlingOptionObject(row, meet);
+    // Keep the skater's REAL Nationals helmet number as both meet number and
+    // helmet number, so the dev meet lines up 1:1 with the printed heat sheets
+    // and answer key (#37 in SSM = #37 on the official sheets). Helmets are
+    // unique in the source data; fall back to sequential only if absent.
+    const realHelmet = Number(String(row.helmet || '').trim());
+    const skaterNumber = Number.isFinite(realHelmet) && realHelmet > 0 ? realHelmet : nextMeetNumber++;
     const reg = {
       id: nextRegId++,
       createdAt: nowIso(),
@@ -466,10 +472,10 @@ function importNationalsRoster(meet, { replace = true, checkedIn = true, paid = 
       divisionGroupLabel: baseGroup?.label || 'Unassigned',
       originalDivisionGroupId: baseGroup?.id || '',
       originalDivisionGroupLabel: baseGroup?.label || '',
-      meetNumber: nextMeetNumber++,
+      meetNumber: skaterNumber,
       birthdate: '',
       email: '',
-      helmetNumber: '',
+      helmetNumber: skaterNumber,
       paid: !!paid,
       checkedIn: !!checkedIn,
       totalCost: 0,

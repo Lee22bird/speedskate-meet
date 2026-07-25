@@ -22,17 +22,24 @@ function buildNationalsDevRoster() {
   for (const r of NATIONALS_ROSTER) {
     const g = byLabel.get(String(r.division || '').trim().toLowerCase());
     if (!g) continue; // division outside the USARS set — skip
-    // Options carry the skater's real IDN 2026 entries: the elite individual event,
-    // each inline relay size they raced (relay2/3/4Person), and quad if they entered
-    // any quad event (individual or quad relay). quadRelays are kept on the row for
-    // the future quad-relay divisions (no distinct registration option yet).
-    const options = ['elite'];
+    // Options carry the skater's real IDN 2026 entries, exactly as raced:
+    //   - elite (inline individual) ONLY if this helmet raced an inline event —
+    //     quad-only helmets (inline:false) must not inflate inline fields/heats;
+    //   - each inline relay size they raced (relay2/3/4Person);
+    //   - quad ONLY for real quad INDIVIDUAL entrants (a quad-relay-only skater
+    //     must not be entered in quad individual races they never skated);
+    //   - each quad relay size they raced (quadRelay2/3Person — quad-relay
+    //     eligibility keys on these, not on `quad`).
+    const options = [];
+    if (r.inline !== false) options.push('elite');
     for (const n of (r.relays || [])) options.push(`relay${n}Person`);
-    if (r.quad || (r.quadRelays || []).length) options.push('quad');
-    // Real quad-relay entries (2- & 3-person) -> their own registration options so
-    // quad-relay eligibility can require an actual quad-relay registration.
+    if (r.quad) options.push('quad');
     for (const n of (r.quadRelays || [])) options.push(`quadRelay${n}Person`);
     rows.push({
+      // Real Nationals helmet number — the importer uses it as the skater's
+      // meet/helmet number so the dev meet cross-references the printed heat
+      // sheets and answer key (#37 in SSM = #37 on the official sheets).
+      helmet: String(r.helmet || '').trim(),
       name: r.name,
       team: r.team || 'Independent',
       age: representativeAge(g.ages),

@@ -107,6 +107,12 @@ function build() {
       const relays = Array.from(p.relays).sort((a, b) => a - b);
       if (relays.length) row.relays = relays;
       if (p.quad) row.quad = true;
+      // A helmet that never appeared in an inline INDIVIDUAL event is quad-only
+      // (inline+quad split skaters carry a separate inline helmet). Emit
+      // inline:false so the importer doesn't over-enter them in inline divisions
+      // — that would inflate those fields' sizes (and heat counts) vs the real
+      // Nationals program.
+      if (!p._inlineDiv) row.inline = false;
       const quadRelays = Array.from(p.quadRelays).sort((a, b) => a - b);
       if (quadRelays.length) row.quadRelays = quadRelays;
       return row;
@@ -115,8 +121,9 @@ function build() {
   const header =
     '// AUTO-GENERATED unique Nationals skater roster for the dev import.\n' +
     '// Fields: helmet, name, team, division; plus real IDN 2026 participation —\n' +
-    '//   relays: inline relay sizes entered [2,3,4]; quad: entered a quad event;\n' +
-    '//   quadRelays: quad relay sizes entered [2,3,4].\n' +
+    '//   relays: inline relay sizes entered [2,3,4]; quad: entered a quad\n' +
+    '//   INDIVIDUAL event; quadRelays: quad relay sizes entered;\n' +
+    '//   inline:false = quad-only helmet (raced no inline individual event).\n' +
     '// Regenerate with: node tools/nationals/gen_dev_roster.js\n';
   const body = 'module.exports = [\n' + rows.map(r => '  ' + JSON.stringify(r)).join(',\n') + '\n];\n';
   require('fs').writeFileSync(OUT, header + body);
