@@ -378,6 +378,16 @@ function migrateMeet(meet,fallbackOwnerId) {
     resultsMode:String(r.resultsMode||'places'), status:String(r.status||'open'),
     notes:String(r.notes||''), isFinal:!!r.isFinal, closedAt:String(r.closedAt||''),
     isOpenRace:!!r.isOpenRace, isQuadRace:!!r.isQuadRace, isTimeTrial:!!r.isTimeTrial, isRelayRace:!!r.isRelayRace, isAdditionalRace:!!r.isAdditionalRace, isSkateabilityRace:!!r.isSkateabilityRace,
+    // Relay identity/metadata must survive migration or relay advancement breaks:
+    // relayDivisionId is the family key advanceRelayProgression uses to seed the
+    // final; relayType/AgeGroup/AgeRange drive eligibility + labels.
+    ...(r.isRelayRace ? {
+      relayDivisionId:String(r.relayDivisionId||''),
+      relayType:String(r.relayType||''),
+      relayAgeGroup:String(r.relayAgeGroup||''),
+      relayAgeRange:String(r.relayAgeRange||''),
+      advancementWarning:String(r.advancementWarning||''),
+    } : {}),
   }));
   meet.blocks=meet.blocks.map((b,idx)=>({
     id:String(b.id||('b'+(idx+1))), name:String(b.name||`Block ${idx+1}`),
