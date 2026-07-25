@@ -87,6 +87,8 @@ function renderRelayBuilderView({ meet, saved = false, added = '', gen = null })
 
   const inlineGroups = groupsFor('inline', ['3 Person', '2 Person', '4 Person']);
   const quadGroups = groupsFor('quad', ['2 Person', '3 Person']);
+  const inlineCount = meet.relayTemplates.filter(r => (r.discipline || 'inline') === 'inline').length;
+  const quadCount = meet.relayTemplates.filter(r => r.discipline === 'quad').length;
 
   return `
     <div class="builder-banner" style="background:linear-gradient(135deg,#1d4ed8 0%,#3b82f6 100%);margin-bottom:18px">
@@ -118,6 +120,9 @@ function renderRelayBuilderView({ meet, saved = false, added = '', gen = null })
 
     <div class="card" style="margin-top:16px">
       <style>
+        .rb-tabs{display:flex;gap:8px;margin:10px 0 2px;flex-wrap:wrap;}
+        .rb-tab{padding:10px 18px;border-radius:999px;border:1px solid rgba(15,31,61,.15);background:#fff;font-weight:800;font-size:14px;cursor:pointer;color:#0f1f3d;}
+        .rb-tab-active{background:#0f1f3d;color:#fff;border-color:#0f1f3d;}
         .relay-type-card{background:#eef3f8;border:1px solid rgba(15,31,61,.10);border-radius:18px;padding:18px;margin-top:14px;}
         .relay-card-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;}
         .relay-template-card{background:#f8fafc;border:1px solid rgba(15,31,61,.10);border-radius:16px;padding:16px;box-shadow:0 1px 4px rgba(15,31,61,.04);}
@@ -131,16 +136,25 @@ function renderRelayBuilderView({ meet, saved = false, added = '', gen = null })
           <div class="note">Enable relay groups, manually set age ranges like Open Builder, then click Save Relay Builder. This page does not autosave.</div>
         </div>
         <div class="action-row">
-          <button class="btn2 btn-sm" type="button" onclick="document.querySelectorAll('.relay-type-card input.toggle-input').forEach(cb=>cb.checked=true)">Select All Relay Cards</button>
+          <button class="btn2 btn-sm" type="button" onclick="relaySelectAllActive()">Select All on This Tab</button>
           <button class="btn-sky btn-sm" type="submit" form="relayBuilderForm">Save Relay Builder</button>
         </div>
       </div>
+      <div class="rb-tabs">
+        <button type="button" id="relayTabBtnInline" class="rb-tab rb-tab-active" onclick="relayTab('inline')">⚡ Inline Relays · ${inlineCount}</button>
+        ${quadCount ? `<button type="button" id="relayTabBtnQuad" class="rb-tab" onclick="relayTab('quad')">🛼 Quad Relays · ${quadCount}</button>` : ''}
+      </div>
       <form id="relayBuilderForm" method="POST" action="/portal/meet/${meet.id}/relay-builder/add-template">
-        ${inlineGroups}
-        ${quadGroups ? `
-        <div class="quad-relay-block" style="margin-top:22px;padding-top:8px;border-top:2px dashed rgba(15,31,61,.16)">
+        <!-- Both tab panels stay inside the ONE form: hiding a panel does not drop
+             its fields from the POST (unchecked boxes never post anyway; text
+             inputs post regardless of display), so saving from either tab saves
+             BOTH disciplines. Tab buttons are type=button so they never submit. -->
+        <div id="relayTabInline" class="rb-tab-panel">
+          ${inlineGroups}
+        </div>
+        ${quadCount ? `
+        <div id="relayTabQuad" class="rb-tab-panel" style="display:none">
           <div style="margin:12px 0 4px">
-            <h2 style="margin:0">🛼 Quad Relays</h2>
             <div class="note">Nationals / regionals only — leagues don't run these. Team fill-in works exactly like inline relays; placement-only, no overall points.</div>
           </div>
           ${quadGroups}
@@ -149,6 +163,26 @@ function renderRelayBuilderView({ meet, saved = false, added = '', gen = null })
           <button class="btn-sky" type="submit">Save Relay Builder</button>
         </div>
       </form>
+      <script>
+        (function () {
+          var active = 'inline';
+          window.relayTab = function (which) {
+            var quadPanel = document.getElementById('relayTabQuad');
+            if (which === 'quad' && !quadPanel) return;
+            active = which;
+            document.getElementById('relayTabInline').style.display = which === 'inline' ? '' : 'none';
+            if (quadPanel) quadPanel.style.display = which === 'quad' ? '' : 'none';
+            document.getElementById('relayTabBtnInline').classList.toggle('rb-tab-active', which === 'inline');
+            var qb = document.getElementById('relayTabBtnQuad');
+            if (qb) qb.classList.toggle('rb-tab-active', which === 'quad');
+          };
+          window.relaySelectAllActive = function () {
+            var panel = document.getElementById(active === 'quad' ? 'relayTabQuad' : 'relayTabInline');
+            if (!panel) return;
+            panel.querySelectorAll('input.toggle-input').forEach(function (cb) { cb.checked = true; });
+          };
+        })();
+      </script>
     </div>
 
     ${relayRaces.length ? `
