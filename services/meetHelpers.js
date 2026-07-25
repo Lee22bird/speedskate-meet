@@ -298,6 +298,13 @@ function applyDivisionScheme(meet, wantUsars) {
     meet.groups = baseGroupsUSARS();
     meet.quadGroups = (makeQuadGroupsTemplate() || []).map(g => ({ ...g, enabled: true }));
     meet.relayEnabled = true;
+    // relayEnabled is only the master switch — the Relay Builder lists one row per
+    // relay division (meet.relayTemplates) each with its OWN enabled checkbox, and
+    // those stayed off, so "USARS National" looked like it hadn't turned relays on.
+    // Enable every division row (all inline + quad relays). Require at call time:
+    // relayHelpers requires meetHelpers, so a top-level require would be circular.
+    const { normalizeRelayTemplates } = require('./relayHelpers');
+    meet.relayTemplates = normalizeRelayTemplates(meet.relayTemplates).map(r => ({ ...r, enabled: true }));
     meet.tiebreaker = 'sr832';
   } else {
     const prev = new Map((meet.groups || []).map(g => [g.id, g]));

@@ -84,8 +84,15 @@ test('USARS National = the complete race-ready preset (heals a stale incomplete 
   assert.deepStrictEqual(meet.quadGroups.find(q => q.id === 'quad_junior_men').distances, ['500m', '1000m', '1500m']);
   assert.deepStrictEqual(meet.quadGroups.find(q => q.id === 'quad_masters_ladies').distances, ['300m', '700m', '1000m']);
 
-  // 4. Relays on (Relay Builder then offers inline + quad relay divisions).
+  // 4. Relays on — the master switch AND every per-division Relay Builder row
+  // (relayEnabled alone just showed the list with all checkboxes off).
   assert.strictEqual(meet.relayEnabled, true, 'relays not enabled');
+  const { ALL_RELAY_DIVISIONS } = require(path.join(ROOT, 'services', 'relayDivisions'));
+  assert.strictEqual(meet.relayTemplates.length, ALL_RELAY_DIVISIONS.length,
+    'expected one enabled template row per relay division (inline + quad)');
+  for (const t of meet.relayTemplates) assert.ok(t.enabled, `relay division not toggled on: ${t.divisionId}`);
+  assert.ok(meet.relayTemplates.some(t => t.discipline === 'inline'), 'no inline relay rows');
+  assert.ok(meet.relayTemplates.some(t => t.discipline === 'quad'), 'no quad relay rows');
 
   // 5. USARS tiebreaker + flag.
   assert.strictEqual(meet.tiebreaker, 'sr832');
@@ -131,6 +138,12 @@ test('the complete USARS preset survives a migrateMeet reload round-trip (§10 g
   assert.strictEqual(reloaded.quadGroups.length, 34, 'reload changed the quad division count');
   assert.ok(reloaded.quadGroups.every(q => q.enabled), 'reload disabled quad divisions');
   assert.strictEqual(reloaded.relayEnabled, true, 'reload turned relays off');
+  // relayTemplates passes through migrateMeet untouched, and the Relay Builder
+  // page re-normalizes on load — enabled must survive BOTH.
+  const { normalizeRelayTemplates } = require(path.join(ROOT, 'services', 'relayHelpers'));
+  const renormalized = normalizeRelayTemplates(reloaded.relayTemplates);
+  assert.ok(renormalized.length > 0 && renormalized.every(t => t.enabled),
+    'relay division toggles did not survive reload + relay-builder normalization');
   assert.strictEqual(reloaded.tiebreaker, 'sr832', 'reload changed tiebreaker');
   assert.strictEqual(reloaded.groups.find(g => g.id === 'grand_classic_men').label, 'Grand Classic Men');
 });
