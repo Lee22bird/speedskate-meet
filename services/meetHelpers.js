@@ -1147,12 +1147,16 @@ function tryAdvanceTopThreeFromTwoHeats(meet, changedRace) {
 
 // ── USARS SR505.4 heat → semi → final advancement ──────────────────────────────
 // Extends the 2-heat MVP to 3-4 heat fields (15-32 skaters): heats feed 2 semis,
-// semis feed the 6-skater final. Auto-semis are GATED (default OFF) so existing
-// meets are byte-for-byte unaffected; USARS-mode meets opt in. Semis are created
-// lazily during advancement (no change to race generation). The seeding functions
-// are pure + reused by relay stage B.
+// semis feed the 6-skater final. Bracket depth follows the field size: a division
+// large enough for 3-4 heats needs semis to narrow fairly to the final 6, so this
+// happens automatically — no per-meet flag. (1-2 heats go straight to the final;
+// 5+ heats/quarterfinals stay manual.) Semis are created lazily during advancement
+// (no change to race generation). The seeding functions are pure + reused by relay
+// stage B.
+// Retained (always true) so any external callers keep working; the heat-count
+// check in advanceRaceProgression is now the sole gate.
 function semiAdvancementEnabled(meet) {
-  return !!(meet && (meet.autoSemis || meet.usarsDivisions));
+  return true;
 }
 
 // SR505.4 semi seeding: [heatNumber, finishing-place] pairs feeding each of the
@@ -1305,7 +1309,9 @@ function advanceRaceProgression(meet, changedRace) {
   const familyKey = advancementFamilyKey(changedRace);
   const heats = (meet.races || []).filter(r =>
     isAdvancementRace(r) && advancementFamilyKey(r) === familyKey && String(r.stage || '').toLowerCase() === 'heat');
-  if (heats.length >= 3 && heats.length <= 4 && semiAdvancementEnabled(meet)) {
+  // Bracket depth follows field size: 3-4 heats → 2 semis → final (SR505.4);
+  // 1-2 heats → straight to the final. Automatic, no per-meet toggle.
+  if (heats.length >= 3 && heats.length <= 4) {
     return advanceSemisFromHeats(meet, changedRace);
   }
   return tryAdvanceTopThreeFromTwoHeats(meet, changedRace);
