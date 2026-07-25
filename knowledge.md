@@ -243,6 +243,18 @@ next load.** And always do at least one live round-trip test, not just headless.
 - **Close a race** (with advancement) via `POST /portal/meet/:id/race-day/judges/save`
   with `raceId`, `action=close`, `resultsMode=places`, and `place_<lane>` fields.
   Add `ajax=1` + `Accept: application/json` to get a JSON response.
+- **⚠ Relay "helmet" numbers are TEMPORARY grouped team numbers** (owner-confirmed
+  domain fact). In the Nationals sheets a relay entry's number identifies the
+  TEAM for that one event, not a person, and freely collides with real individual
+  numbers (relay team "#37" vs skater #37 Brayden Thomas). Never derive skater
+  identity from relay rows — `gen_dev_roster.js` matches relay members by NAME only.
+- **One skater can appear under TWO numbers in the official individual sheets**:
+  heats-vs-finals renumbering (Towne raced heats as #13, semis/finals/quad as
+  #497), separate inline vs quad numbers (~10 skaters), and sibling number swaps
+  on single PDF rows (Velli #333/#334). `gen_dev_roster.js` merges people by name
+  onto the number they raced the deepest stage under → **347 real people**, each
+  imported under their REAL helmet number. Scoring/reconciliation was never
+  affected (standings read finals-only rows, which carry the final number).
 - **Dev-roster team names** carry a cosmetic pollution artifact for record-setters
   (e.g. `"Astro Speed 1:05.361 -New Record"`) — the PDF parser overlapped the team
   column with the record time. Cleaned in the golden-master adapter path

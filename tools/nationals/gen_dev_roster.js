@@ -53,11 +53,48 @@ function build() {
             // fall back to a quad label if that's all they raced.
             if (quad && !p._inlineDiv) { /* keep */ } else if (!quad) { p.division = division; p._inlineDiv = true; }
             if (quad) p.quad = true;
+            // Merge evidence: how deep this helmet raced and how often it appears.
+            p._rows = (p._rows || 0) + 1;
+            const w = /^final/i.test(String(round.label || '')) ? 3 : /^semi/i.test(String(round.label || '')) ? 2 : 1;
+            p._maxStage = Math.max(p._maxStage || 0, w);
             if (!helmetByName.has(norm(name))) helmetByName.set(norm(name), helmet);
           }
         }
       }
     }
+  }
+
+  // MERGE — one PERSON can appear under multiple numbers in the official sheets
+  // (all confirmed in the IDN 2026 data, all same-team):
+  //   1. heat-vs-final renumbering (Towne raced heats as #13, semis/finals as #497);
+  //   2. separate inline and quad numbers for the same skater (~10 people);
+  //   3. sibling number swaps on single PDF rows (Velli #333/#334 cross-bleed).
+  // NOTE the related trap that does NOT apply here: RELAY rows carry temporary
+  // grouped TEAM numbers (a relay "helmet" identifies the team, not a person, and
+  // can collide with someone's real individual number) — relay rounds are already
+  // excluded from PASS 1, and PASS 2 matches members by NAME only.
+  // Merge individual entries by normalized name: keep the number the skater raced
+  // the DEEPEST stage under (finals > semis > heats; then most rows), union their
+  // participation, prefer the inline division as home. Same-name merges are safe
+  // here because every observed pair shares a team; merges are logged for audit.
+  const mergeLog = [];
+  const byNameGroups = new Map();
+  for (const p of people.values()) {
+    const k = norm(p.name);
+    if (!byNameGroups.has(k)) byNameGroups.set(k, []);
+    byNameGroups.get(k).push(p);
+  }
+  for (const [k, list] of byNameGroups) {
+    if (list.length < 2) continue;
+    list.sort((a, b) => (b._maxStage || 0) - (a._maxStage || 0) || (b._rows || 0) - (a._rows || 0) || Number(a.helmet) - Number(b.helmet));
+    const primary = list[0];
+    for (const dup of list.slice(1)) {
+      if (dup.quad) primary.quad = true;
+      if (dup._inlineDiv && !primary._inlineDiv) { primary.division = dup.division; primary._inlineDiv = true; }
+      people.delete(dup.helmet);
+      mergeLog.push(`${dup.name}: #${dup.helmet} -> #${primary.helmet}`);
+    }
+    helmetByName.set(k, primary.helmet);
   }
 
   // PASS 2 — relays: teams list their members in the `team` field (comma-joined).
@@ -129,9 +166,11 @@ function build() {
   require('fs').writeFileSync(OUT, header + body);
 
   console.log(`wrote ${OUT}`);
-  console.log(`  skaters: ${rows.length}   quad entrants: ${rows.filter(r => r.quad).length}`);
+  console.log(`  skaters: ${rows.length}   quad entrants: ${rows.filter(r => r.quad).length}   quad-only: ${rows.filter(r => r.inline === false).length}`);
   console.log(`  with inline relays: ${rows.filter(r => r.relays).length}   with quad relays: ${rows.filter(r => r.quadRelays).length}`);
   console.log(`  relay members matched to a helmet: ${relayMatched}   unmatched (relay-only / name mismatch): ${relayUnmatched}`);
+  console.log(`  multi-number people merged: ${mergeLog.length}`);
+  for (const m of mergeLog) console.log(`    ${m}`);
 }
 
 build();
