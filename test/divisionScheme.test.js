@@ -113,6 +113,28 @@ test('USARS National = the complete race-ready preset (heals a stale incomplete 
   assert.strictEqual(meet.usarsDivisions, true);
 });
 
+test('league-style partial relay enablement materializes ONLY the enabled divisions', () => {
+  const { normalizeRelayTemplates, ensureRelayRacesForEnabledTemplates } = require(path.join(ROOT, 'services', 'relayHelpers'));
+  // A typical league night: the director enables a handful of relay divisions,
+  // NOT the whole USARS set. Race creation must follow the toggles exactly.
+  const templates = normalizeRelayTemplates([]);
+  const picked = templates.filter(t => t.discipline === 'inline').slice(0, 3).map(t => t.divisionId);
+  const meet = {
+    races: [],
+    relayTemplates: templates.map(t => ({ ...t, enabled: picked.includes(t.divisionId) })),
+  };
+  const added = ensureRelayRacesForEnabledTemplates(meet);
+  assert.strictEqual(added, 3, 'creates exactly the enabled divisions');
+  assert.deepStrictEqual(
+    meet.races.filter(r => r.isRelayRace).map(r => r.relayDivisionId).sort(),
+    picked.slice().sort(),
+    'races match the picked divisions, nothing more'
+  );
+  // Re-running (or later hitting Save Relay Builder) must not duplicate them.
+  assert.strictEqual(ensureRelayRacesForEnabledTemplates(meet), 0, 'idempotent for the same toggles');
+  assert.strictEqual(meet.races.filter(r => r.isRelayRace).length, 3);
+});
+
 test('Block Builder lists the preset relay races as schedulable items', () => {
   const { renderBlockBuilderView } = require(path.join(ROOT, 'views', 'blockBuilderView'));
   const meet = defaultMeet('owner');
