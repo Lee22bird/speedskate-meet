@@ -255,8 +255,11 @@ function renderBlockBuilderView({ meet }) {
           <div class="setup-mini-title">Add To Schedule</div>
           <p class="note block-add-helper">Build your race day by adding blocks, breaks, lunch, awards, or practice sessions.</p>
           <div class="block-tool-buttons schedule-add-grid">
-            <button class="schedule-add-card schedule-add-generate" type="button" onclick="generateSchedule(this)">
-              <span class="schedule-add-icon">⚡</span><span><strong>Generate Schedule</strong><small>Auto-build the meet: each distance on its own day (Heats → Semis → Finals, youngest first), then relays, then quad. You can edit everything after.</small></span>
+            <button class="schedule-add-card schedule-add-generate" type="button" onclick="generateSchedule(this,'league')">
+              <span class="schedule-add-icon">⚡</span><span><strong>Generate League Schedule</strong><small>MSSL house style: Quads → Elite Long/Short/Middle (age groups split, novice mixed in) → Opens → Relays. Heats/semis run at the top of their block, finals at the bottom for a rest break. Edit anything after.</small></span>
+            </button>
+            <button class="schedule-add-card schedule-add-generate" type="button" onclick="generateSchedule(this,'championship')">
+              <span class="schedule-add-icon">🏆</span><span><strong>Generate Nationals Schedule</strong><small>Championship style: each distance on its own day — all Heats → all Semis → all Finals, youngest first — then relays, then quad.</small></span>
             </button>
             <button class="schedule-add-card schedule-add-primary" type="button" onclick="addBlock(this)">
               <span class="schedule-add-icon">＋</span><span><strong>+ New Race Block</strong><small>Create a block for a group of races.</small></span>
@@ -1000,10 +1003,11 @@ function renderBlockBuilderView({ meet }) {
       // R1: Generate Schedule. Replace requires explicit confirmation when any
       // races are already assigned (server enforces via 409 needsConfirm); the
       // fallback offer generates blocks for unassigned races only (append).
-      async function generateSchedule(button){
+      async function generateSchedule(button,style){
         if(blockCreatePending) return;
         saveFilters();
-        const post=body=>fetch('/api/meet/'+meetId+'/blocks/generate-schedule',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+        const sty=style==='championship'?'championship':'league';
+        const post=body=>fetch('/api/meet/'+meetId+'/blocks/generate-schedule',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.assign({style:sty},body))});
         button.disabled=true;
         try{
           let r=await post({mode:'replace'});

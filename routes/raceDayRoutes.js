@@ -1340,10 +1340,14 @@ router.post('/api/meet/:meetId/blocks/generate-schedule', requireRole('meet_dire
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet||!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
   const mode=String(req.body.mode||'replace')==='append'?'append':'replace';
+  // League (MSSL house style) is the default; championship is the Nationals
+  // per-distance Heats→Semis→Finals layout. Director picks — league meets DO
+  // have heats, so we never auto-flip on "has heats".
+  const style=String(req.body.style||'league')==='championship'?'championship':'league';
   const assignedCount=(meet.blocks||[]).reduce((n,b)=>n+((b.raceIds||[]).length)+((b.timeTrialEventIds||[]).length),0);
   if(mode==='replace'&&assignedCount>0&&req.body.confirmReplace!==true)
     return res.status(409).json({ok:false,needsConfirm:true,assignedCount});
-  const {blocks,placed}=generateScheduleBlocks(meet,{mode});
+  const {blocks,placed}=generateScheduleBlocks(meet,{mode,style});
   if(!placed) return res.status(400).send(mode==='append'?'All races are already assigned':'No races to schedule');
   createDesktopBackupIfActive(req.db,'before_block_generation',meet.id);
   if(mode==='replace') meet.blocks=blocks;

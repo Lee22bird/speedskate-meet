@@ -122,78 +122,139 @@ function championshipUnits(pool) {
   return units;
 }
 
-// ── LEAGUE: quad -> inline finals (novice before elite per ordinal) -> opens
-//    -> additional -> relays (3/2/4). Everything is a Final. ──
+// ── LEAGUE (MSSL house style) ────────────────────────────────────────────────
+// Block sequence: Quad(short,middle) → Elite LONG → Novice Short → Elite SHORT →
+// Novice Middle → Elite MIDDLE → Opens → Relays(3,2,4). Elite blocks split the
+// age divisions youngest→oldest into two — the even-position ages, then the odd-
+// position ages ("… Continued") — so each division gets rest. WITHIN every block
+// the running order is a 3-pass sweep (owner-specified): (1) any heats/semis
+// youngest→oldest, then (2) straight finals (≤7, no qualifier) youngest→oldest,
+// then (3) the finals of divisions that DID race a qualifier, youngest→oldest,
+// so they get a break before their final. Additional/Skateability rides at the
+// top of the matching "Continued" elite block.
+
+const metersOf = label => { const m = /(\d+)/.exec(String(label || '')); return m ? +m[1] : 0; };
+const isAdditional = r => !!r.isAdditionalRace || cls(r) === 'additional' || cls(r) === 'skateability';
+
+// Per-division distance category: raceId -> 'short' | 'middle' | 'long'. Relative
+// to each division's OWN distances (Primary's long 400m, Elementary's long 700m),
+// keyed off meters so it's independent of the order distances were entered.
+function distanceCategories(races) {
+  const cat = new Map();
+  const byDiv = groupBy(races, r => [r.groupId, cls(r), r.isQuadRace ? 'q' : 'i'].join('|'));
+  for (const [, group] of byDiv) {
+    const ordMeters = new Map();
+    for (const r of group) { const o = ordinalOf(r); if (!ordMeters.has(o)) ordMeters.set(o, metersOf(r.distanceLabel)); }
+    const ords = [...ordMeters.entries()].sort((a, b) => a[1] - b[1]).map(e => e[0]); // short→long
+    const label = {};
+    if (ords.length === 1) label[ords[0]] = 'short';
+    else if (ords.length === 2) { label[ords[0]] = 'short'; label[ords[1]] = 'middle'; }
+    else ords.forEach((o, i) => { label[o] = i === 0 ? 'short' : i === ords.length - 1 ? 'long' : 'middle'; });
+    for (const r of group) cat.set(String(r.id), label[ordinalOf(r)] || 'middle');
+  }
+  return cat;
+}
+
+// The owner's 3-pass within-block running order.
+function orderBlock3Pass(races) {
+  const byDiv = groupBy(races.filter(r => !isAdditional(r)), identity);
+  const hasQual = new Map();
+  for (const [k, g] of byDiv) hasQual.set(k, g.some(r => r.stage === 'heat' || r.stage === 'semi'));
+  const additional = [], qualifiers = [], straightFinals = [], advFinals = [];
+  for (const r of races) {
+    if (isAdditional(r)) additional.push(r);
+    else if (r.stage === 'heat' || r.stage === 'semi') qualifiers.push(r);
+    else if (hasQual.get(identity(r))) advFinals.push(r);
+    else straightFinals.push(r);
+  }
+  const stageRank = r => (r.stage === 'heat' ? 0 : r.stage === 'semi' ? 1 : 2);
+  additional.sort(raceOrder);
+  qualifiers.sort((a, b) => raceOrder(a, b) || (stageRank(a) - stageRank(b)));
+  straightFinals.sort(raceOrder);
+  advFinals.sort(raceOrder);
+  return [...additional, ...qualifiers, ...straightFinals, ...advFinals];
+}
+
 function leagueUnits(pool) {
+  const catOf = distanceCategories(pool);
+  const cat = r => catOf.get(String(r.id)) || 'middle';
   const units = [];
   const placed = new Set();
-  const take = arr => { arr.forEach(r => placed.add(String(r.id))); return arr; };
+  const mk = (name, races) => { races.forEach(r => placed.add(String(r.id))); return { name, races: orderBlock3Pass(races) }; };
 
-  // 1. QUAD first. Split by distance ordinal when it has more than one; else by
-  //    distanceLabel; else a single Quad block (director can split it via drag).
-  const quads = pool.filter(r => r.isQuadRace);
-  if (quads.length) {
-    let groups = groupBy(quads, ordinalOf);
-    let byOrdinal = true;
-    if (groups.size <= 1) {
-      const byLabel = groupBy(quads, r => String(r.distanceLabel || ''));
-      if (byLabel.size > 1) { groups = byLabel; byOrdinal = false; }
-    }
-    const keys = [...groups.keys()].sort((a, b) => byOrdinal ? a - b : String(a).localeCompare(String(b)));
-    if (keys.length <= 1) {
-      units.push([{ name: 'Quad', races: take(quads.slice().sort(raceOrder)) }]);
-    } else {
-      keys.forEach(k => {
-        const name = byOrdinal ? 'Quad — Distance ' + k : ('Quad — ' + (k || '?'));
-        units.push([{ name, races: take(groups.get(k).slice().sort(raceOrder)) }]);
-      });
-    }
+  // Split a category into even-position AGE GROUPS then odd-position age groups,
+  // youngest→oldest — the MSSL "… / … Continued" pattern. Grouped by AGE RANGE so
+  // both genders of an age (Primary Girls + Primary Boys) stay in the same block.
+  const evenOddSplit = races => {
+    const byAge = groupBy(races, r => String(r.ages || '').trim().toLowerCase());
+    const keys = [...byAge.keys()].sort((a, b) => minAgeOf(a) - minAgeOf(b)
+      || raceOrder(byAge.get(a)[0], byAge.get(b)[0]));
+    const first = [], second = [];
+    keys.forEach((k, i) => (i % 2 === 1 ? first : second).push(...byAge.get(k)));
+    return [first, second];
+  };
+
+  // 1. QUAD — short, middle (quads race 2 distances at a league meet).
+  const quad = pool.filter(r => r.isQuadRace);
+  for (const [c, label] of [['short', 'Quad Short Races'], ['middle', 'Quad Middle Races'], ['long', 'Quad Long Races']]) {
+    const rs = quad.filter(r => cat(r) === c);
+    if (rs.length) units.push([mk(label, rs)]);
   }
 
-  // 2. INLINE FINALS: for each distance ordinal ascending, Novice block then
-  //    Elite block. Same-distance races stay back-to-back (novice then elite).
-  const inline = pool.filter(r =>
-    (cls(r) === 'novice' || cls(r) === 'elite') && !r.isOpenRace && !r.isQuadRace && !r.isRelayRace);
-  const inlineOrdinals = [...new Set(inline.map(ordinalOf))].sort((a, b) => a - b);
-  for (const n of inlineOrdinals) {
-    for (const c of ['novice', 'elite']) {
-      const races = inline.filter(r => ordinalOf(r) === n && cls(r) === c).sort(raceOrder);
-      if (races.length) units.push([{ name: cap(c) + ' — Distance ' + n, races: take(races) }]);
-    }
-  }
+  // 2. ELITE by distance category (LONG → SHORT → MIDDLE), each even/odd, with
+  //    Novice slotted between; Skateability rides the "Continued" elite block.
+  const elite = pool.filter(r => cls(r) === 'elite' && !r.isOpenRace && !r.isQuadRace && !r.isRelayRace);
+  const novice = pool.filter(r => cls(r) === 'novice' && !r.isOpenRace && !r.isQuadRace && !r.isRelayRace);
+  const additional = pool.filter(r => isAdditional(r) && !r.isRelayRace && !r.isQuadRace);
+  const eliteBlocks = (c, label) => {
+    const rs = elite.filter(r => cat(r) === c);
+    const add = additional.filter(r => cat(r) === c);
+    if (!rs.length && !add.length) return;
+    const [first, second] = evenOddSplit(rs);
+    if (first.length) units.push([mk(label, first)]);
+    const cont = add.concat(second);
+    if (cont.length) units.push([mk((first.length ? label + ' Continued' : label), cont)]);
+  };
+  const noviceBlock = (c, label) => { const rs = novice.filter(r => cat(r) === c); if (rs.length) units.push([mk(label, rs)]); };
 
-  // 3. OPENS — one block (rolling starts), youngest->oldest, after the inline finals.
+  eliteBlocks('long', 'Elite Long Races');
+  noviceBlock('short', 'Novice Short Races');
+  eliteBlocks('short', 'Elite Short Races');
+  noviceBlock('middle', 'Novice Middle Races');
+  eliteBlocks('middle', 'Elite Middle Races');
+
+  // 3. OPENS (rolling starts), youngest→oldest.
   const opens = pool.filter(r => r.isOpenRace && !r.isQuadRace && !r.isRelayRace).sort(raceOrder);
-  if (opens.length) units.push([{ name: 'Opens', races: take(opens) }]);
+  if (opens.length) units.push([mk('Opens', opens)]);
 
-  // 4. ADDITIONAL / anything not otherwise bucketed (except relays) — never drop a
-  //    race. Placed before relays so relays stay last.
+  // 4. RELAYS last, in the league's 3 → 2 → 4 person order.
   const relays = pool.filter(r => r.isRelayRace);
-  const relayIds = new Set(relays.map(r => String(r.id)));
-  const leftover = pool.filter(r => !placed.has(String(r.id)) && !relayIds.has(String(r.id)));
-  if (leftover.length) units.push([{ name: 'Additional', races: leftover.slice().sort(raceOrder) }]);
-
-  // 5. RELAYS last, grouped by person count (3, 2, 4 — the league's running order).
   if (relays.length) {
     const groups = groupBy(relays, relayPersons);
     const pref = [3, 2, 4];
     const rank = k => { const i = pref.indexOf(k); return i < 0 ? 99 : i; };
     const keys = [...groups.keys()].sort((a, b) => rank(a) - rank(b) || a - b);
-    if (keys.length <= 1) {
-      units.push([{ name: 'Relays', races: relays.slice().sort(raceOrder) }]);
-    } else {
-      keys.forEach(k => {
-        const name = k > 0 ? 'Relays — ' + k + ' Person' : 'Relays';
-        units.push([{ name, races: groups.get(k).slice().sort(raceOrder) }]);
-      });
-    }
+    if (keys.length <= 1) units.push([mk('Relays', relays)]);
+    else keys.forEach(k => units.push([mk(k > 0 ? `${k} Person Relays` : 'Relays', groups.get(k))]));
   }
+
+  // 5. Never drop a race — anything unbucketed lands in a final Additional block.
+  const leftover = pool.filter(r => !placed.has(String(r.id)));
+  if (leftover.length) units.push([mk('Additional', leftover)]);
+
   return units;
 }
 
-// Returns { blocks, placed }. mode 'replace' schedules every race;
-// mode 'append' schedules only races not already assigned to a block.
-function generateScheduleBlocks(meet, { mode = 'replace' } = {}) {
+// Returns { blocks, placed }. mode 'replace' schedules every race; mode 'append'
+// schedules only races not already assigned to a block.
+//
+// style picks the layout — the director knows which it is (league meets DO have
+// heats, so auto-detecting on "has heats" is wrong):
+//   'league'       → MSSL house style (leagueUnits).
+//   'championship' → per-distance Heats→Semis→Finals, a day per distance (Nationals).
+//   'auto'         → legacy heuristic (any heat/semi ⇒ championship); kept for
+//                    back-compat callers only, not the Block Builder default.
+function generateScheduleBlocks(meet, { mode = 'replace', style = 'league' } = {}) {
   const assigned = new Set();
   if (mode === 'append') {
     for (const b of meet.blocks || []) for (const id of b.raceIds || []) assigned.add(String(id));
@@ -201,7 +262,8 @@ function generateScheduleBlocks(meet, { mode = 'replace' } = {}) {
   // Time-trial queue events are left for the director to place, in both modes.
   const pool = (meet.races || []).filter(r => !assigned.has(String(r.id)) && !r.isTimeTrial);
 
-  const units = isChampionshipPool(pool) ? championshipUnits(pool) : leagueUnits(pool);
+  const useChampionship = style === 'championship' || (style === 'auto' && isChampionshipPool(pool));
+  const units = useChampionship ? championshipUnits(pool) : leagueUnits(pool);
 
   const blocks = [];
   let placed = 0;
