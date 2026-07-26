@@ -1689,8 +1689,13 @@ function resultsSectionHtml(section, meet, options = {}) {
       </div>`;
   }
 
+  // Results page can jump-anchor + collapse sections (option) so a 50-division
+  // meet isn't one endless scroll. data-division powers the filter box.
+  const anchorAttr = options.anchorId ? ` id="${esc(options.anchorId)}"` : '';
+  const openAttr = options.collapsed ? '' : ' open';
+  const divKey = esc(`${section.groupLabel} ${section.division}`.toLowerCase());
   return `
-    <details class="card audit-card" open>
+    <details class="card audit-card result-section"${anchorAttr}${openAttr} data-division="${divKey}">
       <summary class="audit-summary">
         <span class="audit-summary-title">${title}</span>
         ${section.standings[0]?`<span class="chip chip-orange">${leaderIcon} ${esc(section.standings[0].skaterName)}</span>`:''}

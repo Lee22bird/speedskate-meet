@@ -2017,7 +2017,57 @@ router.get('/portal/meet/:meetId/results', requireRole('meet_director','judge','
   const errorMsg = req.query.error ? String(req.query.error) : '';
   const canManageResults = hasRole(req.user,'super_admin') || canEditMeet(req.user,meet);
   const canViewOfficialReport = canManageResults || hasRole(req.user,'judge');
+
+  // Champions board: every scored division's winner as a jump-link card, so a
+  // 50-division meet is scannable at a glance instead of one endless scroll.
+  const helmetForRow = (row) => {
+    const reg = (meet.registrations||[]).find(r => Number(r.id) === Number(row.registrationId));
+    if (!reg) return '';
+    const h = reg.helmetNumber===''||reg.helmetNumber==null ? (reg.meetNumber||'') : reg.helmetNumber;
+    return h===''||h==null ? '' : String(h);
+  };
+  const capd = s => { s=String(s||''); return s ? s.charAt(0).toUpperCase()+s.slice(1) : s; };
+  const champCard = (s, anchor, icon) => {
+    const w = s.standings && s.standings[0];
+    if (!w) return '';
+    const h = helmetForRow(w);
+    const divName = `${s.groupLabel}${s.division && s.division!=='quad' ? ' · '+capd(s.division) : ''}`;
+    return `<a class="rb-champ" href="#${anchor}" data-division="${esc((s.groupLabel+' '+s.division).toLowerCase())}">`
+      + `<span class="rb-champ-medal">${icon}</span>`
+      + `<span class="rb-champ-body"><span class="rb-champ-div">${esc(divName)}</span>`
+      + `<span class="rb-champ-name">${h?('#'+esc(h)+' '):''}${esc(w.skaterName||'—')}</span>`
+      + `<span class="rb-champ-meta">${esc(w.team||'')}${w.team?' · ':''}${Number(w.totalPoints||0)} pts</span></span></a>`;
+  };
+  const champCards = [
+    ...sections.map((s,i)=>champCard(s,`sec-i${i}`,'🥇')),
+    ...quadSections.map((s,i)=>champCard(s,`sec-q${i}`,'🛼')),
+  ].filter(Boolean);
+  const champBoardHtml = champCards.length ? `
+    <div class="card rb-results-toolbar">
+      <div class="row between center" style="flex-wrap:wrap;gap:12px;margin-bottom:14px">
+        <div><h2 style="margin:0">🏆 Champions</h2><div class="note">${champCards.length} division${champCards.length===1?'':'s'} scored — tap a champion to jump to full standings</div></div>
+        <div class="action-row" style="flex-wrap:wrap;gap:8px">
+          <input id="resultsFilter" type="search" placeholder="Filter divisions…" aria-label="Filter divisions" autocomplete="off">
+          <button class="btn2 btn-sm" type="button" onclick="resultsExpandAll(true)">Expand all</button>
+          <button class="btn2 btn-sm" type="button" onclick="resultsExpandAll(false)">Collapse all</button>
+        </div>
+      </div>
+      <div class="rb-champ-grid">${champCards.join('')}</div>
+    </div>` : '';
+
   res.send(pageShell({title:'Results',user:req.user,meet,activeTab:'results', bodyHtml:`
+    <style>
+      .rb-champ-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;}
+      .rb-champ{display:flex;gap:10px;align-items:center;padding:10px 12px;border:1px solid var(--border,rgba(15,31,61,.12));border-radius:12px;background:var(--card,#fff);text-decoration:none;color:inherit;transition:border-color .15s ease,transform .15s ease;}
+      .rb-champ:hover{border-color:var(--orange,#f97316);transform:translateY(-1px);}
+      .rb-champ-medal{font-size:22px;line-height:1;}
+      .rb-champ-body{display:flex;flex-direction:column;min-width:0;}
+      .rb-champ-div{font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted,#64748b);}
+      .rb-champ-name{font-weight:800;color:var(--navy,#0f1f3d);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+      .rb-champ-meta{font-size:12px;color:var(--muted,#64748b);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+      #resultsFilter{padding:9px 12px;border:1px solid var(--border2,#cbd5e1);border-radius:8px;min-width:190px;font-size:14px;}
+      details.result-section{scroll-margin-top:14px;}
+    </style>
     <div class="page-header"><h1>Results</h1><div class="sub">${esc(meet.meetName)}</div></div>
     ${okMsg ? `<div class="good" style="margin-bottom:16px">${esc(okMsg)}</div>` : ''}
     ${errorMsg ? `<div class="bad" style="margin-bottom:16px">${esc(errorMsg)}</div>` : ''}
@@ -2036,12 +2086,14 @@ router.get('/portal/meet/:meetId/results', requireRole('meet_director','judge','
       </div>
       ${meet.lastSslResultsSentAt ? `<div class="note" style="margin-top:10px">Last sent to SSL: ${esc(new Date(meet.lastSslResultsSentAt).toLocaleString())}</div>` : ''}
     </div>
-    ${sections.map(s=>resultsSectionHtml(s,meet)).join('<div class="spacer"></div>') || (!ttResultsHtml ? `<div class="card"><div class="muted">No inline standings yet.</div></div>` : '')}
+    ${champBoardHtml}
+    ${sections.length?`<h2 style="margin:18px 0 10px">Inline Standings</h2>`:''}
+    ${sections.map((s,i)=>resultsSectionHtml(s,meet,{collapsed:true,anchorId:`sec-i${i}`})).join('<div class="spacer"></div>') || (!ttResultsHtml ? `<div class="card"><div class="muted">No inline standings yet.</div></div>` : '')}
     ${openSections.length?`
       <div class="spacer"></div>
       <h2 style="color:var(--orange)">🏁 Open Race Results</h2>
       ${openSections.map(s=>`
-        <div class="card" style="border-left:4px solid var(--orange);margin-bottom:14px">
+        <div class="card" data-division="${esc((s.race.groupLabel+' open').toLowerCase())}" style="border-left:4px solid var(--orange);margin-bottom:14px">
           <div class="row between" style="margin-bottom:12px">
             <div><h2 style="margin:0">${esc(s.race.groupLabel)} — Open</h2><div class="note">${esc(s.race.distanceLabel)} • Rolling Start</div></div>
             ${s.rows[0]?`<div class="chip chip-orange">🏁 ${esc(s.rows[0].skaterName)}</div>`:''}
@@ -2054,9 +2106,24 @@ router.get('/portal/meet/:meetId/results', requireRole('meet_director','judge','
     ${quadSections.length?`
       <div class="spacer"></div>
       <h2 style="color:var(--purple)">🛼 Quad Results</h2>
-      ${quadSections.map(s=>quadResultsSectionHtml(s,meet)).join('<div class="spacer"></div>')}`:``}
+      ${quadSections.map((s,i)=>quadResultsSectionHtml(s,meet,{collapsed:true,anchorId:`sec-q${i}`})).join('<div class="spacer"></div>')}`:``}
     ${raceStatusResultsHtml(meet)}
-    ${ttResultsHtml}`}));
+    ${ttResultsHtml}
+    <script>
+    (function(){
+      var box=document.getElementById('resultsFilter');
+      function apply(){
+        var q=(box.value||'').trim().toLowerCase();
+        document.querySelectorAll('[data-division]').forEach(function(el){
+          el.style.display=(!q||el.getAttribute('data-division').indexOf(q)!==-1)?'':'none';
+        });
+      }
+      if(box) box.addEventListener('input',apply);
+      window.resultsExpandAll=function(o){
+        document.querySelectorAll('details.result-section').forEach(function(d){ d.open=o; });
+      };
+    })();
+    </script>`}));
 });
 
 router.post('/portal/meet/:meetId/finalize', requireRole('meet_director'), (req, res) => {
