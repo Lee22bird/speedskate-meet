@@ -141,7 +141,9 @@ module.exports = function createStaffRoutes(deps = {}) {
       if (!meet) throw new Error('Meet not found.');
       if (!canManageMeetSettings(req.user, meet)) throw new Error('Only the meet owner or Super Admin can change staff assignments.');
       const role = String(req.body.staff_role || '').trim();
-      clearMeetStaffAssignment(meet, role);
+      // With multiple people per role, the Remove button targets ONE assignment
+      // by id; a missing id (legacy form) clears the whole role.
+      clearMeetStaffAssignment(meet, role, String(req.body.staff_assignment_id || '').trim());
       saveDb(req.db);
       return res.redirect(`/portal/meet/${encodeURIComponent(meetId)}/builder?saved=1`);
     } catch (err) {

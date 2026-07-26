@@ -138,14 +138,16 @@ function isAssignedTabulatorForMeet(user, meet) {
   const rows = Array.isArray(meet.meet_staff_assignments)
     ? meet.meet_staff_assignments
     : (Array.isArray(meet.staffAssignments) ? meet.staffAssignments : []);
-  const assignment = rows.find(row => String(row?.staff_role || '') === 'tabulator');
-  if (!assignment) return false;
-
+  // A meet can have MULTIPLE assigned tabulators — any of them qualifies (the
+  // old single-row .find() silently locked out every tabulator after the first).
   const userId = user.id == null ? '' : String(user.id);
   const sslId = userSslId(user);
-  if (userId && String(assignment.staff_user_id || '') === userId) return true;
-  if (sslId && String(assignment.staff_ssl_id || '') === sslId) return true;
-  return false;
+  return rows.some(row => {
+    if (String(row?.staff_role || '') !== 'tabulator') return false;
+    if (userId && String(row.staff_user_id || '') === userId) return true;
+    if (sslId && String(row.staff_ssl_id || '') === sslId) return true;
+    return false;
+  });
 }
 
 function canEditMeet(user, meet) {

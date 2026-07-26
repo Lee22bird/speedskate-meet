@@ -99,13 +99,14 @@ function resolveStaffRole(user, meet) {
   const assignments = staffAssignmentsForMeet(meet);
   const userId = user.id == null ? '' : String(user.id);
   for (const row of assignments) {
-    const a = row.assignment;
-    if (!a) continue;
-    if (userId && String(a.staff_user_id || '') === userId) {
-      if (row.key === 'meet_director') return 'director';
-      if (row.key === 'tabulator') return 'tabulator';
-      if (row.key === 'referee') return 'referee';
-      if (row.key === 'announcer') return 'announcer';
+    // A role can carry MULTIPLE people — match the user against every one.
+    for (const a of row.assignments || []) {
+      if (userId && String(a.staff_user_id || '') === userId) {
+        if (row.key === 'meet_director') return 'director';
+        if (row.key === 'tabulator') return 'tabulator';
+        if (row.key === 'referee') return 'referee';
+        if (row.key === 'announcer') return 'announcer';
+      }
     }
   }
   if (canJudgeMeet(user, meet)) return 'tabulator';

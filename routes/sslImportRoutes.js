@@ -602,16 +602,17 @@ function publicMeetPayload(req, db, meet) {
   const base = publicBaseUrl(req);
   const league = compactId(meet.leagueAssociation || meet.league || '');
   const registerPath = `/meet/${encodeURIComponent(meet.id)}/register`;
+  // Every assigned person, across every role — a role can carry multiple people
+  // (two meet directors, a bench of tabulators), and SSL gets them all.
   const staff = staffAssignmentsForMeet(meet)
-    .filter(row => row.assignment)
-    .map(row => ({
+    .flatMap(row => (row.assignments || []).map(a => ({
       staff_role: row.key,
       staff_role_label: row.label,
-      staff_ssl_id: row.assignment.staff_ssl_id || '',
-      staff_user_id: row.assignment.staff_user_id || '',
-      staff_name: row.assignment.staff_name || '',
-      staff_avatar_url: row.assignment.staff_avatar_url || '',
-    }));
+      staff_ssl_id: a.staff_ssl_id || '',
+      staff_user_id: a.staff_user_id || '',
+      staff_name: a.staff_name || '',
+      staff_avatar_url: a.staff_avatar_url || '',
+    })));
   return {
     source: 'SpeedSkateMeet',
     meet_id: `ssm-${meet.id}`,

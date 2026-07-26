@@ -47,17 +47,37 @@ function normalizeStaffAssignment(raw = {}, fallbackMeetId = '') {
   };
 }
 
+// Identity key for "same person" within a role — user id first, then SSL id,
+// then (last resort) normalized name.
+function staffPersonKey(row = {}) {
+  return String(row.staff_user_id || '').trim()
+    || String(row.staff_ssl_id || '').trim().toUpperCase()
+    || String(row.staff_name || '').trim().toLowerCase();
+}
+
+// A meet can have MULTIPLE people per staff role (two meet directors, a bench of
+// tabulators, several referees…). Rows are kept in role order then assignment
+// order; the same person listed twice for one role collapses to the newest row.
+// This runs on EVERY load (migrateMeet), so it must preserve multiples — the old
+// version kept ONE per role, which silently deleted extra staff on reload (the
+// §10 whitelist bug class, in staff form).
 function normalizeMeetStaffAssignments(meet) {
   if (!meet) return [];
   const raw = Array.isArray(meet.meet_staff_assignments)
     ? meet.meet_staff_assignments
     : (Array.isArray(meet.staffAssignments) ? meet.staffAssignments : []);
-  const byRole = new Map();
+  const byRolePerson = new Map(); // `${role}|${personKey}` -> assignment (last wins)
+  const order = [];
   raw.forEach(item => {
     const normalized = normalizeStaffAssignment(item, meet.id);
-    if (normalized) byRole.set(normalized.staff_role, normalized);
+    if (!normalized) return;
+    const key = `${normalized.staff_role}|${staffPersonKey(normalized)}`;
+    if (!byRolePerson.has(key)) order.push(key);
+    byRolePerson.set(key, normalized);
   });
-  const rows = STAFF_ROLES.map(role => byRole.get(role.key)).filter(Boolean);
+  const roleOrder = new Map(STAFF_ROLES.map((role, i) => [role.key, i]));
+  const rows = order.map(key => byRolePerson.get(key))
+    .sort((a, b) => (roleOrder.get(a.staff_role) ?? 99) - (roleOrder.get(b.staff_role) ?? 99));
   meet.meet_staff_assignments = rows;
   meet.staffAssignments = rows.map(row => ({ ...row }));
   return rows;
@@ -65,19 +85,24 @@ function normalizeMeetStaffAssignments(meet) {
 
 function staffAssignmentsForMeet(meet) {
   const rows = normalizeMeetStaffAssignments(meet);
-  const byRole = new Map(rows.map(row => [row.staff_role, row]));
-  return STAFF_ROLES.map(role => ({ ...role, assignment: byRole.get(role.key) || null }));
+  return STAFF_ROLES.map(role => ({
+    ...role,
+    assignments: rows.filter(row => row.staff_role === role.key),
+  }));
 }
 
+// ADD a person to a role (or refresh them if already assigned to it). Multiple
+// people per role are the norm; only the same person twice collapses.
 function upsertMeetStaffAssignment(meet, roleKey, person, assignedByUserId) {
   if (!meet) throw new Error('Meet not found.');
   if (!STAFF_ROLE_KEYS.has(roleKey)) throw new Error('Unsupported staff role.');
   const identity = staffIdentityFromRaw(person);
   if (!identity.staff_ssl_id && !identity.staff_user_id) throw new Error('Choose a valid SSL profile.');
   if (!identity.staff_name) throw new Error('SSL profile name is required.');
-  const rows = normalizeMeetStaffAssignments(meet).filter(row => row.staff_role !== roleKey);
   const now = nowIso();
-  const existing = normalizeMeetStaffAssignments(meet).find(row => row.staff_role === roleKey);
+  const rows = normalizeMeetStaffAssignments(meet);
+  const personKey = staffPersonKey(identity);
+  const existing = rows.find(row => row.staff_role === roleKey && staffPersonKey(row) === personKey);
   const assignment = {
     id: existing?.id || `staff_${roleKey}_${crypto.randomBytes(5).toString('hex')}`,
     meet_id: String(meet.id || ''),
@@ -87,16 +112,26 @@ function upsertMeetStaffAssignment(meet, roleKey, person, assignedByUserId) {
     created_at: existing?.created_at || now,
     updated_at: now,
   };
-  meet.meet_staff_assignments = [...rows, assignment];
+  meet.meet_staff_assignments = [
+    ...rows.filter(row => !(row.staff_role === roleKey && staffPersonKey(row) === personKey)),
+    assignment,
+  ];
   meet.staffAssignments = meet.meet_staff_assignments.map(row => ({ ...row }));
+  normalizeMeetStaffAssignments(meet); // re-sort into role order
   meet.updatedAt = now;
   return assignment;
 }
 
-function clearMeetStaffAssignment(meet, roleKey) {
+// Remove ONE assignment by id (the per-person Remove button), or — when no id is
+// given (legacy forms) — every assignment of the role.
+function clearMeetStaffAssignment(meet, roleKey, assignmentId = '') {
   if (!meet) throw new Error('Meet not found.');
   if (!STAFF_ROLE_KEYS.has(roleKey)) throw new Error('Unsupported staff role.');
-  const rows = normalizeMeetStaffAssignments(meet).filter(row => row.staff_role !== roleKey);
+  const id = String(assignmentId || '').trim();
+  const rows = normalizeMeetStaffAssignments(meet).filter(row => {
+    if (row.staff_role !== roleKey) return true;
+    return id ? String(row.id) !== id : false;
+  });
   meet.meet_staff_assignments = rows;
   meet.staffAssignments = rows.map(row => ({ ...row }));
   meet.updatedAt = nowIso();
@@ -126,13 +161,14 @@ function renderStaffPerson(assignment, roleLabel, compact = false) {
 }
 
 function renderMeetStaffList(meet, options = {}) {
-  const rows = staffAssignmentsForMeet(meet).filter(row => row.assignment);
-  if (!rows.length) {
+  const people = staffAssignmentsForMeet(meet)
+    .flatMap(row => row.assignments.map(a => ({ assignment: a, label: row.label })));
+  if (!people.length) {
     return options.emptyMessage ? `<div class="muted">${esc(options.emptyMessage)}</div>` : '';
   }
   return `
     <div class="meet-staff-list">
-      ${rows.map(row => renderStaffPerson(row.assignment, row.label, !!options.compact)).join('')}
+      ${people.map(p => renderStaffPerson(p.assignment, p.label, !!options.compact)).join('')}
     </div>`;
 }
 
@@ -148,11 +184,15 @@ function renderMeetStaffManager({ meet, canManage = false }) {
       </div>
       <div class="staff-assignment-grid">
         ${rows.map(row => {
-          const current = row.assignment;
+          const assigned = row.assignments || [];
           return `
             <div class="staff-assignment-row" data-staff-role="${esc(row.key)}">
               <div class="staff-assignment-current">
-                ${current ? renderStaffPerson(current, row.label) : `
+                ${assigned.length ? assigned.map(person => `
+                  <div class="staff-person-line">
+                    ${renderStaffPerson(person, row.label)}
+                    ${canManage ? `<form method="POST" action="/portal/meet/${esc(meet.id)}/staff/remove" class="staff-remove-form"><input type="hidden" name="staff_role" value="${esc(row.key)}"><input type="hidden" name="staff_assignment_id" value="${esc(person.id)}"><button class="btn2 btn-sm" type="submit">Remove</button></form>` : ''}
+                  </div>`).join('') : `
                   <div class="staff-person">
                     ${staffAvatarHtml({ staff_name: row.label })}
                     <div class="staff-person-body">
@@ -163,13 +203,16 @@ function renderMeetStaffManager({ meet, canManage = false }) {
               </div>
               ${canManage ? `
                 <div class="staff-picker">
-                  <input type="search" class="staff-search-input" placeholder="Search SSL name or ID" autocomplete="off" aria-label="Search SSL ${esc(row.label)}">
+                  <input type="search" class="staff-search-input" placeholder="${assigned.length ? `Add another ${esc(row.label)} — search SSL name or ID` : 'Search SSL name or ID'}" autocomplete="off" aria-label="Search SSL ${esc(row.label)}">
                   <div class="staff-search-results" aria-live="polite"></div>
-                  ${current ? `<form method="POST" action="/portal/meet/${esc(meet.id)}/staff/remove" class="staff-remove-form"><input type="hidden" name="staff_role" value="${esc(row.key)}"><button class="btn2 btn-sm" type="submit">Remove</button></form>` : ''}
                 </div>` : ''}
             </div>`;
         }).join('')}
       </div>
+      <style>
+        .staff-person-line{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:4px 0;}
+        .staff-person-line .staff-remove-form{margin:0;}
+      </style>
       ${canManage ? `
         <script>
           (function(){
