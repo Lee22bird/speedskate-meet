@@ -104,9 +104,15 @@ Lives in `advanceRaceProgression(meet, changedRace)` (meetHelpers.js), called on
 race **close** from the judges/save handler.
 
 - **1–2 heats** → straight to the final. 2-heat MVP: top 3 from each heat → 6-skater final.
-- **3–4 heats** → **2 semis → final** per **SR505.4**. Semis are **created lazily**
-  on the last heat close (not at generation time). Seeding plan
-  (`semiSeedingPlan(heatCount)`):
+- **3–4 heats** → **2 semis → final** per **SR505.4**. Semis are **PRE-CREATED at
+  generation time** as empty placeholders (buildRaceSetForEntries — canonical copy
+  in raceGenerator.js; meetHelpers re-exports it after the two copies drifted), so
+  the Block Builder/printed program shows the real running order (Heats → Semi 1 →
+  Semi 2 → Final) and directors can schedule them. On the last heat close,
+  `advanceSemisFromHeats` FINDS the two placeholders and seeds the qualifiers —
+  it only creates semis itself for meets generated before this (legacy fallback).
+  Never for relay-flagged races (relay brackets belong to relayGenerator).
+  Seeding plan (`semiSeedingPlan(heatCount)`):
   - **4 heats**: Semi 1 = heats **1 & 4** top 3; Semi 2 = heats **2 & 3** top 3.
   - **3 heats**: Semi 1 = h1(1–4)+h2(2,3); Semi 2 = h2(1,4)+h3(1–4).
   - Each semi's top 3 → the 6-skater final.

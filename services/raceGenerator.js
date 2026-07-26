@@ -239,6 +239,26 @@ function buildRaceSetForEntries(baseRace, regs, laneCount) {
     raceSet.push(heatRace);
   });
 
+  // SR505.4: 3–4 heats qualify through TWO semifinals. Pre-create the semi
+  // shells at generation time so the Block Builder / printed program shows the
+  // REAL running order (Heats → Semi 1 → Semi 2 → Final) and directors can
+  // schedule them — previously semis only materialized mid-meet when the last
+  // heat closed, so block schedules had an invisible gap where two races would
+  // appear. Race day's advanceSemisFromHeats FINDS these two and seeds the
+  // qualifiers into them (it only creates semis itself for meets generated
+  // before this). 2 heats go straight to the final; 5+ heats stay manual.
+  // Never for relay-flagged races: relay brackets (incl. their semis) belong to
+  // relayGenerator's team-based engine, not the individual pipeline.
+  if (!baseRace.isRelayRace && buckets.length >= 3 && buckets.length <= 4) {
+    for (const n of [1, 2]) {
+      const semiRace = buildHeatRaceShell(baseRace, 'semi', n, 50 + n);
+      semiRace.startType = 'standing';
+      semiRace.countsForOverall = false;
+      semiRace.laneEntries = [];
+      raceSet.push(semiRace);
+    }
+  }
+
   const finalRace = buildHeatRaceShell(baseRace, 'final', 0, 99);
   finalRace.startType = 'standing';
   finalRace.countsForOverall = true;
@@ -555,4 +575,11 @@ module.exports = {
   generateOpenRacesForMeet,
   generateQuadRacesForMeet,
   rebuildRaceAssignments,
+  // Canonical race-set builder (heats → pre-created semis → final). meetHelpers
+  // re-exports THIS — it used to carry its own near-identical copy, and the two
+  // silently drifted (the safe rebuild used the copy, so generator fixes never
+  // reached imported meets). One implementation only, forever.
+  buildRaceSetForEntries,
+  buildHeatRaceShell,
+  shouldSplitIntoHeats,
 };

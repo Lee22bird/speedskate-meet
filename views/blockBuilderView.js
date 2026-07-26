@@ -367,6 +367,7 @@ function renderBlockBuilderView({ meet }) {
         <div class="bb-sticky">
           <div class="card">
             <h2 style="margin-bottom:12px">Unassigned Races</h2>
+            <div class="note" style="margin:-6px 0 10px">Running order within a division: <strong>Heats → Semifinals → Final</strong>. Divisions with 3–4 heats include their two Semifinals here — schedule them right after their heats; race day fills the lineups automatically when the heats close.</div>
             <div class="unassigned-panel">
               <div class="bulk-bar" id="bulkBar" style="display:none">
                 <span class="bulk-count" id="bulkCount">0 selected</span>

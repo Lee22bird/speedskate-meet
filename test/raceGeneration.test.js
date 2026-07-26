@@ -157,3 +157,53 @@ test('lane assignment is a random permutation, not registration order', () => {
   // if shuffling were broken (e.g. accidentally returning the input order).
   assert.ok(samples.some(sample => sample.join(',') !== sequential.join(',')));
 });
+
+// ── Pre-created semifinals (SR505.4) ─────────────────────────────────────────
+// 3–4 heat divisions qualify through TWO semis. They are now created at
+// GENERATION time (empty placeholders) so the Block Builder / printed program
+// shows the real running order — previously they materialized mid-meet when
+// the last heat closed, leaving an invisible gap in every block schedule.
+
+test('20 skaters generate 3 heats + TWO pre-created semifinals + a final', () => {
+  const races = buildRaceSetForEntries(baseRace(), registrations(20), 6);
+  const heats = races.filter(r => r.stage === 'heat');
+  const semis = races.filter(r => r.stage === 'semi');
+  const final = races.find(r => r.stage === 'final');
+  assert.equal(heats.length, 3);
+  assert.equal(semis.length, 2, 'semifinals pre-created at generation time');
+  assert.ok(final);
+  assert.deepEqual(semis.map(s => s.heatNumber).sort(), [1, 2]);
+  for (const s of semis) {
+    assert.equal(s.laneEntries.length, 0, 'placeholder until heats close');
+    assert.equal(s.countsForOverall, false, 'semis never score the overall');
+    assert.equal(s.isFinal, false);
+  }
+  // Block/printed order: all heats, then both semis, then the final.
+  const maxHeat = Math.max(...heats.map(r => Number(r.orderHint)));
+  const minSemi = Math.min(...semis.map(r => Number(r.orderHint)));
+  const maxSemi = Math.max(...semis.map(r => Number(r.orderHint)));
+  assert.ok(maxHeat < minSemi && maxSemi < Number(final.orderHint), 'Heats → Semis → Final ordering');
+});
+
+test('12 skaters (2 heats) pre-create NO semifinals — heats feed the final directly', () => {
+  const races = buildRaceSetForEntries(baseRace(), registrations(12), 6);
+  assert.equal(races.filter(r => r.stage === 'semi').length, 0);
+});
+
+test('heat advancement SEEDS the pre-created semis — never duplicates them', () => {
+  const { advanceRaceProgression } = require('../services/meetHelpers');
+  const races = buildRaceSetForEntries(baseRace({ parentRaceKey: 'fam|test' }), registrations(20), 6);
+  const meet = { id: 1, races, registrations: [] };
+  const semiIdsBefore = races.filter(r => r.stage === 'semi').map(r => r.id).sort();
+
+  for (const h of races.filter(r => r.stage === 'heat')) {
+    h.laneEntries.forEach((e, i) => { e.place = String(i + 1); });
+    h.status = 'closed';
+    advanceRaceProgression(meet, h);
+  }
+
+  const semis = meet.races.filter(r => r.stage === 'semi');
+  assert.equal(semis.length, 2, 'still exactly two semis (no lazy duplicates)');
+  assert.deepEqual(semis.map(r => r.id).sort(), semiIdsBefore, 'the SAME pre-created semi races were seeded');
+  assert.ok(semis.every(s => s.laneEntries.length === 6), 'each semi seeded with its 6 qualifiers');
+});

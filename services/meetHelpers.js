@@ -9,6 +9,9 @@ const {
   generateBaseRacesForMeet,
   generateOpenRacesForMeet,
   generateQuadRacesForMeet,
+  buildRaceSetForEntries,
+  buildHeatRaceShell,
+  shouldSplitIntoHeats,
 } = require('./raceGenerator');
 // NOTE: currentRaceInfo + recentClosedRaces live in raceDay, but there is a require
 // cycle (raceDay → timeTrialEvents → meetHelpers → raceDay) AND raceDay reassigns
@@ -879,39 +882,11 @@ function isOpenDivision(div) { return String(div||'').toLowerCase()==='open'; }
 
 function registrationSortKey(reg) { return [String(reg.team||''),String(reg.name||''),Number(reg.age||0),Number(reg.id||0)].join('|'); }
 
-function buildHeatRaceShell(baseRace,stage,heatNumber,suffixOrder) {
-  return {...baseRace,id:'r'+crypto.randomBytes(6).toString('hex'),orderHint:Number(baseRace.orderHint||0)+suffixOrder/100,stage,heatNumber:stage==='final'?0:heatNumber,isFinal:stage==='final',laneEntries:[],status:'open',closedAt:''};
-}
-
-function shouldSplitIntoHeats(baseRace,entryCount,laneCount) {
-  if(isOpenDivision(baseRace.division)) return false; if(baseRace.isOpenRace) return false; return shouldSplitNormalRace(entryCount);
-}
-
-function buildRaceSetForEntries(baseRace,regs,laneCount) {
-  // Sorting only feeds team-balanced heat grouping (distributeByTeam) below —
-  // lane numbers come from an independent random shuffle (assignRandomLaneEntries)
-  // so every skater has an equal chance at any lane in the race.
-  const sorted=[...regs].sort((a,b)=>registrationSortKey(a).localeCompare(registrationSortKey(b)));
-  if(isOpenDivision(baseRace.division)||baseRace.isOpenRace) {
-    return [{...baseRace,stage:'final',heatNumber:0,isFinal:true,startType:'rolling',countsForOverall:false,
-      laneEntries:assignRandomLaneEntries(sorted)}];
-  }
-  if(!shouldSplitIntoHeats(baseRace,sorted.length,laneCount)) {
-    return [{...baseRace,stage:'final',heatNumber:0,isFinal:true,startType:'standing',countsForOverall:true,
-      laneEntries:assignRandomLaneEntries(sorted)}];
-  }
-  const racePlan=planNormalRaceSizing(sorted.length);
-  const buckets=distributeByTeam(sorted,racePlan.heatSizes); const raceSet=[];
-  buckets.forEach((bucket,idx)=>{
-    const heatRace=buildHeatRaceShell(baseRace,'heat',idx+1,idx+1);
-    heatRace.startType='standing'; heatRace.countsForOverall=false;
-    heatRace.laneEntries=assignRandomLaneEntries(bucket);
-    raceSet.push(heatRace);
-  });
-  const finalRace=buildHeatRaceShell(baseRace,'final',0,99);
-  finalRace.startType='standing'; finalRace.countsForOverall=true; finalRace.laneEntries=[];
-  raceSet.push(finalRace); return raceSet;
-}
+// buildRaceSetForEntries now lives in services/raceGenerator.js (imported above
+// and re-exported below). This file used to carry its own near-identical copy,
+// and the two silently drifted — the SAFE rebuild path (ttHelpers) used this
+// copy while the generator evolved, so generator improvements (like pre-created
+// SR505.4 semifinals) never reached imported meets. One implementation only.
 
 
 function generateAdditionalRacesForMeet(meet) {
