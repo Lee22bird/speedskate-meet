@@ -122,6 +122,22 @@ race **close** from the judges/save handler.
   `usarsDivisions`/`autoSemis`; that gate was removed — see git history.)
 - Advancement selects by **finishing place, not lane**.
 
+**Schedule generation** (`services/scheduleGenerator.js`, Block Builder "Generate
+Schedule") has an explicit `style`, NOT auto-detected (league meets have heats,
+so "has a heat ⇒ championship" was wrong):
+- **`'league'` (default) — MSSL house style**, verified block-for-block against
+  MSSL's printed race list: `Quad Short/Middle → Elite LONG → Novice Short →
+  Elite SHORT → Novice Middle → Elite MIDDLE → Opens → Relays(3,2,4)`. Elite
+  blocks split age groups youngest→oldest into even-position then odd-position
+  ("… Continued"), grouped by AGE RANGE (both genders together). Distance
+  category short/middle/long is per-division by meters. WITHIN every block the
+  owner's **3-pass order**: additional/skateability on top → heats/semis
+  (young→old) → straight finals (≤7, young→old) → finals of qualifier divisions
+  LAST (young→old) for a rest break before their final.
+- **`'championship'` — Nationals**: per-distance Heats→Semis→Finals, a day per
+  distance, young→old (semis-bound heats before heat-only). Unchanged.
+Don't reintroduce auto-flip-on-heats; the director picks (two Block Builder buttons).
+
 Relay advancement is the parallel engine in `relayGenerator.js`
 (`advanceRelayProgression` → `relayTwoHeatsToFinal` / `relayHeatsToSemis` /
 `relaySemisToFinal`), keyed by `relayDivisionId`, preserving team identity.
