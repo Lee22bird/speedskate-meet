@@ -219,11 +219,78 @@ function renderBlockBuilderView({ meet }) {
       </div>
     </div>
 
+    <div class="card rdp-card" style="margin-bottom:18px">
+      <div class="rdp-head">
+        <div>
+          <h2 style="margin:0">🏁 Race Day Prep</h2>
+          <div class="note">Work top to bottom to get the meet ready — then run it. Everything stays fully editable.</div>
+        </div>
+        <a class="btn-orange rdp-go" href="/portal/meet/${meet.id}/race-day/director">▶︎ Go to Race Day</a>
+      </div>
+      <div class="rdp-steps">
+        <div class="rdp-step">
+          <div class="rdp-num">1</div>
+          <div class="rdp-body">
+            <div class="rdp-title">Rebuild Races</div>
+            <p class="note">After late adds, scratches, division / challenge-up changes, or a lane-count change. Recalcs heats, semis, finals &amp; lanes — your blocks stay put.</p>
+            <form method="POST" action="/portal/meet/${meet.id}/assign-races?returnTo=blocks" onsubmit="return confirm('Rebuild recalculates heats, finals, race assignments, and lanes.\\n\\nYour manual block schedule is preserved.\\n\\nContinue?')">
+              <button class="btn2 rdp-btn" type="submit">🔄 Rebuild Races</button>
+            </form>
+          </div>
+        </div>
+        <div class="rdp-step">
+          <div class="rdp-num">2</div>
+          <div class="rdp-body">
+            <div class="rdp-title">Generate the Schedule</div>
+            <p class="note">Auto-build the blocks — League is your MSSL house style, Nationals is per-distance heats→semis→finals. Or hand-build blocks in the control center below.</p>
+            <div class="action-row" style="flex-wrap:wrap;gap:8px">
+              <button class="btn2 rdp-btn" type="button" onclick="generateSchedule(this,'league')">⚡ League Schedule</button>
+              <button class="btn2 rdp-btn" type="button" onclick="generateSchedule(this,'championship')">🏆 Nationals Schedule</button>
+            </div>
+          </div>
+        </div>
+        <div class="rdp-step">
+          <div class="rdp-num">3</div>
+          <div class="rdp-body">
+            <div class="rdp-title">Optimize Flow</div>
+            <p class="note">Tidy the running order inside each block (heats earlier, finals later). Add breaks, lunch &amp; awards in the control center below.</p>
+            <form method="POST" action="/portal/meet/${meet.id}/blocks/auto-flow?returnTo=blocks" onsubmit="return confirm('Optimize Race Flow reorders races already assigned inside each block.\\n\\nIt does NOT rebuild races or move races between blocks.\\n\\nContinue?')">
+              <button class="btn-good rdp-btn" type="submit">⚡ Optimize Flow</button>
+            </form>
+          </div>
+        </div>
+      </div>
+      <details class="rdp-checklist">
+        <summary>Race-day checklist — before you run</summary>
+        <ul>
+          <li>All late registrations entered and scratches marked.</li>
+          <li>Division changes and challenge-ups finalized.</li>
+          <li>Lane count for the rink set correctly.</li>
+          <li>Race blocks built the way you want the day to run.</li>
+        </ul>
+      </details>
+      <style>
+        .rdp-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+        .rdp-go{font-weight:800;white-space:nowrap}
+        .rdp-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+        .rdp-step{display:flex;gap:12px;background:var(--card,#f8fafc);border:1px solid var(--border,rgba(15,31,61,.1));border-radius:14px;padding:14px}
+        .rdp-num{flex:0 0 30px;height:30px;border-radius:50%;background:var(--navy,#0f1f3d);color:#fff;font-weight:900;display:flex;align-items:center;justify-content:center}
+        .rdp-body{min-width:0;display:flex;flex-direction:column;gap:6px}
+        .rdp-title{font-weight:800;color:var(--navy,#0f1f3d)}
+        .rdp-body .note{margin:0;font-size:13px}
+        .rdp-btn{font-weight:800;margin-top:auto}
+        .rdp-checklist{margin-top:14px;border:1px solid rgba(59,130,246,.25);border-radius:12px;padding:10px 14px;background:#f0f9ff}
+        .rdp-checklist summary{font-weight:800;cursor:pointer;color:var(--navy,#0f1f3d)}
+        .rdp-checklist ul{margin:8px 0 0;padding-left:20px;line-height:1.8}
+        @media(max-width:820px){.rdp-steps{grid-template-columns:1fr}}
+      </style>
+    </div>
+
     <div class="card block-builder-control-card" style="margin-bottom:18px">
       <div class="block-control-head">
         <div>
           <h2 style="margin:0">Schedule Control Center</h2>
-          <div class="note">Build blocks, add breaks, rebuild race assignments, and keep race day flowing.</div>
+          <div class="note">Hand-build the day: add race blocks, breaks, lunch and awards, and drag races into place.</div>
         </div>
         <div class="action-row">
           <span class="chip" id="timeStatusChip" style="display:none"></span>
@@ -255,12 +322,6 @@ function renderBlockBuilderView({ meet }) {
           <div class="setup-mini-title">Add To Schedule</div>
           <p class="note block-add-helper">Build your race day by adding blocks, breaks, lunch, awards, or practice sessions.</p>
           <div class="block-tool-buttons schedule-add-grid">
-            <button class="schedule-add-card schedule-add-generate" type="button" onclick="generateSchedule(this,'league')">
-              <span class="schedule-add-icon">⚡</span><span><strong>Generate League Schedule</strong><small>MSSL house style: Quads → Elite Long/Short/Middle (age groups split, novice mixed in) → Opens → Relays. Heats/semis run at the top of their block, finals at the bottom for a rest break. Edit anything after.</small></span>
-            </button>
-            <button class="schedule-add-card schedule-add-generate" type="button" onclick="generateSchedule(this,'championship')">
-              <span class="schedule-add-icon">🏆</span><span><strong>Generate Nationals Schedule</strong><small>Championship style: each distance on its own day — all Heats → all Semis → all Finals, youngest first — then relays, then quad.</small></span>
-            </button>
             <button class="schedule-add-card schedule-add-primary" type="button" onclick="addBlock(this)">
               <span class="schedule-add-icon">＋</span><span><strong>+ New Race Block</strong><small>Create a block for a group of races.</small></span>
             </button>
@@ -276,14 +337,6 @@ function renderBlockBuilderView({ meet }) {
             <button class="schedule-add-card" type="button" onclick="addDivider(this,'practice','🛼 Practice')">
               <span class="schedule-add-icon">🛼</span><span><strong>Practice</strong><small>Add warm-up or practice time.</small></span>
             </button>
-          </div>
-        </section>
-
-        <section class="setup-mini-card block-control-mini">
-          <div class="setup-mini-title">Race Actions</div>
-          <div class="block-action-stack">
-            <div class="note" style="margin-top:0">Rebuild Races and Optimize Race Flow now have their own tab.</div>
-            <a class="btn2" href="/portal/meet/${meet.id}/race-actions">Open Race Actions →</a>
           </div>
         </section>
       </div>
