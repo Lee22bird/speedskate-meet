@@ -249,6 +249,15 @@ next load.** And always do at least one live round-trip test, not just headless.
 - **Close a race** (with advancement) via `POST /portal/meet/:id/race-day/judges/save`
   with `raceId`, `action=close`, `resultsMode=places`, and `place_<lane>` fields.
   Add `ajax=1` + `Accept: application/json` to get a JSON response.
+- **⚠ Normalizers that run on every load are §10's sibling trap.** `migrateMeet`
+  re-derives group labels/AGES from a base list on every load; it used the
+  STANDARD list unconditionally, and where ids overlap the schemes (classic_men,
+  veteran_men, esquire_men) it silently widened USARS bands (25-29 → 25-34) so
+  every 30-34 man imported into Classic and the Grand divisions starved. Now
+  scheme-aware (`meet.usarsDivisions` → `baseGroupsUSARS()`). Found ONLY by the
+  live browser-vs-engine differential run — headless scripts import before any
+  reload and can never see load-time clobbering. When adding normalization,
+  test the UI ORDER of operations (setup → reload → act), not just the pure flow.
 - **⚠ Relay "helmet" numbers are TEMPORARY grouped team numbers** (owner-confirmed
   domain fact). In the Nationals sheets a relay entry's number identifies the
   TEAM for that one event, not a person, and freely collides with real individual

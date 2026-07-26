@@ -135,6 +135,31 @@ test('league-style partial relay enablement materializes ONLY the enabled divisi
   assert.strictEqual(meet.races.filter(r => r.isRelayRace).length, 3);
 });
 
+test('UI flow (preset -> reload -> import) keeps Grand divisions populated', () => {
+  // Lee's real flow reloads (migrateMeet) between every step — the age-band
+  // clobber only bit on that path, never in headless import-first scripts.
+  const createRegistrationRoutes = require('../routes/registrationRoutes');
+  const meet = defaultMeet({ id: 1, displayName: 'L', roles: ['super_admin'] });
+  meet.id = 1;
+  applyDivisionScheme(meet, true);
+  migrateMeet(meet, 'o'); // the reload between clicking the preset and importing
+  assert.equal(meet.groups.find(g => g.id === 'classic_men').ages, '25-29', 'reload must not widen classic_men');
+  const db = { meets: [meet] };
+  const router = createRegistrationRoutes({
+    requireRole: () => (q, s, n) => n(), pageShell: v => v, saveDb: () => {}, loadDb: () => db,
+    getSessionUser: () => null, TEAM_LIST: [], toggleSwitch: () => '', renderCheckinView: () => '', renderRegisteredView: () => '',
+  });
+  const layer = router.stack.find(i => i.route?.path === '/portal/meet/:meetId/dev/import-nationals' && i.route.methods.post);
+  layer.route.stack[layer.route.stack.length - 1].handle(
+    { params: { meetId: '1' }, db, user: { id: 1, roles: ['super_admin'] }, body: { action: 'import', replace: 'on', checkedIn: 'on', paid: 'on' } },
+    { redirect() {}, status() { return this; }, send() {} }
+  );
+  const count = l => meet.registrations.filter(r => r.divisionGroupLabel === l).length;
+  assert.ok(count('Grand Classic Men') > 0, 'Grand Classic Men starved after a reload-then-import');
+  assert.ok(count('Grand Veteran Men') > 0, 'Grand Veteran Men starved');
+  assert.ok(count('Grand Esquire Men') > 0, 'Grand Esquire Men starved');
+});
+
 test('Block Builder lists the preset relay races as schedulable items', () => {
   const { renderBlockBuilderView } = require(path.join(ROOT, 'views', 'blockBuilderView'));
   const meet = defaultMeet('owner');
@@ -181,6 +206,16 @@ test('the complete USARS preset survives a migrateMeet reload round-trip (§10 g
   const ids = reloaded.groups.map(g => g.id);
   for (const id of GRAND_AND_PREMIER) assert.ok(ids.includes(id), `migrateMeet dropped ${id}`);
   for (const g of reloaded.groups) assert.ok(g.divisions?.elite?.enabled, `reload disabled elite on ${g.id}`);
+  // AGE BANDS must survive reload with the USARS scheme. migrateMeet used to
+  // normalize ages from the STANDARD list whose ids overlap (classic_men,
+  // veteran_men, esquire_men), silently widening 25-29 -> 25-34 etc. so every
+  // 30-34 man imported into Classic and Grand Classic starved. Caught by the
+  // live browser-vs-engine differential run.
+  const ages = id => reloaded.groups.find(g => g.id === id)?.ages;
+  assert.equal(ages('classic_men'), '25-29', 'classic_men band clobbered by standard scheme');
+  assert.equal(ages('grand_classic_men'), '30-34');
+  assert.equal(ages('veteran_men'), '45-49', 'veteran_men band clobbered');
+  assert.equal(ages('esquire_men'), '55-59', 'esquire_men band clobbered');
   assert.strictEqual(reloaded.quadGroups.length, 34, 'reload changed the quad division count');
   assert.ok(reloaded.quadGroups.every(q => q.enabled), 'reload disabled quad divisions');
   assert.strictEqual(reloaded.relayEnabled, true, 'reload turned relays off');

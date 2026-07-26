@@ -420,9 +420,17 @@ function migrateMeet(meet,fallbackOwnerId) {
   if(typeof meet.status!=='string') meet.status='draft';
   meet.openGroups=normalizeOpenGroups(meet.openGroups);
   meet.quadGroups=normalizeQuadGroups(meet.quadGroups);
-  if(!Array.isArray(meet.groups)||meet.groups.length===0) { meet.groups=baseGroups(); }
+  // Group normalization must use the meet's OWN division scheme as the source of
+  // truth. Using the standard list on a USARS meet silently rewrote the men's
+  // age bands on EVERY load (ids overlap between schemes: classic_men 25-29 ->
+  // 25-34, veteran_men 45-49 -> 45-54, esquire_men 55-59 -> 55+), so every
+  // 30-34 man imported into Classic instead of Grand Classic and the Grand
+  // divisions starved. Caught live by the browser-vs-engine differential run —
+  // headless tests import before any reload and never saw it.
+  const schemeBaseGroups = () => (meet.usarsDivisions ? baseGroupsUSARS() : baseGroups());
+  if(!Array.isArray(meet.groups)||meet.groups.length===0) { meet.groups=schemeBaseGroups(); }
   else {
-    const baseMap=new Map(baseGroups().map(g=>[g.id,g]));
+    const baseMap=new Map(schemeBaseGroups().map(g=>[g.id,g]));
     meet.groups=meet.groups.map(g=>{
       const base=baseMap.get(g.id);
       return {id:g.id||base?.id||crypto.randomBytes(4).toString('hex'),
