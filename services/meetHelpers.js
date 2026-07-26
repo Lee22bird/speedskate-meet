@@ -348,7 +348,7 @@ function defaultMeet(ownerUser) {
     ownership_locked:true,
     createdAt:nowIso(), updatedAt:nowIso(),
     meetName:'New Meet', leagueAssociation:'', league:'', date:'', endDate:'', startTime:'', registrationCloseAt:'',
-    rinkId:1, customRinkName:'', trackLength:100, lanes:4,
+    rinkId:1, customRinkName:'', trackLength:100, lanes:7,
     meet_staff_assignments:[], staffAssignments:[],
     timeTrialsEnabled:false, timeTrialEvent:{enabled:false,distance:'100m',runOrder:'youngest_oldest',countsForOverall:false}, timeTrialEvents:[], relayEnabled:false, judgesPanelRequired:true,
     desktop_pin_hash:'', desktop_pin_created_at:'', desktop_pin_expires_at:'',
@@ -405,7 +405,7 @@ function migrateMeet(meet,fallbackOwnerId) {
   if(typeof meet.rinkId!=='number') meet.rinkId=1;
   if(typeof meet.customRinkName!=='string') meet.customRinkName='';
   if(!Number.isFinite(Number(meet.trackLength))) meet.trackLength=100;
-  if(!Number.isFinite(Number(meet.lanes))) meet.lanes=4;
+  if(!Number.isFinite(Number(meet.lanes))) meet.lanes=7;
   if(typeof meet.timeTrialsEnabled!=='boolean') meet.timeTrialsEnabled=false;
   if(typeof meet.relayEnabled!=='boolean') meet.relayEnabled=false;
   if(typeof meet.judgesPanelRequired!=='boolean') meet.judgesPanelRequired=true;

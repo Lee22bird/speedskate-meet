@@ -207,3 +207,15 @@ test('heat advancement SEEDS the pre-created semis — never duplicates them', (
   assert.deepEqual(semis.map(r => r.id).sort(), semiIdsBefore, 'the SAME pre-created semi races were seeded');
   assert.ok(semis.every(s => s.laneEntries.length === 6), 'each semi seeded with its 6 qualifiers');
 });
+
+test('new meets default to a 7-lane track (USARS standard), and reload heals an unset lane count to 7', () => {
+  const { defaultMeet, migrateMeet } = require('../services/meetHelpers');
+  assert.equal(defaultMeet({ id: 1, roles: ['super_admin'] }).lanes, 7, 'new meet default lanes');
+  const m = { id: 1, meetName: 'x', groups: [], registrations: [], races: [], blocks: [] };
+  migrateMeet(m, 'o');
+  assert.equal(m.lanes, 7, 'unset lanes heal to 7');
+  // A director's explicit choice is preserved (never force-overwritten).
+  const kept = { id: 2, meetName: 'y', lanes: 5, groups: [], registrations: [], races: [], blocks: [] };
+  migrateMeet(kept, 'o');
+  assert.equal(kept.lanes, 5, 'explicit lane count preserved');
+});
