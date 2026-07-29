@@ -467,6 +467,12 @@ function migrateMeet(meet,fallbackOwnerId) {
     dayIndex:Number(r.dayIndex||1), cost:Number(r.cost||0), stage:String(r.stage||'race'),
     heatNumber:Number(r.heatNumber||0), parentRaceKey:String(r.parentRaceKey||''),
     startType:String(r.startType||'standing'),
+    // Day-of race merge (small divisions line up + start together as one pack,
+    // but stay SEPARATE races so each is scored within its own division). These
+    // MUST survive migration or a merge silently un-links on the next load.
+    // mergeGroupId links the merged races; mergeLead marks the one that owns the
+    // combined display/lane sheet. Empty mergeGroupId = not merged.
+    mergeGroupId:String(r.mergeGroupId||''), mergeLead:!!r.mergeLead,
     countsForOverall:typeof r.countsForOverall==='boolean'?r.countsForOverall:(String(r.division||'')!=='open'),
     laneEntries:Array.isArray(r.laneEntries)?r.laneEntries:[],
     resultsMode:String(r.resultsMode||'places'), status:String(r.status||'open'),

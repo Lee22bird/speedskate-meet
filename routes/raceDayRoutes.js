@@ -333,6 +333,56 @@ function renderBlockSchedulePrintPage({ req, meet, showNotes, pageBreaks, showEm
       </article>`;
   }
 
+  // A merged pair prints as ONE card — the pack starts together — but each lane
+  // is tagged with its home division so the tabulator still scores separately.
+  // Positions are renumbered 1..N across the combined field for the start line.
+  function mergedRaceCardHtml(memberRaces, raceNo) {
+    const title = memberRaces.map(r => r.groupLabel || '').filter(Boolean).join(' & ');
+    const first = memberRaces[0] || {};
+    let pos = 0;
+    const lanes = [];
+    for (const r of memberRaces) {
+      for (const ln of printableRaceLanes(r)) { pos += 1; lanes.push({ ...ln, lane: pos, _div: r.groupLabel || '' }); }
+    }
+    const mergeNote = '🔗 Raced together — scored separately';
+    if (printLayout === 'standard') {
+      const rows = (lanes.length ? lanes : [{ lane: '', helmetNumber: '', skaterName: '', team: '', _div: '' }]).map((lane, idx) => `
+        <tr>
+          <td>${idx === 0 ? raceNo : ''}</td>
+          <td>${esc(title)}</td>
+          <td>${esc(cap(first.division || ''))}</td>
+          <td>${esc(first.distanceLabel || '')}</td>
+          <td>${esc(raceDisplayStage(first))}</td>
+          <td>${esc(lane.lane || '')}</td>
+          <td>${lane.helmetNumber ? '#' + esc(lane.helmetNumber) : ''}</td>
+          <td>${esc(lane.skaterName || '')}</td>
+          <td>${esc(lane._div || '')} ${lane.team ? '• ' + esc(lane.team) : ''}</td>
+        </tr>`).join('');
+      return `<article class="race-card"><div class="merge-print-note">${mergeNote}</div>
+        <table><thead><tr><th>Race</th><th>Division</th><th>Class</th><th>Distance</th><th>Heat</th><th>Lane</th><th>Helmet</th><th>Skater</th><th>Division • Team</th></tr></thead>
+        <tbody>${rows}</tbody></table></article>`;
+    }
+    const laneRows = (lanes.length ? lanes : [{ lane: '', helmetNumber: '', skaterName: '', team: '', _div: '' }]).map(lane => `
+      <div class="lane-line">
+        <span class="lane-num">Lane ${esc(lane.lane || '')}</span>
+        <span class="lane-skater">${lane.helmetNumber ? '#' + esc(lane.helmetNumber) + ' ' : ''}${esc(lane.skaterName || '')}</span>
+        <span class="lane-team">${esc(lane._div || '')}${lane.team ? ' • ' + esc(lane.team) : ''}</span>
+      </div>`).join('');
+    return `
+      <article class="race-card merge-print-card">
+        <div class="race-card-head">
+          <div class="race-number">Race ${raceNo}</div>
+          <div>
+            <div class="race-title">${esc(title)}</div>
+            <div class="race-sub">${esc(cap(first.division || ''))} • ${esc(first.distanceLabel || '')} • ${esc(raceDisplayStage(first))}</div>
+            <div class="merge-print-note">${mergeNote}</div>
+          </div>
+        </div>
+        <div class="lane-list">${laneRows}</div>
+        ${printLayout === 'official' ? '<div class="official-notes">Official notes</div>' : ''}
+      </article>`;
+  }
+
   function timeTrialCardHtml(event, eventNo) {
     return `
       <article class="race-card time-trial-card">
@@ -377,9 +427,21 @@ function renderBlockSchedulePrintPage({ req, meet, showNotes, pageBreaks, showEm
       return timeTrialCardHtml(event, scheduleNo);
     }).join('');
 
+    const renderedMerges = new Set();
     const raceSections = (block.raceIds || []).map(raceId => {
       const race = raceById.get(String(raceId));
       if (!race) return '';
+      // Merged pair: render once (on any member) as a single combined card.
+      if (race.mergeGroupId) {
+        if (renderedMerges.has(race.mergeGroupId)) return '';
+        renderedMerges.add(race.mergeGroupId);
+        const members = (meet.races || []).filter(r => r.mergeGroupId === race.mergeGroupId)
+          .sort((a, b) => (a.mergeLead ? 0 : 1) - (b.mergeLead ? 0 : 1));
+        const anyLanes = members.some(r => printableRaceLanes(r).length);
+        if (!showEmpty && !anyLanes) return '';
+        scheduleNo += 1;
+        return mergedRaceCardHtml(members, scheduleNo);
+      }
       const lanes = printableRaceLanes(race);
       if (!showEmpty && !lanes.length) return '';
       scheduleNo += 1;
@@ -429,6 +491,8 @@ function renderBlockSchedulePrintPage({ req, meet, showNotes, pageBreaks, showEm
         .race-print-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:start}
         body.layout-standard .race-print-grid,body.layout-official .race-print-grid{grid-template-columns:1fr}
         .race-card{border:1px solid #999;padding:6px;break-inside:avoid;page-break-inside:avoid;background:#fff}
+        .merge-print-card{border-left:3px solid #7c3aed}
+        .merge-print-note{font-size:10px;font-weight:700;color:#6d28d9;margin-top:2px}
         .time-trial-card{grid-column:1/-1}
         .race-card-head{display:grid;grid-template-columns:auto 1fr;gap:8px;align-items:start;border-bottom:1px solid #ccc;padding-bottom:4px;margin-bottom:4px}
         .race-number{font-weight:800;border:1px solid #111;padding:2px 5px;white-space:nowrap}
@@ -1148,6 +1212,79 @@ router.post('/api/meet/:meetId/blocks/reorder-races', requireRole('meet_director
   block.raceIds=order;
   meet.updatedAt=nowIso(); saveDb(req.db);
   res.json({ok:true});
+});
+
+// ── Day-of race MERGE ────────────────────────────────────────────────────────
+// Two small divisions line up and START together as one pack, but stay SEPARATE
+// race objects so each is still scored WITHIN ITS OWN DIVISION (winner of each
+// gets the full 30 pts). The merge is purely a running/display link — the
+// scoring engine (standings.js buckets by groupId|division) is untouched.
+// A merge is only allowed between two same-distance, same-stage division races.
+function raceCanMerge(race) {
+  if (!race) return false;
+  if (race.isRelayRace || race.isTimeTrial || race.isAdditionalRace || race.isSkateabilityRace) return false;
+  return true;
+}
+function describeRaceForMerge(meet, race) {
+  return [race?.groupLabel || 'Division', race?.distanceLabel || '', raceDisplayStage(race)].filter(Boolean).join(' ');
+}
+// Returns { ok, reason } — the guardrails that keep a merge sane.
+function validateRaceMerge(a, b) {
+  if (!a || !b) return { ok: false, reason: 'One or both races were not found.' };
+  if (String(a.id) === String(b.id)) return { ok: false, reason: 'Pick two different races.' };
+  if (!raceCanMerge(a) || !raceCanMerge(b)) return { ok: false, reason: 'Relays, time trials, and additional races can\'t be merged.' };
+  if (a.mergeGroupId || b.mergeGroupId) return { ok: false, reason: 'One of those races is already merged — unmerge it first.' };
+  const stageA = (a.stage === 'final' || a.isFinal) ? 'final' : String(a.stage || '');
+  const stageB = (b.stage === 'final' || b.isFinal) ? 'final' : String(b.stage || '');
+  if (stageA !== stageB) return { ok: false, reason: 'Both races must be at the same stage (e.g. both Finals).' };
+  if (String(a.distanceLabel || '') !== String(b.distanceLabel || ''))
+    return { ok: false, reason: 'Both races must be the same distance — they start together.' };
+  return { ok: true };
+}
+
+router.post('/api/meet/:meetId/blocks/merge-races', requireRole('meet_director'), (req, res) => {
+  const meet=getMeetOr404(req.db,req.params.meetId);
+  if(!meet||!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
+  const idA=String(req.body.raceIdA||''), idB=String(req.body.raceIdB||'');
+  const raceById=new Map((meet.races||[]).map(r=>[String(r.id),r]));
+  const a=raceById.get(idA), b=raceById.get(idB);
+  const check=validateRaceMerge(a,b);
+  if(!check.ok) return res.status(400).json({ok:false,error:check.reason});
+  // Lead = whichever runs first in its block, so the combined line stays in place.
+  const block=(meet.blocks||[]).find(bl=>(bl.raceIds||[]).map(String).includes(idA) && (bl.raceIds||[]).map(String).includes(idB));
+  let lead=a, follow=b;
+  if(block){
+    const ids=block.raceIds.map(String);
+    if(ids.indexOf(idB) < ids.indexOf(idA)){ lead=b; follow=a; }
+  }
+  createDesktopBackupIfActive(req.db, 'before_block_generation', meet.id);
+  const groupId='mrg_'+crypto.randomBytes(4).toString('hex');
+  lead.mergeGroupId=groupId; lead.mergeLead=true;
+  follow.mergeGroupId=groupId; follow.mergeLead=false;
+  // Tuck the follower directly after the lead so they read as one combined line.
+  if(block){
+    const ids=block.raceIds.map(String).filter(x=>x!==String(follow.id));
+    const at=ids.indexOf(String(lead.id));
+    ids.splice(at+1,0,String(follow.id));
+    block.raceIds=ids;
+  }
+  meet.updatedAt=nowIso(); saveDb(req.db);
+  res.json({ok:true, groupId, lead:String(lead.id), label:describeRaceForMerge(meet,lead)});
+});
+
+router.post('/api/meet/:meetId/blocks/unmerge-races', requireRole('meet_director'), (req, res) => {
+  const meet=getMeetOr404(req.db,req.params.meetId);
+  if(!meet||!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
+  // Accept either a race id (any member of the group) or the groupId itself.
+  const raceId=String(req.body.raceId||''); const groupIdIn=String(req.body.groupId||'');
+  const raceById=new Map((meet.races||[]).map(r=>[String(r.id),r]));
+  const groupId=groupIdIn || (raceById.get(raceId)?.mergeGroupId||'');
+  if(!groupId) return res.status(400).json({ok:false,error:'That race is not merged.'});
+  createDesktopBackupIfActive(req.db, 'before_block_generation', meet.id);
+  let cleared=0;
+  for(const r of meet.races||[]){ if(String(r.mergeGroupId||'')===groupId){ r.mergeGroupId=''; r.mergeLead=false; cleared++; } }
+  meet.updatedAt=nowIso(); saveDb(req.db);
+  res.json({ok:true, cleared});
 });
 
 

@@ -7,6 +7,21 @@ function renderBlockBuilderView({ meet }) {
   const timeTrialEvent = ensureTimeTrialEvent(meet);
   const timeTrialEventById = new Map((meet.timeTrialEvents || []).filter(e => e.enabled).map(e => [e.id, e]));
   const raceById = new Map((meet.races || []).map(r => [r.id, r]));
+  // Day-of merge groups: mergeGroupId -> { lead, members[] }. A merged pair runs
+  // as one pack but stays two races (scored separately). Used to badge the block.
+  const mergeGroups = new Map();
+  for (const r of meet.races || []) {
+    if (!r.mergeGroupId) continue;
+    if (!mergeGroups.has(r.mergeGroupId)) mergeGroups.set(r.mergeGroupId, { lead: null, members: [] });
+    const g = mergeGroups.get(r.mergeGroupId);
+    g.members.push(r);
+    if (r.mergeLead) g.lead = r;
+  }
+  const mergePartnerLabel = (race) => {
+    const g = race.mergeGroupId && mergeGroups.get(race.mergeGroupId);
+    if (!g) return '';
+    return g.members.filter(m => String(m.id) !== String(race.id)).map(o => o.groupLabel).join(' + ');
+  };
   // ── R7: per-race skater membership (compact [key,name] pairs) for client-side
   // conflict detection. Relays are excluded — their laneEntries are teams, not
   // individual skaters, so "back-to-back" doesn't apply the same way.
@@ -87,14 +102,28 @@ function renderBlockBuilderView({ meet }) {
   function raceItemHtml(race, isCurrent, draggable = true) {
     const tag = race.isTimeTrial ? '⏱ ' : race.isRelayRace ? '🔄 ' : race.isOpenRace ? '🏁 ' : race.isQuadRace ? '🛼 ' : (race.isAdditionalRace ? '➕ ' : '');
     const cls = race.isTimeTrial ? 'tt-item' : race.isRelayRace ? 'relay-item' : race.isOpenRace ? 'open-item' : race.isQuadRace ? 'quad-item' : (race.isAdditionalRace ? 'additional-item' : '');
+    const g = race.mergeGroupId ? mergeGroups.get(race.mergeGroupId) : null;
+    const isLead = g && race.mergeLead;
+    const isFollower = g && !race.mergeLead;
+    const mergeCls = isLead ? 'merge-lead' : isFollower ? 'merge-follower' : '';
+    const partner = g ? mergePartnerLabel(race) : '';
+    // A merged race can't be dragged out (it would silently break the pair) — the
+    // director must Unmerge first.
+    const canDrag = g ? false : draggable;
+    const mergeBadge = isLead
+      ? `<div class="merge-badge">🔗 Merged with <b>${esc(partner)}</b> — start together, scored separately <button type="button" class="merge-unbtn" onclick="unmergeRaces('${esc(race.mergeGroupId)}')">Unmerge</button></div>`
+      : isFollower
+        ? `<div class="merge-badge follower">🔗 Starts with <b>${esc(partner)}</b> above — scored separately</div>`
+        : '';
     return `
-      <div class="race-item ${isCurrent ? 'active-now' : ''} ${cls}" draggable="${draggable}"
+      <div class="race-item ${isCurrent ? 'active-now' : ''} ${cls} ${mergeCls}" draggable="${canDrag}"
         data-race-id="${esc(race.id)}"
         data-group-label="${esc(String(race.groupLabel || '').toLowerCase())}"
         data-division="${esc(race.division)}"
         data-distance-index="${esc(race.dayIndex)}">
         <div class="race-label">${tag}${esc(race.groupLabel)} <span style="opacity:.6">•</span> ${esc(cap(race.division))}</div>
         <div class="race-meta">${esc(race.distanceLabel)} • D${esc(race.dayIndex)} • ${esc(raceDisplayStage(race))} • ${esc(cap(race.startType))}</div>
+        ${mergeBadge}
       </div>`;
   }
 
@@ -194,6 +223,23 @@ function renderBlockBuilderView({ meet }) {
             return raceItemHtml(race, meet.currentRaceId === race.id, true);
           }).join('') || `<div class="note" style="padding:8px">Drop races here…</div>`}
         </div>
+        ${(() => {
+          // Merge tool: only when the block has ≥2 unmerged, mergeable races.
+          const mergeable = (block.raceIds || []).map(id => raceById.get(id)).filter(r =>
+            r && !r.isTimeTrial && !r.isRelayRace && !r.isAdditionalRace && !r.isSkateabilityRace && !r.mergeGroupId);
+          if (mergeable.length < 2) return '';
+          const opt = (r, i, sel) => `<option value="${esc(r.id)}" ${i === sel ? 'selected' : ''}>${esc(r.groupLabel)} — ${esc(r.distanceLabel)} ${esc(raceDisplayStage(r))}</option>`;
+          return `
+          <div class="merge-tool">
+            <span class="merge-tool-label">🔗 Merge two races — they start together but score separately:</span>
+            <div class="merge-tool-row">
+              <select id="mA_${esc(block.id)}" class="merge-sel">${mergeable.map((r, i) => opt(r, i, 0)).join('')}</select>
+              <span class="merge-plus">+</span>
+              <select id="mB_${esc(block.id)}" class="merge-sel">${mergeable.map((r, i) => opt(r, i, 1)).join('')}</select>
+              <button type="button" class="btn2 btn-sm" onclick="mergeRaces('${esc(block.id)}')">Merge</button>
+            </div>
+          </div>`;
+        })()}
       </div>`;
   }).join('') || `
     <div class="block-schedule-empty">
@@ -391,6 +437,17 @@ function renderBlockBuilderView({ meet }) {
       .race-drop-line{height:3px;border-radius:2px;background:#f97316;margin:3px 6px;box-shadow:0 0 0 2px rgba(249,115,22,.18);pointer-events:none;}
       .race-item.dragging-race{opacity:.45;}
       .race-item.selected{outline:2px solid #f97316;outline-offset:-2px;background:#fff7ed;}
+      .race-item.merge-lead{border-left:3px solid #7c3aed;}
+      .race-item.merge-follower{border-left:3px solid #7c3aed;margin-top:-4px;opacity:.9;}
+      .merge-badge{margin-top:6px;font-size:11px;color:#6d28d9;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:6px;padding:4px 7px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+      .merge-badge.follower{color:#7c3aed;background:#faf5ff;}
+      .merge-unbtn{margin-left:auto;border:1px solid #ddd6fe;background:#fff;color:#6d28d9;border-radius:5px;padding:1px 8px;font-size:11px;font-weight:700;cursor:pointer;}
+      .merge-unbtn:hover{background:#ede9fe;}
+      .merge-tool{margin-top:8px;padding:8px;border-top:1px dashed #e5e7eb;}
+      .merge-tool-label{display:block;font-size:11px;color:#6b7280;margin-bottom:5px;}
+      .merge-tool-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+      .merge-sel{max-width:220px;font-size:12px;padding:3px 5px;border:1px solid #d1d5db;border-radius:5px;}
+      .merge-plus{color:#9ca3af;font-weight:700;}
       .race-item.selected .race-label:before{content:'✓ ';color:#ea580c;font-weight:900;}
       .bulk-bar{display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:8px 10px;border:1px solid #fdba74;border-radius:12px;background:#fff7ed;}
       .bulk-count{font-weight:800;color:#c2410c;font-size:13px;white-space:nowrap;}
@@ -1172,6 +1229,25 @@ function renderBlockBuilderView({ meet }) {
           const r=await fetch('/api/meet/'+meetId+'/blocks/update-meta',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({blockId:id,day})});
           if(!r.ok) resync('Saving the day failed.');
         }catch(err){console.error(err);resync('Saving the day failed.');}
+      }
+      async function mergeRaces(blockId){
+        const a=document.getElementById('mA_'+blockId).value;
+        const b=document.getElementById('mB_'+blockId).value;
+        if(a===b){ alert('Pick two different races to merge.'); return; }
+        try{
+          const r=await fetch('/api/meet/'+meetId+'/blocks/merge-races',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({raceIdA:a,raceIdB:b})});
+          const j=await r.json().catch(()=>({}));
+          if(!r.ok||!j.ok){ alert(j.error||'Could not merge those races.'); return; }
+          location.reload();
+        }catch(err){console.error(err);alert('Could not merge those races.');}
+      }
+      async function unmergeRaces(groupId){
+        try{
+          const r=await fetch('/api/meet/'+meetId+'/blocks/unmerge-races',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({groupId})});
+          const j=await r.json().catch(()=>({}));
+          if(!r.ok||!j.ok){ alert(j.error||'Could not unmerge.'); return; }
+          location.reload();
+        }catch(err){console.error(err);alert('Could not unmerge.');}
       }
       async function setBlockNotes(id,notes){
         saveFilters();

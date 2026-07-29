@@ -172,3 +172,54 @@ test('Optimize Flow matches the league director rule: heats-only final in age or
   // 3) The semis-division final is dead last (the rest break).
   assert.equal(at('sr_fin'), ids.length - 1, 'senior (semis) final is last in the block');
 });
+
+test('merge-races: links two same-distance finals, tucks follower after lead, keeps them separate races', () => {
+  const R = (id, groupId, label, extra) => ({ id, groupId, groupLabel: label, division: 'elite', dayIndex: 1, distanceLabel: '500m', stage: 'final', isFinal: true, laneEntries: [], ...extra });
+  const races = [R('vet', 'g_vet', 'Veteran Men'), R('esq', 'g_esq', 'Esquire Men'), R('other', 'g_o', 'Senior Men', { distanceLabel: '300m' })];
+  const block = { id: 'b1', type: 'race', raceIds: ['vet', 'other', 'esq'] };
+  const meet = { id: 1, blocks: [block], races };
+  const db = { meets: [meet] };
+  const router = testRouter(db);
+  const resp = responseRecorder();
+  routeHandler(router, '/api/meet/:meetId/blocks/merge-races')(
+    { params: { meetId: '1' }, body: { raceIdA: 'esq', raceIdB: 'vet' }, db, user: { id: 1, roles: ['super_admin'] } }, resp);
+  assert.equal(resp.body.ok, true, 'merge succeeds');
+  const vet = races.find(r => r.id === 'vet'), esq = races.find(r => r.id === 'esq');
+  assert.ok(vet.mergeGroupId && vet.mergeGroupId === esq.mergeGroupId, 'both share one mergeGroupId');
+  // vet runs before esq in the block, so vet is the lead.
+  assert.equal(vet.mergeLead, true, 'earlier race (vet) is the lead');
+  assert.equal(esq.mergeLead, false, 'later race (esq) is the follower');
+  // Follower tucked directly after the lead: [vet, esq, other]
+  assert.deepEqual(block.raceIds, ['vet', 'esq', 'other'], 'follower moved right after the lead');
+  // They remain two separate race objects (scored separately).
+  assert.equal(races.filter(r => r.mergeGroupId).length, 2, 'exactly two races merged, still separate objects');
+});
+
+test('merge-races: rejects different distances, same race, and already-merged', () => {
+  const R = (id, dist, extra) => ({ id, groupId: 'g_' + id, groupLabel: id, division: 'elite', dayIndex: 1, distanceLabel: dist, stage: 'final', isFinal: true, laneEntries: [], ...extra });
+  const races = [R('a', '500m'), R('b', '1000m'), R('c', '500m', { mergeGroupId: 'mrg_x', mergeLead: true })];
+  const meet = { id: 1, blocks: [{ id: 'b1', type: 'race', raceIds: ['a', 'b', 'c'] }], races };
+  const db = { meets: [meet] };
+  const router = testRouter(db);
+  const call = (a, b) => { const resp = responseRecorder(); routeHandler(router, '/api/meet/:meetId/blocks/merge-races')({ params: { meetId: '1' }, body: { raceIdA: a, raceIdB: b }, db, user: { id: 1, roles: ['super_admin'] } }, resp); return resp; };
+  assert.equal(call('a', 'b').statusCode, 400, 'different distances rejected');
+  assert.equal(call('a', 'a').statusCode, 400, 'same race rejected');
+  assert.equal(call('a', 'c').statusCode, 400, 'already-merged partner rejected');
+  assert.equal(races.find(r => r.id === 'a').mergeGroupId || '', '', 'race a left unmerged after failed attempts');
+});
+
+test('unmerge-races: clears the whole group by groupId or member race id', () => {
+  const races = [
+    { id: 'a', mergeGroupId: 'mrg_z', mergeLead: true, laneEntries: [] },
+    { id: 'b', mergeGroupId: 'mrg_z', mergeLead: false, laneEntries: [] },
+  ];
+  const meet = { id: 1, blocks: [{ id: 'b1', type: 'race', raceIds: ['a', 'b'] }], races };
+  const db = { meets: [meet] };
+  const router = testRouter(db);
+  const resp = responseRecorder();
+  routeHandler(router, '/api/meet/:meetId/blocks/unmerge-races')(
+    { params: { meetId: '1' }, body: { raceId: 'b' }, db, user: { id: 1, roles: ['super_admin'] } }, resp);
+  assert.equal(resp.body.ok, true);
+  assert.equal(resp.body.cleared, 2, 'both members unmerged');
+  assert.ok(races.every(r => !r.mergeGroupId && !r.mergeLead), 'merge fields cleared on both');
+});
