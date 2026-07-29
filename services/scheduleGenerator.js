@@ -156,23 +156,35 @@ function distanceCategories(races) {
 }
 
 // The owner's 3-pass within-block running order.
-function orderBlock3Pass(races) {
-  const byDiv = groupBy(races.filter(r => !isAdditional(r)), identity);
-  const hasQual = new Map();
-  for (const [k, g] of byDiv) hasQual.set(k, g.some(r => r.stage === 'heat' || r.stage === 'semi'));
-  const additional = [], qualifiers = [], straightFinals = [], advFinals = [];
-  for (const r of races) {
-    if (isAdditional(r)) additional.push(r);
-    else if (r.stage === 'heat' || r.stage === 'semi') qualifiers.push(r);
-    else if (hasQual.get(identity(r))) advFinals.push(r);
-    else straightFinals.push(r);
+// Within-block running order — the MSSL rule, straight from the meet director:
+//   "all heats at the start of the block, finals at the final time. If there are
+//    semis they would run at the final time and then the final for that race
+//    would be at the end of the block."
+// So a HEATS-ONLY division runs its final in normal age order; only a SEMIS
+// division defers its final to the end (its semis take the age slot). Layout:
+//   [additional] → [all heats, young→old] → [age sweep: each division's final,
+//    or a semis-division's SEMIS] → [finals of semis divisions, young→old].
+function orderBlockRaces(races) {
+  const nonAdd = races.filter(r => !isAdditional(r));
+  const byDiv = groupBy(nonAdd, identity);
+  const typeOf = new Map(); // identity -> 'straight' | 'heats' | 'semis'
+  for (const [k, g] of byDiv) {
+    typeOf.set(k, g.some(r => r.stage === 'semi') ? 'semis' : g.some(r => r.stage === 'heat') ? 'heats' : 'straight');
   }
-  const stageRank = r => (r.stage === 'heat' ? 0 : r.stage === 'semi' ? 1 : 2);
-  additional.sort(raceOrder);
-  qualifiers.sort((a, b) => raceOrder(a, b) || (stageRank(a) - stageRank(b)));
-  straightFinals.sort(raceOrder);
-  advFinals.sort(raceOrder);
-  return [...additional, ...qualifiers, ...straightFinals, ...advFinals];
+  const t = r => typeOf.get(identity(r));
+  const isFinal = r => r.stage === 'final' || r.stage === 'race';
+
+  const additional = races.filter(isAdditional).sort(raceOrder);
+  const heats = nonAdd.filter(r => r.stage === 'heat').sort(raceOrder);
+  // Age-order "final time" sweep: each division's final — but a semis division
+  // shows its SEMIS here instead. Within the same age, a qualifier division's
+  // race runs AFTER a straight division's (extra rest — matches the sheet).
+  const sweep = nonAdd.filter(r => (t(r) === 'semis' ? r.stage === 'semi' : isFinal(r)))
+    .sort((a, b) => (minAgeOf(a.ages) - minAgeOf(b.ages))
+      || ((t(a) === 'straight' ? 0 : 1) - (t(b) === 'straight' ? 0 : 1))
+      || raceOrder(a, b));
+  const endFinals = nonAdd.filter(r => t(r) === 'semis' && isFinal(r)).sort(raceOrder);
+  return [...additional, ...heats, ...sweep, ...endFinals];
 }
 
 function leagueUnits(pool) {
@@ -180,7 +192,7 @@ function leagueUnits(pool) {
   const cat = r => catOf.get(String(r.id)) || 'middle';
   const units = [];
   const placed = new Set();
-  const mk = (name, races) => { races.forEach(r => placed.add(String(r.id))); return { name, races: orderBlock3Pass(races) }; };
+  const mk = (name, races) => { races.forEach(r => placed.add(String(r.id))); return { name, races: orderBlockRaces(races) }; };
 
   // Split a category into even-position AGE GROUPS then odd-position age groups,
   // youngest→oldest — the MSSL "… / … Continued" pattern. Grouped by AGE RANGE so

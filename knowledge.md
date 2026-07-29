@@ -131,9 +131,21 @@ so "has a heat ⇒ championship" was wrong):
   blocks split age groups youngest→oldest into even-position then odd-position
   ("… Continued"), grouped by AGE RANGE (both genders together). Distance
   category short/middle/long is per-division by meters. WITHIN every block the
-  owner's **3-pass order**: additional/skateability on top → heats/semis
-  (young→old) → straight finals (≤7, young→old) → finals of qualifier divisions
-  LAST (young→old) for a rest break before their final.
+  **running order is the league director's (Jon Esterline) rule** — "all heats at
+  the start of the block, finals at the final time; if there are semis they run at
+  the final time and then that race's final is at the END of the block":
+  `[additional/skateability] → [all heats, young→old] → [the "final time" sweep,
+  young→old: each division's FINAL — except a SEMIS division shows its SEMIS here]
+  → [finals of SEMIS divisions LAST, young→old (rest break)]`.
+  **KEY (corrected — was wrong before):** a HEATS-ONLY division runs its final in
+  normal age order; ONLY a division that runs SEMIS defers its final to the block
+  end. `scheduleGenerator.orderBlockRaces` is the source of truth.
+  **TWO PATHS, ONE RULE:** `routes/raceDayRoutes.js arrangeBlockHeatFinalFlow`
+  (the ⚡ Optimize Flow button) re-implements the SAME rule on already-placed
+  blocks — keep it in lock-step with `orderBlockRaces` or Optimize Flow will
+  re-corrupt a freshly generated schedule. Both are covered by tests
+  (`scheduleGenerator.test.js` heats-only/semis cases; `blockBuilderTools.test.js`
+  "Optimize Flow matches the league director rule").
 - **`'championship'` — Nationals**: per-distance Heats→Semis→Finals, a day per
   distance, young→old (semis-bound heats before heat-only). Unchanged.
 Don't reintroduce auto-flip-on-heats; the director picks (two Block Builder buttons).

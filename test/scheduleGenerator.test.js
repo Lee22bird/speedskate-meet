@@ -124,9 +124,9 @@ test('league: Elite blocks split even-position ages, then odd-position ("Continu
   assert.equal(cont[0], 'skate_2', 'skateability (long=300m) leads the Continued block');
 });
 
-test('league: 3-pass within a block — qualifiers first, straight finals, then advanced final last (rest break)', () => {
+test('league: within-block order — heats at top; a HEATS-ONLY division runs its final in age order (not last)', () => {
   const pool = leaguePool();
-  // force Freshman Boys elite SHORT (300m, dayIndex 1) into 2 heats + final
+  // force Freshman Boys elite SHORT (300m, dayIndex 1) into 2 heats + final (heats-only, no semis)
   const fb = pool.find(r => r.id === 'e_freshman_boys_0');
   fb.stage = 'heat'; fb.heatNumber = 1; fb.isFinal = false; fb.parentRaceKey = 'fb';
   pool.push(race({ id: 'fb_h2', groupId: 'freshman_boys', groupLabel: 'Freshman boys', division: 'elite', ages: '12-13', distanceLabel: '300m', dayIndex: 1, stage: 'heat', heatNumber: 2, parentRaceKey: 'fb' }));
@@ -138,14 +138,36 @@ test('league: 3-pass within a block — qualifiers first, straight finals, then 
   assert.ok(iH1 >= 0 && iH2 >= 0 && iFin >= 0, 'all three Freshman Boys races in the block');
   // Additional (Skateability) rides the very top, before the heats.
   assert.equal(blk[0], 'skate_0', 'skateability (short=100m) leads the block');
-  // Advanced final is dead last (the rest break).
-  assert.equal(iFin, blk.length - 1, 'the heat-division final is last in the block');
-  // Straight finals = age-division finals with no qualifier (exclude skateability
-  // + the Freshman heat trio): each runs AFTER the heats and BEFORE the adv final.
-  const straightFinals = blk.filter(id => id !== 'skate_0' && id !== 'e_freshman_boys_0' && id !== 'fb_h2' && id !== 'fb_fin');
-  assert.ok(straightFinals.length > 0, 'block has straight finals');
-  assert.ok(straightFinals.every(id => blk.indexOf(id) > iH2), 'straight finals run after the heats');
-  assert.ok(straightFinals.every(id => blk.indexOf(id) < iFin), 'straight finals run before the advanced final (rest break)');
+  // Both heats sit at the very top of the block (after the additional race).
+  assert.equal(iH1, 1, 'freshman heat 1 leads the racing');
+  assert.equal(iH2, 2, 'freshman heat 2 follows immediately');
+  // Per the league director: a division with only heats (no semis) runs its final
+  // in NORMAL AGE ORDER, NOT at the block end. Freshman (12-13) is young, so its
+  // final falls in the sweep with older divisions' finals still after it.
+  assert.ok(iFin > iH2, 'freshman final runs after its heats');
+  assert.ok(iFin < blk.length - 1, 'heats-only final is NOT shoved to the block end — it runs in age order');
+});
+
+test('league: within-block order — a SEMIS division runs semis in age order, then its FINAL at the block end', () => {
+  const pool = leaguePool();
+  // force Freshman Boys elite SHORT into heats + 2 semis + final (semis division)
+  const fb = pool.find(r => r.id === 'e_freshman_boys_0');
+  fb.stage = 'heat'; fb.heatNumber = 1; fb.isFinal = false; fb.parentRaceKey = 'fb';
+  const add = (id, extra) => pool.push(race({ id, groupId: 'freshman_boys', groupLabel: 'Freshman boys', division: 'elite', ages: '12-13', distanceLabel: '300m', dayIndex: 1, parentRaceKey: 'fb', ...extra }));
+  add('fb_h2', { stage: 'heat', heatNumber: 2 });
+  add('fb_s1', { stage: 'semi', heatNumber: 1, isFinal: false });
+  add('fb_s2', { stage: 'semi', heatNumber: 2, isFinal: false });
+  add('fb_fin', { stage: 'final' });
+  const res = generateScheduleBlocks(meet(pool), { style: 'league' });
+  const blk = res.blocks.find(b => b.name === 'Elite Short Races Continued').raceIds;
+  const iH2 = blk.indexOf('fb_h2'), iS1 = blk.indexOf('fb_s1'), iS2 = blk.indexOf('fb_s2'), iFin = blk.indexOf('fb_fin');
+  // Heats at the top, semis in the age-order sweep, final DEAD LAST (the rest break).
+  assert.ok(iS1 > iH2 && iS2 > iH2, 'semis run after the heats');
+  assert.equal(iFin, blk.length - 1, 'a semis-division final IS last in the block (rest break)');
+  assert.ok(iS1 < iFin && iS2 < iFin, 'semis run before the final');
+  // Straight-final divisions run in the sweep, before the deferred final.
+  const straightFinals = blk.filter(id => !['skate_0', 'e_freshman_boys_0', 'fb_h2', 'fb_s1', 'fb_s2', 'fb_fin'].includes(id));
+  assert.ok(straightFinals.length > 0 && straightFinals.every(id => blk.indexOf(id) < iFin), 'straight finals run before the deferred semis-final');
 });
 
 test('league: relays 3 -> 2 -> 4; opens present; time trial left unassigned; every non-TT race placed', () => {

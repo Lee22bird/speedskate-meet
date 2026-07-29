@@ -635,10 +635,18 @@ module.exports = function createRaceDayRoutes(deps = {}) {
           announcerBoxHtml, meetTabs } = deps;
 
 // ── Block race-flow auto-arranger ────────────────────────────────────────────
-// Real meet flow for blocks with heats, including standard and quad races:
-// 1) heats first in age/division order
-// 2) straight finals next in age/division order
-// 3) finals for heated divisions last in age/division order
+// Real meet flow for blocks with heats, per the MSSL league director (Jon):
+// "all heats at the start of the block, finals at the final time. If there are
+//  semis they run at the final time and then that race's final is at the END of
+//  the block." So a HEATS-ONLY division runs its final in normal age order; only
+//  a division that runs SEMIS defers its final to the block end (its semis take
+//  the age-order slot). This MUST match services/scheduleGenerator.js
+//  orderBlockRaces — the schedule generator and this optimizer are two paths to
+//  the same rule, so keep them in lock-step.
+// 1) heats first, youngest→oldest
+// 2) the "final time" sweep, youngest→oldest: each division's final — except a
+//    semis division shows its SEMIS here instead
+// 3) finals of semis divisions last, youngest→oldest (the rest break)
 // This only reorders raceIds already inside each block. It does not rebuild races,
 // delete races, move races between blocks, or touch lane entries.
 function isStandardScheduleRace(race) {
@@ -663,13 +671,6 @@ function raceFlowSignature(race) {
     String(race?.dayIndex || ''),
     String(race?.distanceLabel || ''),
   ].join('|');
-}
-
-function raceFlowStageKind(race) {
-  const stage = String(race?.stage || '').toLowerCase();
-  if (stage === 'heat' || stage === 'semi' || stage === 'quarter') return 'heat';
-  if (stage === 'final' || race?.isFinal) return 'final';
-  return 'final';
 }
 
 function raceGroupOrderIndex(meet, race) {
@@ -739,14 +740,20 @@ function arrangeBlockHeatFinalFlow(meet, block) {
   const raceById = new Map((meet.races || []).map(r => [String(r.id), r]));
   const rows = raceIds.map((id, idx) => ({ id, race: raceById.get(id), originalIndex: idx }));
 
-  const signaturesWithHeats = new Set();
+  // A division that runs SEMIS defers its final to the block end; a heats-only
+  // division does NOT (its final stays in the age sweep). Track the two sets
+  // separately so we only push semis-division finals to the tail.
+  const signaturesWithQualifier = new Set(); // heat OR semi -> is a qualifier division
+  const signaturesWithSemis = new Set();     // has a semi -> final goes to block end
   for (const row of rows) {
     if (!isStandardScheduleRace(row.race)) continue;
-    if (raceFlowStageKind(row.race) === 'heat') signaturesWithHeats.add(raceFlowSignature(row.race));
+    const stage = String(row.race?.stage || '').toLowerCase();
+    if (stage === 'semi') { signaturesWithSemis.add(raceFlowSignature(row.race)); signaturesWithQualifier.add(raceFlowSignature(row.race)); }
+    else if (stage === 'heat' || stage === 'quarter') signaturesWithQualifier.add(raceFlowSignature(row.race));
   }
 
-  // Blocks with no heats are usually already deliberate/manual. Leave them alone.
-  if (!signaturesWithHeats.size) return false;
+  // Blocks with no heats/semis are usually already deliberate/manual. Leave alone.
+  if (!signaturesWithQualifier.size) return false;
 
   const heatRows = [];
   const directFinalRows = [];
@@ -762,11 +769,18 @@ function arrangeBlockHeatFinalFlow(meet, block) {
 
     const standard = isStandardScheduleRace(race);
     const signature = raceFlowSignature(race);
-    const stageKind = raceFlowStageKind(race);
+    const stage = String(race?.stage || '').toLowerCase();
+    const isHeat = stage === 'heat' || stage === 'quarter';
+    const isSemi = stage === 'semi';
 
-    if (standard && signaturesWithHeats.has(signature) && stageKind === 'heat') {
+    if (standard && isHeat) {
+      // (1) heats ride the very top of the block.
       heatRows.push({ ...row, key: raceFlowSortKey(meet, race, row.originalIndex) });
-    } else if (standard && signaturesWithHeats.has(signature) && stageKind === 'final') {
+    } else if (standard && isSemi) {
+      // (2) semis run in the age-order sweep — the division's "final time" slot.
+      directFinalRows.push({ ...row, key: raceFlowSortKey(meet, race, row.originalIndex) });
+    } else if (standard && signaturesWithSemis.has(signature)) {
+      // (3) only a semis division's FINAL is deferred to the block end.
       heatedFinalRows.push({ ...row, key: raceFlowSortKey(meet, race, row.originalIndex) });
     } else if (standard) {
       directFinalRows.push({ ...row, key: raceFlowSortKey(meet, race, row.originalIndex) });
