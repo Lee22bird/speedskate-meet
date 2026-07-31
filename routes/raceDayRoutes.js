@@ -235,6 +235,34 @@ function isTimeTrialItem(item) {
   return item?.type === 'time_trial';
 }
 
+// ── Merged-race race-day display helpers ─────────────────────────────────────
+// A merged pair (e.g. Elite Veteran & Esquire Men) lines up and STARTS together
+// as one pack, but stays two race objects scored within their own division.
+// These build the combined lane sheet for the DISPLAY surfaces (director +
+// announcer + TV). Result ENTRY stays per-division on the judge screen, so the
+// validated scoring/advancement is untouched.
+function mergeGroupMembers(meet, race) {
+  if (!race || !race.mergeGroupId) return null;
+  const members = (meet.races || []).filter(r => r && r.mergeGroupId === race.mergeGroupId)
+    .sort((a, b) => (a.mergeLead ? 0 : 1) - (b.mergeLead ? 0 : 1));
+  return members.length > 1 ? members : null;
+}
+function mergedPackLanes(meet, race) {
+  const members = mergeGroupMembers(meet, race);
+  if (!members) return laneRowsForRace(race, meet);
+  let pos = 0;
+  const rows = [];
+  for (const m of members) {
+    for (const ln of laneRowsForRace(m, meet)) { pos += 1; rows.push({ ...ln, lane: pos, _div: m.groupLabel || '' }); }
+  }
+  return rows;
+}
+function mergePackLabel(meet, race) {
+  const members = mergeGroupMembers(meet, race);
+  if (!members) return race?.groupLabel || '';
+  return members.map(m => m.groupLabel || '').filter(Boolean).join(' & ');
+}
+
 function rebuildTimeTrialRaceSafe(meet) {
   const freshTtHelpers = require('../services/ttHelpers');
   const fn = freshTtHelpers && freshTtHelpers.rebuildTimeTrialRace;
@@ -1455,9 +1483,19 @@ router.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','j
   const progress = raceDayProgress(meet);
   const currentLanes=current && !isTimeTrialItem(current) ? laneRowsForRace(current,meet):[];
   const nextLanes=info.next && !isTimeTrialItem(info.next) ? laneRowsForRace(info.next,meet):[];
+  // Combined pack lane sheet for DISPLAY (director/announcer). Entry stays on the
+  // per-division `currentLanes`, so scoring is unaffected.
+  const currentPackLanes=current && !isTimeTrialItem(current) ? mergedPackLanes(meet,current):currentLanes;
+  const nextPackLanes=info.next && !isTimeTrialItem(info.next) ? mergedPackLanes(meet,info.next):nextLanes;
+  const currentMerged=!!(current && !isTimeTrialItem(current) && mergeGroupMembers(meet,current));
+  const currentPackLabel=current?mergePackLabel(meet,current):'—';
+  const nextPackLabel=info.next?mergePackLabel(meet,info.next):'—';
   const regMap=new Map((meet.registrations||[]).map(r=>[Number(r.id),r]));
 
-  let body=`<div class="page-header"><h1>Race Day</h1><div class="sub">${esc(meet.meetName)}</div></div>${raceDaySubTabs(meet,mode)}`;
+  let body=`<style>
+    .merge-live-banner{background:#f5f3ff;border:1px solid #ddd6fe;border-left:4px solid #7c3aed;color:#5b21b6;border-radius:8px;padding:8px 12px;font-size:13px;line-height:1.35;margin-bottom:10px}
+    .merge-div-tag{display:inline-block;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;color:#6d28d9;background:#ede9fe;border-radius:4px;padding:1px 6px;margin-left:6px;vertical-align:middle}
+  </style><div class="page-header"><h1>Race Day</h1><div class="sub">${esc(meet.meetName)}</div></div>${raceDaySubTabs(meet,mode)}`;
 
   // Redirect judges/announcers away from director tab
   if(mode==='director'&&!hasRole(req.user,'meet_director')&&!hasRole(req.user,'super_admin')) {
@@ -1470,8 +1508,8 @@ router.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','j
     const raceOptions=info.ordered.map((r,idx)=>`<option value="${r.id}" ${r.id===meet.currentRaceId?'selected':''}>${idx+1}. ${esc(raceDayItemLabel(r))}</option>`).join('');
     body+=`
       <div class="stat-grid" style="margin-bottom:16px">
-        <div class="stat-card orange"><div class="stat-label">Current Event</div><div class="stat-value">${current?esc(current.groupLabel):'—'}</div><div class="stat-sub">${current?esc(raceDayItemSub(current)):''}</div></div>
-        <div class="stat-card yellow"><div class="stat-label">In Staging</div><div class="stat-value">${info.next?esc(info.next.groupLabel):'—'}</div><div class="stat-sub">${info.next?esc(raceDayItemSub(info.next)):''}</div></div>
+        <div class="stat-card orange"><div class="stat-label">Current Event</div><div class="stat-value">${current?esc(currentPackLabel):'—'}${currentMerged?' <span class="chip chip-purple" style="font-size:11px;vertical-align:middle">🔗 together</span>':''}</div><div class="stat-sub">${current?esc(raceDayItemSub(current)):''}</div></div>
+        <div class="stat-card yellow"><div class="stat-label">In Staging</div><div class="stat-value">${info.next?esc(nextPackLabel):'—'}</div><div class="stat-sub">${info.next?esc(raceDayItemSub(info.next)):''}</div></div>
         <div class="stat-card navy"><div class="stat-label">Progress</div><div class="stat-value">${progress.completed} <span style="font-size:18px;opacity:.6">/ ${progress.total}</span></div><div class="stat-sub">${meet.raceDayPaused?'⏸ Paused':'▶ Running'}</div></div>
       </div>
       <div class="card" style="margin-bottom:16px">
@@ -1561,8 +1599,9 @@ router.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','j
               ${current.isOpenRace?`<span class="chip chip-orange">🏁 Open</span>`:''}
               ${current.isQuadRace?`<span class="chip chip-purple">🛼 Quad</span>`:''}
             </div>
+            ${currentMerged?`<div class="merge-live-banner">🔗 Racing together as one pack — <b>${esc(currentPackLabel)}</b>. Each division is scored separately; enter places on each race in the judges tab.</div>`:''}
             <div class="live-lane-list">
-              ${currentLanes.map(l=>{
+              ${currentPackLanes.map(l=>{
                 const reg=regMap.get(Number(l.registrationId));
                 const result=esc(current.resultsMode==='times'?l.time:l.place);
                 const statusText=l.status?esc(raceStatusLabel(l.status)):'';
@@ -1570,7 +1609,7 @@ router.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','j
                 return `<div class="live-lane-card">
                   <div class="live-lane-number">${esc(l.lane)}</div>
                   <div class="live-lane-info">
-                    <div class="live-lane-name">${esc(l.skaterName||'')}</div>
+                    <div class="live-lane-name">${esc(l.skaterName||'')}${l._div?` <span class="merge-div-tag">${esc(l._div)}</span>`:''}</div>
                     ${detail?`<div class="live-lane-detail">${detail}</div>`:''}
                     ${sponsorLineHtml(reg?.sponsor||'').replace('sponsor-line','live-lane-sponsor')}
                   </div>
@@ -1725,6 +1764,7 @@ router.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','j
       })():`        <div class="card">
           <form id="judgeRaceForm" method="POST" action="/portal/meet/${meet.id}/race-day/judges/save">
             <input type="hidden" name="raceId" value="${esc(current.id)}" />
+            ${currentMerged?`<div class="merge-live-banner" style="margin-bottom:12px">🔗 This race starts together as one pack with <b>${esc((mergeGroupMembers(meet,current)||[]).filter(m=>String(m.id)!==String(current.id)).map(m=>m.groupLabel).join(', '))}</b>. Enter places for <b>${esc(current.groupLabel)}</b> only — each division is scored separately. The full pack lane sheet is on the Director &amp; Announcer tabs.</div>`:''}
             <div class="action-row" style="margin-bottom:14px">
               <label class="toggle-wrap"><input type="radio" name="resultsMode" value="places" ${current.resultsMode!=='times'?'checked':''} style="width:auto" /> <span style="font-size:14px;font-weight:600">Places</span></label>
               <label class="toggle-wrap"><input type="radio" name="resultsMode" value="times"  ${current.resultsMode==='times' ?'checked':''} style="width:auto" /> <span style="font-size:14px;font-weight:600">Times</span></label>
@@ -1797,7 +1837,8 @@ router.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','j
           <div class="announcer-deck-card is-next"><div class="announcer-deck-label">In Staging</div><div class="announcer-deck-title">${info.next?esc(info.next.groupLabel):'—'}</div><div class="announcer-deck-meta">${info.next?`${esc(cap(info.next.division))} • ${esc(info.next.distanceLabel)}`:''}</div></div>
           <div class="announcer-deck-card is-after"><div class="announcer-deck-label">After That</div><div class="announcer-deck-title">${info.coming[0]?esc(info.coming[0].groupLabel):'—'}</div><div class="announcer-deck-meta">${info.coming[0]?`${esc(cap(info.coming[0].division))} • ${esc(info.coming[0].distanceLabel)}`:''}</div></div>
         </div>
-        ${announcerBoxHtml(current,currentLanes.map(l=>{const reg=regMap.get(Number(l.registrationId));return{...l,sponsor:reg?.sponsor||''};}))}
+        ${currentMerged?`<div class="merge-live-banner">🔗 One pack — ${esc(currentPackLabel)} (scored separately)</div>`:''}
+        ${announcerBoxHtml(current,currentPackLanes.map(l=>{const reg=regMap.get(Number(l.registrationId));return{...l,sponsor:reg?.sponsor||''};}))}
       </div>`;
   } else {
     body+=`
@@ -1808,11 +1849,11 @@ router.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','j
       <div class="grid-2">
         <div class="live-board-card">
           <h2>Current Race — Lane Assignments</h2>
-          ${current && !isTimeTrialItem(current) ? laneAssignmentListHtml(currentLanes, regMap) : `<div class="muted">${isTimeTrialItem(current)?'Time trial — no lane assignments.':'No race selected yet.'}</div>`}
+          ${current && !isTimeTrialItem(current) ? laneAssignmentListHtml(currentPackLanes, regMap) : `<div class="muted">${isTimeTrialItem(current)?'Time trial — no lane assignments.':'No race selected yet.'}</div>`}
         </div>
         <div class="live-board-card">
           <h2>In Staging — Lane Assignments</h2>
-          ${info.next && !isTimeTrialItem(info.next) ? laneAssignmentListHtml(nextLanes, regMap) : `<div class="muted">${info.next&&isTimeTrialItem(info.next)?'Time trial — no lane assignments.':'Nothing staged yet.'}</div>`}
+          ${info.next && !isTimeTrialItem(info.next) ? laneAssignmentListHtml(nextPackLanes, regMap) : `<div class="muted">${info.next&&isTimeTrialItem(info.next)?'Time trial — no lane assignments.':'Nothing staged yet.'}</div>`}
         </div>
       </div>`;
   }
