@@ -5,6 +5,7 @@ const {
   distributeByTeam,
 } = require('./raceSizing');
 const { assignRandomLaneEntries } = require('./laneAssignment');
+const { calculateRegistrationTotal } = require('./pricing');
 
 
 const CHALLENGE_TOWARD_SENIOR = {
@@ -23,6 +24,25 @@ function noviceChallengeCreatesOwnElite(reg) {
   return !!(opts.challengeUp && opts.novice);
 }
 
+function simpleAgeMatch(range, age) {
+  const text = String(range || '').toLowerCase();
+  const n = Number(age);
+  if (!Number.isFinite(n)) return false;
+  const nums = (text.match(/\d+/g) || []).map(Number);
+  if (!nums.length) return true;
+  if (/under|younger|≤/.test(text)) return n <= nums[0];
+  if (/older|over|\+|≥/.test(text)) return n >= nums[0];
+  if (nums.length >= 2) return n >= nums[0] && n <= nums[1];
+  return n === nums[0];
+}
+
+function simpleGender(value) {
+  const v = String(value || '').toLowerCase();
+  if (['girl', 'girls', 'female', 'woman', 'women', 'lady', 'ladies'].includes(v)) return 'female';
+  if (['boy', 'boys', 'male', 'man', 'men'].includes(v)) return 'male';
+  return '';
+}
+
 function eliteChallengeCreatesAgeGroup(reg) {
   const opts = reg?.options || {};
   return !!(opts.challengeUp && opts.elite && !opts.novice);
@@ -33,6 +53,12 @@ function registrationMatchesStandardRace(reg, race, meet) {
   const opts = reg?.options || {};
   const raceGroupId = String(race?.groupId || '');
   const baseGroupId = String(reg?.originalDivisionGroupId || reg?.divisionGroupId || '');
+
+  if (meet?.divisionScheme === 'mssl' && (div === 'novice' || div === 'elite')) {
+    return !!opts[div]
+      && simpleAgeMatch(race.ages, reg.age)
+      && (!simpleGender(race.gender) || simpleGender(race.gender) === simpleGender(reg.gender));
+  }
 
   if (raceGroupId === baseGroupId) {
     if (div === 'elite' && noviceChallengeCreatesOwnElite(reg)) return true;
@@ -86,18 +112,6 @@ function nextHelmetNumber(meet) {
   let n = 1;
   while (used.has(n)) n += 1;
   return n;
-}
-
-function calculateRegistrationTotal(meet, reg) {
-  let total = 0;
-
-  for (const race of meet.races || []) {
-    if (registrationMatchesStandardRace(reg, race, meet)) {
-      total += Number(race.cost || 0);
-    }
-  }
-
-  return total;
 }
 
 function ensureRegistrationTotalsAndNumbers(meet) {
@@ -299,8 +313,9 @@ function generateBaseRacesForMeet(meet) {
           id: old?.id || ('r' + crypto.randomBytes(6).toString('hex')),
           orderHint: orderHint++,
           groupId: group.id,
-          groupLabel: group.label,
+          groupLabel: div.raceLabel || group.label,
           ages,
+          gender: group.gender || '',
           division: divKey,
           distanceLabel: distance,
           dayIndex: i + 1,
@@ -459,6 +474,7 @@ function generateQuadRacesForMeet(meet) {
         groupId: qg.id,
         groupLabel: qg.label,
         ages: qg.ages,
+        gender: qg.gender || '',
         division: 'quad',
         distanceLabel: distance,
         dayIndex: i + 1,

@@ -12,12 +12,15 @@ function countSelectedEventCategories(options = {}) {
   if (opts.open) count += 1;
   if (opts.quad) count += 1;
   if (opts.timeTrials) count += 1;
-  if (opts.skateability) count += 1;
+  // These are compatibility aliases for the same single event category.
+  if (opts.additional || opts.skateability || opts.additionalRace) count += 1;
   if (Array.isArray(opts.specialRaceIds)) count += opts.specialRaceIds.length;
 
   if (opts.relay2Person) count += 1;
   if (opts.relay3Person) count += 1;
   if (opts.relay4Person) count += 1;
+  if (opts.quadRelay2Person) count += 1;
+  if (opts.quadRelay3Person) count += 1;
 
   // Backward compatibility for older registrations that only had a generic relays flag.
   if (opts.relays && !opts.relay2Person && !opts.relay3Person && !opts.relay4Person) {
@@ -32,11 +35,10 @@ function calcRegistrationCost(meet = {}, options = {}) {
   const additionalFee = moneyNumber(meet.additionalRaceFee);
   const selectedCount = countSelectedEventCategories(options);
 
-  let total = baseFee;
-
-  if (selectedCount > 1) {
-    total += (selectedCount - 1) * additionalFee;
-  }
+  // The base registration covers exactly one selected event category. Every
+  // category after that is charged once at the additional-event rate.
+  const additionalEventCount = Math.max(0, selectedCount - 1);
+  let total = baseFee + (additionalEventCount * additionalFee);
 
   const maxFee = moneyNumber(meet.maxRegistrationFee);
   if (maxFee > 0) total = Math.min(total, maxFee);

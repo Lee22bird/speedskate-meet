@@ -2,7 +2,7 @@ const crypto = require('crypto');
 const { esc } = require('../utils/html');
 const { ageMatch } = require('./meetHelpers');
 const { ageForReg } = require('./meetHelpers');
-const { ALL_RELAY_DIVISIONS } = require('./relayDivisions');
+const { NATIONAL_RELAY_DIVISIONS, relayDivisionsForRuleset } = require('./relayDivisions');
 
 // Relay build scope sentinel. A coach builds relays scoped to ONE club (the
 // per-club USARS model). This reserved "club" value instead means "no club —
@@ -21,16 +21,21 @@ const MIXED_RELAY_SCOPE = '__mixed__';
 // size token, gender kept: "Primary 2 Boys" -> "Primary Boys", "Juvenile 3 Person"
 // -> "Juvenile". Includes both inline and quad divisions; `discipline` tags each
 // so the builder can render/route them separately.
-const RELAY_TEMPLATE_ROWS = ALL_RELAY_DIVISIONS.map(d => ({
+function rowsForDivisions(divisions) { return divisions.map(d => ({
   type: `${d.size} Person`,
   age: d.label.replace(/ \d+ /, ' ').replace(/ Person$/, '').trim(),
   ageRange: d.ageRange,
   distance: d.distance,
-  notes: '',
+  notes: d.notes || '',
   divisionId: d.id,
   gender: d.gender,
   discipline: d.discipline || 'inline',
-}));
+})); }
+
+const RELAY_TEMPLATE_ROWS = rowsForDivisions(NATIONAL_RELAY_DIVISIONS);
+function relayTemplateRowsForRuleset(ruleset) {
+  return rowsForDivisions(relayDivisionsForRuleset(ruleset));
+}
 
 // ── Normalizers ───────────────────────────────────────────────────────────────
 function normalizeRelayEligibleGroupIds(value) {
@@ -42,13 +47,14 @@ function normalizeRelayAgeRange(value) {
   return String(value || '').trim();
 }
 
-function normalizeRelayTemplates(saved) {
+function normalizeRelayTemplates(saved, ruleset = 'usars') {
   const existing = Array.isArray(saved) ? saved : [];
+  const defaults = relayTemplateRowsForRuleset(ruleset);
   // Fast path: a saved set that already matches the current division count aligns
   // by index (preserves any per-row edits). Otherwise (e.g. a legacy 12-row save
   // meeting the expanded USARS set) match saved rows to divisions by divisionId or
   // type+age so previously-enabled relays carry over without scrambling the list.
-  const alignedByIndex = existing.length === RELAY_TEMPLATE_ROWS.length;
+  const alignedByIndex = existing.length === defaults.length && existing.every((row, idx) => !row?.divisionId || row.divisionId === defaults[idx].divisionId);
   const byKey = new Map();
   if (!alignedByIndex) {
     existing.forEach(row => {
@@ -58,7 +64,7 @@ function normalizeRelayTemplates(saved) {
       if (!byKey.has(key)) byKey.set(key, row);
     });
   }
-  return RELAY_TEMPLATE_ROWS.map((def, idx) => {
+  return defaults.map((def, idx) => {
     const row = alignedByIndex
       ? (existing[idx] || {})
       : (byKey.get('id:' + def.divisionId) || byKey.get(`${def.type.toLowerCase()}|${def.age.toLowerCase()}`) || {});
@@ -181,7 +187,7 @@ function relayOptionKeyForRace(race) {
 function relayAgeRangeForRace(meet, race) {
   const direct = normalizeRelayAgeRange(race?.relayAgeRange || race?.ageRange || '');
   if (direct) return direct;
-  const templates = normalizeRelayTemplates(meet?.relayTemplates || []);
+  const templates = normalizeRelayTemplates(meet?.relayTemplates || [], meet?.relayRuleset || (meet?.divisionScheme === 'mssl' ? 'mssl' : 'usars'));
   const match = templates.find(t =>
     String(t.type||'').trim().toLowerCase() === String(race?.relayType||'').trim().toLowerCase() &&
     String(t.age||'').trim().toLowerCase() === String(race?.relayAgeGroup||'').trim().toLowerCase() &&
@@ -274,6 +280,7 @@ function renderRelayEligibleSkatersHtml(meet, race) {
 module.exports = {
   MIXED_RELAY_SCOPE,
   RELAY_TEMPLATE_ROWS,
+  relayTemplateRowsForRuleset,
   normalizeRelayEligibleGroupIds,
   normalizeRelayAgeRange,
   normalizeRelayTemplates,

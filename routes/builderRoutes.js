@@ -10,7 +10,6 @@ const {
   generateConfiguredRacesForMeet, ensureAtLeastOneBlock,
   ensureRegistrationTotalsAndNumbers,
   restoreBlockAssignmentsAfterRaceSync,
-  combineDateTime,
   OPEN_GROUP_DEFAULTS, QUAD_GROUP_DEFAULTS,
   coachVisibleMeets,
   applyDivisionScheme,
@@ -18,7 +17,8 @@ const {
 const {
   normalizeRelayEligibleGroupIds, normalizeRelayAgeRange,
   normalizeRelayTemplates, makeRelayRace, relayRaceExists,
-  renderRelayEligibleSkatersHtml, RELAY_TEMPLATE_ROWS,
+  renderRelayEligibleSkatersHtml,
+  relayTemplateRowsForRuleset,
 } = require('../services/relayHelpers');
 const { buildRelayRacesFromTeams } = require('../services/relayGenerator');
 const { RELAY_DIVISION_BY_ID } = require('../services/relayDivisions');
@@ -31,6 +31,9 @@ const { ensureTimeTrialEvent, normalizeTimeTrialSettings } = require('../service
 const { raceDisplayStage, ensureCurrentRace } = require('../services/raceDay');
 const { generatePinForMeet, clearPinForMeet } = require('../services/desktopMeetPinService');
 const { createBackup: createDesktopBackup } = require('../services/desktopBackupService');
+const { saveMeetIdentityFields } = require('../services/meetIdentityFields');
+const { generateScheduleBlocks } = require('../services/scheduleGenerator');
+const { isMsslPresetName } = require('../services/msslTemplate');
 
 
 function canManageSetupPresets(user) {
@@ -85,30 +88,7 @@ function numberFieldFromBody(body, keys, fallback, minValue) {
 }
 
 function saveMeetFields(meet, body, db) {
-  meet.meetName=String(body.meetName||'New Meet').trim();
-  meet.leagueAssociation = String(body.leagueAssociation || body.league || '').trim();
-  meet.league = meet.leagueAssociation;
-  meet.date=String(body.date||'').trim();
-  meet.endDate=String(body.endDate||'').trim();
-  meet.startTime=String(body.startTime||'').trim();
-  meet.registrationCloseAt=combineDateTime(body.registrationCloseDate,body.registrationCloseTime);
-  const rinkSearch = String(body.rinkSearch || '').trim();
-  let submittedRinkId = Number(body.rinkId || 0);
-  if (!submittedRinkId && db && Array.isArray(db.rinks) && rinkSearch) {
-    const key = rinkSearch.toLowerCase();
-    const matched = db.rinks.find(r => {
-      const label = `${r.name} (${r.city || ''}${r.city && r.state ? ', ' : ''}${r.state || ''})`.toLowerCase();
-      return label === key || String(r.name || '').toLowerCase() === key;
-    });
-    if (matched) submittedRinkId = Number(matched.id || 0);
-  }
-  if (submittedRinkId) {
-    meet.rinkId = submittedRinkId;
-    meet.customRinkName = '';
-  } else {
-    meet.rinkId = Number(meet.rinkId || 1);
-    meet.customRinkName = rinkSearch;
-  }
+  saveMeetIdentityFields(meet, body, db);
   // Preserve existing values if the browser does not submit these fields, and
   // accept a couple of alternate names so lane count cannot silently fall back to 4.
   meet.trackLength = numberFieldFromBody(body, ['trackLength', 'track_length'], meet.trackLength || 100, 1);
@@ -123,19 +103,12 @@ function saveMeetFields(meet, body, db) {
   normalizeTimeTrialSettings(meet);
   ensureTimeTrialEvent(meet);
   if(Array.isArray(meet.openGroups)) {
-    meet.openGroups=normalizeOpenGroups(meet.openGroups).map(g=>({...g,timeTrial:!!meet.timeTrialsEnabled,ttDistance:'100m'}));
+    meet.openGroups=normalizeOpenGroups(meet.openGroups, meet.divisionScheme).map(g=>({...g,timeTrial:!!meet.timeTrialsEnabled,ttDistance:'100m'}));
   }
   // Relay Builder controls relays. If relay races/templates exist, the meet has relays.
   meet.relayEnabled=!!((meet.races||[]).some(r=>r.isRelayRace) || (meet.relayTemplates||[]).length);
   // Every meet gets a judges panel. No director toggle needed.
   meet.judgesPanelRequired=true;
-  meet.status=String(body.status||'draft');
-  // Find a Meet visibility is controlled by status. Published shows publicly; draft stays hidden.
-  meet.isPublic=String(meet.status||'').toLowerCase()==='published';
-  meet.notes=String(body.notes||'');
-  meet.scheduleNotes=String(body.scheduleNotes||'');
-  meet.relayNotes=String(body.relayNotes||'');
-  meet.relayDeadline=String(body.relayDeadline||'').trim(); // free text shown to coaches; locks the coach relay form once passed
   meet.tiebreaker=String(body.tiebreaker||'d2')==='sr832'?'sr832':'d2';
   meet.baseEntryFee=Number(String(body.baseEntryFee||'0').trim()||0);
   meet.additionalRaceFee=Number(String(body.additionalRaceFee||'0').trim()||0);
@@ -172,6 +145,7 @@ function saveMeetFields(meet, body, db) {
         ages,
         enabled: !!body[`sk_${si}_enabled`],
         distances,
+        scheduleCategory: String((meet.additionalGroups || []).find(g => String(g.id) === id)?.scheduleCategory || '').trim(),
       });
     }
     meet.additionalGroups = makeAdditionalRaceSlots(nextManual);
@@ -220,15 +194,24 @@ router.post('/portal/meet/:meetId/builder/save-preset', requireRole('meet_direct
 router.post('/portal/meet/:meetId/division-scheme', requireRole('meet_director'), (req, res) => {
   const meet = getMeetOr404(req.db, req.params.meetId);
   if (!meet || !canEditMeet(req.user, meet)) return res.redirect('/portal');
-  const wantUsars = String(req.body.scheme || '') === 'usars';
+  const scheme = ['standard', 'mssl', 'usars'].includes(String(req.body.scheme || '').toLowerCase())
+    ? String(req.body.scheme).toLowerCase() : 'standard';
   // Always (re)apply the chosen scheme's full template — not only on a flag flip.
   // A meet already flagged usarsDivisions=true but carrying an incomplete group
   // list (stale meets missing Grand Classic/Masters/Veteran/Esquire + Premier)
   // could never be healed by the old guard; re-applying rebuilds the full set and
   // preserves each surviving division's settings by id.
-  applyDivisionScheme(meet, wantUsars);
+  applyDivisionScheme(meet, scheme);
+  if (scheme === 'mssl') {
+    createDesktopBackupIfActive(req.db, 'before_race_generation', meet.id);
+    generateConfiguredRacesForMeet(meet);
+    rebuildRaceAssignmentsSafe(meet);
+    const generated = generateScheduleBlocks(meet, { mode: 'replace', style: 'league' });
+    meet.blocks = generated.blocks;
+    ensureCurrentRace(meet);
+  }
   saveDb(req.db);
-  res.redirect(`/portal/meet/${meet.id}/builder?schemeSwitched=${wantUsars ? 'usars' : 'standard'}`);
+  res.redirect(`/portal/meet/${meet.id}/builder?schemeSwitched=${scheme}`);
 });
 
 // Load a saved setup preset into the current meet (copy reusable structure only)
@@ -240,6 +223,15 @@ router.post('/portal/meet/:meetId/setup-presets/load', requireRole('meet_directo
   if(!Array.isArray(req.db.setupPresets)) req.db.setupPresets=[];
   const preset = req.db.setupPresets.find(p=>String(p.id)===presetId);
   if(!preset) return res.redirect(`/portal/meet/${meet.id}/builder`);
+
+  // The load button submits the complete Meet Builder form. Retain unsaved
+  // meet-specific details before applying the reusable racing setup so loading
+  // a preset never erases the name, dates, venue, status, or notes.
+  saveMeetIdentityFields(meet, req.body, req.db);
+  const loadAsMssl = preset.divisionScheme === 'mssl' || isMsslPresetName(preset.name);
+  meet.divisionScheme = loadAsMssl ? 'mssl' : (preset.divisionScheme || meet.divisionScheme || (meet.usarsDivisions ? 'usars' : 'standard'));
+  meet.usarsDivisions = meet.divisionScheme === 'usars';
+  meet.relayRuleset = loadAsMssl ? 'mssl' : (preset.relayRuleset || meet.relayRuleset || 'usars');
 
   // Copy only allowed fields from preset into meet
   meet.groups = JSON.parse(JSON.stringify(preset.groups || []));
@@ -283,15 +275,22 @@ router.post('/portal/meet/:meetId/setup-presets/load', requireRole('meet_directo
   meet.relayEnabled = !!preset.relayEnabled || presetRelayRaces.length > 0;
   meet.judgesPanelRequired = !!preset.judgesPanelRequired;
 
+  // Named legacy MSSL presets predate the dedicated ruleset and may contain
+  // Nationals quad/relay rows. Refresh their racing structure from the exact
+  // league-office template while retaining pricing and meet identity.
+  if (loadAsMssl) applyDivisionScheme(meet, 'mssl');
+
   // Presets should restore the director's relay races too. Relay Builder creates
   // actual race shells, so saving only relayEnabled was not enough for templates.
-  meet.races = (meet.races || []).filter(r => !r.isRelayRace);
-  for (const relay of presetRelayRaces) {
-    relay.isRelayRace = true;
-    relay.division = relay.division || 'relay';
-    relay.status = relay.status || 'open';
-    relay.laneEntries = Array.isArray(relay.laneEntries) ? relay.laneEntries : [];
-    meet.races.push(relay);
+  if (!loadAsMssl) {
+    meet.races = (meet.races || []).filter(r => !r.isRelayRace);
+    for (const relay of presetRelayRaces) {
+      relay.isRelayRace = true;
+      relay.division = relay.division || 'relay';
+      relay.status = relay.status || 'open';
+      relay.laneEntries = Array.isArray(relay.laneEntries) ? relay.laneEntries : [];
+      meet.races.push(relay);
+    }
   }
 
   // Presets should restore the director's block layout, not erase it.
@@ -300,7 +299,11 @@ router.post('/portal/meet/:meetId/setup-presets/load', requireRole('meet_directo
   createDesktopBackupIfActive(req.db, 'before_race_generation', meet.id);
   generateConfiguredRacesForMeet(meet);
   rebuildRaceAssignmentsSafe(meet);
-  restorePresetBlocksIntoMeet(preset, meet);
+  if (loadAsMssl) {
+    meet.blocks = generateScheduleBlocks(meet, { mode: 'replace', style: 'league' }).blocks;
+  } else {
+    restorePresetBlocksIntoMeet(preset, meet);
+  }
 
   // Mirror Additionals into compatibility aliases for existing saved data.
   meet.additionalGroups = makeAdditionalRaceSlots(meet.additionalGroups || meet.additionalRaceGroups || meet.additionalRaces || meet.skateabilityGroups);
@@ -448,7 +451,7 @@ router.get('/portal/meet/:meetId/relay-builder', requireRole('meet_director'), (
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet) return res.redirect('/portal');
   if(!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
-  meet.relayTemplates=normalizeRelayTemplates(meet.relayTemplates);
+  meet.relayTemplates=normalizeRelayTemplates(meet.relayTemplates, meet.relayRuleset || (meet.divisionScheme === 'mssl' ? 'mssl' : 'usars'));
   res.send(pageShell({
     title:'Relay Builder',
     user:req.user,
@@ -473,7 +476,8 @@ router.post('/portal/meet/:meetId/relay-builder/add-template', requireRole('meet
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
   let added=0;
-  meet.relayTemplates = RELAY_TEMPLATE_ROWS.map((base, idx)=>{
+  const relayRows = relayTemplateRowsForRuleset(meet.relayRuleset || (meet.divisionScheme === 'mssl' ? 'mssl' : 'usars'));
+  meet.relayTemplates = relayRows.map((base, idx)=>{
     const enabled = req.body[`enabled_${idx}`] === 'on';
     const relayType=String(req.body[`relayType_${idx}`]||base.type).trim();
     const ageGroup=String(req.body[`ageGroup_${idx}`]||base.age).trim();
@@ -572,7 +576,7 @@ router.get('/portal/meet/:meetId/open-builder', requireRole('meet_director'), (r
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet) return res.redirect('/portal');
   if(!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
-  meet.openGroups=normalizeOpenGroups(meet.openGroups);
+  meet.openGroups=normalizeOpenGroups(meet.openGroups, meet.divisionScheme);
   res.send(pageShell({
     title:'Open Builder',
     user:req.user,
@@ -590,7 +594,7 @@ router.post('/portal/meet/:meetId/open-builder/save', requireRole('meet_director
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet) return res.redirect('/portal');
   if(!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
-  meet.openGroups=normalizeOpenGroups(meet.openGroups);
+  meet.openGroups=normalizeOpenGroups(meet.openGroups, meet.divisionScheme);
   meet.openGroups.forEach((og,i)=>{
     og.enabled=!!req.body[`og_${i}_enabled`];
     og.ages=String(req.body[`og_${i}_ages`]||'').trim()||og.ages;
@@ -608,7 +612,7 @@ router.get('/portal/meet/:meetId/quad-builder', requireRole('meet_director'), (r
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet) return res.redirect('/portal');
   if(!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
-  meet.quadGroups=normalizeQuadGroups(meet.quadGroups);
+  meet.quadGroups=normalizeQuadGroups(meet.quadGroups, meet.divisionScheme);
   res.send(pageShell({
     title:'Quad Builder',
     user:req.user,
@@ -616,7 +620,7 @@ router.get('/portal/meet/:meetId/quad-builder', requireRole('meet_director'), (r
     activeTab:'quad-builder',
     bodyHtml:renderQuadBuilderView({
       meet,
-      quadGroupDefaults:QUAD_GROUP_DEFAULTS,
+      quadGroupDefaults:meet.divisionScheme === 'mssl' ? meet.quadGroups : QUAD_GROUP_DEFAULTS,
       saved:!!req.query.saved,
       raceDisplayStage,
     }),
@@ -627,7 +631,7 @@ router.post('/portal/meet/:meetId/quad-builder/save', requireRole('meet_director
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet) return res.redirect('/portal');
   if(!canEditMeet(req.user,meet)) return res.status(403).send('Forbidden');
-  meet.quadGroups=normalizeQuadGroups(meet.quadGroups);
+  meet.quadGroups=normalizeQuadGroups(meet.quadGroups, meet.divisionScheme);
   meet.quadGroups.forEach((qg,i)=>{
     qg.enabled=!!req.body[`qg_${i}_enabled`];
     qg.distances[0]=String(req.body[`qg_${i}_d1`]||'').trim()||qg.distances[0];

@@ -51,12 +51,12 @@ function raceOrder(a, b) {
     || String(a.id).localeCompare(String(b.id));
 }
 
-function newBlock(name, dayNum, raceIds) {
+function newBlock(name, dayNum, raceIds, type = 'race') {
   return {
     id: 'b' + crypto.randomBytes(4).toString('hex'),
     name: String(name),
     day: 'Day ' + dayNum,
-    type: 'race',
+    type,
     notes: '',
     raceIds: raceIds.map(r => String(r.id)),
   };
@@ -150,7 +150,7 @@ function distanceCategories(races) {
     if (ords.length === 1) label[ords[0]] = 'short';
     else if (ords.length === 2) { label[ords[0]] = 'short'; label[ords[1]] = 'middle'; }
     else ords.forEach((o, i) => { label[o] = i === 0 ? 'short' : i === ords.length - 1 ? 'long' : 'middle'; });
-    for (const r of group) cat.set(String(r.id), label[ordinalOf(r)] || 'middle');
+    for (const r of group) cat.set(String(r.id), String(r.scheduleCategory || '').toLowerCase() || label[ordinalOf(r)] || 'middle');
   }
   return cat;
 }
@@ -187,17 +187,25 @@ function orderBlockRaces(races) {
   return [...additional, ...heats, ...sweep, ...endFinals];
 }
 
-function leagueUnits(pool) {
+function leagueUnits(pool, meet = {}) {
   const catOf = distanceCategories(pool);
   const cat = r => catOf.get(String(r.id)) || 'middle';
   const units = [];
   const placed = new Set();
   const mk = (name, races) => { races.forEach(r => placed.add(String(r.id))); return { name, races: orderBlockRaces(races) }; };
+  const warmup = name => ({ name, races: [], divider: true });
 
   // Split a category into even-position AGE GROUPS then odd-position age groups,
   // youngest→oldest — the MSSL "… / … Continued" pattern. Grouped by AGE RANGE so
   // both genders of an age (Primary Girls + Primary Boys) stay in the same block.
   const evenOddSplit = races => {
+    if (meet.divisionScheme === 'mssl') {
+      const { MSSL_FIRST_ELITE_GROUPS } = require('./msslTemplate');
+      return [
+        races.filter(r => MSSL_FIRST_ELITE_GROUPS.has(String(r.groupId || ''))),
+        races.filter(r => !MSSL_FIRST_ELITE_GROUPS.has(String(r.groupId || ''))),
+      ];
+    }
     const byAge = groupBy(races, r => String(r.ages || '').trim().toLowerCase());
     const keys = [...byAge.keys()].sort((a, b) => minAgeOf(a) - minAgeOf(b)
       || raceOrder(byAge.get(a)[0], byAge.get(b)[0]));
@@ -208,6 +216,7 @@ function leagueUnits(pool) {
 
   // 1. QUAD — short, middle (quads race 2 distances at a league meet).
   const quad = pool.filter(r => r.isQuadRace);
+  if (meet.divisionScheme === 'mssl' && quad.length) units.push([warmup('Warm Ups — Quad Skaters')]);
   for (const [c, label] of [['short', 'Quad Short Races'], ['middle', 'Quad Middle Races'], ['long', 'Quad Long Races']]) {
     const rs = quad.filter(r => cat(r) === c);
     if (rs.length) units.push([mk(label, rs)]);
@@ -229,7 +238,9 @@ function leagueUnits(pool) {
   };
   const noviceBlock = (c, label) => { const rs = novice.filter(r => cat(r) === c); if (rs.length) units.push([mk(label, rs)]); };
 
+  if (meet.divisionScheme === 'mssl' && elite.length) units.push([warmup('Warm Up — Elite Inline')]);
   eliteBlocks('long', 'Elite Long Races');
+  if (meet.divisionScheme === 'mssl' && novice.length) units.push([warmup('Warm Up — Novice')]);
   noviceBlock('short', 'Novice Short Races');
   eliteBlocks('short', 'Elite Short Races');
   noviceBlock('middle', 'Novice Middle Races');
@@ -275,7 +286,7 @@ function generateScheduleBlocks(meet, { mode = 'replace', style = 'league' } = {
   const pool = (meet.races || []).filter(r => !assigned.has(String(r.id)) && !r.isTimeTrial);
 
   const useChampionship = style === 'championship' || (style === 'auto' && isChampionshipPool(pool));
-  const units = useChampionship ? championshipUnits(pool) : leagueUnits(pool);
+  const units = useChampionship ? championshipUnits(pool) : leagueUnits(pool, meet);
 
   const blocks = [];
   let placed = 0;
@@ -285,8 +296,8 @@ function generateScheduleBlocks(meet, { mode = 'replace', style = 'league' } = {
   units.forEach((defs, i) => {
     const dayNum = Math.floor(i * dayCount / units.length) + 1;
     for (const def of defs) {
-      if (!def.races.length) continue;
-      blocks.push(newBlock(def.name, dayNum, def.races));
+      if (!def.races.length && !def.divider) continue;
+      blocks.push(newBlock(def.name, dayNum, def.races, def.divider ? 'divider' : 'race'));
       placed += def.races.length;
     }
   });

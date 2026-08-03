@@ -8,6 +8,7 @@ const {
   RELAY_DIVISIONS,
   QUAD_RELAY_DIVISIONS,
   ALL_RELAY_DIVISIONS,
+  MSSL_RELAY_DIVISIONS,
   RELAY_DIVISION_BY_ID,
   relayDivisionsForDiscipline,
 } = require('../services/relayDivisions');
@@ -40,7 +41,7 @@ test('relayDivisionsForDiscipline splits inline vs quad; defaults to inline', ()
   assert.equal(relayDivisionsForDiscipline('quad').length, 26);
   assert.equal(relayDivisionsForDiscipline('inline').length, RELAY_DIVISIONS.length);
   assert.equal(relayDivisionsForDiscipline().length, RELAY_DIVISIONS.length);
-  assert.equal(ALL_RELAY_DIVISIONS.length, RELAY_DIVISIONS.length + QUAD_RELAY_DIVISIONS.length);
+  assert.equal(ALL_RELAY_DIVISIONS.length, RELAY_DIVISIONS.length + QUAD_RELAY_DIVISIONS.length + MSSL_RELAY_DIVISIONS.length);
 });
 
 test('makeRelayRace(quad) marks the discipline but stays a placement-only relay', () => {

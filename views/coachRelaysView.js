@@ -47,7 +47,11 @@ function renderCoachRelaysView({ meet, club, skaters, mixed = false, locked, sav
   const byDiv = new Map();
   myTeams.forEach(t => { const a = byDiv.get(t.divisionId) || []; a.push(t); byDiv.set(t.divisionId, a); });
 
-  const fieldable = ALL_RELAY_DIVISIONS
+  const enabledDivisionIds = new Set((meet.relayTemplates || []).filter(t => t.enabled).map(t => String(t.divisionId || '')));
+  const rulesetDivisions = enabledDivisionIds.size
+    ? ALL_RELAY_DIVISIONS.filter(d => enabledDivisionIds.has(String(d.id)))
+    : ALL_RELAY_DIVISIONS.filter(d => (meet.divisionScheme === 'mssl' ? d.ruleset === 'mssl' : d.ruleset !== 'mssl'));
+  const fieldable = rulesetDivisions
     .map(d => ({ d, elig: eligibleForRelayDivision(d, skaters) }))
     .filter(x => x.elig.length >= x.d.size || (byDiv.get(x.d.id) || []).length);
 

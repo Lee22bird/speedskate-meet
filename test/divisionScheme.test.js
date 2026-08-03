@@ -87,8 +87,8 @@ test('USARS National = the complete race-ready preset (heals a stale incomplete 
   // 4. Relays on — the master switch AND every per-division Relay Builder row
   // (relayEnabled alone just showed the list with all checkboxes off).
   assert.strictEqual(meet.relayEnabled, true, 'relays not enabled');
-  const { ALL_RELAY_DIVISIONS } = require(path.join(ROOT, 'services', 'relayDivisions'));
-  assert.strictEqual(meet.relayTemplates.length, ALL_RELAY_DIVISIONS.length,
+  const { NATIONAL_RELAY_DIVISIONS } = require(path.join(ROOT, 'services', 'relayDivisions'));
+  assert.strictEqual(meet.relayTemplates.length, NATIONAL_RELAY_DIVISIONS.length,
     'expected one enabled template row per relay division (inline + quad)');
   for (const t of meet.relayTemplates) assert.ok(t.enabled, `relay division not toggled on: ${t.divisionId}`);
   assert.ok(meet.relayTemplates.some(t => t.discipline === 'inline'), 'no inline relay rows');

@@ -301,7 +301,7 @@ function renderMeetBuilderView({ db, meet, user = null, query = {} }) {
                 <div class="setup-fields cols-3">
                   <div><label>Base Registration</label><input type="number" name="baseEntryFee" value="${esc(String(meet.baseEntryFee||0))}" min="0" /><div class="note">Covers the first selected event category.</div></div>
                   <div><label>Additional Event Fee</label><input type="number" name="additionalRaceFee" value="${esc(String(meet.additionalRaceFee||0))}" min="0" /><div class="note">Charged once for each selected event category after the first.</div></div>
-                  <div><label>Max Registration Cap</label><input type="number" name="maxRegistrationFee" value="${esc(String(meet.maxRegistrationFee||0))}" min="0" /><div class="note">0 = no cap</div></div>
+                  <div><label>Max Registration Cap</label><input type="number" name="maxRegistrationFee" value="${esc(String(meet.maxRegistrationFee||0))}" min="0" /><div class="note">0 = no cap. Any other amount limits the final total even when the event calculation is higher.</div></div>
                 </div>
                 <div class="setup-help-note">Total cost = base fee + selected event fees. Max cap applies when greater than 0.</div>
               </div>
@@ -395,7 +395,7 @@ function renderMeetBuilderView({ db, meet, user = null, query = {} }) {
                 <div class="setup-mini-title">Load or Delete Preset</div>
                 <div class="preset-manage-row">
                   <select id="presetSelect" name="presetId">${presetSelectHtml}</select>
-                  <button id="loadPresetBtn" class="btn2 btn-sm" type="submit" form="meetBuilderForm" formaction="/portal/meet/${meet.id}/setup-presets/load" onclick="return confirm('Load setup will overwrite current divisions, blocks, and race structure. Continue?')">Load</button>
+                  <button id="loadPresetBtn" class="btn2 btn-sm" type="submit" form="meetBuilderForm" formaction="/portal/meet/${meet.id}/setup-presets/load" onclick="return confirm('Load this preset? Your meet name, dates, venue, publication status, and notes will be kept. Divisions, fees, track setup, blocks, and race structure will be replaced.')">Load</button>
                   ${canDeleteSetupPresets ? `
                     <input type="hidden" name="deletePresetId" id="deletePresetId" value="" />
                     <button id="deletePresetBtn" class="btn-danger btn-sm" type="submit" form="meetBuilderForm" formaction="/portal/meet/${meet.id}/setup-presets/delete" onclick="return confirm('Delete selected setup preset? This cannot be undone.')">Delete</button>
@@ -404,7 +404,7 @@ function renderMeetBuilderView({ db, meet, user = null, query = {} }) {
                     <input type="hidden" name="deletePresetId" id="deletePresetId" value="" />
                   `}
                 </div>
-                <div class="setup-warning-note">Loading a preset can overwrite divisions, fees, blocks, and race structure. Save this meet first if you may need to come back to the current setup.</div>
+                <div class="setup-warning-note">Your meet name, dates, venue, publication status, and notes are saved automatically when a preset loads. Divisions, fees, track setup, blocks, and race structure are replaced by the preset.</div>
                 <script>
                   (function(){
                     var sel = document.getElementById('presetSelect');
@@ -464,12 +464,15 @@ function renderMeetBuilderView({ db, meet, user = null, query = {} }) {
         <div class="action-row" style="margin-top:10px;align-items:center;gap:10px">
           <span class="note" style="margin:0">Division set:</span>
           <button type="submit" formaction="/portal/meet/${meet.id}/division-scheme" formmethod="post" name="scheme" value="standard"
-            class="${!meet.usarsDivisions ? 'btn-good' : 'btn2'}"
+            class="${(meet.divisionScheme || (meet.usarsDivisions ? 'usars' : 'standard')) === 'standard' ? 'btn-good' : 'btn2'}"
             onclick="return confirm('Switch to the Standard division set (24 age groups)?\\n\\nThis rebuilds the age-group list. Save any other settings changes first.');">Standard</button>
           <button type="submit" formaction="/portal/meet/${meet.id}/division-scheme" formmethod="post" name="scheme" value="usars"
-            class="${meet.usarsDivisions ? 'btn-good' : 'btn2'}"
+            class="${(meet.divisionScheme || (meet.usarsDivisions ? 'usars' : 'standard')) === 'usars' ? 'btn-good' : 'btn2'}"
             onclick="return confirm('Set up the complete USARS National meet?\\n\\n• All 34 age divisions (incl. Grand + Premier), Elite enabled with official distances\\n• All quad divisions enabled\\n• All relay races created (inline + quad) — schedulable in Block Builder\\n• SR832 tiebreaker\\n\\nThis rebuilds the age-group list from the USARS template (custom per-group tweaks reset). Save any other settings changes first.');">USARS National</button>
-          <span class="note" style="margin:0">${meet.usarsDivisions ? '34 USARS divisions' : '24 standard divisions'}</span>
+          <button type="submit" formaction="/portal/meet/${meet.id}/division-scheme" formmethod="post" name="scheme" value="mssl"
+            class="${meet.divisionScheme === 'mssl' ? 'btn-good' : 'btn2'}"
+            onclick="return confirm('Load the official Mid South Speed League race template?\\n\\n• MSSL novice and elite race offerings in office order\\n• 8 league quad divisions and 8 open divisions\\n• 3-, 2-, then 4-person open-gender relays\\n• Skatability in Elite Middle Continued\\n\\nMeet name, dates, venue, notes, and pricing are preserved.');">MSSL League Office</button>
+          <span class="note" style="margin:0">${meet.divisionScheme === 'mssl' ? 'MSSL office template' : meet.usarsDivisions ? '34 USARS divisions' : '24 standard divisions'}</span>
         </div>
       </div>
       ${groupsHtml}

@@ -3,6 +3,7 @@
 // = any), age range, and distance. Coaches form teams from their club's
 // age/gender-eligible skaters for each of these.
 const { ageMatch, normalizeSkaterGender } = require('./meetHelpers');
+const { MSSL_RELAY_DIVISIONS } = require('./msslTemplate');
 
 const RELAY_DIVISIONS = [
   // ── 2-person ──
@@ -100,15 +101,22 @@ const QUAD_RELAY_DIVISIONS = [
 // meaning of "inline relay divisions" — existing consumers (the inline relay
 // builder) are unchanged; quad divisions live in their own list until the
 // Builder UI is discipline-aware.
-for (const d of RELAY_DIVISIONS) d.discipline = 'inline';
-for (const d of QUAD_RELAY_DIVISIONS) d.discipline = 'quad';
+for (const d of RELAY_DIVISIONS) { d.discipline = 'inline'; d.ruleset = 'usars'; }
+for (const d of QUAD_RELAY_DIVISIONS) { d.discipline = 'quad'; d.ruleset = 'usars'; }
 
-const ALL_RELAY_DIVISIONS = [...RELAY_DIVISIONS, ...QUAD_RELAY_DIVISIONS];
+const NATIONAL_RELAY_DIVISIONS = [...RELAY_DIVISIONS, ...QUAD_RELAY_DIVISIONS];
+const ALL_RELAY_DIVISIONS = [...NATIONAL_RELAY_DIVISIONS, ...MSSL_RELAY_DIVISIONS];
+
+function relayDivisionsForRuleset(ruleset) {
+  return String(ruleset || '').toLowerCase() === 'mssl'
+    ? MSSL_RELAY_DIVISIONS
+    : NATIONAL_RELAY_DIVISIONS;
+}
 
 // Divisions for a discipline ('inline' | 'quad'); defaults to inline.
-function relayDivisionsForDiscipline(discipline) {
+function relayDivisionsForDiscipline(discipline, ruleset = 'usars') {
   const want = String(discipline || 'inline').toLowerCase() === 'quad' ? 'quad' : 'inline';
-  return ALL_RELAY_DIVISIONS.filter(d => d.discipline === want);
+  return relayDivisionsForRuleset(ruleset).filter(d => d.discipline === want);
 }
 
 const RELAY_DIVISION_BY_ID = new Map(ALL_RELAY_DIVISIONS.map(d => [d.id, d]));
@@ -136,4 +144,4 @@ function eligibleForRelayDivision(div, skaters) {
   );
 }
 
-module.exports = { RELAY_DIVISIONS, QUAD_RELAY_DIVISIONS, ALL_RELAY_DIVISIONS, RELAY_DIVISION_BY_ID, relayGenderOk, eligibleForRelayDivision, relayDivisionsForDiscipline };
+module.exports = { RELAY_DIVISIONS, QUAD_RELAY_DIVISIONS, MSSL_RELAY_DIVISIONS, NATIONAL_RELAY_DIVISIONS, ALL_RELAY_DIVISIONS, RELAY_DIVISION_BY_ID, relayGenderOk, eligibleForRelayDivision, relayDivisionsForDiscipline, relayDivisionsForRuleset };

@@ -31,6 +31,12 @@ const {
   distributeByTeam,
 } = require('./raceSizing');
 const { assignRandomLaneEntries } = require('./laneAssignment');
+const {
+  MSSL_TEMPLATE_VERSION,
+  MSSL_INLINE_CONFIG,
+  MSSL_QUAD_GROUPS,
+  MSSL_OPEN_GROUPS,
+} = require('./msslTemplate');
 
 // USARS SR150.1: ages are reckoned as of January 1 of the competitive year.
 function usarsAge(birthdate, meetDate) {
@@ -153,6 +159,7 @@ function makeAdditionalRaceSlots(raw) {
       ages: String(match.ages || '').trim(),
       enabled: !!match.enabled,
       distances: Array.isArray(match.distances) ? [0,1,2].map(n => String(match.distances[n] || '').trim()) : ['', '', ''],
+      scheduleCategory: String(match.scheduleCategory || '').trim(),
     };
   });
 }
@@ -295,23 +302,77 @@ function baseGroupsUSARS() {
 //
 // 'standard' = rebuild the 24 standard age groups, preserving each surviving
 // division's per-class settings by id; quads/relays/tiebreaker are left alone.
-function applyDivisionScheme(meet, wantUsars) {
-  meet.usarsDivisions = !!wantUsars;
-  if (wantUsars) {
+function makeMsslGroupsTemplate() {
+  return baseGroups().map(group => {
+    const config = MSSL_INLINE_CONFIG[group.id] || {};
+    const divisions = makeDivisionsTemplate();
+    for (const key of ['novice', 'elite']) {
+      const row = config[key];
+      if (!row) continue;
+      divisions[key] = {
+        enabled: true,
+        cost: 0,
+        ages: row.ages || group.ages,
+        raceLabel: row.raceLabel || '',
+        distances: [...(row.distances || []), '', '', '', ''].slice(0, 4),
+      };
+    }
+    return { ...group, divisions };
+  });
+}
+
+function makeMsslQuadGroupsTemplate() {
+  return MSSL_QUAD_GROUPS.map(g => ({ ...g, enabled: true, distances: [...g.distances], cost: 0 }));
+}
+
+function makeMsslOpenGroupsTemplate() {
+  return MSSL_OPEN_GROUPS.map(g => ({
+    ...g, enabled: true, cost: 0, timeTrial: false, ttDistance: '',
+  }));
+}
+
+function applyDivisionScheme(meet, requestedScheme) {
+  const scheme = requestedScheme === true ? 'usars'
+    : requestedScheme === false ? 'standard'
+    : ['usars', 'mssl'].includes(String(requestedScheme || '').toLowerCase()) ? String(requestedScheme).toLowerCase() : 'standard';
+  meet.divisionScheme = scheme;
+  meet.usarsDivisions = scheme === 'usars';
+  if (scheme === 'usars') {
     meet.groups = baseGroupsUSARS();
     meet.quadGroups = (makeQuadGroupsTemplate() || []).map(g => ({ ...g, enabled: true }));
     meet.relayEnabled = true;
+    meet.relayRuleset = 'usars';
     // relayEnabled is only the master switch — the Relay Builder lists one row per
     // relay division (meet.relayTemplates) each with its OWN enabled checkbox, and
     // those stayed off, so "USARS National" looked like it hadn't turned relays on.
     // Enable every division row (all inline + quad relays). Require at call time:
     // relayHelpers requires meetHelpers, so a top-level require would be circular.
     const { normalizeRelayTemplates, ensureRelayRacesForEnabledTemplates } = require('./relayHelpers');
-    meet.relayTemplates = normalizeRelayTemplates(meet.relayTemplates).map(r => ({ ...r, enabled: true }));
+    meet.relayTemplates = normalizeRelayTemplates(meet.relayTemplates, 'usars').map(r => ({ ...r, enabled: true }));
     // ...and MATERIALIZE the relay races themselves (find-or-create per division).
     // Enabled toggles alone schedule nothing: the Block Builder can only place
     // races that exist, and relay races were otherwise only created when someone
     // clicked Save Relay Builder.
+    ensureRelayRacesForEnabledTemplates(meet);
+    meet.tiebreaker = 'sr832';
+  } else if (scheme === 'mssl') {
+    meet.groups = makeMsslGroupsTemplate();
+    meet.quadGroups = makeMsslQuadGroupsTemplate();
+    meet.openGroups = makeMsslOpenGroupsTemplate();
+    meet.additionalGroups = makeAdditionalRaceSlots([{
+      id: 'manual_extra_1', ageGroupLabel: 'Skatability', ages: '', enabled: true,
+      distances: ['200m', '', ''], scheduleCategory: 'middle',
+    }]);
+    meet.additionalRaces = meet.additionalGroups.map(g => ({ ...g }));
+    meet.additionalRaceGroups = meet.additionalGroups.map(g => ({ ...g }));
+    meet.skateabilityGroups = meet.additionalGroups.map(g => ({ ...g }));
+    meet.relayEnabled = true;
+    meet.relayRuleset = 'mssl';
+    meet.msslTemplateVersion = MSSL_TEMPLATE_VERSION;
+    const { normalizeRelayTemplates, ensureRelayRacesForEnabledTemplates } = require('./relayHelpers');
+    meet.relayTemplates = normalizeRelayTemplates([], 'mssl').map(r => ({ ...r, enabled: true }));
+    // Remove relay shells from another ruleset before materializing MSSL's 12.
+    meet.races = (meet.races || []).filter(r => !r.isRelayRace);
     ensureRelayRacesForEnabledTemplates(meet);
     meet.tiebreaker = 'sr832';
   } else {
@@ -352,7 +413,7 @@ function defaultMeet(ownerUser) {
     meet_staff_assignments:[], staffAssignments:[],
     timeTrialsEnabled:false, timeTrialEvent:{enabled:false,distance:'100m',runOrder:'youngest_oldest',countsForOverall:false}, timeTrialEvents:[], relayEnabled:false, judgesPanelRequired:true,
     desktop_pin_hash:'', desktop_pin_created_at:'', desktop_pin_expires_at:'',
-    notes:'', scheduleNotes:'', relayNotes:'', isPublic:false, status:'draft', tiebreaker:'sr832',
+    notes:'', scheduleNotes:'', relayNotes:'', isPublic:false, status:'draft', tiebreaker:'sr832', divisionScheme:'standard', relayRuleset:'usars',
     ...defaultPricingFields(),
     groups:baseGroups(), openGroups:makeOpenGroupsTemplate(), quadGroups:makeQuadGroupsTemplate(),
     races:[], blocks:[], registrations:[], additionalGroups:makeAdditionalRaceSlots([]), additionalRaceGroups:makeAdditionalRaceSlots([]), additionalRaces:makeAdditionalRaceSlots([]), skateabilityGroups:makeAdditionalRaceSlots([]),
@@ -366,13 +427,14 @@ function normalizeDivisionSet(divs) {
     out[key].enabled=!!out[key].enabled;
     out[key].cost=Number(out[key].cost||0);
     out[key].ages=String(out[key].ages||'').trim();
+    out[key].raceLabel=String(out[key].raceLabel||'').trim();
     if(!Array.isArray(out[key].distances)) out[key].distances=['','','',''];
     out[key].distances=[0,1,2,3].map(i=>String(out[key].distances[i]||'').trim());
   } return out;
 }
 
-function normalizeOpenGroups(raw) {
-  const defaults=makeOpenGroupsTemplate();
+function normalizeOpenGroups(raw, scheme = 'standard') {
+  const defaults=scheme === 'mssl' ? makeMsslOpenGroupsTemplate() : makeOpenGroupsTemplate();
   if(!Array.isArray(raw)||raw.length===0) return defaults;
   return defaults.map(def=>{
     const saved=raw.find(r=>r.id===def.id); if(!saved) return def;
@@ -382,8 +444,8 @@ function normalizeOpenGroups(raw) {
   });
 }
 
-function normalizeQuadGroups(raw) {
-  const defaults=makeQuadGroupsTemplate();
+function normalizeQuadGroups(raw, scheme = 'standard') {
+  const defaults=scheme === 'mssl' ? makeMsslQuadGroupsTemplate() : makeQuadGroupsTemplate();
   if(!Array.isArray(raw)||raw.length===0) return defaults;
   return defaults.map(def=>{
     const saved=raw.find(r=>r.id===def.id); if(!saved) return def;
@@ -418,8 +480,12 @@ function migrateMeet(meet,fallbackOwnerId) {
   if(typeof meet.relayNotes!=='string') meet.relayNotes='';
   if(typeof meet.isPublic!=='boolean') meet.isPublic=false;
   if(typeof meet.status!=='string') meet.status='draft';
-  meet.openGroups=normalizeOpenGroups(meet.openGroups);
-  meet.quadGroups=normalizeQuadGroups(meet.quadGroups);
+  meet.divisionScheme = String(meet.divisionScheme || (meet.usarsDivisions ? 'usars' : 'standard')).toLowerCase();
+  if (!['standard', 'mssl', 'usars'].includes(meet.divisionScheme)) meet.divisionScheme = meet.usarsDivisions ? 'usars' : 'standard';
+  meet.usarsDivisions = meet.divisionScheme === 'usars';
+  meet.relayRuleset = String(meet.relayRuleset || (meet.divisionScheme === 'mssl' ? 'mssl' : 'usars')).toLowerCase();
+  meet.openGroups=normalizeOpenGroups(meet.openGroups, meet.divisionScheme);
+  meet.quadGroups=normalizeQuadGroups(meet.quadGroups, meet.divisionScheme);
   // Group normalization must use the meet's OWN division scheme as the source of
   // truth. Using the standard list on a USARS meet silently rewrote the men's
   // age bands on EVERY load (ids overlap between schemes: classic_men 25-29 ->
@@ -427,7 +493,7 @@ function migrateMeet(meet,fallbackOwnerId) {
   // 30-34 man imported into Classic instead of Grand Classic and the Grand
   // divisions starved. Caught live by the browser-vs-engine differential run —
   // headless tests import before any reload and never saw it.
-  const schemeBaseGroups = () => (meet.usarsDivisions ? baseGroupsUSARS() : baseGroups());
+  const schemeBaseGroups = () => meet.divisionScheme === 'usars' ? baseGroupsUSARS() : meet.divisionScheme === 'mssl' ? makeMsslGroupsTemplate() : baseGroups();
   if(!Array.isArray(meet.groups)||meet.groups.length===0) { meet.groups=schemeBaseGroups(); }
   else {
     const baseMap=new Map(schemeBaseGroups().map(g=>[g.id,g]));
@@ -462,7 +528,7 @@ function migrateMeet(meet,fallbackOwnerId) {
   meet.skateabilityGroups = meet.additionalGroups.map(g => ({ ...g }));
   meet.races=meet.races.map((r,idx)=>({
     id:r.id||('r'+crypto.randomBytes(6).toString('hex')), orderHint:Number(r.orderHint||idx+1),
-    groupId:String(r.groupId||''), groupLabel:String(r.groupLabel||''), ages:String(r.ages||''),
+    groupId:String(r.groupId||''), groupLabel:String(r.groupLabel||''), ages:String(r.ages||''), gender:String(r.gender||''),
     division:String(r.division||'elite'), distanceLabel:String(r.distanceLabel||''),
     dayIndex:Number(r.dayIndex||1), cost:Number(r.cost||0), stage:String(r.stage||'race'),
     heatNumber:Number(r.heatNumber||0), parentRaceKey:String(r.parentRaceKey||''),
@@ -476,7 +542,7 @@ function migrateMeet(meet,fallbackOwnerId) {
     countsForOverall:typeof r.countsForOverall==='boolean'?r.countsForOverall:(String(r.division||'')!=='open'),
     laneEntries:Array.isArray(r.laneEntries)?r.laneEntries:[],
     resultsMode:String(r.resultsMode||'places'), status:String(r.status||'open'),
-    notes:String(r.notes||''), isFinal:!!r.isFinal, closedAt:String(r.closedAt||''),
+    notes:String(r.notes||''), scheduleCategory:String(r.scheduleCategory||''), isFinal:!!r.isFinal, closedAt:String(r.closedAt||''),
     isOpenRace:!!r.isOpenRace, isQuadRace:!!r.isQuadRace, isTimeTrial:!!r.isTimeTrial, isRelayRace:!!r.isRelayRace, isAdditionalRace:!!r.isAdditionalRace, isSkateabilityRace:!!r.isSkateabilityRace,
     // Relay identity/metadata must survive migration or relay advancement breaks:
     // relayDivisionId is the family key advanceRelayProgression uses to seed the
@@ -606,6 +672,9 @@ function makeSetupPresetFromMeet(db, meet, name, ownerUserId) {
     lanes: Number(meet.lanes || 4),
     timeTrialsEnabled: !!meet.timeTrialsEnabled,
     relayEnabled: !!meet.relayEnabled || (meet.races || []).some(r => r.isRelayRace),
+    divisionScheme: meet.divisionScheme || (meet.usarsDivisions ? 'usars' : 'standard'),
+    relayRuleset: meet.relayRuleset || (meet.divisionScheme === 'mssl' ? 'mssl' : 'usars'),
+    msslTemplateVersion: Number(meet.msslTemplateVersion || 0),
     relayTemplates: JSON.parse(JSON.stringify(meet.relayTemplates || [])),
     relayRaces: JSON.parse(JSON.stringify((meet.races || []).filter(r => r.isRelayRace))),
     judgesPanelRequired: !!meet.judgesPanelRequired,
@@ -836,6 +905,14 @@ function registrationMatchesStandardRace(reg, race, meet) {
 
   if (!div || !raceGroupId || !baseGroupId) return false;
 
+  if (meet?.divisionScheme === 'mssl' && (div === 'novice' || div === 'elite')) {
+    if (!opts[div]) return false;
+    const age = ageForReg(reg, meet);
+    if (!ageMatch(race.ages, age)) return false;
+    const wanted = normalizeSkaterGender(race.gender);
+    return !wanted || wanted === normalizeSkaterGender(reg.gender);
+  }
+
   if (raceGroupId === baseGroupId) {
     if (div === 'elite' && noviceChallengeCreatesOwnElite(reg)) return true;
     return !!opts[div];
@@ -981,6 +1058,7 @@ function generateAdditionalRacesForMeet(meet) {
         isRelayRace: false,
         isAdditionalRace: true,
         isSkateabilityRace: false,
+        scheduleCategory: String(sg.scheduleCategory || existingRace?.scheduleCategory || '').trim(),
         type: 'race',
       });
     });
@@ -1756,6 +1834,9 @@ module.exports = {
   ageForReg,
   makeOpenGroupsTemplate,
   makeQuadGroupsTemplate,
+  makeMsslGroupsTemplate,
+  makeMsslQuadGroupsTemplate,
+  makeMsslOpenGroupsTemplate,
   makeAdditionalRaceSlots,
   makeManualExtraRaceSlots,
   nextId,

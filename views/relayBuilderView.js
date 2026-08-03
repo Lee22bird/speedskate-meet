@@ -1,5 +1,5 @@
 const { esc } = require('../utils/html');
-const { RELAY_DIVISIONS, RELAY_DIVISION_BY_ID } = require('../services/relayDivisions');
+const { ALL_RELAY_DIVISIONS, RELAY_DIVISION_BY_ID } = require('../services/relayDivisions');
 
 function toggleSwitch(name, checked, label = '', value = 'on') {
   return `
@@ -23,7 +23,7 @@ function submittedTeamsSummary(meet) {
     if (!RELAY_DIVISION_BY_ID.has(t.divisionId)) continue;
     byDiv.set(t.divisionId, (byDiv.get(t.divisionId) || 0) + 1);
   }
-  const rows = RELAY_DIVISIONS
+  const rows = ALL_RELAY_DIVISIONS
     .filter(d => byDiv.has(d.id))
     .map(d => ({ label: d.label, distance: d.distance, count: byDiv.get(d.id) }));
   return { total: teams.length, rows };
