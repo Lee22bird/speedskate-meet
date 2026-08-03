@@ -748,7 +748,7 @@ function renderScoreSheetsPrintPage({ req, meet, items, scopeLabel, layout = 'co
           .ss-print-page{break-after:page;page-break-after:always}
           .ss-print-page:last-child{break-after:auto;page-break-after:auto}
           .ss-page{border:1.5px solid #111;margin:0;page-break-after:auto}
-          .ss-print-page--pair{height:10.2in;display:grid;grid-template-rows:1fr 1fr;gap:.12in}
+          .ss-print-page--pair{display:flex;flex-direction:column;gap:.1in}
           .ss-print-page--pair .ss-page{padding:8px;min-height:0}
           .ss-print-page--pair .ss-header{gap:10px;padding-bottom:5px;margin-bottom:6px}
           .ss-print-page--pair .ss-meet-name{font-size:16px;margin-bottom:4px}
