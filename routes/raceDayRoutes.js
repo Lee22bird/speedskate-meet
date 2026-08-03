@@ -717,9 +717,7 @@ function renderScoreSheetsPrintPage({ req, meet, items, scopeLabel, layout = 'co
         .print-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:16px;padding:10px;border:1px solid #ddd;background:#f8fafc}
         .print-controls a,.print-controls button{border:1px solid #999;background:#fff;color:#111;border-radius:4px;padding:7px 12px;text-decoration:none;font-size:13px;cursor:pointer}
         .print-controls a.active{background:#111;color:#fff;border-color:#111}
-        .ss-print-page{break-inside:avoid}
-        .ss-page{border:2px solid #111;padding:18px;margin-bottom:22px;break-inside:avoid;page-break-after:always}
-        .ss-print-page:last-child .ss-page:last-child{page-break-after:auto}
+        .ss-page{border:2px solid #111;padding:18px;margin-bottom:22px;break-inside:avoid}
         .ss-header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;border-bottom:2px solid #111;padding-bottom:10px;margin-bottom:12px}
         .ss-meet-name{font-size:20px;font-weight:700;margin-bottom:8px}
         .ss-field-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px 16px}
@@ -745,10 +743,10 @@ function renderScoreSheetsPrintPage({ req, meet, items, scopeLabel, layout = 'co
           @page{size:letter portrait;margin:.35in}
           .no-print{display:none!important}
           .page{padding:0;max-width:none}
-          .ss-print-page{break-after:page;page-break-after:always}
+          .ss-print-page{display:block;break-after:page;page-break-after:always;break-inside:auto;page-break-inside:auto}
           .ss-print-page:last-child{break-after:auto;page-break-after:auto}
-          .ss-page{border:1.5px solid #111;margin:0;page-break-after:auto}
-          .ss-print-page--pair{display:flex;flex-direction:column;gap:.1in}
+          .ss-page{display:block;border:1.5px solid #111;margin:0;break-inside:avoid;page-break-inside:avoid}
+          .ss-print-page--pair .ss-page + .ss-page{margin-top:.1in}
           .ss-print-page--pair .ss-page{padding:8px;min-height:0}
           .ss-print-page--pair .ss-header{gap:10px;padding-bottom:5px;margin-bottom:6px}
           .ss-print-page--pair .ss-meet-name{font-size:16px;margin-bottom:4px}
