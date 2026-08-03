@@ -657,12 +657,52 @@ function scoreSheetPageHtml(item, meet, raceNumber) {
     </section>`;
 }
 
-function renderScoreSheetsPrintPage({ req, meet, items, scopeLabel }) {
+function groupScoreSheetItems(items, meet, layout) {
+  const groups = [];
+  const fitsCompactHalfPage = item => scoreSheetLaneRows(item, meet).length <= 8;
+
+  for (let index = 0; index < items.length;) {
+    const item = items[index];
+    if (layout === 'standard' || !fitsCompactHalfPage(item)) {
+      groups.push({ items: [item], compact: false });
+      index += 1;
+      continue;
+    }
+
+    const next = items[index + 1];
+    if (next && fitsCompactHalfPage(next)) {
+      groups.push({ items: [item, next], compact: true });
+      index += 2;
+    } else {
+      groups.push({ items: [item], compact: true });
+      index += 1;
+    }
+  }
+
+  return groups;
+}
+
+function renderScoreSheetsPrintPage({ req, meet, items, scopeLabel, layout = 'compact' }) {
   const location = meetRinkLabel(req.db, meet);
   const orderedAll = orderedRaces(meet);
   const numberById = new Map(orderedAll.map((r, idx) => [String(r.id), idx + 1]));
+  const printGroups = groupScoreSheetItems(items, meet, layout);
+  const pagesHtml = printGroups.map(group => {
+    const sheets = group.items.map(item => scoreSheetPageHtml(item, meet, numberById.get(String(item.id)) || '')).join('');
+    const pairClass = group.compact && group.items.length === 2 ? ' ss-print-page--pair' : '';
+    return `<div class="ss-print-page${group.compact ? ' ss-print-page--compact' : ' ss-print-page--standard'}${pairClass}">${sheets}</div>`;
+  }).join('');
 
-  const pagesHtml = items.map(item => scoreSheetPageHtml(item, meet, numberById.get(String(item.id)) || '')).join('');
+  const layoutQuery = new URLSearchParams();
+  const scope = String(req.query.scope || 'meet');
+  layoutQuery.set('scope', scope);
+  if (scope === 'race' && req.query.raceId) layoutQuery.set('raceId', String(req.query.raceId));
+  if (scope === 'block' && req.query.blockId) layoutQuery.set('blockId', String(req.query.blockId));
+  const layoutHref = nextLayout => {
+    const query = new URLSearchParams(layoutQuery);
+    query.set('layout', nextLayout);
+    return `/portal/meet/${encodeURIComponent(String(meet.id))}/score-sheets/print?${query.toString()}`;
+  };
 
   return `<!doctype html>
   <html>
@@ -676,8 +716,10 @@ function renderScoreSheetsPrintPage({ req, meet, items, scopeLabel }) {
         .page{padding:18px;max-width:980px;margin:0 auto}
         .print-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:16px;padding:10px;border:1px solid #ddd;background:#f8fafc}
         .print-controls a,.print-controls button{border:1px solid #999;background:#fff;color:#111;border-radius:4px;padding:7px 12px;text-decoration:none;font-size:13px;cursor:pointer}
+        .print-controls a.active{background:#111;color:#fff;border-color:#111}
+        .ss-print-page{break-inside:avoid}
         .ss-page{border:2px solid #111;padding:18px;margin-bottom:22px;break-inside:avoid;page-break-after:always}
-        .ss-page:last-child{page-break-after:auto}
+        .ss-print-page:last-child .ss-page:last-child{page-break-after:auto}
         .ss-header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;border-bottom:2px solid #111;padding-bottom:10px;margin-bottom:12px}
         .ss-meet-name{font-size:20px;font-weight:700;margin-bottom:8px}
         .ss-field-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px 16px}
@@ -700,10 +742,33 @@ function renderScoreSheetsPrintPage({ req, meet, items, scopeLabel }) {
         .ss-sig-line{border-bottom:1px solid #111;height:30px}
         .ss-sig-label{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#555}
         @media print{
-          @page{size:auto;margin:.4in}
+          @page{size:letter portrait;margin:.35in}
           .no-print{display:none!important}
           .page{padding:0;max-width:none}
-          .ss-page{border:none;page-break-after:always}
+          .ss-print-page{break-after:page;page-break-after:always}
+          .ss-print-page:last-child{break-after:auto;page-break-after:auto}
+          .ss-page{border:1.5px solid #111;margin:0;page-break-after:auto}
+          .ss-print-page--pair{height:10.2in;display:grid;grid-template-rows:1fr 1fr;gap:.12in}
+          .ss-print-page--pair .ss-page{padding:8px;min-height:0}
+          .ss-print-page--pair .ss-header{gap:10px;padding-bottom:5px;margin-bottom:6px}
+          .ss-print-page--pair .ss-meet-name{font-size:16px;margin-bottom:4px}
+          .ss-print-page--pair .ss-field-grid{gap:3px 12px}
+          .ss-print-page--pair .ss-field-label{font-size:7px}
+          .ss-print-page--pair .ss-field-value{font-size:11px;min-height:15px}
+          .ss-print-page--pair .ss-qr{width:56px;height:56px}
+          .ss-print-page--pair .ss-lane-table{margin-bottom:5px}
+          .ss-print-page--pair .ss-lane-table th,.ss-print-page--pair .ss-lane-table td{padding:3px 4px}
+          .ss-print-page--pair .ss-lane-table th{font-size:8px}
+          .ss-print-page--pair .ss-lane-table td{height:23px;font-size:10.5px}
+          .ss-print-page--pair .ss-lane-num{width:28px}
+          .ss-print-page--pair .ss-blank{min-width:42px}
+          .ss-print-page--pair .ss-notes{min-width:80px}
+          .ss-print-page--pair .ss-status-key{font-size:8px;margin-bottom:4px}
+          .ss-print-page--pair .ss-checkboxes{gap:10px;font-size:9px;margin-bottom:4px}
+          .ss-print-page--pair .ss-signatures{gap:10px;margin-top:2px}
+          .ss-print-page--pair .ss-sig{gap:2px}
+          .ss-print-page--pair .ss-sig-line{height:14px}
+          .ss-print-page--pair .ss-sig-label{font-size:7px}
         }
       </style>
     </head>
@@ -712,7 +777,9 @@ function renderScoreSheetsPrintPage({ req, meet, items, scopeLabel }) {
         <div class="print-controls no-print">
           <button type="button" onclick="window.print()">Print</button>
           <a href="/portal/meet/${esc(meet.id)}/blocks">Back to Block Builder</a>
-          <span>${esc(scopeLabel)} • ${items.length} page${items.length===1?'':'s'}</span>
+          <a class="${layout === 'compact' ? 'active' : ''}" href="${esc(layoutHref('compact'))}">Compact · 2 per page</a>
+          <a class="${layout === 'standard' ? 'active' : ''}" href="${esc(layoutHref('standard'))}">Standard · 1 per page</a>
+          <span>${esc(scopeLabel)} • ${items.length} score sheet${items.length===1?'':'s'} • ${printGroups.length} printed page${printGroups.length===1?'':'s'}</span>
         </div>
         ${pagesHtml || '<div class="ss-empty">No races to print for this selection.</div>'}
       </main>
@@ -1109,6 +1176,7 @@ router.get('/portal/meet/:meetId/score-sheets/print', requireRole('meet_director
   ensureAtLeastOneBlock(meet);
 
   const scope=String(req.query.scope||'meet');
+  const layout=String(req.query.layout||'compact')==='standard'?'standard':'compact';
   const ordered=orderedRaces(meet);
   let items=[];
   let scopeLabel='Entire Meet';
@@ -1126,7 +1194,7 @@ router.get('/portal/meet/:meetId/score-sheets/print', requireRole('meet_director
     items=ordered;
   }
 
-  res.send(renderScoreSheetsPrintPage({ req, meet, items, scopeLabel }));
+  res.send(renderScoreSheetsPrintPage({ req, meet, items, scopeLabel, layout }));
 });
 
 router.post('/api/meet/:meetId/blocks/add', requireRole('meet_director'), (req, res) => {
