@@ -26,7 +26,8 @@
     "@supabase/supabase-js": "^2.105.1",
     "electron-log": "^5.4.4",
     "electron-updater": "^6.8.9",
-    "express": "^4.19.2"
+    "express": "^4.19.2",
+    "pdfkit": "^0.19.1"
   },
   "devDependencies": {
     "@electron/notarize": "2.5.0",

@@ -34,6 +34,7 @@ const { completedTimeTrialEvents, ensureTimeTrialEvent, timeTrialEventTitle } = 
 const { renderTimeTrialFinalResultsHtml } = require('../services/timeTrialResultsView');
 const { generateScheduleBlocks } = require('../services/scheduleGenerator');
 const { createBackup: createDesktopBackup } = require('../services/desktopBackupService');
+const { streamScoreSheetsPdf } = require('../services/scoreSheetPdf');
 const { invalidLaneStatus, sendIfInvalid } = require('../utils/validate');
 const {
   RACE_STATUS_OPTIONS,
@@ -703,6 +704,10 @@ function renderScoreSheetsPrintPage({ req, meet, items, scopeLabel, layout = 'co
     query.set('layout', nextLayout);
     return `/portal/meet/${encodeURIComponent(String(meet.id))}/score-sheets/print?${query.toString()}`;
   };
+  const pdfQuery = new URLSearchParams(layoutQuery);
+  pdfQuery.set('layout', layout);
+  pdfQuery.set('format', 'pdf');
+  const pdfHref = `/portal/meet/${encodeURIComponent(String(meet.id))}/score-sheets/print?${pdfQuery.toString()}`;
 
   return `<!doctype html>
   <html>
@@ -774,6 +779,7 @@ function renderScoreSheetsPrintPage({ req, meet, items, scopeLabel, layout = 'co
       <main class="page">
         <div class="print-controls no-print">
           <button type="button" onclick="window.print()">Print</button>
+          <a href="${esc(pdfHref)}">Open Reliable PDF</a>
           <a href="/portal/meet/${esc(meet.id)}/blocks">Back to Block Builder</a>
           <a class="${layout === 'compact' ? 'active' : ''}" href="${esc(layoutHref('compact'))}">Compact · 2 per page</a>
           <a class="${layout === 'standard' ? 'active' : ''}" href="${esc(layoutHref('standard'))}">Standard · 1 per page</a>
@@ -1190,6 +1196,25 @@ router.get('/portal/meet/:meetId/score-sheets/print', requireRole('meet_director
     scopeLabel=block?`Block: ${block.name||'Block'}`:'Selected Block';
   } else {
     items=ordered;
+  }
+
+  if(String(req.query.format||'').toLowerCase()==='pdf') {
+    const numberById=new Map(ordered.map((race,index)=>[String(race.id),index+1]));
+    const groups=groupScoreSheetItems(items,meet,layout).map(group=>({
+      compact:group.compact,
+      sheets:group.items.map(item=>({
+        meetName:meet.meetName||'Meet',
+        date:meet.date||'',
+        raceNumber:numberById.get(String(item.id))||'',
+        division:item.groupLabel||'',
+        distance:item.distanceLabel||'',
+        stage:raceDisplayStage(item),
+        raceType:scoreSheetRaceTypeLabel(item),
+        startType:cap(item.startType||''),
+        lanes:scoreSheetLaneRows(item,meet),
+      })),
+    }));
+    return streamScoreSheetsPdf(res,{meetName:meet.meetName||'Meet',groups});
   }
 
   res.send(renderScoreSheetsPrintPage({ req, meet, items, scopeLabel, layout }));
@@ -1641,7 +1666,7 @@ router.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','j
           </form>
         </div>
         <div class="action-row" style="margin-top:10px">
-          <a class="btn2" href="/portal/meet/${meet.id}/score-sheets/print?scope=meet" target="_blank">Print Entire Meet</a>
+          <a class="btn2" href="/portal/meet/${meet.id}/score-sheets/print?scope=meet&amp;format=pdf" target="_blank">Print Entire Meet PDF</a>
         </div>
       </div>
       <div class="grid-2">
