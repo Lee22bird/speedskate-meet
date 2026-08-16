@@ -16,7 +16,52 @@ const {
   raceDayProgress,
 } = require('../services/raceDay');
 const { fireRaceAlerts, fireResultAlerts } = require('../services/raceAlerts');
-const { raceHasProtest } = require('../services/protests');
+const { raceHasProtest, protestsForMeet } = require('../services/protests');
+
+// Protest notification for the two roles that rule on them (director + tabulator):
+// a banner (Review / Later — Later hides it but the sub-tab count stays) and a
+// once-per-protest toast. Server-rendered off the newest unresolved protest; the
+// race-day page reloads on every director action, so it stays current.
+function protestNotifyHtml(meet, mode) {
+  if (mode !== 'director' && mode !== 'judges') return '';
+  const open = protestsForMeet(meet).filter(p => p.state === 'new' || p.state === 'review');
+  if (!open.length) return '';
+  const p = open[open.length - 1];
+  const meta = [p.category, p.filedByName, p.team, p.raceLabel, p.createdAt ? new Date(p.createdAt).toLocaleTimeString() : '']
+    .filter(Boolean).map(esc).join(' · ');
+  return `
+    <div id="protestBanner" class="protest-banner" data-pid="${esc(p.id)}">
+      <div class="protest-banner-body">
+        <span class="protest-banner-tag">⚑ ${open.length} unresolved protest${open.length === 1 ? '' : 's'}</span>
+        <span class="protest-banner-meta"><b>${esc(p.id)}</b> — ${meta}</span>
+      </div>
+      <div class="protest-banner-actions">
+        <a class="btn-orange btn-sm" href="/portal/meet/${esc(meet.id)}/protests">Review protest${open.length === 1 ? '' : 's'}</a>
+        <button type="button" class="btn2 btn-sm" id="protestBannerLater">Later</button>
+      </div>
+    </div>
+    <div id="protestToast" class="protest-toast" role="status" aria-live="polite">⚑ New protest filed — ${esc(p.id)}</div>
+    <style>
+      .protest-banner{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;
+        margin-bottom:14px;padding:12px 16px;border-radius:14px;background:#fff7ed;border:1px solid #fed7aa;border-left:4px solid var(--orange,#F97316)}
+      .protest-banner-tag{font-weight:800;font-size:12px;color:#c2410c;margin-right:10px}
+      .protest-banner-meta{font-size:13px;color:#7c2d12}
+      .protest-banner-actions{display:flex;gap:8px;flex:none}
+      .protest-toast{position:fixed;right:22px;bottom:22px;background:#c2410c;color:#fff;font-weight:800;
+        border-radius:999px;padding:12px 18px;box-shadow:0 10px 30px rgba(194,65,12,.35);opacity:0;transform:translateY(12px);
+        pointer-events:none;transition:opacity .18s ease,transform .18s ease;z-index:9999}
+      .protest-toast.show{opacity:1;transform:translateY(0)}
+    </style>
+    <script>(function(){
+      var b=document.getElementById('protestBanner'); if(!b) return;
+      var pid=b.getAttribute('data-pid'), key='ssmProtestSeen:'+${JSON.stringify(String(meet.id))};
+      var later=document.getElementById('protestBannerLater');
+      if(later) later.addEventListener('click',function(){ try{sessionStorage.setItem('ssmProtestLater:'+pid,'1');}catch(e){} b.style.display='none'; });
+      try{ if(sessionStorage.getItem('ssmProtestLater:'+pid)==='1') b.style.display='none'; }catch(e){}
+      var t=document.getElementById('protestToast'); var seen=''; try{seen=sessionStorage.getItem(key)||'';}catch(e){}
+      if(t && seen!==pid){ t.classList.add('show'); setTimeout(function(){t.classList.remove('show');},2600); try{sessionStorage.setItem(key,pid);}catch(e){} }
+    })();</script>`;
+}
 const { skaterAvatarHtml } = require('../services/avatarDisplay');
 const { renderJudgeBoard, renderDirectorBoard } = require('../views/raceDayView');
 const { resultsThemeCss } = require('../views/resultsTheme');
@@ -1589,7 +1634,7 @@ router.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','j
   let body=`<style>
     .merge-live-banner{background:#f5f3ff;border:1px solid #ddd6fe;border-left:4px solid #7c3aed;color:#5b21b6;border-radius:8px;padding:8px 12px;font-size:13px;line-height:1.35;margin-bottom:10px}
     .merge-div-tag{display:inline-block;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;color:#6d28d9;background:#ede9fe;border-radius:4px;padding:1px 6px;margin-left:6px;vertical-align:middle}
-  </style><div class="page-header"><h1>Race Day</h1><div class="sub">${esc(meet.meetName)}</div></div>${raceDaySubTabs(meet,mode)}`;
+  </style><div class="page-header"><h1>Race Day</h1><div class="sub">${esc(meet.meetName)}</div></div>${raceDaySubTabs(meet,mode)}${protestNotifyHtml(meet,mode)}`;
 
   // Redirect judges/announcers away from director tab
   if(mode==='director'&&!hasRole(req.user,'meet_director')&&!hasRole(req.user,'super_admin')) {

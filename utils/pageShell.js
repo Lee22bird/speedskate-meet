@@ -1,5 +1,6 @@
 const { esc, cap } = require('./html');
 const { raceDisplayStage } = require('../services/raceDay');
+const { unresolvedProtestCount } = require('../services/protests');
 
 // ── Sponsor line ─────────────────────────────────────────────────────────────
 function sponsorLineHtml(sponsor) {
@@ -131,12 +132,17 @@ function meetTabs(meet, active) {
 }
 
 function raceDaySubTabs(meet,active) {
+  // Only the two roles that can act on protests carry the unresolved count.
+  const protestCount = unresolvedProtestCount(meet);
+  const badge = k => (protestCount && (k==='director'||k==='judges'))
+    ? `<span class="sub-tab-badge" title="${protestCount} unresolved protest${protestCount===1?'':'s'}">${protestCount}</span>` : '';
   return `<div class="sub-tabs">${[
     ['director','Director',`/portal/meet/${meet.id}/race-day/director`],
     ['judges','Tabulator',`/portal/meet/${meet.id}/race-day/judges`],
     ['announcer','Announcer',`/portal/meet/${meet.id}/race-day/announcer`],
     ['live','Referee',`/portal/meet/${meet.id}/race-day/live`],
-  ].map(([k,label,href])=>`<a class="sub-tab ${active===k?'active':''}" href="${href}">${label}</a>`).join('')}</div>`;
+  ].map(([k,label,href])=>`<a class="sub-tab ${active===k?'active':''}" href="${href}">${label}${badge(k)}</a>`).join('')}
+    <style>.sub-tab-badge{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;margin-left:7px;border-radius:999px;background:#ef4444;color:#fff;font-size:11px;font-weight:800;vertical-align:middle}</style></div>`;
 }
 
 function pageShell({ title, bodyHtml, user, meet, activeTab, description }) {
