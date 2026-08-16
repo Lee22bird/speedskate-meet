@@ -127,6 +127,7 @@ const { renderCoachRelaysView, formatRelayDeadline } = require('./views/coachRel
 const { RELAY_DIVISION_BY_ID } = require('./services/relayDivisions');
 const { renderBlockBuilderView } = require('./views/blockBuilderView');
 const { renderMeetBuilderView } = require('./views/meetBuilderView');
+const { renderDqReportView } = require('./views/dqReportView');
 const { renderOpenBuilderView } = require('./views/openBuilderView');
 const { renderQuadBuilderView } = require('./views/quadBuilderView');
 const { renderRelayBuilderView } = require('./views/relayBuilderView');
@@ -2307,14 +2308,7 @@ app.get('/portal/meet/:meetId/results/dq-report', requireRole('meet_director','j
   const rows = statusRowsForMeet(meet, { onlyDisqualifications: true });
   const location = meetRinkLabel(req.db, meet);
   const dateLine = meetDateLabel(meet);
-  res.send(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Officials DQ Report - ${esc(meet.meetName)}</title>
-    <style>*{box-sizing:border-box}body{margin:0;background:#fff;color:#111;font-family:Arial,sans-serif;font-size:11px;line-height:1.35}.page{padding:18px;max-width:1100px;margin:0 auto}.controls{display:flex;gap:8px;margin-bottom:14px}.controls button,.controls a{border:1px solid #aaa;background:#fff;color:#111;border-radius:4px;padding:7px 10px;text-decoration:none;cursor:pointer}.header{border-bottom:2px solid #111;padding-bottom:9px;margin-bottom:14px}h1{font-size:22px;margin:0 0 4px}.meta{color:#444}table{width:100%;border-collapse:collapse}th,td{border:1px solid #bbb;padding:6px;text-align:left;vertical-align:top}th{background:#f1f5f9;font-size:9px;text-transform:uppercase;letter-spacing:.04em}.notes{white-space:pre-wrap;min-width:180px}@media print{@page{margin:.4in}.controls{display:none}.page{padding:0}}</style></head><body><main class="page">
-    <div class="controls"><button type="button" onclick="window.print()">Print</button><a href="/portal/meet/${esc(meet.id)}/results">Back To Results</a></div>
-    <header class="header"><h1>${esc(meet.meetName)} - Officials Disqualification Report</h1><div class="meta">${esc(dateLine || '')}${location ? ` - ${esc(location)}` : ''}</div></header>
-    <table><thead><tr><th>Race</th><th>Skater</th><th>Team</th><th>DQ Category</th><th>Rule Reference</th><th>Official Notes</th><th>Timestamp</th><th>Recorded By</th></tr></thead><tbody>
-      ${rows.map(row => `<tr><td>${esc(row.raceLabel)}</td><td>${esc(row.skaterName)}</td><td>${esc(row.team)}</td><td><strong>${esc(row.statusLabel)}</strong></td><td>${esc(row.dqRuleReference)}</td><td class="notes">${esc(row.dqOfficialNotes)}</td><td>${esc(row.dqTimestamp ? new Date(row.dqTimestamp).toLocaleString() : '')}</td><td>${esc(row.dqRecordedBy)}</td></tr>`).join('') || '<tr><td colspan="8">No disqualifications recorded.</td></tr>'}
-    </tbody></table>
-  </main></body></html>`);
+  res.send(renderDqReportView({ meet, rows, dateLine, location }));
 });
 
 app.get('/meet/:meetId/alerts', (req, res) => {
