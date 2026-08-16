@@ -134,6 +134,7 @@ const { renderQuadBuilderView } = require('./views/quadBuilderView');
 const { renderRelayBuilderView } = require('./views/relayBuilderView');
 const { renderRegisteredView } = require('./views/registeredView');
 const { renderCheckinView } = require('./views/checkinView');
+const { renderHomeView } = require('./views/homeView');
 
 const createPublicRoutes = require('./routes/publicRoutes');
 const createAdminRoutes = require('./routes/adminRoutes');
@@ -431,6 +432,7 @@ function requireRole(...roles) {
 // ── Public routes ─────────────────────────────────────────────────────────────
 
 app.get('/', (req, res) => {
+  const db = loadDb();
   const data = getSessionUser(req);
   const portalLink = data ? '/portal' : '/admin/login';
 
@@ -438,68 +440,7 @@ app.get('/', (req, res) => {
     title: 'Home',
     description: 'SpeedSkateMeet is the all-in-one platform for inline speed skating meets. Registration, race building, block scheduling, live scoring, and race-day operations.',
     user: data?.user || null,
-    bodyHtml: `
-    <section class="home-hero">
-      <img class="home-hero-bg" src="/public/images/home/hero-banner.jpg" alt="" />
-      <div class="home-hero-wash"></div>
-
-      <div class="home-hero-inner">
-        <img src="/public/images/branding/ssm-logo.png" alt="SpeedSkateMeet.com" class="home-hero-logo" />
-
-        <div class="home-hero-kicker">Inline speed skating meet software</div>
-        <h1 class="home-hero-title">Run meets. Build races. Go live.</h1>
-        <p class="home-hero-copy">
-          Registration, race builders, manual block scheduling, live results, check-in,
-          standings, and race-day tools built specifically for inline speed skating.
-        </p>
-
-        <div class="home-hero-actions">
-          <a class="btn-orange home-hero-primary" href="/meets">Find a Meet</a>
-          <a class="btn2 btn-white" href="/live">Live Race Day</a>
-          <a class="btn2 btn-white" href="${portalLink}">${data ? 'Open Portal' : 'Login'}</a>
-        </div>
-
-        <div class="home-hero-pills">
-          <span>Meet Builder</span>
-          <span>Race Day</span>
-          <span>Live Results</span>
-          <span>Text Alerts</span>
-        </div>
-      </div>
-    </section>
-
-    <div class="feature-grid">
-      <a class="feature-card feature-card-link" href="/live">
-        <img class="feature-card-bg" src="/public/images/home/feature-card-dark.jpg" alt="" />
-        <div class="feature-card-overlay"></div>
-        <div class="feature-card-content">
-          <div class="feature-icon-emoji">🏆</div>
-          <div class="feature-title">Live Results</div>
-          <div class="feature-desc">Follow along in real time. Race-by-race results and standings updated the moment a race closes.</div>
-          <div class="feature-cta">Watch Live →</div>
-        </div>
-      </a>
-      <a class="feature-card feature-card-link" href="${portalLink}">
-        <img class="feature-card-bg" src="/public/images/home/feature-card-gold.jpg" alt="" />
-        <div class="feature-card-overlay"></div>
-        <div class="feature-card-content">
-          <div class="feature-icon-emoji">📋</div>
-          <div class="feature-title">Meet Management</div>
-          <div class="feature-desc">Build meets from scratch with registration, race builders, manual block scheduling, check-in, and standings.</div>
-          <div class="feature-cta">Go to Portal →</div>
-        </div>
-      </a>
-      <a class="feature-card feature-card-link" href="/rinks">
-        <img class="feature-card-bg" src="/public/images/home/feature-card-light.jpg" alt="" />
-        <div class="feature-card-overlay"></div>
-        <div class="feature-card-content">
-          <div class="feature-icon-emoji">📍</div>
-          <div class="feature-title">Find a Rink</div>
-          <div class="feature-desc">Discover inline speed skating venues and upcoming meets near you. Addresses, contact info, and schedules all in one place.</div>
-          <div class="feature-cta">Browse Rinks →</div>
-        </div>
-      </a>
-    </div>`
+    bodyHtml: renderHomeView({ db, portalLink }),
   }));
 });
 
