@@ -380,6 +380,350 @@ function renderJudgeBoard({
     ${renderRelayEligibleSkatersHtml ? renderRelayEligibleSkatersHtml(meet, current) : ''}`;
 }
 
+// ── Director control board ───────────────────────────────────────────────────
+// Replaces the six stacked utility cards on the Director tab. The race pointer
+// owns the screen; Correction / Re-Randomize / Score Sheets drop to a strip at
+// the bottom. Under 1024px the whole thing becomes the trackside layout — same
+// page, bigger targets, one Advance button.
+//
+// Every existing hook is preserved verbatim:
+//   JSON APIs  /api/meet/:id/race-day/{set-current,step,toggle-pause,unlock-race}
+//              via setCurrentRace() / moveCurrent(±1) / pauseMeet() / unlockRace()
+//   GET        /portal/meet/:id/race-day/correction   (raceId, closed races only)
+//   POST       /portal/meet/:id/race-day/re-randomize-lanes (raceId, confirm)
+//   GET        /portal/meet/:id/score-sheets/print    (raceId + hidden scope=race)
+//              and ?scope=meet&format=pdf
+//   Links      /meet/:id/tv, /portal/meet/:id/time-trials/:id?mode=director
+//   Flashes    ?lanesRandomized=  and  ?error=
+function renderDirectorBoard({
+  meet,
+  info,
+  current,
+  currentPackLanes = [],
+  currentPackLabel = '',
+  nextPackLabel = '',
+  currentMerged = false,
+  progress = { completed: 0, total: 0 },
+  regMap = new Map(),
+  query = {},
+  isTimeTrialItem,
+  raceDayItemLabel,
+  raceDayItemSub,
+  raceStatusLabel,
+  sponsorLineHtml,
+}) {
+  const total = Number(progress.total) || 0;
+  const done = Number(progress.completed) || 0;
+  const pct = total ? Math.round((done / total) * 100) : 0;
+  const raceNo = Math.max((info.idx || 0) + 1, 1);
+  const currentIsTT = !!(current && isTimeTrialItem(current));
+  const nextLabel = info.next ? (nextPackLabel || info.next.groupLabel) : '';
+  const nextSub = info.next ? raceDayItemSub(info.next) : '';
+
+  const raceOptions = info.ordered
+    .map((r, idx) => `<option value="${esc(r.id)}" ${r.id === meet.currentRaceId ? 'selected' : ''}>${idx + 1}. ${esc(raceDayItemLabel(r))}</option>`)
+    .join('');
+
+  const optionRow = (r, idx) =>
+    `<option value="${esc(r.id)}">Race ${idx + 1} — ${esc(r.groupLabel)} — ${esc(cap(r.division))} — ${esc(r.distanceLabel)} — ${esc(raceDisplayStage(r))}</option>`;
+
+  const closedOptions = info.ordered
+    .map((r, idx) => ({ r, idx }))
+    .filter(({ r }) => !isTimeTrialItem(r) && String(r.status || '') === 'closed')
+    .map(({ r, idx }) => optionRow(r, idx))
+    .join('');
+
+  const randomizeOptions = info.ordered
+    .map((r, idx) => ({ r, idx }))
+    .filter(({ r }) => !isTimeTrialItem(r) && !r.isRelayRace)
+    .map(({ r, idx }) => optionRow(r, idx))
+    .join('');
+
+  const sheetOptions = info.ordered.map((r, idx) => optionRow(r, idx)).join('');
+
+  const chips = current && !currentIsTT ? [
+    current.blockName || 'Unassigned',
+    cap(current.division),
+    raceDisplayStage(current),
+    `${cap(current.startType)} Start`,
+  ] : currentIsTT ? [
+    current.blockName || 'Unassigned',
+    '⏱ Time Trial',
+    current.distanceLabel || '100m',
+  ] : [];
+
+  const laneSheet = currentIsTT ? `
+    <div class="rdd-tt">
+      <p class="rdd-tt-note">Standalone queue event — manual time entry and live leaderboards.</p>
+      <a class="btn-orange" href="/portal/meet/${esc(meet.id)}/time-trials/${esc(current.id)}?mode=director">Open Time Trial Event</a>
+    </div>` : current ? `
+    ${currentMerged ? `<div class="rdd-merge">🔗 Racing together as one pack — <b>${esc(currentPackLabel)}</b>. Each division is scored separately; enter places on each race in the Tabulator tab.</div>` : ''}
+    <div class="rdd-lane-list">
+      ${currentPackLanes.map(l => {
+        const reg = regMap.get(Number(l.registrationId));
+        const result = esc(current.resultsMode === 'times' ? l.time : l.place);
+        const statusText = l.status ? esc(raceStatusLabel(l.status)) : '';
+        const sponsor = sponsorLineHtml(reg?.sponsor || '').replace('sponsor-line', 'rdd-lane-sponsor');
+        return `<div class="rdd-lane">
+          <span class="rdd-lane-n">L${esc(l.lane)}</span>
+          <span class="rdd-helmet">${l.helmetNumber ? esc(l.helmetNumber) : '—'}</span>
+          <span class="rdd-lane-who">
+            <b>${esc(l.skaterName || '')}${l._div ? ` <span class="merge-div-tag">${esc(l._div)}</span>` : ''}</b>
+            ${l.team ? `<em>${esc(l.team)}</em>` : ''}
+            ${sponsor}
+          </span>
+          ${statusText ? `<span class="rdd-lane-status">${statusText}</span>` : (result ? `<span class="rdd-lane-result">${result}</span>` : '')}
+        </div>`;
+      }).join('') || '<div class="rdd-empty">No skaters entered yet.</div>'}
+    </div>` : '<div class="rdd-empty">No race selected yet.</div>';
+
+  return `
+<style>
+  .rdd{--o:#F97316;--n:#13213a}
+  .rdd-flash{padding:12px 16px;border-radius:14px;font-weight:700;font-size:14px;margin-bottom:14px}
+  .rdd-flash.ok{background:#ecfdf5;border:1px solid #6ee7b7;color:#047857}
+  .rdd-flash.bad{background:#fef2f2;border:1px solid #fca5a5;color:#b42318}
+
+  .rdd-cmd{border-radius:22px;background:var(--n);padding:22px 24px 18px;box-shadow:var(--shadow-lg);margin-bottom:16px;color:#fff}
+  .rdd-cmd-top{display:flex;align-items:flex-start;gap:26px;flex-wrap:wrap}
+  .rdd-now{flex:1;min-width:300px}
+  .rdd-kickers{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:7px}
+  .rdd-onair{display:inline-flex;align-items:center;gap:7px;padding:5px 11px;border-radius:999px;background:rgba(239,68,68,.18);border:1px solid rgba(239,68,68,.45);font-weight:800;font-size:11px;letter-spacing:.09em;color:#FCA5A5}
+  .rdd-onair i{width:7px;height:7px;border-radius:50%;background:#ef4444;animation:rddPulse 1.6s ease-in-out infinite}
+  @keyframes rddPulse{0%,100%{opacity:1}50%{opacity:.35}}
+  .rdd-raceno{font-weight:800;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--o)}
+  .rdd-title{font-size:40px;font-weight:800;letter-spacing:-.03em;line-height:1.05;color:#fff}
+  .rdd-sub{font-size:15px;font-weight:600;color:rgba(255,255,255,.68);margin-top:4px}
+  .rdd-chips{display:flex;gap:7px;flex-wrap:wrap;margin-top:11px}
+  .rdd-chip{padding:5px 11px;border-radius:999px;background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.18);font-weight:700;font-size:12px;color:rgba(255,255,255,.88)}
+  .rdd-chip.state{background:rgba(56,189,248,.16);border-color:rgba(56,189,248,.45);color:#7DD3FC}
+  .rdd-chip.merged{background:rgba(124,58,237,.20);border-color:rgba(167,139,250,.5);color:#DDD6FE}
+
+  .rdd-ctrl{display:flex;flex-direction:column;gap:10px;min-width:330px}
+  .rdd-ctrl-row{display:flex;gap:10px;flex-wrap:wrap}
+  .rdd-b{display:inline-flex;align-items:center;justify-content:center;border:0;cursor:pointer;font-family:'Inter',ui-sans-serif,system-ui,sans-serif;white-space:nowrap;text-decoration:none}
+  .rdd-b-prev{min-height:58px;padding:0 20px;border-radius:14px;background:rgba(255,255,255,.10);border:1.5px solid rgba(255,255,255,.22);color:#fff;font-weight:800;font-size:15px}
+  .rdd-b-next{flex:1;min-height:58px;padding:0 26px;border-radius:14px;background:var(--o);color:#fff;font-weight:800;font-size:17px;box-shadow:0 8px 22px rgba(249,115,22,.40)}
+  .rdd-b-next span{display:block;font-weight:600;font-size:12.5px;opacity:.85;margin-top:1px}
+  .rdd-b-sm{flex:1;min-height:44px;padding:0 16px;border-radius:12px;background:rgba(255,255,255,.08);border:1.5px solid rgba(255,255,255,.20);color:#fff;font-weight:700;font-size:13.5px}
+  .rdd-b-tv{background:rgba(56,189,248,.16);border-color:rgba(56,189,248,.45);color:#7DD3FC}
+  .rdd-b-unlock{background:rgba(239,68,68,.16);border-color:rgba(239,68,68,.45);color:#FCA5A5}
+  .rdd-b:hover{filter:brightness(1.08)}
+
+  .rdd-cmd-foot{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:18px;padding-top:16px;border-top:1px solid rgba(255,255,255,.12)}
+  .rdd-prog{flex:1;min-width:240px}
+  .rdd-bar{height:8px;border-radius:999px;background:rgba(255,255,255,.12);overflow:hidden}
+  .rdd-bar i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,#F97316,#fbbf24)}
+  .rdd-prog-label{font-weight:600;font-size:12.5px;color:rgba(255,255,255,.62);margin-top:7px}
+  .rdd-staging{padding:10px 16px;border-radius:14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14)}
+  .rdd-staging-k{font-weight:800;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:#FCD34D}
+  .rdd-staging-v{font-weight:750;font-size:15px;color:#fff;margin-top:2px}
+
+  .rdd-grid{display:grid;grid-template-columns:1.4fr .6fr;gap:16px;align-items:start}
+  .rdd-panel{border-radius:20px;background:var(--card);border:1px solid var(--border);box-shadow:var(--shadow-sm);overflow:hidden}
+  .rdd-panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:16px 18px;border-bottom:1px solid var(--border)}
+  .rdd-panel-title{font-size:21px;font-weight:800;letter-spacing:-.02em;color:var(--navy)}
+  .rdd-panel-note{font-weight:600;font-size:13px;color:var(--muted)}
+  .rdd-lane{display:grid;grid-template-columns:34px 46px 1fr auto;align-items:center;gap:14px;padding:13px 16px;border-bottom:1px solid var(--border);background:#fff}
+  .rdd-lane:nth-child(even){background:var(--card)}
+  .rdd-lane:last-child{border-bottom:0}
+  .rdd-lane-n{font-weight:700;font-size:13px;color:var(--muted)}
+  .rdd-helmet{display:flex;align-items:center;justify-content:center;height:36px;border-radius:9px;background:var(--navy);color:#fff;font-weight:800;font-size:17px}
+  .rdd-lane-who{min-width:0;display:flex;flex-direction:column}
+  .rdd-lane-who b{font-weight:700;font-size:17px;color:var(--navy);line-height:1.3}
+  .rdd-lane-who em{font-style:normal;font-weight:500;font-size:13px;color:var(--muted)}
+  .rdd-lane-sponsor{font-size:12.5px;font-weight:600;color:var(--sky2);margin-top:2px}
+  .rdd-lane-result{font-size:20px;font-weight:800;color:var(--navy)}
+  .rdd-lane-status{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--red)}
+  .rdd-empty,.rdd-tt-note{padding:20px 18px;font-weight:600;color:var(--muted)}
+  .rdd-tt{padding:18px}
+  .rdd-tt-note{padding:0 0 14px}
+  .rdd-merge{margin:14px 18px 0;padding:12px 14px;border-radius:12px;background:#faf5ff;border:1px solid #d8b4fe;font-size:13px;font-weight:600;color:#6d28d9}
+
+  .rdd-side{display:flex;flex-direction:column;gap:14px}
+  .rdd-card{padding:16px 18px;border-radius:20px;background:#fff;border:1px solid var(--border);box-shadow:var(--shadow-sm)}
+  .rdd-card-k{font-weight:700;font-size:11.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin-bottom:7px}
+  .rdd-card-t{font-size:17px;font-weight:800;letter-spacing:-.02em;color:var(--navy);margin-bottom:11px}
+  .rdd-note{font-weight:500;font-size:12.5px;line-height:1.5;color:var(--muted);margin-top:9px}
+  .rdd-queue{display:flex;flex-direction:column;gap:8px}
+  .rdd-q{display:grid;grid-template-columns:34px 1fr;align-items:center;gap:12px;padding:12px 14px;border-radius:12px;background:var(--panel);border:1px solid var(--border)}
+  .rdd-q-n{font-weight:800;font-size:15px;color:var(--muted);text-align:center}
+  .rdd-q-t{font-weight:700;font-size:14.5px;color:var(--navy)}
+  .rdd-q-m{font-weight:500;font-size:12.5px;color:var(--muted)}
+
+  .rdd-tools{margin-top:18px}
+  .rdd-tools>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;min-height:52px;padding:0 18px;border-radius:16px;background:#fff;border:1px solid var(--border);font-weight:800;font-size:14px;color:var(--navy)}
+  .rdd-tools>summary::-webkit-details-marker{display:none}
+  .rdd-tools>summary em{font-style:normal;font-weight:500;font-size:12.5px;color:var(--muted);flex:1}
+  .rdd-tools-head{display:flex;align-items:baseline;gap:10px;margin-bottom:10px}
+  .rdd-tools-head b{font-weight:700;font-size:11.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+  .rdd-tools-head span{font-weight:500;font-size:12.5px;color:#94a3b8}
+  .rdd-toolgrid{display:flex;gap:12px;flex-wrap:wrap}
+  .rdd-tool{flex:1;min-width:250px;display:flex;flex-direction:column;gap:9px;padding:16px 18px;border-radius:16px;background:#fff;border:1px solid var(--border);border-top:3px solid var(--orange)}
+  .rdd-tool.sky{border-top-color:var(--sky2)}
+  .rdd-tool.navy{border-top-color:var(--navy)}
+  .rdd-tool-t{font-weight:800;font-size:15px;color:var(--navy)}
+  .rdd-tool-d{font-weight:500;font-size:12.5px;line-height:1.5;color:var(--muted)}
+  .rdd-tool form{display:flex;flex-direction:column;gap:9px;margin:0}
+  .rdd-meetpdf{margin-top:10px;font-weight:500;font-size:12.5px;color:#94a3b8}
+
+  /* Desktop keeps the tools strip open — the summary is the mobile affordance. */
+  @media(min-width:1025px){
+    .rdd-tools>summary{display:none}
+    .rdd-tools>.rdd-toolbody{display:block}
+  }
+  /* ── Trackside: tablet at the rail, one thumb ── */
+  @media(max-width:1024px){
+    .rdd-title{font-size:46px;letter-spacing:-.035em}
+    .rdd-ctrl{min-width:0}
+    .rdd-ctrl-row{flex-wrap:nowrap}
+    .rdd-b-prev{min-height:72px;min-width:72px;padding:0 22px;border-radius:18px;font-size:22px}
+    .rdd-b-next{min-height:72px;border-radius:18px;font-size:20px;flex-direction:column;gap:0}
+    .rdd-b-sm{min-height:52px}
+    .rdd-grid{grid-template-columns:1fr}
+    .rdd-lane{grid-template-columns:44px 62px 1fr auto;gap:18px;padding:17px 20px}
+    .rdd-helmet{height:46px;border-radius:11px;font-size:22px}
+    .rdd-lane-who b{font-size:22px}
+    .rdd-lane-who em{font-size:14px}
+    .rdd-tools>.rdd-toolbody{padding-top:12px}
+  }
+  @media(max-width:700px){
+    .rdd-cmd{padding:18px 16px 16px}
+    .rdd-title{font-size:34px}
+    .rdd-lane{grid-template-columns:34px 46px 1fr;gap:12px;padding:14px}
+    .rdd-helmet{height:38px;font-size:18px}
+    .rdd-lane-who b{font-size:18px}
+    .rdd-lane-result,.rdd-lane-status{grid-column:3;text-align:left}
+  }
+</style>
+<div class="rdd">
+  ${query.lanesRandomized ? '<div class="rdd-flash ok">🎲 Lanes re-randomized for that race. Heats, race order, and blocks were not changed.</div>' : ''}
+  ${query.error ? `<div class="rdd-flash bad">${esc(query.error)}</div>` : ''}
+
+  <div class="rdd-cmd">
+    <div class="rdd-cmd-top">
+      <div class="rdd-now">
+        <div class="rdd-kickers">
+          <span class="rdd-onair"><i></i>ON THE TRACK</span>
+          <span class="rdd-raceno">${current ? `Race ${raceNo} of ${info.ordered.length}` : 'No race selected'}</span>
+        </div>
+        <div class="rdd-title">${current ? esc(currentPackLabel || current.groupLabel) : '—'}</div>
+        ${current ? `<div class="rdd-sub">${esc(raceDayItemSub(current))}</div>` : ''}
+        <div class="rdd-chips">
+          ${chips.map(c => `<span class="rdd-chip">${esc(c)}</span>`).join('')}
+          ${current && !currentIsTT ? `<span class="rdd-chip state">${esc(current.status || '')}</span>` : ''}
+          ${currentMerged ? '<span class="rdd-chip merged">🔗 together</span>' : ''}
+          ${current && current.isOpenRace ? '<span class="rdd-chip">🏁 Open</span>' : ''}
+          ${current && current.isQuadRace ? '<span class="rdd-chip">🛼 Quad</span>' : ''}
+        </div>
+      </div>
+      <div class="rdd-ctrl">
+        <div class="rdd-ctrl-row">
+          <button class="rdd-b rdd-b-prev" type="button" onclick="moveCurrent(-1)">←<span class="rdd-prev-word"> Previous</span></button>
+          <button class="rdd-b rdd-b-next" type="button" onclick="moveCurrent(1)">${info.next ? `Advance to race ${raceNo + 1} →` : 'Next race →'}${nextLabel ? `<span>${esc(nextLabel)}${nextSub ? ' · ' + esc(nextSub) : ''}</span>` : ''}</button>
+        </div>
+        <div class="rdd-ctrl-row">
+          <button class="rdd-b rdd-b-sm" type="button" onclick="pauseMeet()">${meet.raceDayPaused ? '▶ Resume' : '⏸ Pause meet'}</button>
+          <a class="rdd-b rdd-b-sm rdd-b-tv" href="/meet/${meet.id}/tv" target="_blank">📺 TV display</a>
+          ${current && !currentIsTT && current.status === 'closed' ? `<button class="rdd-b rdd-b-sm rdd-b-unlock" type="button" onclick="unlockRace('${esc(current.id)}')">Unlock race</button>` : ''}
+        </div>
+      </div>
+    </div>
+    <div class="rdd-cmd-foot">
+      <div class="rdd-prog">
+        <div class="rdd-bar"><i style="width:${pct}%"></i></div>
+        <div class="rdd-prog-label">${done} of ${total} races complete · ${meet.raceDayPaused ? '⏸ Paused' : '▶ Running'}</div>
+      </div>
+      ${info.next ? `<div class="rdd-staging"><div class="rdd-staging-k">In staging</div><div class="rdd-staging-v">${esc(nextLabel)}${nextSub ? ' · ' + esc(nextSub) : ''}</div></div>` : ''}
+    </div>
+  </div>
+
+  <div class="rdd-grid">
+    <div class="rdd-panel">
+      <div class="rdd-panel-head">
+        <div class="rdd-panel-title">${currentIsTT ? 'Time Trial event' : 'Lane sheet'}</div>
+        ${currentIsTT ? '' : `<div class="rdd-panel-note">${currentPackLanes.filter(l => l.skaterName).length} skaters · results post from the Tabulator tab</div>`}
+      </div>
+      ${laneSheet}
+    </div>
+
+    <div class="rdd-side">
+      <div class="rdd-card">
+        <div class="rdd-card-k">Jump to race</div>
+        <select onchange="setCurrentRace(this.value)">${raceOptions}</select>
+        <div class="rdd-note">Judges stay locked to the live race. Jumping moves the whole meet pointer.</div>
+      </div>
+      <div class="rdd-card">
+        <div class="rdd-card-t">Coming up</div>
+        <div class="rdd-queue">
+          ${info.coming.map((r, i) => `<div class="rdd-q">
+            <span class="rdd-q-n">${info.idx + i + 3}</span>
+            <div>
+              <div class="rdd-q-t">${esc(r.groupLabel)}</div>
+              <div class="rdd-q-m">${isTimeTrialItem(r) ? 'Time Trial' : esc(cap(r.division))} · ${esc(r.distanceLabel)}</div>
+            </div>
+          </div>`).join('') || '<div class="rdd-q-m">Nothing queued.</div>'}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <details class="rdd-tools">
+    <summary>Director tools <em>Correction · Re-randomize lanes · Score sheets</em> →</summary>
+    <div class="rdd-toolbody">
+      <div class="rdd-tools-head">
+        <b>Director tools</b>
+        <span>Occasional — they no longer outrank the race pointer</span>
+      </div>
+      <div class="rdd-toolgrid">
+        <div class="rdd-tool">
+          <div class="rdd-tool-t">✏️ Correction Mode</div>
+          <div class="rdd-tool-d">Fix a closed race without rewinding the meet, advancing racers, or rebuilding later races.</div>
+          <form method="GET" action="/portal/meet/${meet.id}/race-day/correction">
+            <select name="raceId" required>
+              <option value="">Select completed race…</option>
+              ${closedOptions}
+            </select>
+            <button class="btn-orange" type="submit">Open correction</button>
+          </form>
+        </div>
+        <div class="rdd-tool sky">
+          <div class="rdd-tool-t">🎲 Re-Randomize Lanes</div>
+          <div class="rdd-tool-d">Redraw lane assignments for one race only. Heats, race order, and block placement are untouched.</div>
+          <form method="POST" action="/portal/meet/${meet.id}/race-day/re-randomize-lanes" onsubmit="return confirm('Re-randomize lanes for this race? This only changes lane numbers — heats, order, and blocks stay the same.');">
+            <select name="raceId" required>
+              <option value="">Select race…</option>
+              ${randomizeOptions}
+            </select>
+            <button class="btn-sky" type="submit">🎲 Re-randomize lanes</button>
+          </form>
+        </div>
+        <div class="rdd-tool navy">
+          <div class="rdd-tool-t">🖨 Race Score Sheets</div>
+          <div class="rdd-tool-d">Printable paper worksheets for judges, referees, and tabulators — blank Place/Status/Points/Notes.</div>
+          <form method="GET" action="/portal/meet/${meet.id}/score-sheets/print" target="_blank">
+            <select name="raceId">
+              <option value="">Select race…</option>
+              ${sheetOptions}
+            </select>
+            <input type="hidden" name="scope" value="race" />
+            <button class="btn2" type="submit">Print selected race</button>
+          </form>
+        </div>
+      </div>
+      <div class="rdd-meetpdf"><a href="/portal/meet/${meet.id}/score-sheets/print?scope=meet&amp;format=pdf" target="_blank">Print entire meet PDF →</a></div>
+    </div>
+  </details>
+</div>
+<script>
+  async function setCurrentRace(raceId){const r=await fetch('/api/meet/${meet.id}/race-day/set-current',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({raceId})});if(r.ok) location.reload();}
+  async function moveCurrent(dir){const r=await fetch('/api/meet/${meet.id}/race-day/step',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({direction:dir})});if(r.ok) location.reload();}
+  async function pauseMeet(){const r=await fetch('/api/meet/${meet.id}/race-day/toggle-pause',{method:'POST'});if(r.ok) location.reload();}
+  async function unlockRace(raceId){const r=await fetch('/api/meet/${meet.id}/race-day/unlock-race',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({raceId})});if(r.ok) location.reload();}
+</script>`;
+}
+
 module.exports = {
   renderJudgeBoard,
+  renderDirectorBoard,
 };

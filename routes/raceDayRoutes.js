@@ -18,7 +18,7 @@ const {
 const { fireRaceAlerts, fireResultAlerts } = require('../services/raceAlerts');
 const { raceHasProtest } = require('../services/protests');
 const { skaterAvatarHtml } = require('../services/avatarDisplay');
-const { renderJudgeBoard } = require('../views/raceDayView');
+const { renderJudgeBoard, renderDirectorBoard } = require('../views/raceDayView');
 const { resultsThemeCss } = require('../views/resultsTheme');
 const {
   STANDARD_POINTS, computeMeetStandings, computeQuadStandings, computeOpenResults,
@@ -1599,139 +1599,13 @@ router.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','j
     return res.redirect(`/portal/meet/${meet.id}/race-day/announcer`);
   }
   if(mode==='director') {
-    const raceOptions=info.ordered.map((r,idx)=>`<option value="${r.id}" ${r.id===meet.currentRaceId?'selected':''}>${idx+1}. ${esc(raceDayItemLabel(r))}</option>`).join('');
-    body+=`
-      <div class="stat-grid" style="margin-bottom:16px">
-        <div class="stat-card orange"><div class="stat-label">Current Event</div><div class="stat-value">${current?esc(currentPackLabel):'—'}${currentMerged?' <span class="chip chip-purple" style="font-size:11px;vertical-align:middle">🔗 together</span>':''}</div><div class="stat-sub">${current?esc(raceDayItemSub(current)):''}</div></div>
-        <div class="stat-card yellow"><div class="stat-label">In Staging</div><div class="stat-value">${info.next?esc(nextPackLabel):'—'}</div><div class="stat-sub">${info.next?esc(raceDayItemSub(info.next)):''}</div></div>
-        <div class="stat-card navy"><div class="stat-label">Progress</div><div class="stat-value">${progress.completed} <span style="font-size:18px;opacity:.6">/ ${progress.total}</span></div><div class="stat-sub">${meet.raceDayPaused?'⏸ Paused':'▶ Running'}</div></div>
-      </div>
-      <div class="card" style="margin-bottom:16px">
-        <div class="form-grid cols-3">
-          <div><label>Set Current Race</label><select onchange="setCurrentRace(this.value)">${raceOptions}</select></div>
-          <div class="action-row" style="align-self:flex-end">
-            <button class="btn2" onclick="moveCurrent(-1)">← Previous</button>
-            <button class="btn-orange" onclick="moveCurrent(1)">Next →</button>
-          </div>
-          <div class="action-row" style="align-self:flex-end">
-            <button class="btn2" onclick="pauseMeet()">${meet.raceDayPaused?'▶ Resume':'⏸ Pause'}</button>
-            <a class="btn-sky" href="/meet/${meet.id}/tv" target="_blank">📺 TV Display</a>
-            ${current&&!isTimeTrialItem(current)&&current.status==='closed'?`<button class="btn-danger" onclick="unlockRace('${current.id}')">Unlock Race</button>`:''}
-          </div>
-        </div>
-      </div>
-      <div class="card" style="margin-bottom:16px;border-left:5px solid var(--orange)">
-        <div class="row between center">
-          <div>
-            <h2 style="margin:0">Correction Mode</h2>
-            <div class="note">Fix a completed race without rewinding the meet, advancing racers, or rebuilding later races.</div>
-          </div>
-          <form method="GET" action="/portal/meet/${meet.id}/race-day/correction" class="action-row" style="margin:0">
-            <select name="raceId" required>
-              <option value="">Select completed race…</option>
-              ${info.ordered.filter(r=>!isTimeTrialItem(r)&&String(r.status||'')==='closed').map((r,idx)=>`<option value="${esc(r.id)}">Race ${info.ordered.findIndex(x=>String(x.id)===String(r.id))+1} — ${esc(r.groupLabel)} — ${esc(cap(r.division))} — ${esc(r.distanceLabel)} — ${esc(raceDisplayStage(r))}</option>`).join('')}
-            </select>
-            <button class="btn-orange" type="submit">Open Correction</button>
-          </form>
-        </div>
-        <div class="note" style="margin-top:10px">Judges remain locked to the live current race. Corrections are director-only in Phase 1.</div>
-      </div>
-      ${req.query.lanesRandomized ? `<div class="good" style="margin-bottom:16px">🎲 Lanes re-randomized for that race. Heats, race order, and blocks were not changed.</div>` : ''}
-      ${req.query.error ? `<div class="bad" style="margin-bottom:16px">${esc(req.query.error)}</div>` : ''}
-      <div class="card" style="margin-bottom:16px;border-left:5px solid var(--sky)">
-        <div class="row between center">
-          <div>
-            <h2 style="margin:0">🎲 Re-Randomize Lanes</h2>
-            <div class="note">Redraw lane assignments for one race only. Heats, race order, and block placement are untouched.</div>
-          </div>
-          <form method="POST" action="/portal/meet/${meet.id}/race-day/re-randomize-lanes" class="action-row" style="margin:0" onsubmit="return confirm('Re-randomize lanes for this race? This only changes lane numbers — heats, order, and blocks stay the same.');">
-            <select name="raceId" required>
-              <option value="">Select race…</option>
-              ${info.ordered.filter(r=>!isTimeTrialItem(r)&&!r.isRelayRace).map((r,idx)=>`<option value="${esc(r.id)}">Race ${idx+1} — ${esc(r.groupLabel)} — ${esc(cap(r.division))} — ${esc(r.distanceLabel)} — ${esc(raceDisplayStage(r))}</option>`).join('')}
-            </select>
-            <button class="btn-sky" type="submit">🎲 Re-Randomize Lanes</button>
-          </form>
-        </div>
-      </div>
-      <div class="card" style="margin-bottom:16px;border-left:5px solid var(--navy)">
-        <div class="row between center">
-          <div>
-            <h2 style="margin:0">🖨 Race Score Sheets</h2>
-            <div class="note">Printable paper worksheets for judges, referees, and tabulators — blank Place/Status/Points/Notes for manual scoring.</div>
-          </div>
-          <form method="GET" action="/portal/meet/${meet.id}/score-sheets/print" target="_blank" class="action-row" style="margin:0">
-            <select name="raceId">
-              <option value="">Select race…</option>
-              ${info.ordered.map((r,idx)=>`<option value="${esc(r.id)}">Race ${idx+1} — ${esc(r.groupLabel)} — ${esc(cap(r.division))} — ${esc(r.distanceLabel)} — ${esc(raceDisplayStage(r))}</option>`).join('')}
-            </select>
-            <input type="hidden" name="scope" value="race" />
-            <button class="btn2" type="submit">Print Selected Race</button>
-          </form>
-        </div>
-        <div class="action-row" style="margin-top:10px">
-          <a class="btn2" href="/portal/meet/${meet.id}/score-sheets/print?scope=meet&amp;format=pdf" target="_blank">Print Entire Meet PDF</a>
-        </div>
-      </div>
-      <div class="grid-2">
-        <div class="card">
-          <h2>Current Event</h2>
-          ${isTimeTrialItem(current)?`
-            <div class="action-row" style="margin-bottom:12px">
-              <span class="chip">${esc(current.blockName||'Unassigned')}</span>
-              <span class="chip chip-sky">⏱ Time Trial</span>
-              <span class="chip">${esc(current.distanceLabel || '100m')}</span>
-            </div>
-            <p class="note">This is a standalone queue event with manual time entry and live leaderboards.</p>
-            <a class="btn-orange" href="/portal/meet/${esc(meet.id)}/time-trials/${esc(current.id)}?mode=director">Open Time Trial Event</a>
-          `:current?`
-            <div class="action-row" style="margin-bottom:12px">
-              <span class="chip">${esc(current.blockName||'Unassigned')}</span>
-              <span class="chip">${esc(cap(current.division))}</span>
-              <span class="chip">${esc(raceDisplayStage(current))}</span>
-              <span class="chip">${esc(cap(current.startType))} Start</span>
-              <span class="chip chip-${current.status==='closed'?'green':'sky'}">${esc(current.status)}</span>
-              ${current.isOpenRace?`<span class="chip chip-orange">🏁 Open</span>`:''}
-              ${current.isQuadRace?`<span class="chip chip-purple">🛼 Quad</span>`:''}
-            </div>
-            ${currentMerged?`<div class="merge-live-banner">🔗 Racing together as one pack — <b>${esc(currentPackLabel)}</b>. Each division is scored separately; enter places on each race in the judges tab.</div>`:''}
-            <div class="live-lane-list">
-              ${currentPackLanes.map(l=>{
-                const reg=regMap.get(Number(l.registrationId));
-                const result=esc(current.resultsMode==='times'?l.time:l.place);
-                const statusText=l.status?esc(raceStatusLabel(l.status)):'';
-                const detail=[l.helmetNumber?'#'+esc(l.helmetNumber):'',esc(l.team||'')].filter(Boolean).join(' · ');
-                return `<div class="live-lane-card">
-                  <div class="live-lane-number">${esc(l.lane)}</div>
-                  <div class="live-lane-info">
-                    <div class="live-lane-name">${esc(l.skaterName||'')}${l._div?` <span class="merge-div-tag">${esc(l._div)}</span>`:''}</div>
-                    ${detail?`<div class="live-lane-detail">${detail}</div>`:''}
-                    ${sponsorLineHtml(reg?.sponsor||'').replace('sponsor-line','live-lane-sponsor')}
-                  </div>
-                  ${statusText?`<div class="live-lane-status">${statusText}</div>`:(result?`<div class="live-lane-result">${result}</div>`:'')}
-                </div>`;
-              }).join('') || '<div class="muted">No skaters entered yet.</div>'}
-            </div>`:
-          `<div class="muted">No race selected yet.</div>`}
-        </div>
-        <div class="card">
-          <h2>Coming Up</h2>
-          <div class="queue-list">
-            ${info.coming.map((r,i)=>`<div class="queue-row">
-              <div class="queue-num">${info.idx+i+3}</div>
-              <div class="queue-info">
-                <div class="queue-title">${esc(r.groupLabel)}</div>
-                <div class="queue-meta">${isTimeTrialItem(r)?'Time Trial':esc(cap(r.division))} • ${esc(r.distanceLabel)}</div>
-              </div>
-            </div>`).join('') || '<div class="muted">Nothing queued.</div>'}
-          </div>
-        </div>
-      </div>
-      <script>
-        async function setCurrentRace(raceId){const r=await fetch('/api/meet/${meet.id}/race-day/set-current',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({raceId})});if(r.ok) location.reload();}
-        async function moveCurrent(dir){const r=await fetch('/api/meet/${meet.id}/race-day/step',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({direction:dir})});if(r.ok) location.reload();}
-        async function pauseMeet(){const r=await fetch('/api/meet/${meet.id}/race-day/toggle-pause',{method:'POST'});if(r.ok) location.reload();}
-        async function unlockRace(raceId){const r=await fetch('/api/meet/${meet.id}/race-day/unlock-race',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({raceId})});if(r.ok) location.reload();}
-      </script>`;
+    body+=renderDirectorBoard({
+      meet, info, current,
+      currentPackLanes, currentPackLabel, nextPackLabel, currentMerged,
+      progress, regMap,
+      query: req.query,
+      isTimeTrialItem, raceDayItemLabel, raceDayItemSub, raceStatusLabel, sponsorLineHtml,
+    });
 
   } else if(mode==='judges') {
     body+=`
