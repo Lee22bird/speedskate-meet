@@ -1654,10 +1654,6 @@ router.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','j
 
   } else if(mode==='judges') {
     body+=`
-      <div class="card" style="margin-bottom:14px">
-        <h2 style="margin:0">${current?`Race ${Math.max(info.idx+1,1)} — ${current.isTimeTrial?'Time Trial Session':esc(current.groupLabel)} — ${current.isTimeTrial?'100m':esc(cap(current.division))+' — '+esc(current.distanceLabel)}`:'No race selected'}</h2>
-        <div class="note">Judges always land on the current race. Save, then close race when done.</div>
-      </div>
       ${current?(isTimeTrialItem(current)?`
         <div class="card">
           <div class="action-row" style="margin-bottom:12px">
