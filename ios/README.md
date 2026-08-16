@@ -1,7 +1,50 @@
-# SSM Companion (iOS)
+# SSM for iOS (iPhone companion + iPad meet-running app)
 
-A focused iOS companion app for SpeedSkateMeet — **not** the full meet
-management system. It covers exactly five things:
+One adaptive app, two deliberate experiences:
+
+- **iPhone = the barebones companion.** Find a Meet, Live Race Day, Live
+  Board, Results, and minimal staff race-day controls. Nothing else, by
+  design.
+- **iPad = the SSM meet-running software.** A `NavigationSplitView` command
+  center for actually running a meet at the rink: Director race-day control
+  (advance/pause/jump/unlock), **Tabulator result entry** (finish-order tap
+  tray, place/time/record, DQ details), **Correction Mode** (closed races
+  only, required reason, audit trail), Announcer + Referee read boards, Live
+  Board, and Results. The device decides at launch (`RootTabView` →
+  `PadRootView` on iPad); the iPhone experience is untouched.
+
+This iPhone/iPad feature asymmetry is intentional (per the workspace parity
+rules: leave a note when platforms deliberately diverge). A future SSM
+Android tablet build should match the iPad scope. iPad phase 2 targets:
+Block Builder (JSON endpoints already exist), Check-In, Time Trials,
+re-randomize lanes, finalize/reopen, score-sheet PDFs.
+
+## How the iPad app talks to the server — zero server changes
+
+Every iPad screen drives the **existing** SSM Express server; nothing was
+added or changed server-side for it:
+
+| iPad feature | Existing endpoint |
+|---|---|
+| Race-day state + race list | `GET /api/v1/meets/:id/race-day-state` |
+| Advance / pause / jump / unlock | `POST /api/meet/:id/race-day/{step,toggle-pause,set-current,unlock-race}` |
+| Result entry (Save / Close & Advance) | `POST /portal/meet/:id/race-day/judges/save` with `ajax=1` (the site's own AJAX mode) |
+| Full race detail (resultsMode, notes, all lanes) | `GET /portal/meet/:id/desktop-export` |
+| Correction Mode | `POST /portal/meet/:id/race-day/correction/save` (302 = success, browser semantics) |
+
+Scoring, heat→semi→final progression, permissions, and validation all stay
+server-side — the app posts the same form fields the website posts and
+re-reads state. `APIClient` gained a redirect-suppressing portal request so
+a `302 → /admin/login` surfaces as "session expired" instead of an
+undecodable HTML page.
+
+Debug builds honor an `SSM_BASE_URL` environment variable (e.g. launch the
+simulator with `SIMCTL_CHILD_SSM_BASE_URL=http://127.0.0.1:10000`) to point
+at a local server; release builds always use production.
+
+## The iPhone companion scope
+
+The iPhone side covers exactly five things:
 
 1. Find a Meet
 2. Live Race Day (public)
@@ -11,7 +54,7 @@ management system. It covers exactly five things:
 
 It does **not** include Meet Builder, Open/Quad/Relay/Block Builder, Submit a
 Meet/Rink, Rinks, About, Help, the admin portal, or any desktop-only tools.
-None of that exists in this app, by design.
+None of that exists on the phone, by design.
 
 ## What this is
 

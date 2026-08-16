@@ -49,6 +49,24 @@ public extension View {
         self
         #endif
     }
+
+    @ViewBuilder
+    func ssmNumberPad() -> some View {
+        #if os(iOS)
+        self.keyboardType(.numberPad)
+        #else
+        self
+        #endif
+    }
+
+    @ViewBuilder
+    func ssmDecimalPad() -> some View {
+        #if os(iOS)
+        self.keyboardType(.decimalPad)
+        #else
+        self
+        #endif
+    }
 }
 
 // A dark, "race broadcast" theme — near-black navy backgrounds, glowing

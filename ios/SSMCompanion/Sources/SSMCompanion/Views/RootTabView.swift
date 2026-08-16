@@ -6,7 +6,24 @@ public struct RootTabView: View {
 
     public init() {}
 
+    /// iPad gets the full meet-running app; iPhone keeps the companion tabs.
+    private var isPad: Bool {
+        #if os(iOS)
+        UIDevice.current.userInterfaceIdiom == .pad
+        #else
+        false
+        #endif
+    }
+
     public var body: some View {
+        if isPad {
+            PadRootView()
+        } else {
+            phoneBody
+        }
+    }
+
+    private var phoneBody: some View {
         ZStack(alignment: .bottom) {
             Group {
                 switch selectedTab {
