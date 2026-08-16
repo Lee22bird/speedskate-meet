@@ -44,3 +44,41 @@ test('raceHasProtest ticks the score-sheet box for a protested race', () => {
   assert.equal(P.raceHasProtest(meet, 'r9'), false);
   assert.equal(P.raceHasProtest(meet, ''), false);
 });
+
+test('buildProtest snapshots feeAmount from meet.protestFee', () => {
+  const meet = { protests: [], protestFee: 25, races: [] };
+  const r = P.buildProtest(meet, { category: 'Officials', statement: 'x' }, 't');
+  assert.equal(r.protest.feeAmount, 25);
+  assert.equal(r.protest.feeCollected, false);
+});
+
+test('deadline: raceDeadlineAt = closedAt + minutes; window-closed logic', () => {
+  const closedAt = '2026-10-17T14:00:00.000Z';
+  const meet = { protestDeadlineMinutes: 30, races: [{ id: 'r1', closedAt }] };
+  const race = meet.races[0];
+  assert.equal(P.raceDeadlineAt(meet, race), '2026-10-17T14:30:00.000Z');
+  // before deadline -> open; after -> closed
+  assert.equal(P.raceProtestWindowClosed(meet, race, Date.parse('2026-10-17T14:20:00Z')), false);
+  assert.equal(P.raceProtestWindowClosed(meet, race, Date.parse('2026-10-17T14:45:00Z')), true);
+  // 0 minutes = no limit -> never closed
+  assert.equal(P.raceProtestWindowClosed({ protestDeadlineMinutes: 0, races: [race] }, race, Date.parse('2030-01-01T00:00:00Z')), false);
+  // no closedAt -> no deadline
+  assert.equal(P.raceDeadlineAt(meet, { id: 'r2' }), '');
+});
+
+test('buildProtest snapshots deadlineAt for a race-specific protest', () => {
+  const meet = { protests: [], protestFee: 0, protestDeadlineMinutes: 30, races: [{ id: 'r1', closedAt: '2026-10-17T14:00:00.000Z' }] };
+  const r = P.buildProtest(meet, { category: 'Competition', raceId: 'r1', statement: 'x' }, 't');
+  assert.equal(r.protest.deadlineAt, '2026-10-17T14:30:00.000Z');
+  // meet-wide category -> no deadline snapshot
+  const w = P.buildProtest(meet, { category: 'Officials', statement: 'x' }, 't');
+  assert.equal(w.protest.deadlineAt, '');
+});
+
+test('unresolvedProtestCount counts new + review only', () => {
+  const meet = { protests: [
+    P.normalizeProtest({ state: 'new' }), P.normalizeProtest({ state: 'review' }),
+    P.normalizeProtest({ state: 'upheld' }), P.normalizeProtest({ state: 'denied' }),
+  ] };
+  assert.equal(P.unresolvedProtestCount(meet), 2);
+});

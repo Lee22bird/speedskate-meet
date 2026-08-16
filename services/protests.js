@@ -64,7 +64,41 @@ function normalizeProtest(p) {
     ruledByName: String(p.ruledByName || ''),
     ruledAt: String(p.ruledAt || ''),
     correctionRaceId: String(p.correctionRaceId || ''),
+    // Fee (snapshot at filing; non-refundable; settled in person by the director).
+    feeAmount: Number(p.feeAmount || 0),
+    feeCollected: !!p.feeCollected,
+    feeCollectedBy: String(p.feeCollectedBy || ''),
+    feeCollectedAt: String(p.feeCollectedAt || ''),
+    // Deadline snapshot (ISO) for a race-specific protest; '' when none.
+    deadlineAt: String(p.deadlineAt || ''),
   };
+}
+
+// Per-meet protest deadline: minutes after the race in question CLOSES
+// (race.closedAt). 0 = no limit. Only race-specific categories are gated.
+function protestDeadlineMinutes(meet) {
+  const n = Number(meet && meet.protestDeadlineMinutes);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+// The absolute deadline for protesting a race, or '' if none applies.
+function raceDeadlineAt(meet, race) {
+  const mins = protestDeadlineMinutes(meet);
+  const closedAt = race && race.closedAt;
+  if (!mins || !closedAt) return '';
+  const t = new Date(closedAt).getTime();
+  if (Number.isNaN(t)) return '';
+  return new Date(t + mins * 60000).toISOString();
+}
+// Has the online protest window for this race closed? (director may still accept
+// a late protest in person). nowMs defaults to Date.now() but is injectable.
+function raceProtestWindowClosed(meet, race, nowMs) {
+  const deadline = raceDeadlineAt(meet, race);
+  if (!deadline) return false;
+  return (nowMs == null ? Date.now() : nowMs) > new Date(deadline).getTime();
+}
+// Unresolved protests drive the notification count + badges.
+function unresolvedProtestCount(meet) {
+  return protestsForMeet(meet).filter(p => p.state === 'new' || p.state === 'review').length;
 }
 
 // Validate + create. Returns { ok, error?, protest? }. Does not persist.
@@ -75,6 +109,7 @@ function buildProtest(meet, input, nowIso) {
   if (!statement) return { ok: false, error: 'A written statement is required.' };
   if (statement.length > 2000) return { ok: false, error: 'Statement is too long (2000 character max).' };
   const raceId = isRaceSpecific(category) ? String(input.raceId || '') : '';
+  const race = raceId ? (meet.races || []).find(r => String(r.id) === raceId) : null;
   return {
     ok: true,
     protest: normalizeProtest({
@@ -89,6 +124,10 @@ function buildProtest(meet, input, nowIso) {
       team: String(input.team || ''),
       statement,
       state: 'new',
+      // Snapshot the fee + deadline so later meet-setting changes can't alter
+      // what an already-filed protest owes or when it was due.
+      feeAmount: Number(meet.protestFee || 0),
+      deadlineAt: race ? raceDeadlineAt(meet, race) : '',
     }),
   };
 }
@@ -97,4 +136,5 @@ module.exports = {
   PROTEST_CATEGORIES, RACE_SPECIFIC_CATEGORIES, PROTEST_STATES,
   isRaceSpecific, nextProtestId, protestsForMeet, protestsForCoach,
   raceHasProtest, findProtest, normalizeProtest, buildProtest,
+  protestDeadlineMinutes, raceDeadlineAt, raceProtestWindowClosed, unresolvedProtestCount,
 };

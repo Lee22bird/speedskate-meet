@@ -283,8 +283,12 @@ function renderMeetBuilderView({ db, meet, user = null, query = {} }) {
                   <div><label>Max Registration Cap</label><input type="number" name="maxRegistrationFee" value="${esc(String(meet.maxRegistrationFee||0))}" min="0" /><div class="note">0 = no cap. Any other amount limits the final total even when the event calculation is higher.</div></div>
                 </div>
                 <div class="setup-help-note">Total cost = base fee + selected event fees. Max cap applies when greater than 0.</div>
+                <div class="setup-fields cols-2" style="margin-top:14px">
+                  <div><label>Protest Fee</label><input type="number" name="protestFee" value="${esc(String(meet.protestFee||0))}" min="0" /><div class="note">0 = no fee. Non-refundable, settled in person with the director when a coach files a protest.</div></div>
+                  <div><label>Protest Window (minutes)</label><input type="number" name="protestDeadlineMinutes" value="${esc(String(meet.protestDeadlineMinutes||0))}" min="0" /><div class="note">0 = no limit. Minutes after a race closes that a coach can still file a protest online. A director can accept a late protest in person.</div></div>
+                </div>
               </div>
-              
+
           ${feeExplainerHtml}
           <div class="setup-mini-card setup-mini-card-primary">
                 <div class="setup-mini-title">Publication</div>

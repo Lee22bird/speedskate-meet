@@ -113,6 +113,8 @@ function saveMeetFields(meet, body, db) {
   meet.baseEntryFee=Number(String(body.baseEntryFee||'0').trim()||0);
   meet.additionalRaceFee=Number(String(body.additionalRaceFee||'0').trim()||0);
   meet.maxRegistrationFee=Number(String(body.maxRegistrationFee||'0').trim()||0);
+  meet.protestFee=Number(String(body.protestFee||'0').trim()||0);
+  meet.protestDeadlineMinutes=Number(String(body.protestDeadlineMinutes||'0').trim()||0);
   const hasGroupFields = Object.keys(body||{}).some(k=>/^g_\d+_(novice|elite)_/.test(k));
   if(hasGroupFields) {
     meet.groups.forEach((group,gi)=>{

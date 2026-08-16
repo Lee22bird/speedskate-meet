@@ -7,7 +7,10 @@ const { orderedRaces } = require('../services/raceDay');
 const {
   PROTEST_CATEGORIES, RACE_SPECIFIC_CATEGORIES, isRaceSpecific,
   protestsForMeet, protestsForCoach, findProtest, buildProtest,
+  protestDeadlineMinutes, raceProtestWindowClosed,
 } = require('../services/protests');
+
+function money(n) { return '$' + Number(n || 0).toFixed(0); }
 
 // Coaches whose team has at least one registration in this meet may file.
 function coachHasSkaters(meet, user) {
@@ -54,6 +57,8 @@ function renderProtestForm(meet, user, error = '') {
         The chief referee (here: a judge or the meet director) decides protests. Notes are confidential and are
         not published with results.
       </div>
+      ${Number(meet.protestFee || 0) > 0 ? `<div class="note" style="margin-top:10px;line-height:1.5"><strong>Protest fee: ${money(meet.protestFee)}</strong> — non-refundable regardless of the outcome, and settled <strong>in person</strong> with the meet director (they'll find you). This form does not take payment. Your protest is accepted and reviewed right away.</div>` : ''}
+      ${protestDeadlineMinutes(meet) ? `<div class="note" style="margin-top:8px">Race-specific protests must be filed within <strong>${protestDeadlineMinutes(meet)} minutes</strong> of that race finishing. After that, see the meet director to file in person.</div>` : ''}
     </div>
 
     <div class="card">
@@ -127,6 +132,11 @@ function renderProtestInbox(meet, user, flash = '') {
         ${stateBadge(p.state)}
       </div>
       <div class="card" style="margin-top:10px;background:var(--off,#f8fafc)"><div style="white-space:pre-wrap">${esc(p.statement)}</div></div>
+      ${Number(p.feeAmount || 0) > 0 ? `
+        <div class="row between center" style="margin-top:10px;flex-wrap:wrap;gap:8px">
+          <div class="note"><strong>Fee ${money(p.feeAmount)}</strong> — non-refundable, paid in person. ${p.feeCollected ? `<span style="color:#047857;font-weight:700">✔ Collected${p.feeCollectedBy ? ' by ' + esc(p.feeCollectedBy) : ''}</span>` : '<span style="color:#c2410c;font-weight:700">Not yet collected</span>'}</div>
+          ${canCorrect && !p.feeCollected ? `<form method="POST" action="/portal/meet/${esc(meet.id)}/protests/${esc(p.id)}/fee" style="margin:0"><button class="btn2 btn-sm" type="submit">Mark fee collected</button></form>` : ''}
+        </div>` : ''}
       ${p.ruling ? `<div class="note" style="margin-top:8px"><strong>Ruling:</strong> ${esc(p.ruling)}${p.ruledByName ? ' — ' + esc(p.ruledByName) : ''}</div>` : ''}
       ${(p.state === 'new' || p.state === 'review') ? `
         <form method="POST" action="/portal/meet/${esc(meet.id)}/protests/${esc(p.id)}/rule" style="margin-top:12px">
@@ -173,6 +183,15 @@ module.exports = function createProtestRoutes(deps = {}) {
       const reg = (meet.registrations || []).find(r => String(r.id) === registrationId);
       const sameTeam = reg && String(reg.team || '').trim().toLowerCase() === String(req.user.team || '').trim().toLowerCase();
       if (!sameTeam) registrationId = '';
+    }
+    // Race-specific protest past the online window: the director can still take it
+    // in person, but the coach can't file it here.
+    if (isRaceSpecific(req.body.category)) {
+      const race = (meet.races || []).find(r => String(r.id) === String(req.body.raceId || ''));
+      if (race && raceProtestWindowClosed(meet, race)) {
+        const msg = `The online protest window for that race has closed (${protestDeadlineMinutes(meet)} minutes after it finished). See the meet director to file in person.`;
+        return res.redirect(`/portal/meet/${encodeURIComponent(meet.id)}/coach/protest?error=${encodeURIComponent(msg)}`);
+      }
     }
     const built = buildProtest(meet, {
       category: req.body.category, raceId: req.body.raceId, raceLabel: req.body.raceLabel,
@@ -223,6 +242,22 @@ module.exports = function createProtestRoutes(deps = {}) {
       ? (protest.raceId ? `${protest.id} upheld. A meet director can open Correction Mode for the race.` : `${protest.id} upheld.`)
       : `${protest.id} denied.`;
     res.redirect(`/portal/meet/${encodeURIComponent(meet.id)}/protests?flash=${encodeURIComponent(flash)}`);
+  });
+
+  // Meet director marks the (in-person) protest fee collected. Judges rule; they
+  // do not handle money. Non-refundable, so this only flips to collected.
+  router.post('/portal/meet/:meetId/protests/:protestId/fee', requireRole('meet_director'), (req, res) => {
+    const meet = getMeetOr404(req.db, req.params.meetId);
+    if (!meet) return res.redirect('/portal');
+    if (!canEditMeet(req.user, meet)) return res.status(403).send('Forbidden');
+    const protest = findProtest(meet, req.params.protestId);
+    if (!protest) return res.redirect(`/portal/meet/${encodeURIComponent(meet.id)}/protests`);
+    protest.feeCollected = true;
+    protest.feeCollectedBy = String(req.user.name || req.user.fullName || req.user.email || '');
+    protest.feeCollectedAt = nowIso();
+    meet.updatedAt = nowIso();
+    saveDb(req.db);
+    res.redirect(`/portal/meet/${encodeURIComponent(meet.id)}/protests?flash=${encodeURIComponent(`Fee for ${protest.id} marked collected.`)}`);
   });
 
   return router;
