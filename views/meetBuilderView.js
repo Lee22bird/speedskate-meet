@@ -1,6 +1,7 @@
 const { esc } = require('../utils/html');
 const { hasRole, isSuperAdmin, isMeetOwner, canManageMeetSettings } = require('../utils/auth');
 const { renderMeetStaffManager } = require('../services/staffAssignments');
+const { meetBuilderThemeCss, builderHeaderHtml, sectionHeadHtml } = require('./meetBuilderTheme');
 
 const LEAGUE_ASSOCIATION_OPTIONS = [
   { value: '', label: 'None / Independent' },
@@ -183,83 +184,45 @@ function renderMeetBuilderView({ db, meet, user = null, query = {} }) {
   }
   const groupsHtml=groupsRows.join('');
 
+  // Header meta + fee explainer + light section completeness (theme, display only).
+  const _base = Number(meet.baseEntryFee || 0), _add = Number(meet.additionalRaceFee || 0), _cap = Number(meet.maxRegistrationFee || 0);
+  const _cost = (n) => { let c = _base + Math.max(0, n - 1) * _add; if (_cap > 0) c = Math.min(c, _cap); return c; };
+  const _capHits5 = _cap > 0 && (_base + 4 * _add) > _cap;
+  const feeExplainerHtml = `<div class="mb-fee-explain"><div class="mb-fee-explain-title">So a skater pays\u2026</div><div class="mb-fee-chips"><span class="mb-fee-chip"><strong>$${_cost(1)}</strong><span>for 1 event</span></span><span class="mb-fee-chip"><strong>$${_cost(3)}</strong><span>for 3</span></span><span class="mb-fee-chip${_capHits5 ? ' is-cap' : ''}"><strong>$${_cost(5)}</strong><span>for 5${_capHits5 ? ' \u2014 cap hits here' : ''}</span></span></div></div>`;
+  const _metaParts = [ meet.date ? esc(String(meet.date)) : '', rinkInputValue || '', meet.registrationCloseAt ? ('reg closes ' + esc(meet.registrationCloseAt.slice(0,10))) : '' ].filter(Boolean);
+  const builderMetaLine = _metaParts.join('  \u00b7  ');
+  const _s1done = !!String(meet.meetName || '').trim();
+  const _s2done = _base > 0 || !!meet.registrationCloseAt;
+  const _s3done = Number(meet.trackLength || 0) > 0 && Number(meet.lanes || 0) > 0;
+  const builderDoneCount = [_s1done, _s2done, _s3done].filter(Boolean).length;
+  const builderEncouragement = builderDoneCount >= 3 ? 'The basics are set \u2014 divisions are next.' : 'A few basics left \u2014 you can save anytime.';
+
+
   return `
+    <style>${meetBuilderThemeCss()}</style>
     <div class="page-header"><h1>Meet Builder</h1><div class="sub">${esc(meet.meetName)}</div></div>
-    <div class="builder-sticky-save">
-      <div class="builder-sticky-info">
-        <div class="builder-sticky-label">Meet Builder</div>
-        <div class="builder-sticky-title">${esc(meet.meetName || 'Untitled Meet')}</div>
-      </div>
-      <div class="builder-sticky-actions">
-        <span id="builderStatusBadge" class="builder-status-badge ${statusBadgeClass}">${statusLabel}</span>
-        <button class="btn-orange" type="submit" form="meetBuilderForm" formaction="/portal/meet/${meet.id}/builder/save-meet">Save Meet</button>
-      </div>
-    </div>
+    ${builderHeaderHtml({ meet, statusLabel, statusBadgeClass, doneCount: builderDoneCount, totalCount: 6, metaLine: builderMetaLine, encouragement: builderEncouragement })}
     ${savedFlash}
     ${presetSavedFlash}
     ${presetLoadedFlash}
     ${presetDeletedFlash}
     ${ownershipFlash}
     ${errorFlash}
-    ${ownershipPanel}
-    ${staffPanel}
-    ${desktopPinPanel}
-    ${desktopImportPanel}
-    <div class="grid-2" style="margin-bottom:16px">
-      <div class="card card-accent" style="border-left-color:var(--orange)">
-        <div class="row between center">
-          <div>
-            <div class="bold">🏁 Open Builder ${openEnabledCount>0?`<span class="chip chip-orange">${openEnabledCount} active</span>`:''}</div>
-            <div class="note">Rolling-start Open races, separate results.</div>
-          </div>
-          <a class="btn-orange btn-sm" href="/portal/meet/${meet.id}/open-builder">Configure →</a>
-        </div>
-      </div>
-      <div class="card card-accent" style="border-left-color:var(--purple)">
-        <div class="row between center">
-          <div>
-            <div class="bold">🛼 Quad Builder ${quadEnabledCount>0?`<span class="chip chip-purple">${quadEnabledCount} active</span>`:''}</div>
-            <div class="note">Quad divisions, own standings bucket.</div>
-          </div>
-          <a class="btn-purple btn-sm" href="/portal/meet/${meet.id}/quad-builder">Configure →</a>
-        </div>
-      </div>
-    </div>
+
     <form id="meetBuilderForm" method="POST" action="/portal/meet/${meet.id}/builder/save" class="stack">
-      <div class="card" style="margin-bottom:16px;border-left:5px solid var(--sky2)">
-        <div class="row between center" style="gap:12px;align-items:flex-start">
-          <div>
-            <h2 style="margin:0 0 4px">Time Trial Builder</h2>
-            <div class="note">Standalone queue, manual times, and live leaderboard. Does not generate heats, finals, or brackets.</div>
-          </div>
-          ${toggleSwitch('timeTrialEventEnabled', !!ttEvent.enabled, 'Enable Time Trials')}
-        </div>
-        <div class="form-grid cols-3" style="margin-top:14px">
-          <div><label>Distance</label><input name="timeTrialEventDistance" value="${esc(ttEvent.distance || '100m')}" placeholder="100m" /></div>
-          <div><label>Run Order</label><input value="Youngest → Oldest" disabled /></div>
-          <div><label>Counts For Overall</label><select name="timeTrialEventCountsForOverall"><option value="no" ${ttEvent.countsForOverall ? '' : 'selected'}>No</option><option value="yes" ${ttEvent.countsForOverall ? 'selected' : ''}>Yes</option></select></div>
-        </div>
-      </div>
-      <div class="card setup-card">
-        <div class="setup-head">
-          <div>
-            <h2 class="setup-title">Meet Setup</h2>
-            <div class="setup-sub">Core meet details, venue, rules, and reusable presets.</div>
-          </div>
-        </div>
-        <div class="setup-body">
-          <div class="setup-sections">
-            <section class="setup-section setup-section-event">
-              <div class="setup-section-title">📋 Event Information</div>
-              <div class="setup-section-intro">Name the meet, set the race schedule, and add any director notes for multi-day timing.</div>
-              <div class="setup-mini-card setup-mini-card-primary">
+
+      <div class="mb-section tone-sky">
+        ${sectionHeadHtml({ n:1, icon:'🏟', tone:'sky', title:'What meet is this?', sub:'Name, dates, and venue', state:_s1done?'done':'todo' })}
+        <div class="mb-body">
+          <div class="setup-mini-card setup-mini-card-primary">
                 <div class="setup-mini-title">Meet Identity</div>
                 <div class="setup-fields">
                   <div class="setup-field-full"><label>Meet Name</label><input name="meetName" value="${esc(meet.meetName)}" required /></div>
                   <div class="setup-field-full"><label>League Association</label><select name="leagueAssociation">${renderLeagueAssociationOptions(meet.leagueAssociation || meet.league || '')}</select><div class="note">Optional. This tells SpeedSkateLeague which league schedule this meet belongs to. Teams from any SSL league can still register.</div></div>
                 </div>
               </div>
-              <div class="setup-mini-card">
+              
+          <div class="setup-mini-card">
                 <div class="setup-mini-title">Event Schedule</div>
                 <div class="setup-fields">
                   <div><label>Start Date</label><input type="date" name="date" value="${esc(meet.date)}" /></div>
@@ -274,7 +237,8 @@ function renderMeetBuilderView({ db, meet, user = null, query = {} }) {
                   <div class="setup-field-full"><label>Start Time</label><input type="time" name="startTime" value="${esc(meet.startTime)}" /></div>
                 </div>
               </div>
-              <div class="setup-mini-card">
+              
+          <div class="setup-mini-card">
                 <div class="setup-mini-title">Schedule Notes</div>
                 <div class="setup-fields">
                   <div class="setup-field-full">
@@ -284,19 +248,34 @@ function renderMeetBuilderView({ db, meet, user = null, query = {} }) {
                   </div>
                 </div>
               </div>
-            </section>
+            
+          <div class="setup-mini-card setup-mini-card-primary">
+                <div class="setup-mini-title">Rink Selection</div>
+                <div class="setup-fields">
+                  <div class="setup-field-full"><label>Rink</label>
+                    <input name="rinkSearch" id="rinkSearch" list="rinkSuggestions" value="${esc(rinkInputValue)}" placeholder="Start typing rink name..." autocomplete="off" />
+                    <input type="hidden" name="rinkId" id="rinkId" value="${esc(String(meet.rinkId||''))}" />
+                    <datalist id="rinkSuggestions">${rinkDataList}</datalist>
+                    <div class="note">Pick a saved rink when available. Typed names become custom for this meet only.</div>
+                  </div>
+                </div>
+              </div>
+              
+        </div>
+      </div>
 
-            <section class="setup-section setup-section-registration">
-              <div class="setup-section-title">🎟 Registration Settings</div>
-              <div class="setup-section-intro">Control when entries close, what skaters pay, and whether the meet is visible to the public.</div>
-              <div class="setup-mini-card">
+      <div class="mb-section tone-green">
+        ${sectionHeadHtml({ n:2, icon:'🎟', tone:'green', title:'Who can enter, and what does it cost?', sub:'Registration window and fees', state:_s2done?'done':'todo' })}
+        <div class="mb-body">
+          <div class="setup-mini-card">
                 <div class="setup-mini-title">Registration Window</div>
                 <div class="setup-fields">
                   <div><label>Close Date</label><input type="date" name="registrationCloseDate" value="${esc(meet.registrationCloseAt?meet.registrationCloseAt.slice(0,10):'')}" /></div>
                   <div><label>Close Time</label><input type="time" name="registrationCloseTime" value="${esc(meet.registrationCloseAt?meet.registrationCloseAt.slice(11,16):'')}" /></div>
                 </div>
               </div>
-              <div class="setup-mini-card">
+              
+          <div class="setup-mini-card">
                 <div class="setup-mini-title">Pricing</div>
                 <div class="setup-fields cols-3">
                   <div><label>Base Registration</label><input type="number" name="baseEntryFee" value="${esc(String(meet.baseEntryFee||0))}" min="0" /><div class="note">Covers the first selected event category.</div></div>
@@ -305,7 +284,9 @@ function renderMeetBuilderView({ db, meet, user = null, query = {} }) {
                 </div>
                 <div class="setup-help-note">Total cost = base fee + selected event fees. Max cap applies when greater than 0.</div>
               </div>
-              <div class="setup-mini-card setup-mini-card-primary">
+              
+          ${feeExplainerHtml}
+          <div class="setup-mini-card setup-mini-card-primary">
                 <div class="setup-mini-title">Publication</div>
                 <div class="builder-publish-card">
                   <input type="hidden" id="meetStatusInput" name="status" value="${esc(meetStatus || 'draft')}" />
@@ -339,23 +320,14 @@ function renderMeetBuilderView({ db, meet, user = null, query = {} }) {
                   toggle.addEventListener('change', syncStatus);
                 })();
               </script>
-            </section>
+            
+        </div>
+      </div>
 
-            <section class="setup-section setup-section-venue">
-              <div class="setup-section-title">📍 Venue</div>
-              <div class="setup-section-intro">Choose a saved rink when available, or type a one-time custom rink for this meet.</div>
-              <div class="setup-mini-card setup-mini-card-primary">
-                <div class="setup-mini-title">Rink Selection</div>
-                <div class="setup-fields">
-                  <div class="setup-field-full"><label>Rink</label>
-                    <input name="rinkSearch" id="rinkSearch" list="rinkSuggestions" value="${esc(rinkInputValue)}" placeholder="Start typing rink name..." autocomplete="off" />
-                    <input type="hidden" name="rinkId" id="rinkId" value="${esc(String(meet.rinkId||''))}" />
-                    <datalist id="rinkSuggestions">${rinkDataList}</datalist>
-                    <div class="note">Pick a saved rink when available. Typed names become custom for this meet only.</div>
-                  </div>
-                </div>
-              </div>
-              <div class="setup-mini-card">
+      <div class="mb-section tone-amber">
+        ${sectionHeadHtml({ n:3, icon:'🏁', tone:'amber', title:'How does the racing work?', sub:'Track, lanes, and tiebreaker', state:_s3done?'done':'todo' })}
+        <div class="mb-body">
+          <div class="setup-mini-card">
                 <div class="setup-mini-title">Track Configuration</div>
                 <div class="setup-fields">
                   <div><label>Track Length (m)</label><input type="number" name="trackLength" value="${esc(meet.trackLength)}" min="1" step="1" /></div>
@@ -363,13 +335,8 @@ function renderMeetBuilderView({ db, meet, user = null, query = {} }) {
                 </div>
                 <div class="setup-help-note">Changing lanes or track length may require rebuilding race assignments.</div>
               </div>
-            </section>
-
-            <section class="setup-section setup-section-rules">
-              <div class="setup-section-title">⚙️ Rules & Presets</div>
-              <div class="setup-section-intro">Choose how ties are handled and reuse proven meet setups without rebuilding every distance by hand.</div>
-
-              <div class="setup-mini-card setup-mini-card-primary">
+            
+          <div class="setup-mini-card setup-mini-card-primary">
                 <div class="setup-mini-title">Scoring Method</div>
                 <div class="setup-fields cols-1">
                   <div>
@@ -382,83 +349,14 @@ function renderMeetBuilderView({ db, meet, user = null, query = {} }) {
                 </div>
               </div>
 
-              <div class="setup-mini-card">
-                <div class="setup-mini-title">Save Current Setup</div>
-                <div class="preset-row">
-                  <input name="presetName" value="${esc(meet.presetName||'')}" placeholder="Mid South Speed League" />
-                  <button class="btn2 btn-sm" type="submit" formaction="/portal/meet/${meet.id}/builder/save-preset">Save Setup</button>
-                </div>
-                <div class="setup-help-note">Saves divisions, distances, fees, tiebreaker, blocks, and race order so this setup can be reused later.</div>
-              </div>
-
-              <div class="setup-mini-card">
-                <div class="setup-mini-title">Load or Delete Preset</div>
-                <div class="preset-manage-row">
-                  <select id="presetSelect" name="presetId">${presetSelectHtml}</select>
-                  <button id="loadPresetBtn" class="btn2 btn-sm" type="submit" form="meetBuilderForm" formaction="/portal/meet/${meet.id}/setup-presets/load" onclick="return confirm('Load this preset? Your meet name, dates, venue, publication status, and notes will be kept. Divisions, fees, track setup, blocks, and race structure will be replaced.')">Load</button>
-                  ${canDeleteSetupPresets ? `
-                    <input type="hidden" name="deletePresetId" id="deletePresetId" value="" />
-                    <button id="deletePresetBtn" class="btn-danger btn-sm" type="submit" form="meetBuilderForm" formaction="/portal/meet/${meet.id}/setup-presets/delete" onclick="return confirm('Delete selected setup preset? This cannot be undone.')">Delete</button>
-                  ` : `
-                    <span class="muted small">Only super admins can delete shared presets.</span>
-                    <input type="hidden" name="deletePresetId" id="deletePresetId" value="" />
-                  `}
-                </div>
-                <div class="setup-warning-note">Your meet name, dates, venue, publication status, and notes are saved automatically when a preset loads. Divisions, fees, track setup, blocks, and race structure are replaced by the preset.</div>
-                <script>
-                  (function(){
-                    var sel = document.getElementById('presetSelect');
-                    var loadBtn = document.getElementById('loadPresetBtn');
-                    var deleteBtn = document.getElementById('deletePresetBtn');
-                    var deleteInput = document.getElementById('deletePresetId');
-                    if(!sel || !loadBtn || !deleteBtn || !deleteInput) return;
-                    function update(){
-                      var selected = sel.value;
-                      loadBtn.disabled = !selected;
-                      deleteBtn.disabled = !selected;
-                      deleteInput.value = selected || '';
-                    }
-                    sel.addEventListener('change', update);
-                    update();
-                  })();
-                </script>
-              </div>
-            </section>
-
-            <section class="setup-section setup-section-wide">
-              <div class="setup-section-title">📝 Meet Notes</div>
-              <script>
-                (function(){
-                  var rinks = ${rinkLookupScript};
-                  var input = document.getElementById('rinkSearch');
-                  var hidden = document.getElementById('rinkId');
-                  if(!input || !hidden) return;
-                  function syncRink(){
-                    var value = (input.value || '').trim().toLowerCase();
-                    var match = rinks.find(function(r){
-                      return String(r.label || '').trim().toLowerCase() === value || String(r.name || '').trim().toLowerCase() === value;
-                    });
-                    hidden.value = match ? String(match.id) : '';
-                  }
-                  input.addEventListener('input', syncRink);
-                  input.addEventListener('change', syncRink);
-                  syncRink();
-                })();
-              </script>
-              <div class="setup-notes-grid">
-                <div><label>Meet Notes</label><textarea name="notes">${esc(meet.notes||'')}</textarea></div>
-                <div><label>Relay Notes</label><textarea name="relayNotes">${esc(meet.relayNotes||'')}</textarea></div>
-              </div>
-              <div style="margin-top:10px">
-                <label>Relay Roster Deadline</label>
-                <input type="datetime-local" name="relayDeadline" value="${esc(meet.relayDeadline||'')}" />
-                <div class="hint" style="font-size:12px;color:var(--muted);margin-top:4px">Shown to coaches on the Build Relay Teams page. When this date/time passes, the coach relay form locks so no late teams can be added. Leave blank for no deadline.</div>
-              </div>
-            </section>
-          </div>
+              
         </div>
       </div>
-      <div class="page-header">
+
+      <div class="mb-section tone-violet">
+        ${sectionHeadHtml({ n:4, icon:'👥', tone:'violet', title:'Which divisions are racing?', sub:'Enable classes and set distances', state:'current' })}
+        <div class="mb-body">
+          <div class="page-header">
         <h2>Division Groups</h2>
         <div class="sub">Enable classes and set distances for each age group.</div>
         <div class="action-row" style="margin-top:10px;align-items:center;gap:10px">
@@ -475,9 +373,51 @@ function renderMeetBuilderView({ db, meet, user = null, query = {} }) {
           <span class="note" style="margin:0">${meet.divisionScheme === 'mssl' ? 'MSSL office template' : meet.usarsDivisions ? '34 USARS divisions' : '24 standard divisions'}</span>
         </div>
       </div>
-      ${groupsHtml}
+      
+          ${groupsHtml}
+        </div>
+      </div>
 
-      <div class="card" style="margin-top:8px">
+      <div class="mb-section tone-sky">
+        ${sectionHeadHtml({ n:5, icon:'✨', tone:'sky', title:'Anything special?', sub:'Open, Quad, relays, and time trials', state:'optional' })}
+        <div class="mb-body">
+          <div class="grid-2" style="margin-bottom:16px">
+      <div class="card card-accent" style="border-left-color:var(--orange)">
+        <div class="row between center">
+          <div>
+            <div class="bold">🏁 Open Builder ${openEnabledCount>0?`<span class="chip chip-orange">${openEnabledCount} active</span>`:''}</div>
+            <div class="note">Rolling-start Open races, separate results.</div>
+          </div>
+          <a class="btn-orange btn-sm" href="/portal/meet/${meet.id}/open-builder">Configure →</a>
+        </div>
+      </div>
+      <div class="card card-accent" style="border-left-color:var(--purple)">
+        <div class="row between center">
+          <div>
+            <div class="bold">🛼 Quad Builder ${quadEnabledCount>0?`<span class="chip chip-purple">${quadEnabledCount} active</span>`:''}</div>
+            <div class="note">Quad divisions, own standings bucket.</div>
+          </div>
+          <a class="btn-purple btn-sm" href="/portal/meet/${meet.id}/quad-builder">Configure →</a>
+        </div>
+      </div>
+    </div>
+    
+          <div class="card" style="margin-bottom:16px;border-left:5px solid var(--sky2)">
+        <div class="row between center" style="gap:12px;align-items:flex-start">
+          <div>
+            <h2 style="margin:0 0 4px">Time Trial Builder</h2>
+            <div class="note">Standalone queue, manual times, and live leaderboard. Does not generate heats, finals, or brackets.</div>
+          </div>
+          ${toggleSwitch('timeTrialEventEnabled', !!ttEvent.enabled, 'Enable Time Trials')}
+        </div>
+        <div class="form-grid cols-3" style="margin-top:14px">
+          <div><label>Distance</label><input name="timeTrialEventDistance" value="${esc(ttEvent.distance || '100m')}" placeholder="100m" /></div>
+          <div><label>Run Order</label><input value="Youngest → Oldest" disabled /></div>
+          <div><label>Counts For Overall</label><select name="timeTrialEventCountsForOverall"><option value="no" ${ttEvent.countsForOverall ? '' : 'selected'}>No</option><option value="yes" ${ttEvent.countsForOverall ? 'selected' : ''}>Yes</option></select></div>
+        </div>
+      </div>
+      
+          <div class="card" style="margin-top:8px">
         <div class="row between center" style="margin-bottom:14px">
           <div>
             <h2 style="margin:0">Special Events</h2>
@@ -527,7 +467,8 @@ function renderMeetBuilderView({ db, meet, user = null, query = {} }) {
         <input type="hidden" name="additional_count" id="additional_count" value="4" />
       </div>
 
-      <div class="card" style="margin-top:8px">
+      
+          <div class="card" style="margin-top:8px">
         <div class="row between center" style="margin-bottom:14px">
           <div>
             <h2 style="margin:0">🏁 Special Races</h2>
@@ -572,13 +513,101 @@ function renderMeetBuilderView({ db, meet, user = null, query = {} }) {
         })()}
       </div>
 
+      
+          
+              <div class="setup-section-title">📝 Meet Notes</div>
+              <script>
+                (function(){
+                  var rinks = ${rinkLookupScript};
+                  var input = document.getElementById('rinkSearch');
+                  var hidden = document.getElementById('rinkId');
+                  if(!input || !hidden) return;
+                  function syncRink(){
+                    var value = (input.value || '').trim().toLowerCase();
+                    var match = rinks.find(function(r){
+                      return String(r.label || '').trim().toLowerCase() === value || String(r.name || '').trim().toLowerCase() === value;
+                    });
+                    hidden.value = match ? String(match.id) : '';
+                  }
+                  input.addEventListener('input', syncRink);
+                  input.addEventListener('change', syncRink);
+                  syncRink();
+                })();
+              </script>
+              <div class="setup-notes-grid">
+                <div><label>Meet Notes</label><textarea name="notes">${esc(meet.notes||'')}</textarea></div>
+                <div><label>Relay Notes</label><textarea name="relayNotes">${esc(meet.relayNotes||'')}</textarea></div>
+              </div>
+              <div style="margin-top:10px">
+                <label>Relay Roster Deadline</label>
+                <input type="datetime-local" name="relayDeadline" value="${esc(meet.relayDeadline||'')}" />
+                <div class="hint" style="font-size:12px;color:var(--muted);margin-top:4px">Shown to coaches on the Build Relay Teams page. When this date/time passes, the coach relay form locks so no late teams can be added. Leave blank for no deadline.</div>
+              </div>
+            
+        </div>
+      </div>
+
       <div class="card">
         <div class="row between center">
           <div class="muted">Save Meet saves all settings and updates configured race titles while preserving block assignments.</div>
           <button class="btn2" type="submit" form="meetBuilderForm" formaction="/portal/meet/${meet.id}/builder/save-meet">Save Meet</button>
         </div>
       </div>
-    </form>`;
+    
+    </form>
+
+    <div class="mb-section tone-slate">
+      ${sectionHeadHtml({ n:6, icon:'💾', tone:'slate', title:'Save it for next time', sub:'Presets, ownership, staff, and desktop', state:'optional' })}
+      <div class="mb-body">
+        <div class="setup-mini-card">
+                <div class="setup-mini-title">Save Current Setup</div>
+                <div class="preset-row">
+                  <input form="meetBuilderForm" name="presetName" value="${esc(meet.presetName||'')}" placeholder="Mid South Speed League" />
+                  <button class="btn2 btn-sm" type="submit" form="meetBuilderForm" formaction="/portal/meet/${meet.id}/builder/save-preset">Save Setup</button>
+                </div>
+                <div class="setup-help-note">Saves divisions, distances, fees, tiebreaker, blocks, and race order so this setup can be reused later.</div>
+              </div>
+
+              
+        <div class="setup-mini-card">
+                <div class="setup-mini-title">Load or Delete Preset</div>
+                <div class="preset-manage-row">
+                  <select id="presetSelect" form="meetBuilderForm" name="presetId">${presetSelectHtml}</select>
+                  <button id="loadPresetBtn" class="btn2 btn-sm" type="submit" form="meetBuilderForm" formaction="/portal/meet/${meet.id}/setup-presets/load" onclick="return confirm('Load this preset? Your meet name, dates, venue, publication status, and notes will be kept. Divisions, fees, track setup, blocks, and race structure will be replaced.')">Load</button>
+                  ${canDeleteSetupPresets ? `
+                    <input type="hidden" form="meetBuilderForm" name="deletePresetId" id="deletePresetId" value="" />
+                    <button id="deletePresetBtn" class="btn-danger btn-sm" type="submit" form="meetBuilderForm" formaction="/portal/meet/${meet.id}/setup-presets/delete" onclick="return confirm('Delete selected setup preset? This cannot be undone.')">Delete</button>
+                  ` : `
+                    <span class="muted small">Only super admins can delete shared presets.</span>
+                    <input type="hidden" form="meetBuilderForm" name="deletePresetId" id="deletePresetId" value="" />
+                  `}
+                </div>
+                <div class="setup-warning-note">Your meet name, dates, venue, publication status, and notes are saved automatically when a preset loads. Divisions, fees, track setup, blocks, and race structure are replaced by the preset.</div>
+                <script>
+                  (function(){
+                    var sel = document.getElementById('presetSelect');
+                    var loadBtn = document.getElementById('loadPresetBtn');
+                    var deleteBtn = document.getElementById('deletePresetBtn');
+                    var deleteInput = document.getElementById('deletePresetId');
+                    if(!sel || !loadBtn || !deleteBtn || !deleteInput) return;
+                    function update(){
+                      var selected = sel.value;
+                      loadBtn.disabled = !selected;
+                      deleteBtn.disabled = !selected;
+                      deleteInput.value = selected || '';
+                    }
+                    sel.addEventListener('change', update);
+                    update();
+                  })();
+                </script>
+              </div>
+            
+        ${ownershipPanel}
+        ${staffPanel}
+        ${desktopPinPanel}
+        ${desktopImportPanel}
+      </div>
+    </div>`;
 }
 
 module.exports = {
