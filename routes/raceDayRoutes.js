@@ -18,6 +18,7 @@ const {
 const { fireRaceAlerts, fireResultAlerts } = require('../services/raceAlerts');
 const { skaterAvatarHtml } = require('../services/avatarDisplay');
 const { renderJudgeBoard } = require('../views/raceDayView');
+const { resultsThemeCss } = require('../views/resultsTheme');
 const {
   STANDARD_POINTS, computeMeetStandings, computeQuadStandings, computeOpenResults,
 } = require('../services/standings');
@@ -2200,7 +2201,7 @@ router.get('/portal/meet/:meetId/results', requireRole('meet_director','judge','
       <div class="rb-champ-grid">${champCards.join('')}</div>
     </div>` : '';
 
-  res.send(pageShell({title:'Results',user:req.user,meet,activeTab:'results', bodyHtml:`
+  res.send(pageShell({title:'Results',user:req.user,meet,activeTab:'results', bodyHtml:`<style>${resultsThemeCss()}</style><div class="ssm-results-dark">
     <style>
       .rb-champ-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;}
       .rb-champ{display:flex;gap:10px;align-items:center;padding:10px 12px;border:1px solid var(--border,rgba(15,31,61,.12));border-radius:12px;background:var(--card,#fff);text-decoration:none;color:inherit;transition:border-color .15s ease,transform .15s ease;}
@@ -2268,7 +2269,7 @@ router.get('/portal/meet/:meetId/results', requireRole('meet_director','judge','
         document.querySelectorAll('details.result-section').forEach(function(d){ d.open=o; });
       };
     })();
-    </script>`}));
+    </script></div>`}));
 });
 
 router.post('/portal/meet/:meetId/finalize', requireRole('meet_director'), (req, res) => {
