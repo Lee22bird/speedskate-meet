@@ -16,6 +16,7 @@ const {
   raceDayProgress,
 } = require('../services/raceDay');
 const { fireRaceAlerts, fireResultAlerts } = require('../services/raceAlerts');
+const { raceHasProtest } = require('../services/protests');
 const { skaterAvatarHtml } = require('../services/avatarDisplay');
 const { renderJudgeBoard } = require('../views/raceDayView');
 const { resultsThemeCss } = require('../views/resultsTheme');
@@ -646,7 +647,7 @@ function scoreSheetPageHtml(item, meet, raceNumber) {
 
       <div class="ss-checkboxes">
         <span class="ss-checkbox">☐ Photo Finish Used</span>
-        <span class="ss-checkbox">☐ Protest Filed</span>
+        <span class="ss-checkbox">${raceHasProtest(meet, item.id) ? '☑' : '☐'} Protest Filed</span>
         <span class="ss-checkbox">☐ Rerace</span>
         <span class="ss-checkbox">☐ Official Review</span>
       </div>
@@ -1083,7 +1084,7 @@ function correctionWarningHtml(race) {
     </div>`;
 }
 
-function renderCorrectionRaceForm(meet, race, regMap, user, error = '', ok = '') {
+function renderCorrectionRaceForm(meet, race, regMap, user, error = '', ok = '', prefillReason = '') {
   const lanes = laneRowsForRace(race, meet);
   const raceNo = raceListNumber(meet, race);
   const correctionHistory = (Array.isArray(meet.raceCorrections) ? meet.raceCorrections : [])
@@ -1127,7 +1128,7 @@ function renderCorrectionRaceForm(meet, race, regMap, user, error = '', ok = '')
           </table>
         </div>
         <div style="margin-top:14px"><label>Race Notes</label><textarea name="notes">${esc(race.notes || '')}</textarea></div>
-        <div style="margin-top:14px"><label>Correction Reason</label><textarea name="reason" placeholder="Example: Judge review corrected finishing order after protest." required></textarea></div>
+        <div style="margin-top:14px"><label>Correction Reason</label><textarea name="reason" placeholder="Example: Judge review corrected finishing order after protest." required>${esc(prefillReason || '')}</textarea></div>
         <div class="action-row" style="margin-top:14px">
           <button class="btn-orange" type="submit">Save Correction</button>
           <a class="btn2" href="/portal/meet/${esc(meet.id)}/race-day/director">Cancel</a>
@@ -1909,7 +1910,7 @@ router.get('/portal/meet/:meetId/race-day/correction', requireRole('meet_directo
       user:req.user,
       meet,
       activeTab:'race-day',
-      bodyHtml:renderCorrectionRaceForm(meet,race,regMap,req.user,req.query.error||'',req.query.ok||''),
+      bodyHtml:renderCorrectionRaceForm(meet,race,regMap,req.user,req.query.error||'',req.query.ok||'',req.query.reason||''),
     }));
   }
 

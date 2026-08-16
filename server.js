@@ -100,6 +100,7 @@ const {
   coachRecentResultsForMeet, coachStandingsForMeet, isPublicMeet, resultsSectionHtml, quadResultsSectionHtml, raceStatusResultsHtml,
 } = require('./services/meetHelpers');
 const { raceStatusLabel, statusRowsForMeet } = require('./services/raceStatus');
+const { protestsForCoach } = require('./services/protests');
 
 const {
   RELAY_TEMPLATE_ROWS,
@@ -139,6 +140,7 @@ const createAdminRoutes = require('./routes/adminRoutes');
 const createBuilderRoutes = require('./routes/builderRoutes');
 const createRegistrationRoutes = require('./routes/registrationRoutes');
 const createRaceDayRoutes = require('./routes/raceDayRoutes');
+const createProtestRoutes = require('./routes/protestRoutes');
 const createSslImportRoutes = require('./routes/sslImportRoutes');
 const createMobileApiRoutes = require('./routes/mobileApiRoutes');
 const createStaffRoutes = require('./routes/staffRoutes');
@@ -1763,10 +1765,17 @@ app.get('/portal/coach', requireRole('coach','meet_director','super_admin'), (re
     }
   });
 
+  // Protests this coach filed, across their meets, for the portal panel.
+  const stateLabelOf = s => ({ new: 'Awaiting review', review: 'Under review', upheld: 'Upheld', denied: 'Denied' }[s] || 'Awaiting review');
+  const protests = meets.flatMap(meet => protestsForCoach(meet, req.user.id).map(p => ({
+    id: p.id, category: p.category, raceLabel: p.raceLabel,
+    stateLabel: stateLabelOf(p.state), resolved: p.state === 'upheld' || p.state === 'denied',
+  })));
+
   res.send(pageShell({
     title: 'Coach Portal',
     user: req.user,
-    bodyHtml: renderCoachPortalView({ user: req.user, meetCards }),
+    bodyHtml: renderCoachPortalView({ user: req.user, meetCards, protests }),
   }));
 });
 
@@ -2574,6 +2583,7 @@ app.use('/', createAdminRoutes(routeDeps));
 app.use('/', createBuilderRoutes(routeDeps));
 app.use('/', createRegistrationRoutes(routeDeps));
 app.use('/', createRaceDayRoutes(routeDeps));
+app.use('/', createProtestRoutes(routeDeps));
 app.use('/', createStaffRoutes(routeDeps));
 app.use('/', createTimeTrialRoutes(routeDeps));
 app.use('/', createSslImportRoutes(routeDeps));
