@@ -56,12 +56,14 @@ function renderJudgeBoard({
       separately. The full pack lane sheet is on the Director and Announcer tabs.</div>
     </div>` : '';
 
-  // Finish-order tray: one chip per lane that has a skater.
+  // Finish-order tray: one chip per lane that has an entry. A relay places TEAMS,
+  // so the chip leads with the lane number and names the team — a helmet number
+  // and a first name mean nothing when four skaters share the entry.
   const trayChips = currentLanes.filter(l => l.skaterName).map(l => `
     <button type="button" class="rd-chip" data-lane="${esc(l.lane)}">
       <span class="rd-chip-ord"></span>
-      <span class="rd-chip-helmet">${esc(l.helmetNumber || '—')}</span>
-      <span class="rd-chip-name">${esc(String(l.skaterName).split(' ')[0])}</span>
+      <span class="rd-chip-helmet">${isRelay ? esc(l.lane) : esc(l.helmetNumber || '—')}</span>
+      <span class="rd-chip-name">${isRelay ? esc(l.team || l.skaterName) : esc(String(l.skaterName).split(' ')[0])}</span>
     </button>`).join('');
 
   const laneRows = currentLanes.map(l => {
@@ -69,15 +71,15 @@ function renderJudgeBoard({
     return `
       <div class="rd-row" data-lane="${esc(l.lane)}">
         <div class="rd-lane">${esc(l.lane)}</div>
-        <div class="rd-helmet">${esc(l.helmetNumber || '—')}</div>
+        <div class="rd-helmet">${isRelay ? '<span class="rd-relay-dash">—</span>' : esc(l.helmetNumber || '—')}</div>
         <div class="rd-skater">
-          ${skaterAvatarHtml ? skaterAvatarHtml(l, reg, 'small') : ''}
+          ${!isRelay && skaterAvatarHtml ? skaterAvatarHtml(l, reg, 'small') : ''}
           <div class="rd-skater-fields">
-            <input name="skaterName_${esc(l.lane)}" value="${esc(l.skaterName)}" autocomplete="off" />
+            <input name="skaterName_${esc(l.lane)}" value="${esc(l.skaterName)}" autocomplete="off" placeholder="${isRelay ? 'Relay team' : ''}" />
             ${reg?.sponsor ? `<div class="rd-sponsor">Sponsor: ${esc(reg.sponsor)}</div>` : ''}
           </div>
         </div>
-        <div><input name="team_${esc(l.lane)}" value="${esc(l.team)}" autocomplete="off" /></div>
+        <div><input name="team_${esc(l.lane)}" value="${esc(l.team)}" autocomplete="off" placeholder="${isRelay ? 'Club' : ''}" /></div>
         <div><input class="rd-place" name="place_${esc(l.lane)}" value="${esc(l.place)}" inputmode="numeric" autocomplete="off" /></div>
         <div><input class="rd-time" name="time_${esc(l.lane)}" value="${esc(l.time)}" inputmode="decimal" placeholder="—" autocomplete="off" /></div>
         <div class="rd-rec">
@@ -120,7 +122,7 @@ function renderJudgeBoard({
         ${trayChips ? `
         <div class="rd-tray-wrap">
           <div class="rd-tray-head">
-            <span class="rd-tray-title">Tap in finish order</span>
+            <span class="rd-tray-title">${isRelay ? 'Tap teams in finish order' : 'Tap in finish order'}</span>
             <span class="rd-tray-count" id="rdTrayCount"></span>
             <button type="button" class="rd-tray-clear" id="rdTrayClear">Clear order</button>
           </div>
@@ -129,7 +131,7 @@ function renderJudgeBoard({
 
         <div class="rd-table">
           <div class="rd-thead">
-            <div>Lane</div><div>Helm</div><div>Skater</div><div>Team</div>
+            <div>Lane</div><div>${isRelay ? '' : 'Helm'}</div><div>${isRelay ? 'Relay team' : 'Skater'}</div><div>${isRelay ? 'Club' : 'Team'}</div>
             <div>Place</div><div>Time</div><div>Rec</div><div>Status / DQ</div>
           </div>
           ${laneRows}
@@ -141,7 +143,7 @@ function renderJudgeBoard({
         </div>
 
         <div class="rd-actions">
-          <span class="rd-actions-note">Save posts in place and does not advance the meet. Close Race does.</span>
+          <span class="rd-actions-note">${isRelay ? 'Relays place by team — one row per team entry. Legs are listed below for reference. ' : ''}Save posts in place and does not advance the meet. Close Race does.</span>
           <button class="rd-btn rd-btn-save" type="submit" name="action" value="save">Save</button>
           <button class="rd-btn rd-btn-close" type="submit" name="action" value="close">Close race &amp; advance →</button>
         </div>
@@ -226,6 +228,7 @@ function renderJudgeBoard({
       .rd-skater{display:flex;align-items:center;gap:10px;min-width:0;}
       .rd-skater-fields{flex:1;min-width:0;}
       .rd-sponsor{font-size:11px;font-weight:600;color:#7DD3FC;margin-top:3px;}
+      .rd-relay-dash{color:rgba(255,255,255,.32);font-size:16px;}
       .rd-board input[type=text],.rd-board input:not([type]),.rd-board textarea{
         width:100%;box-sizing:border-box;min-height:44px;padding:0 12px;border-radius:10px;
         background:rgba(255,255,255,.05);border:1.5px solid rgba(255,255,255,.14);
