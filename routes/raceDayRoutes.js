@@ -17,6 +17,7 @@ const {
 } = require('../services/raceDay');
 const { fireRaceAlerts, fireResultAlerts } = require('../services/raceAlerts');
 const { skaterAvatarHtml } = require('../services/avatarDisplay');
+const { renderJudgeBoard } = require('../views/raceDayView');
 const {
   STANDARD_POINTS, computeMeetStandings, computeQuadStandings, computeOpenResults,
 } = require('../services/standings');
@@ -1852,73 +1853,11 @@ router.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','j
             if(input){ input.value=''; input.focus(); }
           }
         </script>`;
-      })():`        <div class="card">
-          <form id="judgeRaceForm" method="POST" action="/portal/meet/${meet.id}/race-day/judges/save">
-            <input type="hidden" name="raceId" value="${esc(current.id)}" />
-            ${currentMerged?`<div class="merge-live-banner" style="margin-bottom:12px">🔗 This race starts together as one pack with <b>${esc((mergeGroupMembers(meet,current)||[]).filter(m=>String(m.id)!==String(current.id)).map(m=>m.groupLabel).join(', '))}</b>. Enter places for <b>${esc(current.groupLabel)}</b> only — each division is scored separately. The full pack lane sheet is on the Director &amp; Announcer tabs.</div>`:''}
-            <div class="action-row" style="margin-bottom:14px">
-              <label class="toggle-wrap"><input type="radio" name="resultsMode" value="places" ${current.resultsMode!=='times'?'checked':''} style="width:auto" /> <span style="font-size:14px;font-weight:600">Places</span></label>
-              <label class="toggle-wrap"><input type="radio" name="resultsMode" value="times"  ${current.resultsMode==='times' ?'checked':''} style="width:auto" /> <span style="font-size:14px;font-weight:600">Times</span></label>
-            </div>
-            <div style="overflow-x:auto">
-              <table class="table">
-                <thead><tr><th>Lane</th><th>Helmet</th><th>Skater</th><th>Team</th><th>Place</th><th>Time</th><th>🏅 Rec</th><th>Status</th></tr></thead>
-                <tbody>${currentLanes.map(l=>{const reg=regMap.get(Number(l.registrationId));return`<tr>
-                  <td>${l.lane}</td><td>${l.helmetNumber?'#'+esc(l.helmetNumber):''}</td>
-                  <td><div style="display:flex;align-items:center;gap:10px">${skaterAvatarHtml(l, reg, 'small')}<div style="flex:1"><input name="skaterName_${l.lane}" value="${esc(l.skaterName)}" />${reg?.sponsor?`<div class="sponsor-line">Sponsor: ${esc(reg.sponsor)}</div>`:''}</div></div></td>
-                  <td><input name="team_${l.lane}"       value="${esc(l.team)}"       /></td>
-                  <td><input name="place_${l.lane}"      value="${esc(l.place)}"      /></td>
-                  <td><input name="time_${l.lane}"       value="${esc(l.time)}"       /></td>
-                  <td style="text-align:center"><input type="checkbox" name="record_${l.lane}" ${l.record?'checked':''} title="New record set in this race" /></td>
-                  <td><select class="race-status-select" data-lane="${esc(l.lane)}" name="status_${esc(l.lane)}">${raceStatusOptionsHtml(l.status)}</select>${dqMetadataFields(l, l.lane)}</td>
-                </tr>`;}).join('')}</tbody>
-              </table>
-            </div>
-            <div style="margin-top:14px"><label>Race Notes</label><textarea name="notes">${esc(current.notes||'')}</textarea></div>
-            <div class="action-row" style="margin-top:14px">
-              <button class="btn2" type="submit" name="action" value="save">Save</button>
-              <button class="btn-orange" type="submit" name="action" value="close">Close Race</button>
-            </div>
-          </form>
-          ${dqDialogHtml(req.user)}
-          <div id="judgeSaveToast" class="judge-save-toast" role="status" aria-live="polite">✓ Race Saved</div>
-          <style>
-            .judge-save-toast{position:fixed;right:22px;bottom:22px;background:#10b981;color:#fff;font-weight:800;border-radius:999px;padding:12px 18px;box-shadow:0 10px 30px rgba(16,185,129,.35);opacity:0;transform:translateY(12px);pointer-events:none;transition:opacity .18s ease,transform .18s ease;z-index:9999}
-            .judge-save-toast.show{opacity:1;transform:translateY(0)}
-          </style>
-          <script>
-            (function(){
-              var form=document.getElementById('judgeRaceForm');
-              var toast=document.getElementById('judgeSaveToast');
-              if(!form||!toast) return;
-              var clickedAction='';
-              form.querySelectorAll('button[type="submit"][name="action"]').forEach(function(btn){
-                btn.addEventListener('click',function(){ clickedAction=this.value||''; });
-              });
-              function showToast(msg){
-                toast.textContent=msg||'✓ Race Saved';
-                toast.classList.add('show');
-                clearTimeout(window.__judgeSaveToastTimer);
-                window.__judgeSaveToastTimer=setTimeout(function(){toast.classList.remove('show');},2200);
-              }
-              form.addEventListener('submit',function(e){
-                var action=clickedAction || (document.activeElement&&document.activeElement.value) || '';
-                if(action!=='save') return;
-                e.preventDefault();
-                var submitter=form.querySelector('button[name="action"][value="save"]');
-                var fd=new FormData(form);
-                fd.set('action','save');
-                var body=new URLSearchParams(fd);
-                if(submitter) submitter.disabled=true;
-                fetch(form.getAttribute('action'),{method:'POST',body:body,credentials:'same-origin',headers:{'Accept':'application/json','Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'}})
-                  .then(function(r){ if(!r.ok) throw new Error('Save failed'); return r.json(); })
-                  .then(function(){ showToast('✓ Race Saved'); })
-                  .catch(function(){ showToast('⚠ Save failed'); })
-                  .finally(function(){ if(submitter) submitter.disabled=false; clickedAction=''; });
-              });
-            })();
-          </script>
-        </div>${renderRelayEligibleSkatersHtml(meet,current)}`):`<div class="card"><div class="muted">No race selected yet.</div></div>`}`;
+      })():renderJudgeBoard({
+  meet, current, currentLanes, currentMerged, regMap, user: req.user,
+  raceStatusOptionsHtml, dqMetadataFields, dqDialogHtml,
+  skaterAvatarHtml, mergeGroupMembers, renderRelayEligibleSkatersHtml,
+})):`<div class="card"><div class="muted">No race selected yet.</div></div>`}`;
 
   } else if(mode==='announcer') {
     body+=`
