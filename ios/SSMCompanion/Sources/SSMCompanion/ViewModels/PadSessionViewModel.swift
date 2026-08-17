@@ -5,6 +5,8 @@ import SwiftUI
 public enum PadSection: String, CaseIterable, Identifiable {
     case director
     case blockBuilder
+    case registered
+    case checkIn
     case tabulator
     case announcer
     case referee
@@ -17,6 +19,8 @@ public enum PadSection: String, CaseIterable, Identifiable {
         switch self {
         case .director: return "Race Day Control"
         case .blockBuilder: return "Block Builder"
+        case .registered: return "Registered"
+        case .checkIn: return "Check-In"
         case .tabulator: return "Tabulator"
         case .announcer: return "Announcer"
         case .referee: return "Referee"
@@ -29,6 +33,8 @@ public enum PadSection: String, CaseIterable, Identifiable {
         switch self {
         case .director: return "flag.checkered"
         case .blockBuilder: return "square.stack.3d.up"
+        case .registered: return "person.text.rectangle"
+        case .checkIn: return "person.crop.circle.badge.checkmark"
         case .tabulator: return "square.and.pencil"
         case .announcer: return "megaphone"
         case .referee: return "person.crop.rectangle.stack"
@@ -38,15 +44,16 @@ public enum PadSection: String, CaseIterable, Identifiable {
     }
 
     /// Which staff roles may open this board — mirrors the website's race-day
-    /// tab access rules (routes/raceDayRoutes.js:1595-1600). Block Builder
-    /// follows the server's canEditMeet gate (`canBuildBlocks` from
-    /// staff-access), so assigned tabulators get it exactly like the website
+    /// tab access rules (routes/raceDayRoutes.js:1595-1600). Block Builder,
+    /// Registered, and Check-In follow the server's canEditMeet gate
+    /// (`canBuildBlocks` from staff-access — the same gate those portal pages
+    /// enforce), so assigned tabulators get them exactly like the website
     /// allows. The server still enforces everything; this only decides what
     /// the sidebar offers.
     func allowed(for role: StaffRole?, canBuildBlocks: Bool) -> Bool {
         switch self {
         case .director: return role == .director
-        case .blockBuilder: return role == .director || canBuildBlocks
+        case .blockBuilder, .registered, .checkIn: return role == .director || canBuildBlocks
         case .tabulator: return role == .director || role == .tabulator
         case .announcer, .referee: return role != nil
         case .liveBoard, .results: return true

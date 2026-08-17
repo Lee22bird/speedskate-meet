@@ -16,15 +16,20 @@ One adaptive app, two deliberate experiences:
   move menus, multi-select bulk moves, merge/unmerge with website-identical
   badges, unassigned pool with search/class/distance filters + select-all,
   live time chips using the site's exact pace math), Announcer + Referee
-  read boards, Live Board, and Results. The device decides at launch
-  (`RootTabView` → `PadRootView` on iPad); the iPhone experience is
+  read boards, Live Board, Results, **Registered** (division-grouped roster
+  with the site's exact ready-for-race-generation math, filters, and a
+  native Add/Edit Racer sheet with live cost preview), and **Check-In**
+  (race-day front desk: stat band, quick filters, attention-sorted queue,
+  paid/check-in toggles, helmet editor, needs-attention rail, walk-up adds,
+  and the bulk mark-paid / reassign-helmets actions). The device decides at
+  launch (`RootTabView` → `PadRootView` on iPad); the iPhone experience is
   untouched.
 
 This iPhone/iPad feature asymmetry is intentional (per the workspace parity
 rules: leave a note when platforms deliberately diverge). A future SSM
 Android tablet build should match the iPad scope. iPad phase 2 remaining:
-Check-In + Registered, Time Trials running, re-randomize lanes,
-finalize/reopen, score-sheet printing. Block Builder access matches the
+Time Trials running, re-randomize lanes, finalize/reopen, score-sheet
+printing. Block Builder access matches the
 website: directors always, plus anyone the server's canEditMeet gate allows
 (assigned tabulators), via the staff-access API's additive `canBuildBlocks`
 field.

@@ -422,17 +422,90 @@ public final class APIClient {
                                          expectedRedirectPrefix: "/portal/meet/\(meetID)/")
     }
 
+    // ── Check-In / Registered (iPad front desk) ──────────────────────────
+    // All of these are the website's existing portal endpoints in
+    // routes/registrationRoutes.js — form posts whose success answer is a
+    // redirect back into the meet.
+
+    public func toggleCheckIn(meetID: String, registrationID: String) async throws {
+        _ = try await portalRedirectPost("/portal/meet/\(meetID)/checkin/toggle-checkin/\(registrationID)",
+                                         expectedRedirectPrefix: "/portal/meet/\(meetID)/")
+    }
+
+    public func togglePaid(meetID: String, registrationID: String) async throws {
+        _ = try await portalRedirectPost("/portal/meet/\(meetID)/checkin/toggle-paid/\(registrationID)",
+                                         expectedRedirectPrefix: "/portal/meet/\(meetID)/")
+    }
+
+    public func bulkMarkPaid(meetID: String) async throws {
+        _ = try await portalRedirectPost("/portal/meet/\(meetID)/checkin/bulk-mark-paid",
+                                         expectedRedirectPrefix: "/portal/meet/\(meetID)/")
+    }
+
+    public func setHelmetNumber(meetID: String, registrationID: String, helmetNumber: String) async throws {
+        _ = try await portalRedirectPost("/portal/meet/\(meetID)/checkin/helmet/\(registrationID)",
+                                         formFields: [("helmetNumber", helmetNumber)],
+                                         expectedRedirectPrefix: "/portal/meet/\(meetID)/")
+    }
+
+    public func reassignHelmets(meetID: String, startHelmet: String) async throws {
+        _ = try await portalRedirectPost("/portal/meet/\(meetID)/checkin/reassign-helmets",
+                                         formFields: [("startHelmet", startHelmet)],
+                                         expectedRedirectPrefix: "/portal/meet/\(meetID)/")
+    }
+
+    /// Add/edit take JSON bodies: the server reads flags as !!body.x, so real
+    /// JSON booleans and arrays behave exactly, with none of the urlencoded
+    /// omit-unchecked-checkbox pitfalls. Validation failures come back as
+    /// 400 {ok:false,error} because we send Accept: application/json.
+    public func addRegistration(meetID: String, body: [String: Any]) async throws {
+        _ = try await portalRedirectPostJSON("/portal/meet/\(meetID)/registered/add",
+                                             body: body,
+                                             expectedRedirectPrefix: "/portal/meet/\(meetID)/")
+    }
+
+    public func editRegistration(meetID: String, registrationID: String, body: [String: Any]) async throws {
+        _ = try await portalRedirectPostJSON("/portal/meet/\(meetID)/registered/\(registrationID)/edit",
+                                             body: body,
+                                             expectedRedirectPrefix: "/portal/meet/\(meetID)/")
+    }
+
+    public func deleteRegistration(meetID: String, registrationID: String) async throws {
+        _ = try await portalRedirectPost("/portal/meet/\(meetID)/registered/\(registrationID)/delete",
+                                         expectedRedirectPrefix: "/portal/meet/\(meetID)/")
+    }
+
+    /// Same redirect-success semantics as portalRedirectPost but with a JSON
+    /// body (needed for real booleans and arrays on add/edit registration).
+    private func portalRedirectPostJSON(_ path: String,
+                                        body: [String: Any],
+                                        expectedRedirectPrefix: String) async throws -> String {
+        guard let url = URL(string: path, relativeTo: baseURL)?.absoluteURL else { throw APIError.invalidURL }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("application/json", forHTTPHeaderField: "Accept")
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        return try await sendRedirectRequest(req, expectedRedirectPrefix: expectedRedirectPrefix)
+    }
+
     /// Form POST to a portal endpoint whose success answer is a redirect
     /// back into the meet. Returns the redirect Location. The server signals
     /// a lost-permission (or deleted-meet) failure on these routes with a
     /// bare redirect to /portal — that must NOT read as success.
-    private func portalRedirectPost(_ path: String, expectedRedirectPrefix: String) async throws -> String {
+    private func portalRedirectPost(_ path: String,
+                                    formFields: [(String, String)] = [],
+                                    expectedRedirectPrefix: String) async throws -> String {
         guard let url = URL(string: path, relativeTo: baseURL)?.absoluteURL else { throw APIError.invalidURL }
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
         req.setValue("application/json", forHTTPHeaderField: "Accept")
-        req.httpBody = Data()
+        req.httpBody = Self.formEncode(formFields) ?? Data()
+        return try await sendRedirectRequest(req, expectedRedirectPrefix: expectedRedirectPrefix)
+    }
+
+    private func sendRedirectRequest(_ req: URLRequest, expectedRedirectPrefix: String) async throws -> String {
 
         let (data, response): (Data, URLResponse)
         do {

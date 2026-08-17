@@ -70,9 +70,28 @@ public struct ExportMeet: Decodable {
     public let races: [ExportRace]
     public let blocks: [ExportBlock]
     public let timeTrialEvents: [ExportTimeTrialEvent]
+    public let registrations: [ExportRegistration]
+    public let relayTemplates: [ExportRelayTemplate]
+    public let additionalGroups: [ExportAdditionalGroup]
+    public let quadEnabled: Bool
+    public let relayEnabled: Bool
+    public let baseEntryFee: Double
+    public let additionalRaceFee: Double
+    public let maxRegistrationFee: Double
 
     private enum CodingKeys: String, CodingKey {
-        case id, meetName, status, lanes, date, endDate, startTime, currentRaceId, raceDayPaused, races, blocks, timeTrialEvents
+        case id, meetName, status, lanes, date, endDate, startTime, currentRaceId, raceDayPaused, races, blocks, timeTrialEvents, registrations
+        case relayTemplates, additionalGroups, additionalRaceGroups, additionalRaces, skateabilityGroups, quadGroups, relayEnabled
+        case baseEntryFee, additionalRaceFee, maxRegistrationFee
+    }
+
+    private struct QuadGroupLite: Decodable {
+        let enabled: Bool
+        private enum CodingKeys: String, CodingKey { case enabled }
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            enabled = c.flexBool(.enabled) ?? false
+        }
     }
 
     public init(from decoder: Decoder) throws {
@@ -89,6 +108,33 @@ public struct ExportMeet: Decodable {
         races = (try? c.decodeIfPresent([ExportRace].self, forKey: .races)) ?? []
         blocks = (try? c.decodeIfPresent([ExportBlock].self, forKey: .blocks)) ?? []
         timeTrialEvents = (try? c.decodeIfPresent([ExportTimeTrialEvent].self, forKey: .timeTrialEvents)) ?? []
+        registrations = (try? c.decodeIfPresent([ExportRegistration].self, forKey: .registrations)) ?? []
+        relayTemplates = (try? c.decodeIfPresent([ExportRelayTemplate].self, forKey: .relayTemplates)) ?? []
+        // The additional-race groups live under one of four legacy keys —
+        // first non-empty wins (same fallback chain as the website's form).
+        var groups: [ExportAdditionalGroup] = []
+        for key in [CodingKeys.additionalGroups, .additionalRaceGroups, .additionalRaces, .skateabilityGroups] {
+            if let found = try? c.decodeIfPresent([ExportAdditionalGroup].self, forKey: key), !found.isEmpty {
+                groups = found
+                break
+            }
+        }
+        additionalGroups = groups
+        let quadGroups = (try? c.decodeIfPresent([QuadGroupLite].self, forKey: .quadGroups)) ?? []
+        quadEnabled = quadGroups.contains { $0.enabled }
+        relayEnabled = c.flexBool(.relayEnabled) ?? false
+        baseEntryFee = (try? c.decodeIfPresent(Double.self, forKey: .baseEntryFee)) ?? Double(c.flexInt(.baseEntryFee) ?? 0)
+        additionalRaceFee = (try? c.decodeIfPresent(Double.self, forKey: .additionalRaceFee)) ?? Double(c.flexInt(.additionalRaceFee) ?? 0)
+        maxRegistrationFee = (try? c.decodeIfPresent(Double.self, forKey: .maxRegistrationFee)) ?? Double(c.flexInt(.maxRegistrationFee) ?? 0)
+    }
+
+    /// The website's hasRelayEvents gate (services/meetHelpers.js:1530):
+    /// the relay flag, any enabled template, or an existing relay race.
+    /// Registration relay controls only render when this is true.
+    public var hasRelayEvents: Bool {
+        relayEnabled
+            || relayTemplates.contains(where: \.enabled)
+            || races.contains(where: \.isRelayRace)
     }
 
     /// Race ids that no block claims — the website's "Unassigned" pool.
@@ -262,6 +308,178 @@ public struct ExportLane: Decodable, Identifiable, Hashable {
         dqOfficialNotes = c.flexString(.dqOfficialNotes)
         dqTimestamp = c.flexString(.dqTimestamp)
         relayTeamId = c.flexString(.relayTeamId)
+    }
+}
+
+/// One registration row from desktop-export — the roster/check-in slice.
+public struct ExportRegistration: Decodable, Identifiable, Hashable {
+    public let id: String
+    public let name: String
+    public let birthdate: String
+    public let age: Int?
+    public let gender: String
+    public let email: String
+    public let team: String
+    public let sponsor: String
+    public let divisionGroupLabel: String
+    public let originalDivisionGroupLabel: String
+    public let meetNumber: String?
+    public let helmetNumber: String?
+    public let paid: Bool
+    public let checkedIn: Bool
+    public let totalCost: Double?
+    /// Truthy option flags (novice/elite/open/quad/timeTrials/additional/
+    /// relay2Person/… — keys vary by meet config).
+    public let options: [String: Bool]
+    /// Selected relay division ids — must round-trip on edit (the edit POST
+    /// wholly replaces options).
+    public let relayEventIds: [String]
+    public let quadRelayEventIds: [String]
+    public let specialRaceIds: [String]
+    public let additionalGroupId: String
+    public let challengeUp: Bool
+    public let timeTrials: Bool
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, birthdate, age, gender, email, team, sponsor
+        case divisionGroupLabel, originalDivisionGroupLabel, meetNumber, helmetNumber
+        case paid, checkedIn, totalCost, timeTrials, options
+    }
+
+    private struct AnyKey: CodingKey {
+        var stringValue: String
+        var intValue: Int? { nil }
+        init?(stringValue: String) { self.stringValue = stringValue }
+        init?(intValue: Int) { return nil }
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = c.flexString(.id) ?? ""
+        name = c.flexString(.name) ?? ""
+        birthdate = c.flexString(.birthdate) ?? ""
+        age = c.flexInt(.age)
+        gender = c.flexString(.gender) ?? ""
+        email = c.flexString(.email) ?? ""
+        team = c.flexString(.team) ?? ""
+        sponsor = c.flexString(.sponsor) ?? ""
+        divisionGroupLabel = c.flexString(.divisionGroupLabel) ?? ""
+        originalDivisionGroupLabel = c.flexString(.originalDivisionGroupLabel) ?? ""
+        meetNumber = c.flexString(.meetNumber)
+        helmetNumber = c.flexString(.helmetNumber)
+        paid = c.flexBool(.paid) ?? false
+        checkedIn = c.flexBool(.checkedIn) ?? false
+        totalCost = (try? c.decodeIfPresent(Double.self, forKey: .totalCost))
+            ?? c.flexInt(.totalCost).map(Double.init)
+        // options{} carries bools, strings, and string arrays — pull each out.
+        var flags: [String: Bool] = [:]
+        var relayIDs: [String] = []
+        var quadRelayIDs: [String] = []
+        var specialIDs: [String] = []
+        var additionalGroup = ""
+        if let sub = try? decoder.container(keyedBy: CodingKeys.self)
+            .nestedContainer(keyedBy: AnyKey.self, forKey: .options) {
+            for key in sub.allKeys {
+                switch key.stringValue {
+                case "relayEventIds":
+                    relayIDs = (try? sub.decode([String].self, forKey: key)) ?? relayIDs
+                case "quadRelayEventIds":
+                    quadRelayIDs = (try? sub.decode([String].self, forKey: key)) ?? quadRelayIDs
+                case "specialRaceIds":
+                    specialIDs = (try? sub.decode([String].self, forKey: key)) ?? specialIDs
+                case "additionalGroupId":
+                    additionalGroup = (try? sub.decode(String.self, forKey: key)) ?? additionalGroup
+                default:
+                    if let b = try? sub.decode(Bool.self, forKey: key) { flags[key.stringValue] = b }
+                    else if let i = try? sub.decode(Int.self, forKey: key) { flags[key.stringValue] = i != 0 }
+                    else if let s = try? sub.decode(String.self, forKey: key) {
+                        flags[key.stringValue] = ["true", "1", "yes", "on"].contains(s.lowercased())
+                    }
+                }
+            }
+        }
+        options = flags
+        relayEventIds = relayIDs
+        quadRelayEventIds = quadRelayIDs
+        specialRaceIds = specialIDs
+        additionalGroupId = additionalGroup
+        challengeUp = flags["challengeUp"] ?? false
+        timeTrials = c.flexBool(.timeTrials) ?? (flags["timeTrials"] ?? false)
+    }
+
+    /// A positive helmet number, or nil when unassigned/cleared.
+    public var helmetDisplay: String? {
+        guard let h = helmetNumber?.trimmingCharacters(in: .whitespaces), !h.isEmpty, h != "0" else { return nil }
+        return h
+    }
+
+    /// The website's "has entries" check (registeredView.js hasEntries):
+    /// category flags, relay flags, special races, or legacy aliases.
+    public var hasEntries: Bool {
+        let keys = ["novice", "elite", "open", "quad", "timeTrials", "additional",
+                    "relay2Person", "relay3Person", "relay4Person",
+                    "quadRelay2Person", "quadRelay3Person",
+                    "skateability", "additionalRace", "relays"]
+        if keys.contains(where: { options[$0] == true }) { return true }
+        return !specialRaceIds.isEmpty || !relayEventIds.isEmpty || !quadRelayEventIds.isEmpty
+    }
+
+    public static func == (lhs: ExportRegistration, rhs: ExportRegistration) -> Bool { lhs.id == rhs.id }
+    public func hash(into hasher: inout Hasher) { hasher.combine(id) }
+}
+
+/// A stored relay template row (meet.relayTemplates) — enough to render the
+/// registration form's relay checkboxes. Display only; the server filters
+/// submitted ids against its own enabled set.
+public struct ExportRelayTemplate: Decodable, Identifiable {
+    public let divisionId: String
+    public let enabled: Bool
+    public let type: String
+    public let age: String
+    public let ageRange: String
+    public let distance: String
+    public let discipline: String
+
+    public var id: String { divisionId }
+
+    private enum CodingKeys: String, CodingKey { case divisionId, enabled, type, age, ageRange, distance, discipline }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        divisionId = c.flexString(.divisionId) ?? ""
+        enabled = c.flexBool(.enabled) ?? false
+        type = c.flexString(.type) ?? ""
+        age = c.flexString(.age) ?? ""
+        ageRange = c.flexString(.ageRange) ?? ""
+        distance = c.flexString(.distance) ?? ""
+        discipline = c.flexString(.discipline) ?? "inline"
+    }
+
+    public var displayLabel: String {
+        let base = age.isEmpty ? type : "\(age) \(type)"
+        return ageRange.isEmpty ? base : "\(base) (\(ageRange))"
+    }
+}
+
+/// An additional-race group option for the registration form's picker.
+public struct ExportAdditionalGroup: Decodable, Identifiable {
+    public let id: String
+    public let ageGroupLabel: String
+    public let ages: String
+    public let enabled: Bool
+
+    private enum CodingKeys: String, CodingKey { case id, ageGroupLabel, ages, enabled }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = c.flexString(.id) ?? ""
+        ageGroupLabel = c.flexString(.ageGroupLabel) ?? "Additional Race"
+        ages = c.flexString(.ages) ?? ""
+        enabled = c.flexBool(.enabled) ?? true
+    }
+
+    public var displayLabel: String {
+        ages.isEmpty ? ageGroupLabel : "\(ageGroupLabel) (\(ages))"
     }
 }
 
