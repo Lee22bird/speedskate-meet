@@ -9,15 +9,26 @@ One adaptive app, two deliberate experiences:
   center for actually running a meet at the rink: Director race-day control
   (advance/pause/jump/unlock), **Tabulator result entry** (finish-order tap
   tray, place/time/record, DQ details), **Correction Mode** (closed races
-  only, required reason, audit trail), Announcer + Referee read boards, Live
-  Board, and Results. The device decides at launch (`RootTabView` →
-  `PadRootView` on iPad); the iPhone experience is untouched.
+  only, required reason, audit trail), **Block Builder** (Race Day Prep
+  stepper, generate League/Nationals schedules with the replace/append
+  confirm flow, add blocks & break/lunch/awards/practice dividers, rename /
+  day / notes / est-minutes editing, move/reorder blocks, per-race nudge +
+  move menus, multi-select bulk moves, merge/unmerge with website-identical
+  badges, unassigned pool with search/class/distance filters + select-all,
+  live time chips using the site's exact pace math), Announcer + Referee
+  read boards, Live Board, and Results. The device decides at launch
+  (`RootTabView` → `PadRootView` on iPad); the iPhone experience is
+  untouched.
 
 This iPhone/iPad feature asymmetry is intentional (per the workspace parity
 rules: leave a note when platforms deliberately diverge). A future SSM
-Android tablet build should match the iPad scope. iPad phase 2 targets:
-Block Builder (JSON endpoints already exist), Check-In, Time Trials,
-re-randomize lanes, finalize/reopen, score-sheet PDFs.
+Android tablet build should match the iPad scope. iPad phase 2 remaining:
+Check-In + Registered, Time Trials running, re-randomize lanes,
+finalize/reopen, score-sheet printing. Known gate difference: the iPad
+sidebar offers Block Builder to the meet-director role only — the website
+also lets an assigned tabulator in via the canEditMeet carve-out; matching
+that cleanly needs an additive `canBuildBlocks` field on the staff-access
+API (deliberately not added without sign-off).
 
 ## How the iPad app talks to the server — zero server changes
 

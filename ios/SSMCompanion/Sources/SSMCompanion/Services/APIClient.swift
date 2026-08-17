@@ -268,7 +268,8 @@ public final class APIClient {
         for lane in lanes { fields.append(contentsOf: lane.formFields()) }
         let _: SimpleOKResponse = try await portalRequest("/portal/meet/\(meetID)/race-day/correction/save",
                                                           method: "POST", formFields: fields,
-                                                          treatRedirectAsSuccess: true)
+                                                          treatRedirectAsSuccess: true,
+                                                          expectedRedirectPrefix: "/portal/meet/\(meetID)/")
     }
 
     /// Request against the website's portal/form endpoints with redirects
@@ -278,7 +279,8 @@ public final class APIClient {
     private func portalRequest<T: Decodable>(_ path: String,
                                              method: String = "GET",
                                              formFields: [(String, String)]? = nil,
-                                             treatRedirectAsSuccess: Bool = false) async throws -> T {
+                                             treatRedirectAsSuccess: Bool = false,
+                                             expectedRedirectPrefix: String? = nil) async throws -> T {
         guard let url = URL(string: path, relativeTo: baseURL)?.absoluteURL else { throw APIError.invalidURL }
         var req = URLRequest(url: url)
         req.httpMethod = method
@@ -300,6 +302,11 @@ public final class APIClient {
             let location = http.value(forHTTPHeaderField: "Location") ?? ""
             if location.contains("/admin/login") { throw APIError.unauthorized }
             if treatRedirectAsSuccess {
+                // A redirect that doesn't land back inside the meet (e.g. a
+                // bare /portal) is the server's lost-permission signal.
+                if let prefix = expectedRedirectPrefix, !location.contains(prefix) {
+                    throw APIError.server("You no longer have edit access to this meet.")
+                }
                 let okData = Data("{\"ok\":true}".utf8)
                 do { return try JSONDecoder().decode(T.self, from: okData) }
                 catch { throw APIError.decoding(error) }
@@ -318,6 +325,184 @@ public final class APIClient {
             }
             throw APIError.server("Request failed (\(http.statusCode)).")
         }
+        do {
+            return try JSONDecoder().decode(T.self, from: data)
+        } catch {
+            throw APIError.decoding(error)
+        }
+    }
+
+    // ── Block Builder (iPad) ─────────────────────────────────────────────
+    // All of these are the website's existing JSON block endpoints in
+    // routes/raceDayRoutes.js — the same ones its drag-and-drop UI calls.
+
+    public func addBlock(meetID: String) async throws -> String? {
+        let response: BlockAddResponse = try await apiPost("/api/meet/\(meetID)/blocks/add", body: [:])
+        return response.blockId
+    }
+
+    /// `afterBlockID` accepts a block id or the server's `__start__` sentinel.
+    public func addDivider(meetID: String, type: String, name: String, day: String, afterBlockID: String) async throws -> String? {
+        let response: BlockAddResponse = try await apiPost("/api/meet/\(meetID)/blocks/add-divider", body: [
+            "type": type, "name": name, "day": day, "afterBlockId": afterBlockID,
+        ])
+        return response.blockId
+    }
+
+    public func updateBlockMeta(meetID: String, blockID: String, name: String, day: String, type: String, notes: String, durationMin: String) async throws {
+        let _: SimpleOKResponse = try await apiPost("/api/meet/\(meetID)/blocks/update-meta", body: [
+            "blockId": blockID, "name": name, "day": day, "type": type,
+            "notes": notes, "durationMin": durationMin,
+        ])
+    }
+
+    public func deleteBlock(meetID: String, blockID: String) async throws {
+        let _: SimpleOKResponse = try await apiPost("/api/meet/\(meetID)/blocks/delete", body: ["blockId": blockID])
+    }
+
+    public func moveBlock(meetID: String, blockID: String, direction: String) async throws {
+        let _: SimpleOKResponse = try await apiPost("/api/meet/\(meetID)/blocks/move", body: ["blockId": blockID, "dir": direction])
+    }
+
+    public func reorderRaces(meetID: String, blockID: String, order: [String]) async throws {
+        let _: SimpleOKResponse = try await apiPost("/api/meet/\(meetID)/blocks/reorder-races", body: ["blockId": blockID, "order": order])
+    }
+
+    public func mergeRaces(meetID: String, raceA: String, raceB: String) async throws -> MergeRacesResponse {
+        try await apiPost("/api/meet/\(meetID)/blocks/merge-races", body: ["raceIdA": raceA, "raceIdB": raceB])
+    }
+
+    public func unmergeRaces(meetID: String, raceID: String) async throws -> UnmergeRacesResponse {
+        try await apiPost("/api/meet/\(meetID)/blocks/unmerge-races", body: ["raceId": raceID])
+    }
+
+    /// `destBlockID` accepts a block id or `__unassigned__`. When
+    /// `beforeRaceID` is nil the race lands at the end of the destination.
+    public func moveRace(meetID: String, raceID: String, destBlockID: String, beforeRaceID: String?) async throws {
+        var body: [String: Any] = ["raceId": raceID, "destBlockId": destBlockID]
+        if let beforeRaceID { body["beforeRaceId"] = beforeRaceID }
+        let _: SimpleOKResponse = try await apiPost("/api/meet/\(meetID)/blocks/move-race", body: body)
+    }
+
+    public func moveRaces(meetID: String, raceIDs: [String], destBlockID: String) async throws -> MoveRacesResponse {
+        try await apiPost("/api/meet/\(meetID)/blocks/move-races", body: ["raceIds": raceIDs, "destBlockId": destBlockID])
+    }
+
+    public func generateSchedule(meetID: String, mode: String, style: String, confirmReplace: Bool) async throws -> GenerateScheduleOutcome {
+        var body: [String: Any] = ["mode": mode, "style": style]
+        if confirmReplace { body["confirmReplace"] = true }
+        let (data, http) = try await apiPostRaw("/api/meet/\(meetID)/blocks/generate-schedule", body: body)
+        if http.statusCode == 409,
+           let decoded = try? JSONDecoder().decode(GenerateScheduleResponse.self, from: data),
+           decoded.needsConfirm == true {
+            return .needsConfirm(assignedCount: decoded.assignedCount ?? 0)
+        }
+        try Self.throwIfError(http: http, data: data)
+        let decoded = try decodeOrThrow(GenerateScheduleResponse.self, from: data)
+        return .generated(blocks: decoded.blocks ?? 0, placed: decoded.placed ?? 0)
+    }
+
+    /// The website's "Optimize Flow" button — a portal form post that
+    /// answers with a redirect on success. Returns the server's
+    /// `?autoFlow=<changedBlocks>` count (0 = nothing needed changing).
+    public func autoFlowBlocks(meetID: String) async throws -> Int? {
+        let location = try await portalRedirectPost("/portal/meet/\(meetID)/blocks/auto-flow",
+                                                    expectedRedirectPrefix: "/portal/meet/\(meetID)/")
+        guard let components = URLComponents(string: location),
+              let value = components.queryItems?.first(where: { $0.name == "autoFlow" })?.value else {
+            return nil
+        }
+        return Int(value)
+    }
+
+    /// The website's "Rebuild Races/Assignments" — recalculates race
+    /// assignments from registrations, preserving block layout server-side.
+    public func rebuildRaceAssignments(meetID: String) async throws {
+        _ = try await portalRedirectPost("/portal/meet/\(meetID)/assign-races",
+                                         expectedRedirectPrefix: "/portal/meet/\(meetID)/")
+    }
+
+    /// Form POST to a portal endpoint whose success answer is a redirect
+    /// back into the meet. Returns the redirect Location. The server signals
+    /// a lost-permission (or deleted-meet) failure on these routes with a
+    /// bare redirect to /portal — that must NOT read as success.
+    private func portalRedirectPost(_ path: String, expectedRedirectPrefix: String) async throws -> String {
+        guard let url = URL(string: path, relativeTo: baseURL)?.absoluteURL else { throw APIError.invalidURL }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        req.setValue("application/json", forHTTPHeaderField: "Accept")
+        req.httpBody = Data()
+
+        let (data, response): (Data, URLResponse)
+        do {
+            (data, response) = try await noRedirectSession.data(for: req)
+        } catch {
+            throw APIError.network(error)
+        }
+        guard let http = response as? HTTPURLResponse else { throw APIError.server("No response from server.") }
+        if (300...399).contains(http.statusCode) {
+            let location = http.value(forHTTPHeaderField: "Location") ?? ""
+            if location.contains("/admin/login") { throw APIError.unauthorized }
+            guard location.contains(expectedRedirectPrefix) else {
+                throw APIError.server("You no longer have edit access to this meet.")
+            }
+            return location
+        }
+        try Self.throwIfError(http: http, data: data)
+        throw APIError.server("Unexpected response from server.")
+    }
+
+    // ── JSON POST plumbing for the /api/meet/* block endpoints ───────────
+
+    /// JSON POST (arrays allowed in the body) with redirects suppressed, so
+    /// an expired session surfaces as .unauthorized instead of a login page.
+    private func apiPost<T: Decodable>(_ path: String, body: [String: Any]) async throws -> T {
+        let (data, http) = try await apiPostRaw(path, body: body)
+        try Self.throwIfError(http: http, data: data)
+        return try decodeOrThrow(T.self, from: data)
+    }
+
+    private func apiPostRaw(_ path: String, body: [String: Any]) async throws -> (Data, HTTPURLResponse) {
+        guard let url = URL(string: path, relativeTo: baseURL)?.absoluteURL else { throw APIError.invalidURL }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("application/json", forHTTPHeaderField: "Accept")
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (data, response): (Data, URLResponse)
+        do {
+            (data, response) = try await noRedirectSession.data(for: req)
+        } catch {
+            throw APIError.network(error)
+        }
+        guard let http = response as? HTTPURLResponse else { throw APIError.server("No response from server.") }
+        if (300...399).contains(http.statusCode) {
+            let location = http.value(forHTTPHeaderField: "Location") ?? ""
+            if location.contains("/admin/login") { throw APIError.unauthorized }
+            throw APIError.server("Unexpected redirect from server.")
+        }
+        return (data, http)
+    }
+
+    /// Shared error mapping for API responses: JSON `{ok:false,error}` first,
+    /// then short plain-text bodies (several block endpoints answer 400 with
+    /// bare text), then a generic message.
+    private static func throwIfError(http: HTTPURLResponse, data: Data) throws {
+        guard http.statusCode >= 400 else { return }
+        if http.statusCode == 401 { throw APIError.unauthorized }
+        if let decoded = try? JSONDecoder().decode(SimpleOKResponse.self, from: data), let message = decoded.error {
+            throw APIError.server(message)
+        }
+        if let text = String(data: data, encoding: .utf8), !text.isEmpty, text.count < 200, !text.contains("<") {
+            throw APIError.server(text)
+        }
+        if http.statusCode == 403 { throw APIError.server("You don't have access to this.") }
+        throw APIError.server("Request failed (\(http.statusCode)).")
+    }
+
+    private func decodeOrThrow<T: Decodable>(_ type: T.Type, from data: Data) throws -> T {
         do {
             return try JSONDecoder().decode(T.self, from: data)
         } catch {

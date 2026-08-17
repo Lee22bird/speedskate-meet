@@ -235,8 +235,16 @@ struct PadDetailRouter: View {
                 switch session.selectedSection {
                 case .director:
                     PadDirectorView()
+                case .blockBuilder:
+                    // .id(meetID) tears the view (and its @StateObject) down
+                    // the instant the sidebar switches meets — otherwise the
+                    // old meet's data stays interactive during the
+                    // staff-access round-trip and mutations hit the old meet.
+                    PadBlockBuilderView(meetID: meetID)
+                        .id(meetID)
                 case .tabulator:
                     PadTabulatorView(meetID: meetID)
+                        .id(meetID)
                 case .announcer:
                     PadAnnouncerView()
                 case .referee:
