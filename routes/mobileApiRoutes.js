@@ -272,6 +272,12 @@ module.exports = function createMobileApiRoutes(deps = {}) {
       hasAccess: true,
       role,
       canControlRaceDay: role === 'director' || role === 'tabulator',
+      // Additive: whether this user could use the website's Block Builder on
+      // this meet — the same canEditMeet gate every /api/meet/:meetId/blocks/*
+      // endpoint already enforces. Lets the iPad offer Block Builder to
+      // assigned tabulators exactly like the website does, instead of
+      // guessing from the role string.
+      canBuildBlocks: canEditMeet(data.user, meet),
     });
   });
 

@@ -115,7 +115,7 @@ struct PadSidebar: View {
 
     private var boardsSection: some View {
         Section {
-            ForEach(PadSection.allCases.filter { $0.allowed(for: session.role) }) { section in
+            ForEach(PadSection.allCases.filter { $0.allowed(for: session.role, canBuildBlocks: session.canBuildBlocks) }) { section in
                 Button {
                     session.selectedSection = section
                 } label: {

@@ -38,12 +38,15 @@ public enum PadSection: String, CaseIterable, Identifiable {
     }
 
     /// Which staff roles may open this board — mirrors the website's race-day
-    /// tab access rules (routes/raceDayRoutes.js:1595-1600) and its
-    /// director-only meet tabs. The server still enforces everything; this
-    /// only decides what the sidebar offers.
-    func allowed(for role: StaffRole?) -> Bool {
+    /// tab access rules (routes/raceDayRoutes.js:1595-1600). Block Builder
+    /// follows the server's canEditMeet gate (`canBuildBlocks` from
+    /// staff-access), so assigned tabulators get it exactly like the website
+    /// allows. The server still enforces everything; this only decides what
+    /// the sidebar offers.
+    func allowed(for role: StaffRole?, canBuildBlocks: Bool) -> Bool {
         switch self {
-        case .director, .blockBuilder: return role == .director
+        case .director: return role == .director
+        case .blockBuilder: return role == .director || canBuildBlocks
         case .tabulator: return role == .director || role == .tabulator
         case .announcer, .referee: return role != nil
         case .liveBoard, .results: return true
@@ -60,6 +63,7 @@ public final class PadSessionViewModel: ObservableObject {
     @Published public var selectedSection: PadSection?
     @Published public private(set) var role: StaffRole?
     @Published public private(set) var canControlRaceDay: Bool = false
+    @Published public private(set) var canBuildBlocks: Bool = false
     @Published public private(set) var state: RaceDayStateResponse?
     @Published public private(set) var isSendingAction = false
     @Published public var errorMessage: String?
@@ -80,6 +84,7 @@ public final class PadSessionViewModel: ObservableObject {
         selectedMeetName = name
         role = nil
         canControlRaceDay = false
+        canBuildBlocks = false
         state = nil
         errorMessage = nil
 
@@ -87,9 +92,11 @@ public final class PadSessionViewModel: ObservableObject {
             let access = try await api.staffAccess(meetID: id)
             role = access.hasAccess ? access.role : nil
             canControlRaceDay = access.canControlRaceDay ?? false
+            canBuildBlocks = access.canBuildBlocks ?? false
         } catch {
             role = nil
             canControlRaceDay = false
+            canBuildBlocks = false
         }
 
         selectedSection = defaultSection(for: role)
@@ -106,6 +113,7 @@ public final class PadSessionViewModel: ObservableObject {
         selectedSection = nil
         role = nil
         canControlRaceDay = false
+        canBuildBlocks = false
         state = nil
     }
 

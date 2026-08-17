@@ -261,6 +261,10 @@ public struct StaffAccessResponse: Decodable {
     public let hasAccess: Bool
     public let role: StaffRole?
     public let canControlRaceDay: Bool?
+    /// Whether this user may use the Block Builder on this meet (the
+    /// server's canEditMeet gate — includes assigned tabulators). Optional
+    /// so older servers without the field keep working.
+    public let canBuildBlocks: Bool?
 }
 
 public struct StaffMeetSummary: Decodable, Identifiable, Hashable {
