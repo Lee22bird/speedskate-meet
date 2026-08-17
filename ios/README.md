@@ -24,11 +24,10 @@ This iPhone/iPad feature asymmetry is intentional (per the workspace parity
 rules: leave a note when platforms deliberately diverge). A future SSM
 Android tablet build should match the iPad scope. iPad phase 2 remaining:
 Check-In + Registered, Time Trials running, re-randomize lanes,
-finalize/reopen, score-sheet printing. Known gate difference: the iPad
-sidebar offers Block Builder to the meet-director role only — the website
-also lets an assigned tabulator in via the canEditMeet carve-out; matching
-that cleanly needs an additive `canBuildBlocks` field on the staff-access
-API (deliberately not added without sign-off).
+finalize/reopen, score-sheet printing. Block Builder access matches the
+website: directors always, plus anyone the server's canEditMeet gate allows
+(assigned tabulators), via the staff-access API's additive `canBuildBlocks`
+field.
 
 ## How the iPad app talks to the server — zero server changes
 
