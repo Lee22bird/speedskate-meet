@@ -10,20 +10,46 @@ public struct PadRootView: View {
     @StateObject private var staffMeets = StaffMeetsViewModel()
     @StateObject private var allMeets = MeetsListViewModel()
     @State private var showLogin = false
+    /// Custom overlay drawer — every board runs full-width and the ☰ button
+    /// slides the sidebar in over it. (NavigationSplitView's columnVisibility
+    /// binding can't be reliably re-opened programmatically on iPad, so we
+    /// own the drawer state directly.) Starts open until a meet is picked.
+    @State private var drawerOpen = true
+
+    private static let drawerWidth: CGFloat = 380
 
     public init() {}
 
     public var body: some View {
-        NavigationSplitView {
-            PadSidebar(showLogin: $showLogin)
+        ZStack(alignment: .leading) {
+            PadDetailRouter(drawerOpen: $drawerOpen)
                 .environmentObject(auth)
                 .environmentObject(session)
-                .environmentObject(staffMeets)
-                .environmentObject(allMeets)
-        } detail: {
-            PadDetailRouter()
-                .environmentObject(auth)
-                .environmentObject(session)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            // Dim backdrop — tap to dismiss.
+            if drawerOpen {
+                Color.black.opacity(0.45)
+                    .ignoresSafeArea()
+                    .onTapGesture { withAnimation(.easeInOut(duration: 0.2)) { drawerOpen = false } }
+                    .transition(.opacity)
+                    .zIndex(1)
+            }
+
+            if drawerOpen {
+                PadSidebar(showLogin: $showLogin,
+                           closeDrawer: { withAnimation(.easeInOut(duration: 0.2)) { drawerOpen = false } })
+                    .environmentObject(auth)
+                    .environmentObject(session)
+                    .environmentObject(staffMeets)
+                    .environmentObject(allMeets)
+                    .frame(width: Self.drawerWidth)
+                    .frame(maxHeight: .infinity)
+                    .background(SSMTheme.pageBackground)
+                    .shadow(color: .black.opacity(0.5), radius: 20, x: 4, y: 0)
+                    .transition(.move(edge: .leading))
+                    .zIndex(2)
+            }
         }
         .background(SSMTheme.pageBackground)
         .preferredColorScheme(.dark)
@@ -54,30 +80,52 @@ struct PadSidebar: View {
     @EnvironmentObject private var staffMeets: StaffMeetsViewModel
     @EnvironmentObject private var allMeets: MeetsListViewModel
     @Binding var showLogin: Bool
+    /// Slide the drawer shut after a pick so the chosen board is immediately
+    /// full-width.
+    let closeDrawer: () -> Void
 
     var body: some View {
-        List {
-            accountSection
-            if session.selectedMeetID != nil {
-                boardsSection
+        // Plain ScrollView + VStack (not List) — predictable hit-testing and
+        // width inside the custom drawer overlay.
+        ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+                Text("Speed Skate Meet")
+                    .font(.ssmRounded(26, weight: .heavy))
+                    .foregroundStyle(SSMTheme.textPrimary)
+                    .padding(.top, 8)
+
+                accountSection
+                if session.selectedMeetID != nil {
+                    boardsSection
+                }
+                if auth.isLoggedIn {
+                    myMeetsSection
+                }
+                allMeetsSection
             }
-            if auth.isLoggedIn {
-                myMeetsSection
-            }
-            allMeetsSection
+            .padding(20)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .listStyle(.sidebar)
-        .scrollContentBackground(.hidden)
+        .scrollIndicators(.hidden)
         .background(SSMTheme.pageBackground)
-        .navigationTitle("Speed Skate Meet")
-        .refreshable {
-            await staffMeets.load()
-            await allMeets.load()
-        }
+        .safeAreaPadding(.top)
+    }
+
+    private func sectionHeader(_ text: String, accent: Color = SSMTheme.muted) -> some View {
+        Text(text.uppercased())
+            .font(.ssmRounded(11, weight: .heavy))
+            .foregroundStyle(accent)
+    }
+
+    private func card<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        content()
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(SSMTheme.cardBackground, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     private var accountSection: some View {
-        Section {
+        card {
             if let user = auth.currentUser {
                 HStack(spacing: 10) {
                     Image(systemName: "person.crop.circle.fill")
@@ -93,13 +141,11 @@ struct PadSidebar: View {
                             .lineLimit(1)
                     }
                     Spacer()
-                    Button("Log Out") {
-                        auth.logout()
-                    }
-                    .font(.ssmRounded(12, weight: .bold))
-                    .foregroundStyle(SSMTheme.muted)
+                    Button("Log Out") { auth.logout() }
+                        .font(.ssmRounded(12, weight: .bold))
+                        .foregroundStyle(SSMTheme.muted)
+                        .buttonStyle(.plain)
                 }
-                .padding(.vertical, 2)
             } else {
                 Button {
                     showLogin = true
@@ -108,49 +154,50 @@ struct PadSidebar: View {
                         .font(.ssmRounded(15, weight: .bold))
                         .foregroundStyle(SSMTheme.orange)
                 }
+                .buttonStyle(.plain)
             }
         }
-        .listRowBackground(SSMTheme.cardBackground)
     }
 
     private var boardsSection: some View {
-        Section {
-            ForEach(PadSection.allCases.filter { $0.allowed(for: session.role, canBuildBlocks: session.canBuildBlocks) }) { section in
-                Button {
-                    session.selectedSection = section
-                } label: {
-                    HStack {
-                        Label(section.title, systemImage: section.icon)
-                            .font(.ssmRounded(15, weight: session.selectedSection == section ? .bold : .semibold))
-                            .foregroundStyle(session.selectedSection == section ? SSMTheme.orange : SSMTheme.textPrimary)
-                        Spacer()
-                        if session.selectedSection == section {
-                            Circle().fill(SSMTheme.orange).frame(width: 7, height: 7)
-                        }
-                    }
-                }
-            }
-        } header: {
+        VStack(alignment: .leading, spacing: 8) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(session.selectedMeetName)
                     .font(.ssmRounded(13, weight: .heavy))
                     .foregroundStyle(SSMTheme.textPrimary)
-                if let role = session.role {
-                    Text(role.displayName.uppercased())
-                        .font(.ssmRounded(10, weight: .bold))
-                        .foregroundStyle(SSMTheme.orange)
-                } else {
-                    Text("SPECTATOR")
-                        .font(.ssmRounded(10, weight: .bold))
-                        .foregroundStyle(SSMTheme.muted)
+                Text((session.role?.displayName ?? "Spectator").uppercased())
+                    .font(.ssmRounded(10, weight: .bold))
+                    .foregroundStyle(session.role != nil ? SSMTheme.orange : SSMTheme.muted)
+            }
+            card {
+                VStack(spacing: 4) {
+                    ForEach(PadSection.allCases.filter { $0.allowed(for: session.role, canBuildBlocks: session.canBuildBlocks) }) { section in
+                        Button {
+                            session.selectedSection = section
+                            closeDrawer()
+                        } label: {
+                            HStack {
+                                Label(section.title, systemImage: section.icon)
+                                    .font(.ssmRounded(15, weight: session.selectedSection == section ? .bold : .semibold))
+                                    .foregroundStyle(session.selectedSection == section ? SSMTheme.orange : SSMTheme.textPrimary)
+                                Spacer()
+                                if session.selectedSection == section {
+                                    Circle().fill(SSMTheme.orange).frame(width: 7, height: 7)
+                                }
+                            }
+                            .padding(.vertical, 8)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
             }
         }
-        .listRowBackground(SSMTheme.cardBackground)
     }
 
     private var myMeetsSection: some View {
-        Section("My Meets") {
+        VStack(alignment: .leading, spacing: 8) {
+            sectionHeader("My Meets")
             if staffMeets.meets.isEmpty {
                 Text(staffMeets.isLoading ? "Loading…" : "No assigned meets.")
                     .font(.ssmRounded(13, weight: .medium))
@@ -159,37 +206,44 @@ struct PadSidebar: View {
             ForEach(staffMeets.meets) { meet in
                 Button {
                     Task { await session.selectMeet(id: meet.id.stringValue, name: meet.meetName) }
+                    closeDrawer()
                 } label: {
-                    PadSidebarMeetRow(
-                        name: meet.meetName,
-                        detail: meet.date,
-                        badge: meet.role.displayName,
-                        isLive: meet.status.lowercased() == "live",
-                        isSelected: session.selectedMeetID == meet.id.stringValue
-                    )
+                    card {
+                        PadSidebarMeetRow(
+                            name: meet.meetName,
+                            detail: meet.date,
+                            badge: meet.role.displayName,
+                            isLive: meet.status.lowercased() == "live",
+                            isSelected: session.selectedMeetID == meet.id.stringValue
+                        )
+                    }
                 }
+                .buttonStyle(.plain)
             }
         }
-        .listRowBackground(SSMTheme.cardBackground)
     }
 
     private var allMeetsSection: some View {
-        Section("All Meets") {
+        VStack(alignment: .leading, spacing: 8) {
+            sectionHeader("All Meets")
             ForEach(allMeets.meets) { meet in
                 Button {
                     Task { await session.selectMeet(id: meet.id.stringValue, name: meet.meetName) }
+                    closeDrawer()
                 } label: {
-                    PadSidebarMeetRow(
-                        name: meet.meetName,
-                        detail: "\(meet.date) · \(meet.location)",
-                        badge: nil,
-                        isLive: meet.isLiveNow,
-                        isSelected: session.selectedMeetID == meet.id.stringValue
-                    )
+                    card {
+                        PadSidebarMeetRow(
+                            name: meet.meetName,
+                            detail: "\(meet.date) · \(meet.location)",
+                            badge: nil,
+                            isLive: meet.isLiveNow,
+                            isSelected: session.selectedMeetID == meet.id.stringValue
+                        )
+                    }
                 }
+                .buttonStyle(.plain)
             }
         }
-        .listRowBackground(SSMTheme.cardBackground)
     }
 }
 
@@ -228,50 +282,92 @@ struct PadSidebarMeetRow: View {
 struct PadDetailRouter: View {
     @EnvironmentObject private var auth: AuthViewModel
     @EnvironmentObject private var session: PadSessionViewModel
+    @Binding var drawerOpen: Bool
 
     var body: some View {
-        Group {
-            if let meetID = session.selectedMeetID {
-                switch session.selectedSection {
-                case .director:
-                    PadDirectorView()
-                case .blockBuilder:
-                    // .id(meetID) tears the view (and its @StateObject) down
-                    // the instant the sidebar switches meets — otherwise the
-                    // old meet's data stays interactive during the
-                    // staff-access round-trip and mutations hit the old meet.
-                    PadBlockBuilderView(meetID: meetID)
-                        .id(meetID)
-                case .registered:
-                    PadRegisteredView(meetID: meetID)
-                        .id(meetID)
-                case .checkIn:
-                    PadCheckInView(meetID: meetID)
-                        .id(meetID)
-                case .tabulator:
-                    PadTabulatorView(meetID: meetID)
-                        .id(meetID)
-                case .announcer:
-                    PadAnnouncerView()
-                case .referee:
-                    PadRefereeView()
-                case .liveBoard:
-                    PadEmbeddedScreen(title: session.selectedMeetName) {
-                        LiveRaceDayView(meetID: meetID, meetName: session.selectedMeetName)
-                    }
-                case .results:
-                    PadEmbeddedScreen(title: session.selectedMeetName) {
-                        ResultsView(meetID: meetID, meetName: session.selectedMeetName)
-                    }
-                case nil:
-                    PadPlaceholder(text: "Pick a board from the sidebar.")
-                }
-            } else {
-                PadPlaceholder(text: "Select a meet to get started.")
-            }
+        VStack(spacing: 0) {
+            detailHeader
+            routedContent
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(SSMTheme.pageBackground)
+    }
+
+    /// Slim chrome bar carrying the drawer toggle (top-left ☰) and a
+    /// breadcrumb, so every board keeps the full width below it.
+    private var detailHeader: some View {
+        HStack(spacing: 14) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) { drawerOpen.toggle() }
+            } label: {
+                Image(systemName: "line.3.horizontal")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(SSMTheme.textPrimary)
+                    .frame(width: 44, height: 44)
+                    .background(SSMTheme.cardBackground, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Menu")
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(session.selectedMeetID == nil ? "Speed Skate Meet"
+                     : (session.selectedMeetName.isEmpty ? "Speed Skate Meet" : session.selectedMeetName))
+                    .font(.ssmRounded(16, weight: .heavy))
+                    .foregroundStyle(SSMTheme.textPrimary)
+                    .lineLimit(1)
+                if session.selectedMeetID != nil, let title = session.selectedSection?.title {
+                    Text(title.uppercased())
+                        .font(.ssmRounded(10, weight: .bold))
+                        .foregroundStyle(SSMTheme.orange)
+                }
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(SSMTheme.pageBackground)
+    }
+
+    @ViewBuilder private var routedContent: some View {
+        if let meetID = session.selectedMeetID {
+            switch session.selectedSection {
+            case .director:
+                PadDirectorView()
+            case .blockBuilder:
+                // .id(meetID) tears the view (and its @StateObject) down
+                // the instant the sidebar switches meets — otherwise the
+                // old meet's data stays interactive during the
+                // staff-access round-trip and mutations hit the old meet.
+                PadBlockBuilderView(meetID: meetID)
+                    .id(meetID)
+            case .registered:
+                PadRegisteredView(meetID: meetID)
+                    .id(meetID)
+            case .checkIn:
+                PadCheckInView(meetID: meetID)
+                    .id(meetID)
+            case .tabulator:
+                PadTabulatorView(meetID: meetID)
+                    .id(meetID)
+            case .announcer:
+                PadAnnouncerView()
+            case .referee:
+                PadRefereeView()
+            case .liveBoard:
+                PadEmbeddedScreen(title: session.selectedMeetName) {
+                    LiveRaceDayView(meetID: meetID, meetName: session.selectedMeetName)
+                }
+            case .results:
+                PadEmbeddedScreen(title: session.selectedMeetName) {
+                    ResultsView(meetID: meetID, meetName: session.selectedMeetName)
+                }
+            case nil:
+                PadPlaceholder(text: "Pick a board from the ☰ menu.")
+            }
+        } else {
+            PadPlaceholder(text: "Tap ☰ to pick a meet.")
+        }
     }
 }
 
