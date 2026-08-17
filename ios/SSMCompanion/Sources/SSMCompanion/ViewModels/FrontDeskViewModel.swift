@@ -228,12 +228,11 @@ public final class FrontDeskViewModel: ObservableObject {
 
     // ── Mutations ────────────────────────────────────────────────────────
 
-    /// The toggle endpoints are blind inversions server-side, so the flash
-    /// reports the reg's state AFTER refresh — never the pre-tap guess
-    /// (another station may have flipped it first).
+    /// Sends the intended state (server assigns, not inverts), and the flash
+    /// still reports the reg's state AFTER refresh — the server is truth.
     public func toggleCheckIn(_ reg: ExportRegistration) async {
         await run {
-            try await self.api.toggleCheckIn(meetID: self.meetID, registrationID: reg.id)
+            try await self.api.setCheckedIn(meetID: self.meetID, registrationID: reg.id, to: !reg.checkedIn)
         }
         guard errorMessage == nil else { return }
         if let updated = registrations.first(where: { $0.id == reg.id }) {
@@ -243,7 +242,7 @@ public final class FrontDeskViewModel: ObservableObject {
 
     public func togglePaid(_ reg: ExportRegistration) async {
         await run {
-            try await self.api.togglePaid(meetID: self.meetID, registrationID: reg.id)
+            try await self.api.setPaid(meetID: self.meetID, registrationID: reg.id, to: !reg.paid)
         }
         guard errorMessage == nil else { return }
         if let updated = registrations.first(where: { $0.id == reg.id }) {

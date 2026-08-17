@@ -1075,11 +1075,25 @@ router.get('/portal/meet/:meetId/checkin', requireRole('meet_director'), (req, r
   }));
 });
 
+// Optional absolute setter for the two check-in toggles. When the POST body
+// carries paid/checkedIn, assign that value instead of inverting, so a
+// stale client's tap becomes an idempotent no-op rather than a reversal
+// (two front-desk stations can otherwise undo each other). Website forms
+// post no body field and keep today's toggle behavior unchanged.
+function requestedToggleValue(raw) {
+  if (raw === undefined || raw === null || raw === '') return null;
+  if (typeof raw === 'boolean') return raw;
+  return ['1', 'true', 'on', 'yes'].includes(String(raw).trim().toLowerCase());
+}
+
 router.post('/portal/meet/:meetId/checkin/toggle-paid/:regId', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
   const reg=(meet.registrations||[]).find(r=>Number(r.id)===Number(req.params.regId));
-  if(reg) reg.paid=!reg.paid;
+  if(reg){
+    const wanted = requestedToggleValue(req.body && req.body.paid);
+    reg.paid = wanted === null ? !reg.paid : wanted;
+  }
   saveDb(req.db);
   res.redirect(registrationOpsRedirect(meet, req, 'paid=1'));
 });
@@ -1100,7 +1114,10 @@ router.post('/portal/meet/:meetId/checkin/toggle-checkin/:regId', requireRole('m
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
   const reg=(meet.registrations||[]).find(r=>Number(r.id)===Number(req.params.regId));
-  if(reg) reg.checkedIn=!reg.checkedIn;
+  if(reg){
+    const wanted = requestedToggleValue(req.body && req.body.checkedIn);
+    reg.checkedIn = wanted === null ? !reg.checkedIn : wanted;
+  }
   saveDb(req.db);
   res.redirect(registrationOpsRedirect(meet, req, 'checkedIn=1'));
 });

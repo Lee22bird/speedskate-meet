@@ -427,13 +427,18 @@ public final class APIClient {
     // routes/registrationRoutes.js — form posts whose success answer is a
     // redirect back into the meet.
 
-    public func toggleCheckIn(meetID: String, registrationID: String) async throws {
+    /// Sends the INTENDED state ("1"/"0") — the server assigns it instead of
+    /// blind-inverting, so a tap made on stale data is an idempotent no-op
+    /// rather than a reversal when another station got there first.
+    public func setCheckedIn(meetID: String, registrationID: String, to value: Bool) async throws {
         _ = try await portalRedirectPost("/portal/meet/\(meetID)/checkin/toggle-checkin/\(registrationID)",
+                                         formFields: [("checkedIn", value ? "1" : "0")],
                                          expectedRedirectPrefix: "/portal/meet/\(meetID)/")
     }
 
-    public func togglePaid(meetID: String, registrationID: String) async throws {
+    public func setPaid(meetID: String, registrationID: String, to value: Bool) async throws {
         _ = try await portalRedirectPost("/portal/meet/\(meetID)/checkin/toggle-paid/\(registrationID)",
+                                         formFields: [("paid", value ? "1" : "0")],
                                          expectedRedirectPrefix: "/portal/meet/\(meetID)/")
     }
 
