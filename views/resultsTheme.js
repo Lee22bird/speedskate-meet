@@ -143,14 +143,18 @@ function resultsThemeCss() {
     top:0;
     z-index:1;
   }
+  /* Paint the rows an EXPLICIT dark — do not rely on transparency over the card,
+     because the base .table sits on a light --card (#f8fafc) and any gap there
+     renders white text on a white row. Solid dark cells are white-on-dark always. */
   .ssm-results-dark .table td{
     color:#fff;
+    background:#111d34;
     border-bottom-color:rgba(255,255,255,.08);
   }
   .ssm-results-dark .table tbody tr:nth-child(even) td{
-    background:rgba(255,255,255,.025);
+    background:#16233d;
   }
-  .ssm-results-dark .table tr:hover td{ background:rgba(56,189,248,.07); }
+  .ssm-results-dark .table tr:hover td{ background:#1c2c4c; }
   .ssm-results-dark .table td .note{ color:#7DD3FC; }
 
   /* Tiebreaker + run-off */
@@ -208,8 +212,9 @@ function resultsThemeCss() {
     .ssm-results-dark .card,
     .ssm-results-dark details.result-section,
     .ssm-results-dark .podium-card,
-    .ssm-results-dark .table th{ background:#fff; border-color:#ccc; }
-    .ssm-results-dark .table tbody tr:nth-child(even) td{ background:#fff; }
+    .ssm-results-dark .table th,
+    .ssm-results-dark .table td,
+    .ssm-results-dark .table tbody tr:nth-child(even) td{ background:#fff; border-color:#ccc; }
   }`;
 }
 
