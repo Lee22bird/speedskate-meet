@@ -1,4 +1,7 @@
 import SwiftUI
+#if os(iOS)
+import UIKit
+#endif
 
 /// iPad Tabulator board — mirrors the website's judges panel
 /// (views/raceDayView.js renderJudgeBoard): finish-order tap tray, lane grid
@@ -331,7 +334,8 @@ struct PadTabulatorView: View {
                 if race.isClosed {
                     closedBanner
                 }
-                modeAndTray
+                modeBar
+                tapToPlaceCard
                 laneGrid
                 notesCard
                 actionBar(race)
@@ -421,47 +425,175 @@ struct PadTabulatorView: View {
         }
     }
 
-    // ── Mode toggle + finish-order tray ──────────────────────────────────
+    // ── Mode toggle ──────────────────────────────────────────────────────
 
-    private var modeAndTray: some View {
+    private var modeBar: some View {
         SSMCard {
+            HStack(spacing: 14) {
+                Picker("Results mode", selection: $model.resultsMode) {
+                    Text("Places").tag("places")
+                    Text("Times").tag("times")
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 240)
+                .onChange(of: model.resultsMode) { _, _ in model.markDirty() }
+                Text(model.resultsMode == "places"
+                     ? "Places are authoritative; time is optional."
+                     : "Times drive the ranking.")
+                    .font(.ssmRounded(12, weight: .medium))
+                    .foregroundStyle(SSMTheme.muted)
+                Spacer()
+            }
+        }
+    }
+
+    // ── Tap-to-place hero ────────────────────────────────────────────────
+    // The finish-line workflow: tap each skater as they cross, big helmet
+    // numbers front-and-centre; tapped skaters drop into a live finish-order
+    // column. Undo, tap-to-unplace, and auto-place the last skater.
+
+    private var tapToPlaceCard: some View {
+        let placed = model.placedLanes
+        let unplaced = model.unplacedLanes
+        let total = model.placeableCount
+
+        return SSMCard {
             VStack(alignment: .leading, spacing: 14) {
-                HStack(spacing: 14) {
-                    Picker("Results mode", selection: $model.resultsMode) {
-                        Text("Places").tag("places")
-                        Text("Times").tag("times")
+                HStack(alignment: .center) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("TAP AS THEY FINISH")
+                            .font(.ssmRounded(13, weight: .heavy))
+                            .foregroundStyle(SSMTheme.orange)
+                        Text("\(placed.count) of \(total) placed")
+                            .font(.ssmRounded(12, weight: .semibold))
+                            .foregroundStyle(SSMTheme.muted)
                     }
-                    .pickerStyle(.segmented)
-                    .frame(width: 240)
-                    .onChange(of: model.resultsMode) { _, _ in model.markDirty() }
-                    Text(model.resultsMode == "places"
-                         ? "Places are authoritative; time is optional."
-                         : "Times drive the ranking.")
-                        .font(.ssmRounded(12, weight: .medium))
-                        .foregroundStyle(SSMTheme.muted)
                     Spacer()
-                    Button("Clear Order") { model.clearFinishOrder() }
-                        .font(.ssmRounded(13, weight: .bold))
-                        .foregroundStyle(SSMTheme.danger)
+                    Button {
+                        SSMHaptics.tap()
+                        model.undoLastFinish()
+                    } label: {
+                        Label("Undo", systemImage: "arrow.uturn.backward")
+                            .font(.ssmRounded(13, weight: .bold))
+                    }
+                    .buttonStyle(.ssmSoftPill)
+                    .disabled(placed.isEmpty)
+
+                    Button("Clear") {
+                        SSMHaptics.tap()
+                        model.clearFinishOrder()
+                    }
+                    .font(.ssmRounded(13, weight: .bold))
+                    .foregroundStyle(SSMTheme.danger)
+                    .disabled(placed.isEmpty)
                 }
 
-                Text("TAP IN FINISH ORDER")
-                    .font(.ssmRounded(12, weight: .heavy))
-                    .foregroundStyle(SSMTheme.muted)
-
-                let columns = [GridItem(.adaptive(minimum: 150), spacing: 10)]
-                LazyVGrid(columns: columns, spacing: 10) {
-                    ForEach(model.lanes.filter(\.hasSkater)) { lane in
-                        FinishOrderChip(
-                            lane: lane,
-                            orderIndex: model.finishOrder.firstIndex(of: lane.lane)
-                        ) {
-                            model.tapFinishOrder(lane: lane.lane)
-                        }
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .top, spacing: 16) {
+                        unplacedPad(unplaced).frame(maxWidth: .infinity, alignment: .topLeading)
+                        finishOrderColumn(placed).frame(width: 320)
+                    }
+                    VStack(alignment: .leading, spacing: 16) {
+                        unplacedPad(unplaced)
+                        finishOrderColumn(placed)
                     }
                 }
             }
         }
+    }
+
+    /// The grid of big skater buttons still waiting to be placed.
+    @ViewBuilder private func unplacedPad(_ unplaced: [LaneEdit]) -> some View {
+        if unplaced.isEmpty {
+            HStack(spacing: 10) {
+                Image(systemName: "checkmark.seal.fill")
+                    .foregroundStyle(SSMTheme.good)
+                Text("Everyone's placed — review the order, then Close Race.")
+                    .font(.ssmRounded(14, weight: .bold))
+                    .foregroundStyle(SSMTheme.good)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 20)
+        } else {
+            VStack(alignment: .leading, spacing: 10) {
+                let columns = [GridItem(.adaptive(minimum: 132), spacing: 10)]
+                LazyVGrid(columns: columns, spacing: 10) {
+                    ForEach(unplaced) { lane in
+                        FinishTapButton(lane: lane) {
+                            SSMHaptics.tap()
+                            withAnimation(.easeOut(duration: 0.18)) {
+                                model.tapFinishOrder(lane: lane.lane)
+                            }
+                        }
+                    }
+                }
+                if unplaced.count == 1, let last = unplaced.first {
+                    Button {
+                        SSMHaptics.tap()
+                        withAnimation { model.placeRemaining() }
+                    } label: {
+                        Label("Place last skater — \(shortName(last.skaterName))", systemImage: "flag.checkered")
+                            .font(.ssmRounded(13, weight: .bold))
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.ssmSoftPill)
+                    .padding(.top, 2)
+                }
+            }
+        }
+    }
+
+    /// The live finish-order results column filling in 1..N.
+    @ViewBuilder private func finishOrderColumn(_ placed: [LaneEdit]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("FINISH ORDER")
+                .font(.ssmRounded(11, weight: .heavy))
+                .foregroundStyle(SSMTheme.muted)
+            if placed.isEmpty {
+                Text("Tap a skater as they cross the line.")
+                    .font(.ssmRounded(13, weight: .medium))
+                    .foregroundStyle(SSMTheme.muted)
+                    .padding(.vertical, 10)
+            } else {
+                ForEach(Array(placed.enumerated()), id: \.element.lane) { index, lane in
+                    Button {
+                        SSMHaptics.tap()
+                        withAnimation(.easeOut(duration: 0.18)) { model.unplace(lane: lane.lane) }
+                    } label: {
+                        HStack(spacing: 10) {
+                            PlaceBadge(place: index + 1)
+                            VStack(alignment: .leading, spacing: 1) {
+                                HStack(spacing: 6) {
+                                    if let helmet = lane.helmetNumber, !helmet.isEmpty {
+                                        Text("#\(helmet)")
+                                            .font(.ssmRounded(12, weight: .heavy))
+                                            .foregroundStyle(SSMTheme.sky)
+                                    }
+                                    Text(lane.skaterName)
+                                        .font(.ssmRounded(14, weight: .bold))
+                                        .foregroundStyle(SSMTheme.textPrimary)
+                                        .lineLimit(1)
+                                }
+                                Text("Lane \(lane.lane)\(lane.team.isEmpty ? "" : " · \(lane.team)")")
+                                    .font(.ssmRounded(10, weight: .medium))
+                                    .foregroundStyle(SSMTheme.muted)
+                                    .lineLimit(1)
+                            }
+                            Spacer()
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(SSMTheme.muted.opacity(0.6))
+                        }
+                        .padding(8)
+                        .background(SSMTheme.cardBackgroundLight, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private func shortName(_ name: String) -> String {
+        name.split(separator: " ").first.map(String.init) ?? name
     }
 
     // ── Lane grid ────────────────────────────────────────────────────────
@@ -562,47 +694,74 @@ struct PadTabulatorView: View {
 
 // ── Pieces ───────────────────────────────────────────────────────────────
 
-struct FinishOrderChip: View {
+/// A big finish-line button — helmet number front and centre (officials call
+/// skaters by helmet), name below. Tapping drops them into the finish order.
+struct FinishTapButton: View {
     let lane: LaneEdit
-    let orderIndex: Int?
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 8) {
-                if let orderIndex {
-                    Text("\(orderIndex + 1)")
-                        .font(.ssmRounded(15, weight: .heavy))
-                        .foregroundStyle(.white)
-                        .frame(width: 28, height: 28)
-                        .background(Circle().fill(SSMTheme.orange))
-                } else if let helmet = lane.helmetNumber, !helmet.isEmpty {
-                    Text("#\(helmet)")
-                        .font(.ssmRounded(14, weight: .heavy))
-                        .foregroundStyle(SSMTheme.sky)
-                }
-                Text(firstName(lane.skaterName))
-                    .font(.ssmRounded(15, weight: .bold))
+            VStack(spacing: 4) {
+                Text(lane.helmetNumber.map { $0.isEmpty ? "L\(lane.lane)" : "#\($0)" } ?? "L\(lane.lane)")
+                    .font(.ssmRounded(30, weight: .heavy))
                     .foregroundStyle(SSMTheme.textPrimary)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                Text(firstName(lane.skaterName))
+                    .font(.ssmRounded(14, weight: .bold))
+                    .foregroundStyle(SSMTheme.textPrimary)
+                    .lineLimit(1)
+                Text("Lane \(lane.lane)")
+                    .font(.ssmRounded(10, weight: .semibold))
+                    .foregroundStyle(SSMTheme.muted)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
             .frame(maxWidth: .infinity)
-            .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(orderIndex != nil ? SSMTheme.good.opacity(0.18) : SSMTheme.cardBackgroundLight)
-            )
+            .frame(height: 96)
+            .background(SSMTheme.cardBackgroundLight, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(orderIndex != nil ? SSMTheme.good : SSMTheme.cardBorder, lineWidth: 1)
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .strokeBorder(SSMTheme.cardBorder, lineWidth: 1)
             )
+            .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
         .buttonStyle(.plain)
     }
 
     private func firstName(_ name: String) -> String {
         name.split(separator: " ").first.map(String.init) ?? name
+    }
+}
+
+/// A place badge — gold / silver / bronze for the podium, navy otherwise.
+struct PlaceBadge: View {
+    let place: Int
+
+    private var color: Color {
+        switch place {
+        case 1: return Color(red: 0.98, green: 0.75, blue: 0.20)   // gold
+        case 2: return Color(red: 0.75, green: 0.79, blue: 0.85)   // silver
+        case 3: return Color(red: 0.80, green: 0.52, blue: 0.30)   // bronze
+        default: return SSMTheme.navy3
+        }
+    }
+
+    var body: some View {
+        Text("\(place)")
+            .font(.ssmRounded(16, weight: .heavy))
+            .foregroundStyle(place <= 3 ? .black : .white)
+            .frame(width: 34, height: 34)
+            .background(Circle().fill(color))
+    }
+}
+
+/// Light haptic feedback for finish-line taps.
+enum SSMHaptics {
+    static func tap() {
+        #if os(iOS)
+        let generator = UIImpactFeedbackGenerator(style: .light)
+        generator.impactOccurred()
+        #endif
     }
 }
 

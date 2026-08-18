@@ -127,14 +127,58 @@ public final class TabulatorViewModel: ObservableObject {
 
     public func markDirty() { isDirty = true }
 
+    /// Skaters still waiting to be placed (has a skater, not DQ'd, not yet
+    /// tapped) — the buttons the operator taps as racers cross the line.
+    public var unplacedLanes: [LaneEdit] {
+        lanes.filter { $0.hasSkater && !$0.isDQ && !finishOrder.contains($0.lane) }
+            .sorted { $0.lane < $1.lane }
+    }
+
+    /// The finish order built so far, in place order (1..N).
+    public var placedLanes: [LaneEdit] {
+        finishOrder.compactMap { lane in lanes.first { $0.lane == lane } }
+    }
+
+    /// Total skaters eligible for a place (excludes empty lanes and DQs).
+    public var placeableCount: Int {
+        lanes.filter { $0.hasSkater && !$0.isDQ }.count
+    }
+
     /// Finish-order tray: tapping skaters in the order they crossed writes
     /// places 1..N (the website's primary quick-entry flow).
     public func tapFinishOrder(lane: Int) {
         guard !finishOrder.contains(lane) else { return }
         finishOrder.append(lane)
+        renumberFinishOrder()
+        isDirty = true
+    }
+
+    /// Remove one skater from the finish order and renumber everyone behind
+    /// them — tapping a placed skater (mis-tap fix) or the × on their row.
+    public func unplace(lane: Int) {
+        guard let pos = finishOrder.firstIndex(of: lane) else { return }
+        finishOrder.remove(at: pos)
         if let idx = lanes.firstIndex(where: { $0.lane == lane }) {
-            lanes[idx].place = String(finishOrder.count)
+            lanes[idx].place = ""
         }
+        renumberFinishOrder()
+        isDirty = true
+    }
+
+    /// Undo the most recent tap.
+    public func undoLastFinish() {
+        guard let last = finishOrder.last else { return }
+        unplace(lane: last)
+    }
+
+    /// Auto-place every remaining un-placed skater (in lane order) — the
+    /// convenience real timing software offers when only the last skater(s)
+    /// are left to tap.
+    public func placeRemaining() {
+        for lane in unplacedLanes {
+            finishOrder.append(lane.lane)
+        }
+        renumberFinishOrder()
         isDirty = true
     }
 
@@ -146,6 +190,15 @@ public final class TabulatorViewModel: ObservableObject {
         }
         finishOrder = []
         isDirty = true
+    }
+
+    /// Rewrite place strings to match the current finish order (1..N).
+    private func renumberFinishOrder() {
+        for (index, lane) in finishOrder.enumerated() {
+            if let idx = lanes.firstIndex(where: { $0.lane == lane }) {
+                lanes[idx].place = String(index + 1)
+            }
+        }
     }
 
     /// Seed the tray highlight from already-saved places so reopening a
