@@ -8,6 +8,8 @@ import SwiftUI
 struct PadDirectorView: View {
     @EnvironmentObject private var session: PadSessionViewModel
     @State private var showCorrection = false
+    @State private var showMeetActions = false
+    @State private var showTTEvent = false
 
     var body: some View {
         Group {
@@ -25,6 +27,18 @@ struct PadDirectorView: View {
             if let meetID = session.selectedMeetID {
                 PadCorrectionView(meetID: meetID)
                     .environmentObject(session)
+            }
+        }
+        .sheet(isPresented: $showMeetActions) {
+            if let meetID = session.selectedMeetID {
+                MeetActionsSheet(meetID: meetID)
+                    .environmentObject(session)
+            }
+        }
+        .sheet(isPresented: $showTTEvent) {
+            if let meetID = session.selectedMeetID,
+               let eventID = session.state?.current?.id.stringValue {
+                PadTimeTrialView(meetID: meetID, eventID: eventID, canManage: true)
             }
         }
     }
@@ -94,7 +108,26 @@ struct PadDirectorView: View {
                     }
                 }
 
-                if let current = state.current {
+                if let current = state.current, current.type == "time_trial" {
+                    Text(current.groupLabel)
+                        .font(.ssmRounded(34, weight: .heavy))
+                        .foregroundStyle(SSMTheme.textPrimary)
+                        .minimumScaleFactor(0.5)
+                        .lineLimit(2)
+                    HStack(spacing: 8) {
+                        SSMChip("⏱ Time Trial", color: SSMTheme.sky)
+                        SSMChip(current.distanceLabel.isEmpty ? "100m" : current.distanceLabel, color: SSMTheme.orange)
+                    }
+                    Text("Standalone queue event — manual time entry and live leaderboards.")
+                        .font(.ssmRounded(13, weight: .medium))
+                        .foregroundStyle(SSMTheme.muted)
+                    Button {
+                        showTTEvent = true
+                    } label: {
+                        Label("Open Time Trial Event", systemImage: "stopwatch")
+                    }
+                    .buttonStyle(.ssmPill)
+                } else if let current = state.current {
                     Text(current.groupLabel)
                         .font(.ssmRounded(34, weight: .heavy))
                         .foregroundStyle(SSMTheme.textPrimary)
@@ -353,6 +386,17 @@ struct PadDirectorView: View {
                 }
                 .buttonStyle(.ssmSoftPill)
                 Text("Fix results on a closed race — needs a reason, keeps an audit trail.")
+                    .font(.ssmRounded(12, weight: .medium))
+                    .foregroundStyle(SSMTheme.muted)
+
+                Button {
+                    showMeetActions = true
+                } label: {
+                    Label("Meet Actions", systemImage: "gearshape")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.ssmSoftPill)
+                Text("Re-randomize lanes, finalize or reopen the meet, print score sheets.")
                     .font(.ssmRounded(12, weight: .medium))
                     .foregroundStyle(SSMTheme.muted)
             }

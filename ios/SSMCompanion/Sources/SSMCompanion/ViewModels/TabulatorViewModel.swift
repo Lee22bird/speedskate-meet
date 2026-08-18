@@ -4,6 +4,7 @@ import SwiftUI
 /// One lane's editable result-entry state on the iPad tabulator board.
 public struct LaneEdit: Identifiable {
     public let lane: Int
+    public let registrationId: String?
     public var skaterName: String
     public var team: String
     public var helmetNumber: String?
@@ -22,6 +23,7 @@ public struct LaneEdit: Identifiable {
 
     init(from lane: ExportLane) {
         self.lane = lane.lane
+        self.registrationId = lane.registrationId
         self.skaterName = lane.skaterName
         self.team = lane.team
         self.helmetNumber = lane.helmetNumber
@@ -166,6 +168,72 @@ public final class TabulatorViewModel: ObservableObject {
             lanes[idx].dqTimestamp = ISO8601DateFormatter().string(from: Date())
         }
         isDirty = true
+    }
+
+    // ── Time-trial session (the isTimeTrial RACE) ────────────────────────
+    // Queue lanes come from the race's laneEntries (the server rebuilds them
+    // from opted-in registrations on race-day loads): waiting = no time yet
+    // (queue order), posted = has a time (fastest first).
+
+    public var ttWaiting: [LaneEdit] {
+        lanes.filter { $0.time.trimmingCharacters(in: .whitespaces).isEmpty && $0.hasSkater }
+    }
+
+    public var ttPosted: [LaneEdit] {
+        lanes.filter { !$0.time.trimmingCharacters(in: .whitespaces).isEmpty }
+            .sorted { (Double($0.time) ?? 999) < (Double($1.time) ?? 999) }
+    }
+
+    /// Post one skater's time via the website's tt-post endpoint. The server
+    /// accepts any string, so we validate numerically here (parity with the
+    /// dedicated screen's rules) and normalize to two decimals.
+    public func postTTTime(meetID: String, registrationID: String, rawTime: String) async -> Bool {
+        guard let race else { return false }
+        let trimmed = rawTime.trimmingCharacters(in: .whitespaces)
+        guard let n = Double(trimmed), n.isFinite, n > 0 else {
+            errorMessage = "Enter a valid time, like 10.42."
+            return false
+        }
+        guard !isSaving else { return false }
+        isSaving = true
+        defer { isSaving = false }
+        do {
+            try await api.ttPostTime(meetID: meetID, raceID: race.id,
+                                     registrationID: registrationID,
+                                     time: String(format: "%.2f", n))
+            errorMessage = nil
+            await reloadRace(meetID: meetID)
+            return true
+        } catch {
+            let message = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            await reloadRace(meetID: meetID)
+            errorMessage = message
+            return false
+        }
+    }
+
+    public func removeTTTime(meetID: String, registrationID: String) async {
+        guard let race else { return }
+        guard !isSaving else { return }
+        isSaving = true
+        defer { isSaving = false }
+        do {
+            try await api.ttRemoveTime(meetID: meetID, raceID: race.id, registrationID: registrationID)
+            errorMessage = nil
+            await reloadRace(meetID: meetID)
+        } catch {
+            // Reload FIRST, then set the message — the reload clears
+            // errorMessage, so setting it afterward keeps it visible.
+            let message = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            await reloadRace(meetID: meetID)
+            errorMessage = message
+        }
+    }
+
+    private func reloadRace(meetID: String) async {
+        let raceID = race?.id
+        loadedRaceID = nil
+        await loadCurrentRace(meetID: meetID, currentRaceID: raceID)
     }
 
     // ── Save / Close ─────────────────────────────────────────────────────

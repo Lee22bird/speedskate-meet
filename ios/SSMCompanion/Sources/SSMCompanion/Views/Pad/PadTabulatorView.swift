@@ -12,16 +12,26 @@ struct PadTabulatorView: View {
     @State private var dqEditLane: DQLaneSelection?
     @State private var confirmClose = false
 
+    @State private var showTTEvent = false
+
     var body: some View {
         Group {
             if session.state?.current?.type == "time_trial" {
-                timeTrialPlaceholder
+                timeTrialEventCard
+            } else if let race = model.race, race.isTimeTrial {
+                ttSessionBody(race)
             } else if let race = model.race {
                 boardBody(race)
             } else if model.isLoading {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 PadPlaceholder(text: model.errorMessage ?? "No race is on the track.")
+            }
+        }
+        .sheet(isPresented: $showTTEvent) {
+            if let eventID = session.state?.current?.id.stringValue {
+                PadTimeTrialView(meetID: meetID, eventID: eventID,
+                                 canManage: session.role == .director || session.role == .tabulator)
             }
         }
         .background(SSMTheme.pageBackground)
@@ -50,19 +60,260 @@ struct PadTabulatorView: View {
         }
     }
 
-    private var timeTrialPlaceholder: some View {
-        VStack(spacing: 12) {
+    /// The current ordered item is a standalone TT EVENT — the dedicated
+    /// screen owns time entry, queue, and leaderboards (website parity).
+    private var timeTrialEventCard: some View {
+        VStack(spacing: 14) {
             Image(systemName: "stopwatch")
                 .font(.system(size: 44))
                 .foregroundStyle(SSMTheme.sky)
-            Text("Time Trial event on the track")
-                .font(.ssmRounded(20, weight: .heavy))
+            Text("Time Trial Event")
+                .font(.ssmRounded(22, weight: .heavy))
                 .foregroundStyle(SSMTheme.textPrimary)
-            Text("Time trials run on the website or desktop app for now — coming to iPad next.")
+            Text("This standalone event uses the dedicated Time Trial screen for time entry, queue, and leaderboards.")
                 .font(.ssmRounded(14, weight: .medium))
                 .foregroundStyle(SSMTheme.muted)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 420)
+            Button {
+                showTTEvent = true
+            } label: {
+                Label("Open Time Trial Event", systemImage: "stopwatch")
+            }
+            .buttonStyle(.ssmPill)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    // ── In-race-day TT session (the isTimeTrial RACE) ────────────────────
+
+    @State private var ttSelectedRegID: String?
+    @State private var ttTimeDraft = ""
+    @State private var confirmCloseTT = false
+    @State private var ttRemoveTarget: LaneEdit?
+
+    private func ttSessionBody(_ race: ExportRace) -> some View {
+        // The next-up skater is simply the head of the waiting queue.
+        let waiting = model.ttWaiting
+        let posted = model.ttPosted
+        let selected = waiting.first { $0.registrationId == ttSelectedRegID } ?? waiting.first
+
+        return GeometryReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    if model.pointerMovedAway { pointerBanner }
+
+                    SSMCard {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("⏱ TIME TRIAL SESSION — \(race.distanceLabel.isEmpty ? "100m" : race.distanceLabel)")
+                                    .font(.ssmRounded(16, weight: .heavy))
+                                    .foregroundStyle(SSMTheme.textPrimary)
+                                Text("One rolling queue. Tap the next skater, enter the time, Save Time. Saved skaters leave the waiting list.")
+                                    .font(.ssmRounded(12, weight: .medium))
+                                    .foregroundStyle(SSMTheme.muted)
+                            }
+                            Spacer()
+                            Button("Close Time Trial") { confirmCloseTT = true }
+                                .buttonStyle(.ssmPill)
+                                .disabled(model.isSaving || race.isClosed)
+                        }
+                    }
+
+                    let columns = proxy.size.width >= 900
+                    if columns {
+                        HStack(alignment: .top, spacing: 16) {
+                            ttWaitingCard(waiting: waiting, selected: selected)
+                                .frame(maxWidth: .infinity)
+                            VStack(spacing: 16) {
+                                ttEntryCard(selected: selected)
+                                ttPostedCard(posted: posted)
+                            }
+                            .frame(maxWidth: .infinity)
+                        }
+                    } else {
+                        ttEntryCard(selected: selected)
+                        ttWaitingCard(waiting: waiting, selected: selected)
+                        ttPostedCard(posted: posted)
+                    }
+                }
+                .padding(20)
+                .frame(maxWidth: 1100)
+                .frame(maxWidth: .infinity)
+            }
+            .scrollIndicators(.hidden)
+            .scrollDismissesKeyboard(.interactively)
+        }
+        .confirmationDialog("Close this Time Trial Session and advance to the next race?",
+                            isPresented: $confirmCloseTT, titleVisibility: .visible) {
+            Button("Close Time Trial", role: .destructive) {
+                Task {
+                    if await model.save(meetID: meetID, close: true) {
+                        await session.refreshState()
+                    }
+                }
+            }
+        }
+        .confirmationDialog("Remove this posted time?",
+                            isPresented: Binding(get: { ttRemoveTarget != nil },
+                                                 set: { if !$0 { ttRemoveTarget = nil } }),
+                            titleVisibility: .visible,
+                            presenting: ttRemoveTarget) { target in
+            Button("Remove", role: .destructive) {
+                if let regID = target.registrationId {
+                    Task { await model.removeTTTime(meetID: meetID, registrationID: regID) }
+                }
+            }
+        }
+    }
+
+    private func ttWaitingCard(waiting: [LaneEdit], selected: LaneEdit?) -> some View {
+        SSMCard {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("WAITING QUEUE")
+                        .font(.ssmRounded(12, weight: .heavy))
+                        .foregroundStyle(SSMTheme.muted)
+                    Spacer()
+                    Text("Youngest to oldest • \(waiting.count) remaining")
+                        .font(.ssmRounded(11, weight: .semibold))
+                        .foregroundStyle(SSMTheme.muted)
+                }
+                if waiting.isEmpty {
+                    Text("All time trial skaters have posted times.")
+                        .font(.ssmRounded(13, weight: .semibold))
+                        .foregroundStyle(SSMTheme.good)
+                        .padding(.vertical, 8)
+                }
+                ForEach(Array(waiting.enumerated()), id: \.element.lane) { index, row in
+                    let isSelected = row.registrationId == selected?.registrationId
+                    Button {
+                        ttSelectedRegID = row.registrationId
+                        ttTimeDraft = ""
+                    } label: {
+                        HStack(spacing: 10) {
+                            Text("\(index + 1)")
+                                .font(.ssmRounded(13, weight: .heavy))
+                                .foregroundStyle(.white)
+                                .frame(width: 26, height: 26)
+                                .background(Circle().fill(isSelected ? SSMTheme.orange : SSMTheme.navy3))
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text("#\(row.helmetNumber ?? "—") — \(row.skaterName)")
+                                    .font(.ssmRounded(14, weight: .bold))
+                                    .foregroundStyle(SSMTheme.textPrimary)
+                                Text(row.team)
+                                    .font(.ssmRounded(11, weight: .medium))
+                                    .foregroundStyle(SSMTheme.muted)
+                            }
+                            Spacer()
+                        }
+                        .padding(8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(isSelected ? SSMTheme.orange.opacity(0.12) : Color.clear)
+                        )
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private func ttEntryCard(selected: LaneEdit?) -> some View {
+        SSMCard {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("SELECTED SKATER")
+                    .font(.ssmRounded(12, weight: .heavy))
+                    .foregroundStyle(SSMTheme.muted)
+                if let selected {
+                    Text("#\(selected.helmetNumber ?? "—") — \(selected.skaterName)")
+                        .font(.ssmRounded(28, weight: .heavy))
+                        .foregroundStyle(SSMTheme.textPrimary)
+                        .minimumScaleFactor(0.5)
+                        .lineLimit(1)
+                    Text(selected.team.isEmpty ? "Independent" : selected.team)
+                        .font(.ssmRounded(13, weight: .semibold))
+                        .foregroundStyle(SSMTheme.muted)
+                    HStack(spacing: 10) {
+                        TextField("ex: 11.42", text: $ttTimeDraft)
+                            .ssmDecimalPad()
+                            .multilineTextAlignment(.center)
+                            .font(.ssmRounded(24, weight: .heavy))
+                            .foregroundStyle(SSMTheme.textPrimary)
+                            .padding(.vertical, 10)
+                            .frame(width: 150)
+                            .background(SSMTheme.cardBackgroundLight, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        Button("Save Time") {
+                            Task {
+                                if let regID = selected.registrationId,
+                                   await model.postTTTime(meetID: meetID, registrationID: regID, rawTime: ttTimeDraft) {
+                                    ttSelectedRegID = nil
+                                    ttTimeDraft = ""
+                                }
+                            }
+                        }
+                        .buttonStyle(.ssmPill)
+                        .disabled(model.isSaving || selected.registrationId == nil)
+                    }
+                } else {
+                    Text("Select a skater from the waiting queue.")
+                        .font(.ssmRounded(14, weight: .semibold))
+                        .foregroundStyle(SSMTheme.muted)
+                }
+            }
+        }
+    }
+
+    private func ttPostedCard(posted: [LaneEdit]) -> some View {
+        SSMCard {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("POSTED TIMES")
+                        .font(.ssmRounded(12, weight: .heavy))
+                        .foregroundStyle(SSMTheme.muted)
+                    Spacer()
+                    Text("\(posted.count) posted • sorted fastest first")
+                        .font(.ssmRounded(11, weight: .semibold))
+                        .foregroundStyle(SSMTheme.muted)
+                }
+                if posted.isEmpty {
+                    Text("No times posted yet.")
+                        .font(.ssmRounded(13, weight: .semibold))
+                        .foregroundStyle(SSMTheme.muted)
+                        .padding(.vertical, 6)
+                }
+                ForEach(Array(posted.enumerated()), id: \.element.lane) { index, row in
+                    HStack(spacing: 10) {
+                        Text("\(index + 1)")
+                            .font(.ssmRounded(13, weight: .heavy))
+                            .foregroundStyle(index == 0 ? SSMTheme.orange : SSMTheme.muted)
+                            .frame(width: 22)
+                        Text("#\(row.helmetNumber ?? "—")")
+                            .font(.ssmRounded(12, weight: .bold))
+                            .foregroundStyle(SSMTheme.sky)
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text(row.skaterName)
+                                .font(.ssmRounded(13, weight: .bold))
+                                .foregroundStyle(SSMTheme.textPrimary)
+                            Text(row.team)
+                                .font(.ssmRounded(10, weight: .medium))
+                                .foregroundStyle(SSMTheme.muted)
+                        }
+                        Spacer()
+                        Text(row.time)
+                            .font(.ssmRounded(15, weight: .heavy))
+                            .foregroundStyle(SSMTheme.textPrimary)
+                        Button("Remove") { ttRemoveTarget = row }
+                            .font(.ssmRounded(11, weight: .heavy))
+                            .foregroundStyle(SSMTheme.danger)
+                            .buttonStyle(.plain)
+                            .disabled(model.isSaving)
+                    }
+                    .padding(.vertical, 3)
+                }
+            }
+        }
     }
 
     // ── Board ────────────────────────────────────────────────────────────

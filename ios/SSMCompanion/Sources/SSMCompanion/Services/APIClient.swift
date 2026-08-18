@@ -480,6 +480,106 @@ public final class APIClient {
                                          expectedRedirectPrefix: "/portal/meet/\(meetID)/")
     }
 
+    // ── Time trials + director actions (iPad) ────────────────────────────
+
+    /// In-race-day TT session: post one skater's time onto the TT race.
+    public func ttPostTime(meetID: String, raceID: String, registrationID: String, time: String) async throws {
+        _ = try await portalRedirectPost("/portal/meet/\(meetID)/race-day/judges/tt-post",
+                                         formFields: [("raceId", raceID),
+                                                      ("registrationId", registrationID),
+                                                      ("time", time),
+                                                      ("action", "save")],
+                                         expectedRedirectPrefix: "/portal/meet/\(meetID)/")
+    }
+
+    public func ttRemoveTime(meetID: String, raceID: String, registrationID: String) async throws {
+        _ = try await portalRedirectPost("/portal/meet/\(meetID)/race-day/judges/tt-remove",
+                                         formFields: [("raceId", raceID), ("registrationId", registrationID)],
+                                         expectedRedirectPrefix: "/portal/meet/\(meetID)/")
+    }
+
+    /// Dedicated TT event screen: save the current skater's time (the server
+    /// normalizes to 2 decimals and auto-advances currentIndex). The /time
+    /// endpoint reports a bad time via an ?error= redirect the website never
+    /// shows — surface it (client-side validation should catch it first).
+    public func ttSaveEventTime(meetID: String, eventID: String, registrationID: String, time: String) async throws {
+        let location = try await portalRedirectPost("/portal/meet/\(meetID)/time-trials/\(eventID)/time",
+                                                    formFields: [("registrationId", registrationID),
+                                                                 ("time", time),
+                                                                 ("mode", "director"),
+                                                                 ("action", "save")],
+                                                    expectedRedirectPrefix: "/portal/meet/\(meetID)/")
+        if let components = URLComponents(string: location),
+           let message = components.queryItems?.first(where: { $0.name == "error" })?.value,
+           !message.isEmpty {
+            throw APIError.server(message)
+        }
+    }
+
+    public func ttStepEvent(meetID: String, eventID: String, direction: Int) async throws {
+        _ = try await portalRedirectPost("/portal/meet/\(meetID)/time-trials/\(eventID)/step",
+                                         formFields: [("direction", String(direction)), ("mode", "director")],
+                                         expectedRedirectPrefix: "/portal/meet/\(meetID)/")
+    }
+
+    public func ttCompleteEvent(meetID: String, eventID: String) async throws {
+        _ = try await portalRedirectPost("/portal/meet/\(meetID)/time-trials/\(eventID)/complete",
+                                         formFields: [("mode", "director")],
+                                         expectedRedirectPrefix: "/portal/meet/\(meetID)/")
+    }
+
+    /// Re-randomize one race's lane draw. The failure redirect stays inside
+    /// the meet with an ?error= query — surface that as the error it is.
+    public func reRandomizeLanes(meetID: String, raceID: String) async throws {
+        let location = try await portalRedirectPost("/portal/meet/\(meetID)/race-day/re-randomize-lanes",
+                                                    formFields: [("raceId", raceID)],
+                                                    expectedRedirectPrefix: "/portal/meet/\(meetID)/")
+        if let components = URLComponents(string: location),
+           let message = components.queryItems?.first(where: { $0.name == "error" })?.value,
+           !message.isEmpty {
+            throw APIError.server(message)
+        }
+    }
+
+    public func finalizeMeet(meetID: String) async throws {
+        _ = try await portalRedirectPost("/portal/meet/\(meetID)/finalize",
+                                         expectedRedirectPrefix: "/portal/meet/\(meetID)/")
+    }
+
+    public func reopenMeet(meetID: String) async throws {
+        _ = try await portalRedirectPost("/portal/meet/\(meetID)/reopen",
+                                         expectedRedirectPrefix: "/portal/meet/\(meetID)/")
+    }
+
+    /// Fetch the score-sheets PDF (scope: meet | block | race). Returns the
+    /// raw PDF bytes for a share/print sheet.
+    public func fetchScoreSheetsPDF(meetID: String, scope: String,
+                                    raceID: String? = nil, blockID: String? = nil,
+                                    layout: String = "compact") async throws -> Data {
+        var components = URLComponents(string: "/portal/meet/\(meetID)/score-sheets/print")!
+        var items = [URLQueryItem(name: "scope", value: scope),
+                     URLQueryItem(name: "layout", value: layout),
+                     URLQueryItem(name: "format", value: "pdf")]
+        if let raceID { items.append(URLQueryItem(name: "raceId", value: raceID)) }
+        if let blockID { items.append(URLQueryItem(name: "blockId", value: blockID)) }
+        components.queryItems = items
+        guard let url = URL(string: components.string ?? "", relativeTo: baseURL)?.absoluteURL else {
+            throw APIError.invalidURL
+        }
+        let (data, response): (Data, URLResponse)
+        do {
+            (data, response) = try await session.data(from: url)
+        } catch {
+            throw APIError.network(error)
+        }
+        guard let http = response as? HTTPURLResponse else { throw APIError.server("No response from server.") }
+        guard http.statusCode == 200,
+              (http.value(forHTTPHeaderField: "Content-Type") ?? "").contains("pdf") else {
+            throw APIError.server("Couldn't fetch the score sheets — log in again and retry.")
+        }
+        return data
+    }
+
     /// Same redirect-success semantics as portalRedirectPost but with a JSON
     /// body (needed for real booleans and arrays on add/edit registration).
     private func portalRedirectPostJSON(_ path: String,

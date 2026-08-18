@@ -524,25 +524,68 @@ public struct ExportBlock: Decodable, Identifiable, Hashable {
     public func hash(into hasher: inout Hasher) { hasher.combine(id) }
 }
 
-/// Minimal slice of a time-trial event, enough to label it in a block's
-/// running order and estimate its duration.
+/// One time-trial participant row (services/timeTrialEvents.js
+/// queueFromRegistrations — queue order is age ascending then name).
+public struct ExportTTParticipant: Decodable, Identifiable, Hashable {
+    public let registrationId: String
+    public let skater: String
+    public let team: String
+    public let gender: String
+    public let age: Int?
+    public let ageGroup: String
+    public let helmetNumber: String
+    public let time: String
+
+    public var id: String { registrationId }
+
+    private enum CodingKeys: String, CodingKey {
+        case registrationId, skater, team, gender, age, ageGroup, helmetNumber, time
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        registrationId = c.flexString(.registrationId) ?? ""
+        skater = c.flexString(.skater) ?? ""
+        team = c.flexString(.team) ?? ""
+        gender = c.flexString(.gender) ?? ""
+        age = c.flexInt(.age)
+        ageGroup = c.flexString(.ageGroup) ?? ""
+        helmetNumber = c.flexString(.helmetNumber) ?? ""
+        time = c.flexString(.time) ?? ""
+    }
+
+    public var hasTime: Bool { !time.trimmingCharacters(in: .whitespaces).isEmpty }
+
+    /// Numeric time for ranking (invalid parses sort last, like the server).
+    public var numericTime: Double? {
+        let n = Double(time.trimmingCharacters(in: .whitespaces))
+        return (n ?? 0) > 0 ? n : nil
+    }
+
+    /// The server's genderBucket (timeTrialEvents.js:6-11).
+    public var genderBucket: String {
+        let v = gender.lowercased()
+        if ["girls", "girl", "women", "woman", "female", "ladies", "lady", "f"].contains(v) { return "female" }
+        if ["boys", "boy", "men", "man", "male", "m"].contains(v) { return "male" }
+        return ""
+    }
+}
+
+/// A time-trial event (meet.timeTrialEvents) — the queue + times the
+/// dedicated screen drives. Distinct from the isTimeTrial RACE, whose
+/// laneEntries the in-race-day session drives.
 public struct ExportTimeTrialEvent: Decodable, Identifiable {
     public let id: String
     public let title: String
     public let distance: String
     public let countsForOverall: Bool
-    public let participantCount: Int
-    public let completedCount: Int
+    public let currentIndex: Int
+    public let status: String
+    public let finalized: Bool
+    public let participants: [ExportTTParticipant]
 
-    private enum CodingKeys: String, CodingKey { case id, title, distance, countsForOverall, participants }
-
-    private struct ParticipantLite: Decodable {
-        let time: String?
-        private enum CodingKeys: String, CodingKey { case time }
-        init(from decoder: Decoder) throws {
-            let c = try decoder.container(keyedBy: CodingKeys.self)
-            time = c.flexString(.time)
-        }
+    private enum CodingKeys: String, CodingKey {
+        case id, title, distance, countsForOverall, currentIndex, status, finalized, participants
     }
 
     public init(from decoder: Decoder) throws {
@@ -551,9 +594,37 @@ public struct ExportTimeTrialEvent: Decodable, Identifiable {
         title = c.flexString(.title) ?? "Time Trial"
         distance = c.flexString(.distance) ?? ""
         countsForOverall = c.flexBool(.countsForOverall) ?? false
-        let participants = (try? c.decodeIfPresent([ParticipantLite].self, forKey: .participants)) ?? []
-        participantCount = participants.count
-        completedCount = participants.filter { !($0.time ?? "").trimmingCharacters(in: .whitespaces).isEmpty }.count
+        currentIndex = c.flexInt(.currentIndex) ?? 0
+        status = c.flexString(.status) ?? "open"
+        finalized = c.flexBool(.finalized) ?? false
+        participants = (try? c.decodeIfPresent([ExportTTParticipant].self, forKey: .participants)) ?? []
+    }
+
+    public var participantCount: Int { participants.count }
+    public var completedCount: Int { participants.filter { $0.numericTime != nil }.count }
+    public var remainingCount: Int { max(0, participantCount - completedCount) }
+
+    /// timeTrialEventIsComplete (timeTrialEvents.js:137-140).
+    public var isComplete: Bool {
+        finalized || ["closed", "complete", "completed"].contains(status.lowercased())
+    }
+
+    /// The GET's current-skater resolution: currentIndex, else first without
+    /// a time, else the first participant.
+    public var currentParticipant: ExportTTParticipant? {
+        if participants.indices.contains(currentIndex) { return participants[currentIndex] }
+        return participants.first { !$0.hasTime } ?? participants.first
+    }
+
+    /// timeTrialResults ordering: valid times ascending, name tie-break.
+    public func leaderboard(bucket: String?) -> [ExportTTParticipant] {
+        participants
+            .filter { $0.numericTime != nil }
+            .filter { bucket == nil || $0.genderBucket == bucket }
+            .sorted {
+                if let a = $0.numericTime, let b = $1.numericTime, a != b { return a < b }
+                return $0.skater.localizedCompare($1.skater) == .orderedAscending
+            }
     }
 }
 
