@@ -771,23 +771,34 @@ struct LaneEntryRow: View {
     let onStatusPick: (String) -> Void
     let onDQEdit: () -> Void
 
+    @Environment(\.horizontalSizeClass) private var hSizeClass
+
     var body: some View {
-        // Wide: one row. Narrow (sidebar pinned in portrait): skater line on
-        // top, inputs underneath — the name never gets crushed.
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 0) {
-                laneCircle.frame(width: 52, alignment: .leading)
-                skaterBlock.frame(maxWidth: .infinity, alignment: .leading)
-                    .frame(minWidth: 200)
-                inputsBlock
-            }
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 12) {
-                    laneCircle
-                    skaterBlock
-                    Spacer()
+        // A STABLE layout choice — deliberately NOT ViewThatFits. ViewThatFits
+        // re-measures both branches on every re-render; on iPad, the number pad
+        // appearing while a place/time field is first responder makes it tear
+        // down and rebuild the focused field mid-edit, which crashes the app
+        // (the manual place-entry crash). A size-class branch only flips on
+        // rotation/multitasking, so the focused field's identity stays put.
+        // Wide: one row. Narrow (compact width): skater line on top, inputs
+        // underneath — the name never gets crushed.
+        Group {
+            if hSizeClass == .compact {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 12) {
+                        laneCircle
+                        skaterBlock
+                        Spacer()
+                    }
+                    inputsBlock
                 }
-                inputsBlock
+            } else {
+                HStack(spacing: 0) {
+                    laneCircle.frame(width: 52, alignment: .leading)
+                    skaterBlock.frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(minWidth: 200)
+                    inputsBlock
+                }
             }
         }
         .padding(.vertical, 7)
