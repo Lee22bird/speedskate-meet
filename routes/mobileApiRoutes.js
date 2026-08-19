@@ -60,6 +60,45 @@ function laneToJson(lane, regMap) {
   };
 }
 
+// ── Day-of race merge (display only) ───────────────────────────────────────
+// Two races (e.g. Elite Veteran & Esquire Men) line up and start as ONE pack
+// but stay separate race objects scored independently. These mirror the
+// route-private helpers in routes/raceDayRoutes.js (293-313) so the mobile
+// display can show the combined, renumbered pack; they are NOT exported from a
+// service, so we reimplement them here. Result ENTRY stays per-division — the
+// tabulator hydrates each race from desktop-export, never from this pack sheet.
+function mergeGroupMembers(meet, race) {
+  if (!race || !race.mergeGroupId) return null;
+  const members = (meet.races || [])
+    .filter(r => r && r.mergeGroupId === race.mergeGroupId)
+    .sort((a, b) => (a.mergeLead ? 0 : 1) - (b.mergeLead ? 0 : 1)); // lead first
+  return members.length > 1 ? members : null;
+}
+
+function mergePackLabel(meet, race) {
+  const members = mergeGroupMembers(meet, race);
+  if (!members) return race && race.groupLabel ? race.groupLabel : '';
+  return members.map(m => m.groupLabel || '').filter(Boolean).join(' & ');
+}
+
+// Combined, renumbered pack sheet: real skaters only (empties filtered like the
+// website's print card), each lane renumbered 1..N across the pack and tagged
+// with its home division label (`division` = the member's groupLabel).
+function mergedPackLanesJson(meet, race, regMap) {
+  const members = mergeGroupMembers(meet, race);
+  if (!members) return null;
+  const rows = [];
+  let pos = 0;
+  for (const m of members) {
+    for (const ln of laneRowsForRace(m, meet)) {
+      if (!ln.skaterName) continue;
+      pos += 1;
+      rows.push({ ...laneToJson(ln, regMap), lane: pos, division: m.groupLabel || '' });
+    }
+  }
+  return rows;
+}
+
 function raceDayItemToJson(item, meet, regMap) {
   if (!item) return null;
   if (isTimeTrialItem(item)) {
@@ -73,6 +112,11 @@ function raceDayItemToJson(item, meet, regMap) {
     };
   }
   const lanes = laneRowsForRace(item, meet).filter(l => l.skaterName).map(l => laneToJson(l, regMap));
+  // Merged pack (display only): `lanes` stays this race's own lanes (entry is
+  // per-division); `mergedLanes` carries the combined, renumbered, division-
+  // tagged pack sheet for the Director/Announcer/Live boards.
+  const mergedLanes = mergedPackLanesJson(meet, item, regMap);
+  const isMerged = mergedLanes != null;
   return {
     id: item.id,
     type: 'race',
@@ -85,6 +129,9 @@ function raceDayItemToJson(item, meet, regMap) {
     isOpenRace: !!item.isOpenRace,
     isQuadRace: !!item.isQuadRace,
     lanes,
+    isMerged,
+    packLabel: isMerged ? mergePackLabel(meet, item) : null,
+    mergedLanes,
   };
 }
 

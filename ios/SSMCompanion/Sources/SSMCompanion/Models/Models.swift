@@ -118,6 +118,9 @@ public struct LaneEntry: Decodable, Identifiable, Hashable {
     public let place: String?
     public let time: String?
     public let status: String?
+    /// Home division for a lane in a merged-pack sheet (the race's group label,
+    /// e.g. "Esquire Men"). nil on ordinary single-race lanes.
+    public let division: String?
 
     public var id: Int { lane }
 }
@@ -134,8 +137,23 @@ public struct RaceDayItem: Decodable, Identifiable, Hashable {
     public let isOpenRace: Bool?
     public let isQuadRace: Bool?
     public let lanes: [LaneEntry]
+    /// Day-of race merge (display only). When two races start as one pack,
+    /// `mergedLanes` is the combined, renumbered, division-tagged sheet and
+    /// `packLabel` is the joined label ("Elite Veteran & Esquire Men"). `lanes`
+    /// stays this race's own lanes so result entry remains per-division. All
+    /// optional so older servers still decode.
+    public let isMerged: Bool?
+    public let packLabel: String?
+    public let mergedLanes: [LaneEntry]?
 
     public var isTimeTrial: Bool { type == "time_trial" }
+
+    /// True when this race is running as a merged pack with a combined sheet.
+    public var isMergedPack: Bool { isMerged == true && !(mergedLanes?.isEmpty ?? true) }
+
+    /// The lanes a DISPLAY board should show: the combined pack sheet when
+    /// merged, otherwise this race's own lanes. (Result entry never uses this.)
+    public var displayLanes: [LaneEntry] { isMergedPack ? (mergedLanes ?? lanes) : lanes }
 }
 
 public struct ComingUpItem: Decodable, Identifiable, Hashable {

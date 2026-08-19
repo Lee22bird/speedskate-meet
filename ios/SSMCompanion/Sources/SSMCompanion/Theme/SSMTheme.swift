@@ -84,6 +84,9 @@ public enum SSMTheme {
     public static let sky2 = Color(red: 0x0e/255, green: 0xa5/255, blue: 0xe9/255)
     public static let good = Color(red: 0x1c/255, green: 0xd9/255, blue: 0x8a/255)
     public static let danger = Color(red: 0xff/255, green: 0x5a/255, blue: 0x5a/255)
+    /// Merged-pack accent — violet, matching the website's merge cue (tuned
+    /// lighter so it reads on the dark theme).
+    public static let mergeAccent = Color(red: 0xa7/255, green: 0x8b/255, blue: 0xfa/255)
 
     // Dark surfaces
     public static let pageBackground = Color(red: 0x07/255, green: 0x0b/255, blue: 0x16/255)
@@ -211,6 +214,43 @@ public struct SSMChip: View {
             .padding(.vertical, 6)
             .background(color, in: SSMTheme.pillShape)
             .shadow(color: color.opacity(0.35), radius: 4, x: 0, y: 2)
+    }
+}
+
+/// A small violet division chip shown on each lane of a merged-pack sheet
+/// (the `_div` tag — the lane's home group label, e.g. "Esquire Men").
+public struct MergeDivTag: View {
+    let text: String
+    public init(_ text: String) { self.text = text }
+    public var body: some View {
+        Text(text)
+            .font(.ssmRounded(10, weight: .heavy))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 7).padding(.vertical, 2)
+            .background(SSMTheme.mergeAccent, in: Capsule())
+    }
+}
+
+/// Banner above a merged-pack lane sheet: two divisions start together as one
+/// pack but are scored separately.
+public struct MergePackBanner: View {
+    let label: String
+    public init(label: String) { self.label = label }
+    public var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "link").font(.system(size: 12, weight: .bold))
+            Text(label.isEmpty ? "One pack — scored separately"
+                               : "One pack — \(label) — scored separately")
+                .font(.ssmRounded(12, weight: .bold))
+            Spacer(minLength: 0)
+        }
+        .foregroundStyle(SSMTheme.mergeAccent)
+        .padding(.horizontal, 12).padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(SSMTheme.mergeAccent.opacity(0.14),
+                    in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+            .strokeBorder(SSMTheme.mergeAccent.opacity(0.4), lineWidth: 1))
     }
 }
 

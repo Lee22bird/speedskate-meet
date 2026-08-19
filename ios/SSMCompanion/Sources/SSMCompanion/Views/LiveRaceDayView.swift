@@ -279,8 +279,12 @@ struct LaneListCard: View {
     var body: some View {
         SSMCard {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Lanes").font(.subheadline.bold()).foregroundStyle(SSMTheme.muted)
-                ForEach(item.lanes) { lane in
+                Text(item.isMergedPack ? "Lanes — merged pack" : "Lanes")
+                    .font(.subheadline.bold()).foregroundStyle(SSMTheme.muted)
+                if item.isMergedPack {
+                    MergePackBanner(label: item.packLabel ?? "")
+                }
+                ForEach(item.displayLanes) { lane in
                     HStack(alignment: .top, spacing: 12) {
                         Text("\(lane.lane)")
                             .font(.ssmRounded(16, weight: .heavy))
@@ -290,7 +294,12 @@ struct LaneListCard: View {
                             .clipShape(Circle())
                             .shadow(color: SSMTheme.orange.opacity(0.4), radius: 4, x: 0, y: 2)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(lane.skaterName).font(.ssmRounded(17, weight: .bold)).foregroundStyle(SSMTheme.textPrimary)
+                            HStack(spacing: 6) {
+                                Text(lane.skaterName).font(.ssmRounded(17, weight: .bold)).foregroundStyle(SSMTheme.textPrimary)
+                                if let div = lane.division, !div.isEmpty {
+                                    MergeDivTag(div)
+                                }
+                            }
                             HStack(spacing: 6) {
                                 if let helmet = lane.helmetNumber {
                                     Text("#\(helmet)").font(.caption).foregroundStyle(SSMTheme.muted)

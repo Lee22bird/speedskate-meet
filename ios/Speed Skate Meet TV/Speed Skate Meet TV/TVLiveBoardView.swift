@@ -110,7 +110,7 @@ struct TVLiveBoardView: View {
     }
 
     private func raceCard(title: String, accent: Color, item: RaceDayItem) -> some View {
-        let lanes = sortedLanes(item.lanes)
+        let lanes = sortedLanes(item.displayLanes)
         return VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 14) {
                 Text(title)
@@ -123,7 +123,7 @@ struct TVLiveBoardView: View {
             }
             .padding(.bottom, 18)
 
-            Text(item.groupLabel)
+            Text(item.isMergedPack ? (item.packLabel ?? item.groupLabel) : item.groupLabel)
                 .font(.ssmRounded(52, weight: .heavy))
                 .foregroundStyle(SSMTheme.textPrimary)
                 .lineLimit(1)
@@ -164,6 +164,9 @@ struct TVLiveBoardView: View {
         HStack(spacing: 10) {
             if !item.stage.isEmpty {
                 TVChip(item.stage.uppercased(), color: SSMTheme.orange)
+            }
+            if item.isMergedPack {
+                TVChip("MERGED PACK", color: SSMTheme.mergeAccent)
             }
             if item.isTimeTrial {
                 TVChip("TIME TRIAL", color: SSMTheme.sky2)
@@ -363,10 +366,19 @@ struct TVLaneRow: View {
             }
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(lane.skaterName)
-                    .font(.ssmRounded(30, weight: .bold))
-                    .foregroundStyle(SSMTheme.textPrimary)
-                    .lineLimit(1)
+                HStack(spacing: 10) {
+                    Text(lane.skaterName)
+                        .font(.ssmRounded(30, weight: .bold))
+                        .foregroundStyle(SSMTheme.textPrimary)
+                        .lineLimit(1)
+                    if let div = lane.division, !div.isEmpty {
+                        Text(div)
+                            .font(.ssmRounded(15, weight: .heavy))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 9).padding(.vertical, 3)
+                            .background(SSMTheme.mergeAccent, in: Capsule())
+                    }
+                }
                 Text([lane.team, lane.sponsor].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: "  •  "))
                     .font(.ssmRounded(20, weight: .medium))
                     .foregroundStyle(SSMTheme.muted)

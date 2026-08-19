@@ -223,10 +223,13 @@ struct PadDirectorView: View {
     private func laneSheetCard(_ race: RaceDayItem) -> some View {
         SSMCard {
             VStack(alignment: .leading, spacing: 10) {
-                Text("LANE SHEET")
+                Text(race.isMergedPack ? "MERGED PACK — LANE SHEET" : "LANE SHEET")
                     .font(.ssmRounded(12, weight: .heavy))
                     .foregroundStyle(SSMTheme.muted)
-                ForEach(race.lanes) { lane in
+                if race.isMergedPack {
+                    MergePackBanner(label: race.packLabel ?? "")
+                }
+                ForEach(race.displayLanes) { lane in
                     HStack(spacing: 12) {
                         Text("\(lane.lane)")
                             .font(.ssmRounded(16, weight: .heavy))
@@ -243,6 +246,9 @@ struct PadDirectorView: View {
                                 Text(lane.skaterName)
                                     .font(.ssmRounded(16, weight: .bold))
                                     .foregroundStyle(SSMTheme.textPrimary)
+                                if let div = lane.division, !div.isEmpty {
+                                    MergeDivTag(div)
+                                }
                             }
                             Text(lane.team)
                                 .font(.ssmRounded(12, weight: .medium))
@@ -327,13 +333,18 @@ struct PadDirectorView: View {
                     .font(.ssmRounded(12, weight: .heavy))
                     .foregroundStyle(SSMTheme.muted)
                 if let next = state.next {
-                    Text(next.groupLabel)
+                    Text(next.isMergedPack ? (next.packLabel ?? next.groupLabel) : next.groupLabel)
                         .font(.ssmRounded(20, weight: .heavy))
                         .foregroundStyle(SSMTheme.textPrimary)
-                    Text("\(next.distanceLabel) · \(next.stage)")
-                        .font(.ssmRounded(13, weight: .semibold))
-                        .foregroundStyle(SSMTheme.sky)
-                    ForEach(next.lanes.prefix(8)) { lane in
+                    HStack(spacing: 6) {
+                        Text("\(next.distanceLabel) · \(next.stage)")
+                            .font(.ssmRounded(13, weight: .semibold))
+                            .foregroundStyle(SSMTheme.sky)
+                        if next.isMergedPack {
+                            MergeDivTag("MERGED")
+                        }
+                    }
+                    ForEach(next.displayLanes.prefix(8)) { lane in
                         HStack(spacing: 8) {
                             Text("\(lane.lane)")
                                 .font(.ssmRounded(12, weight: .heavy))
@@ -348,6 +359,9 @@ struct PadDirectorView: View {
                                 .font(.ssmRounded(13, weight: .semibold))
                                 .foregroundStyle(SSMTheme.textPrimary)
                                 .lineLimit(1)
+                            if let div = lane.division, !div.isEmpty {
+                                MergeDivTag(div)
+                            }
                             Spacer()
                         }
                     }
