@@ -30,7 +30,7 @@ struct TVLiveBoardView: View {
                     HStack(alignment: .top, spacing: 32) {
                         currentPanel
                             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                        finishedPanel
+                        sidePanel
                             .frame(width: 620, alignment: .top)
                     }
                     .frame(maxHeight: .infinity, alignment: .top)
@@ -185,30 +185,109 @@ struct TVLiveBoardView: View {
         return parts.joined(separator: "  •  ")
     }
 
-    // MARK: Recently finished
+    // MARK: Up next + coming up + recently finished
 
-    private var finishedPanel: some View {
-        VStack(alignment: .leading, spacing: 18) {
+    private var sidePanel: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            // Only surface "Up Next" here while a race is actually running —
+            // when nothing's on the track the next race is promoted to the
+            // main panel as "ON DECK", so showing it twice would be redundant.
+            if vm.data?.current != nil, let next = vm.data?.next {
+                upNextCard(next)
+            }
+
+            if let coming = vm.data?.coming, !coming.isEmpty {
+                comingUpList(coming)
+            }
+
+            finishedSection
+            Spacer(minLength: 0)
+        }
+        .frame(maxHeight: .infinity, alignment: .top)
+    }
+
+    private func upNextCard(_ item: RaceDayItem) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Text("UP NEXT")
+                    .font(.ssmRounded(20, weight: .heavy))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 14).padding(.vertical, 6)
+                    .background(SSMTheme.sky2, in: SSMTheme.pillShape)
+                if !item.stage.isEmpty {
+                    TVChip(item.stage.uppercased(), color: SSMTheme.navy3)
+                }
+                Spacer()
+                if !item.lanes.isEmpty {
+                    Text("\(item.lanes.count) skaters")
+                        .font(.ssmRounded(18, weight: .semibold))
+                        .foregroundStyle(SSMTheme.muted)
+                }
+            }
+            Text(item.groupLabel)
+                .font(.ssmRounded(30, weight: .heavy))
+                .foregroundStyle(SSMTheme.textPrimary)
+                .lineLimit(1).minimumScaleFactor(0.7)
+            Text(subtitle(item))
+                .font(.ssmRounded(22, weight: .semibold))
+                .foregroundStyle(SSMTheme.sky)
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(SSMTheme.cardBackground)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .strokeBorder(SSMTheme.sky2.opacity(0.55), lineWidth: 2)
+        )
+    }
+
+    private func comingUpList(_ coming: [ComingUpItem]) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("COMING UP")
+                .font(.ssmRounded(20, weight: .heavy))
+                .foregroundStyle(SSMTheme.muted)
+            ForEach(coming.prefix(3)) { item in
+                HStack(spacing: 12) {
+                    Circle().fill(SSMTheme.navy3).frame(width: 8, height: 8)
+                    Text(comingLabel(item))
+                        .font(.ssmRounded(21, weight: .semibold))
+                        .foregroundStyle(SSMTheme.textPrimary)
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+    }
+
+    private var finishedSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
             Text("JUST FINISHED")
-                .font(.ssmRounded(24, weight: .heavy))
+                .font(.ssmRounded(20, weight: .heavy))
                 .foregroundStyle(SSMTheme.muted)
 
             let recents = vm.data?.recentResults ?? []
             if recents.isEmpty {
                 Text("Results will appear here as races close.")
-                    .font(.ssmRounded(22, weight: .medium))
+                    .font(.ssmRounded(21, weight: .medium))
                     .foregroundStyle(SSMTheme.muted)
-                    .padding(.top, 10)
             } else {
-                VStack(spacing: 16) {
-                    ForEach(recents.prefix(4)) { race in
+                VStack(spacing: 14) {
+                    ForEach(recents.prefix(3)) { race in
                         TVFinishedRaceCard(race: race)
                     }
                 }
             }
-            Spacer(minLength: 0)
         }
-        .frame(maxHeight: .infinity, alignment: .top)
+    }
+
+    private func comingLabel(_ item: ComingUpItem) -> String {
+        var parts: [String] = [item.groupLabel]
+        if let div = item.division, !div.isEmpty { parts.append(div.capitalized) }
+        parts.append(item.distanceLabel)
+        return parts.joined(separator: " • ")
     }
 
     // MARK: Helpers
