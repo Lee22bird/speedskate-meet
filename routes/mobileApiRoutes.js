@@ -14,6 +14,9 @@ const {
   computeMeetStandings, computeQuadStandings, computeOpenResults,
 } = require('../services/standings');
 const { staffAssignmentsForMeet } = require('../services/staffAssignments');
+const {
+  protestsForMeet, normalizeProtest, findProtest, unresolvedProtestCount,
+} = require('../services/protests');
 
 // Server-controlled "featured schedule" promo shown as a banner under the
 // app's Nationals tab. Returning null hides the banner in the app with NO app
@@ -115,10 +118,11 @@ function resolveStaffRole(user, meet) {
 
 module.exports = function createMobileApiRoutes(deps = {}) {
   const router = express.Router();
-  const { getSessionUser, loadDb } = deps;
+  const { getSessionUser, loadDb, saveDb } = deps;
 
   if (typeof getSessionUser !== 'function') throw new Error('mobileApiRoutes requires getSessionUser');
   if (typeof loadDb !== 'function') throw new Error('mobileApiRoutes requires loadDb');
+  if (typeof saveDb !== 'function') throw new Error('mobileApiRoutes requires saveDb');
 
   // ── Auth / session ────────────────────────────────────────────────────────
   router.get('/api/v1/me', (req, res) => {
@@ -332,6 +336,9 @@ module.exports = function createMobileApiRoutes(deps = {}) {
       canControlRaceDay: role === 'director' || role === 'tabulator',
       paused: !!meet.raceDayPaused,
       progress: raceDayProgress(meet),
+      // Drives the unresolved-protest badge on the Director + Tabulator tabs,
+      // mirroring the website's sub-tab badge (new + review protests).
+      protestUnresolvedCount: unresolvedProtestCount(meet),
       current: raceDayItemToJson(info.current, meet, regMap),
       next: raceDayItemToJson(info.next, meet, regMap),
       orderedRaces: info.ordered.map((item, idx) => ({
@@ -342,6 +349,105 @@ module.exports = function createMobileApiRoutes(deps = {}) {
           : `${item.groupLabel} — ${item.division} — ${item.distanceLabel} — ${raceDisplayStage(item)}`,
         isCurrent: item.id === meet.currentRaceId,
       })),
+    });
+  });
+
+  // ── Staff: protests (officials inbox + rule + fee) ───────────────────────
+  // Mirrors the website's /portal/meet/:id/protests inbox and its rule/fee
+  // actions for the iPad. Display + action only: every record mutation goes
+  // through services/protests and the exact same canEditMeet gate the website
+  // uses. No protest logic (validation, ids, fee/deadline math) is reimplemented
+  // here — only re-shaped as JSON. Officials = judge (tabulator) + meet_director
+  // (director), matching requireRole('judge','meet_director') on the web.
+
+  function protestUpheldReason(protest) {
+    // Same reason string the website prefills into Correction Mode.
+    return `Protest ${protest.id} upheld: ${protest.ruling || protest.statement}`.slice(0, 500);
+  }
+
+  router.get('/api/v1/meets/:meetId/protests', (req, res) => {
+    const data = getSessionUser(req);
+    if (!data) return res.status(401).json({ ok:false, error:'Not logged in.' });
+    const meet = getMeetOr404(data.db, req.params.meetId);
+    if (!meet) return res.status(404).json({ ok:false, error:'Meet not found.' });
+    const role = resolveStaffRole(data.user, meet);
+    if (role !== 'director' && role !== 'tabulator') {
+      return res.status(403).json({ ok:false, error:'Only officials can view protests.' });
+    }
+    const canCorrect = canEditMeet(data.user, meet);
+    res.json({
+      ok: true,
+      protests: protestsForMeet(meet).map(normalizeProtest),
+      unresolvedCount: unresolvedProtestCount(meet),
+      canRule: true,                 // judge + director may both rule
+      canCollectFee: canCorrect,     // director/owner only
+      canOpenCorrection: canCorrect, // upheld race-specific → correction (director only)
+      protestFee: Number(meet.protestFee || 0),
+      protestDeadlineMinutes: Number(meet.protestDeadlineMinutes || 0),
+    });
+  });
+
+  router.post('/api/v1/meets/:meetId/protests/:protestId/rule', (req, res) => {
+    const data = getSessionUser(req);
+    if (!data) return res.status(401).json({ ok:false, error:'Not logged in.' });
+    const meet = getMeetOr404(data.db, req.params.meetId);
+    if (!meet) return res.status(404).json({ ok:false, error:'Meet not found.' });
+    const role = resolveStaffRole(data.user, meet);
+    if (role !== 'director' && role !== 'tabulator') {
+      return res.status(403).json({ ok:false, error:'Only officials can rule on protests.' });
+    }
+    const protest = findProtest(meet, req.params.protestId);
+    if (!protest) return res.status(404).json({ ok:false, error:'Protest not found.' });
+    const state = req.body.state === 'upheld' ? 'upheld'
+                : req.body.state === 'denied' ? 'denied' : '';
+    if (!state) return res.status(400).json({ ok:false, error:'Ruling must be upheld or denied.' });
+
+    protest.state = state;
+    protest.ruling = String(req.body.ruling || '').slice(0, 2000);
+    protest.ruledByUserId = String(data.user.id || '');
+    protest.ruledByName = String(data.user.name || data.user.fullName || data.user.email || '');
+    protest.ruledAt = new Date().toISOString();
+
+    // Upheld race-specific protest opens Correction Mode — meet-director only.
+    const canCorrect = canEditMeet(data.user, meet);
+    let correction = null;
+    if (state === 'upheld' && protest.raceId && canCorrect) {
+      protest.correctionRaceId = protest.raceId;
+      correction = { available: true, raceId: protest.raceId, reason: protestUpheldReason(protest) };
+    }
+    meet.updatedAt = new Date().toISOString();
+    saveDb(data.db);
+
+    res.json({
+      ok: true,
+      protest: normalizeProtest(protest),
+      unresolvedCount: unresolvedProtestCount(meet),
+      correction,
+    });
+  });
+
+  router.post('/api/v1/meets/:meetId/protests/:protestId/fee', (req, res) => {
+    const data = getSessionUser(req);
+    if (!data) return res.status(401).json({ ok:false, error:'Not logged in.' });
+    const meet = getMeetOr404(data.db, req.params.meetId);
+    if (!meet) return res.status(404).json({ ok:false, error:'Meet not found.' });
+    // Fee collection is director/owner only — the same canEditMeet gate the
+    // website's requireRole('meet_director') + canEditMeet check enforces.
+    if (!canEditMeet(data.user, meet)) {
+      return res.status(403).json({ ok:false, error:'Only a meet director can collect the fee.' });
+    }
+    const protest = findProtest(meet, req.params.protestId);
+    if (!protest) return res.status(404).json({ ok:false, error:'Protest not found.' });
+    protest.feeCollected = true;
+    protest.feeCollectedBy = String(data.user.name || data.user.fullName || data.user.email || '');
+    protest.feeCollectedAt = new Date().toISOString();
+    meet.updatedAt = new Date().toISOString();
+    saveDb(data.db);
+
+    res.json({
+      ok: true,
+      protest: normalizeProtest(protest),
+      unresolvedCount: unresolvedProtestCount(meet),
     });
   });
 

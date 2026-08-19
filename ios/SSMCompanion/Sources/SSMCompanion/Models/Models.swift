@@ -319,6 +319,9 @@ public struct RaceDayStateResponse: Decodable {
     public let canControlRaceDay: Bool
     public let paused: Bool
     public let progress: RaceDayProgress
+    /// Unresolved protests (new + review) — drives the badge on the Director /
+    /// Tabulator tabs. Optional so older servers without the field still decode.
+    public let protestUnresolvedCount: Int?
     public let current: RaceDayItem?
     public let next: RaceDayItem?
     public let orderedRaces: [OrderedRaceOption]
@@ -327,4 +330,72 @@ public struct RaceDayStateResponse: Decodable {
 public struct SimpleOKResponse: Decodable {
     public let ok: Bool
     public let error: String?
+}
+
+// ── Protests (officials inbox) ─────────────────────────────────────────────
+
+/// A coach-filed protest, ruled by officials. Mirrors the server's
+/// normalizeProtest() shape (services/protests.js). Fields the app doesn't
+/// use (e.g. ruledByUserId) are simply omitted — extra JSON keys are ignored.
+public struct Protest: Decodable, Identifiable, Hashable {
+    public let id: String
+    public let createdAt: String
+    public let category: String
+    public let raceId: String
+    public let raceLabel: String
+    public let registrationId: String
+    public let filedByName: String
+    public let team: String
+    public let statement: String
+    public let state: String        // new | review | upheld | denied
+    public let ruling: String
+    public let ruledByName: String
+    public let ruledAt: String
+    public let correctionRaceId: String
+    public let feeAmount: Double
+    public let feeCollected: Bool
+    public let feeCollectedBy: String
+    public let feeCollectedAt: String
+    public let deadlineAt: String
+
+    /// Only Competition/Eligibility/Conduct carry a race; the rest are meet-wide.
+    public var isRaceSpecific: Bool { !raceId.isEmpty }
+    public var isResolved: Bool { state == "upheld" || state == "denied" }
+    public var isUnresolved: Bool { state == "new" || state == "review" }
+    public var isUpheld: Bool { state == "upheld" }
+    public var isDenied: Bool { state == "denied" }
+    public var hasFee: Bool { feeAmount > 0 }
+}
+
+/// Returned by the rule endpoint when an upheld race-specific protest can be
+/// opened in Correction Mode (director only).
+public struct ProtestCorrection: Decodable, Hashable, Identifiable {
+    public let available: Bool
+    public let raceId: String
+    public let reason: String
+    public var id: String { raceId + "|" + reason }
+}
+
+public struct ProtestsResponse: Decodable {
+    public let ok: Bool
+    public let protests: [Protest]
+    public let unresolvedCount: Int
+    public let canRule: Bool
+    public let canCollectFee: Bool
+    public let canOpenCorrection: Bool
+    public let protestFee: Double
+    public let protestDeadlineMinutes: Int
+}
+
+public struct ProtestRuleResponse: Decodable {
+    public let ok: Bool
+    public let protest: Protest
+    public let unresolvedCount: Int
+    public let correction: ProtestCorrection?
+}
+
+public struct ProtestActionResponse: Decodable {
+    public let ok: Bool
+    public let protest: Protest
+    public let unresolvedCount: Int
 }

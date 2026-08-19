@@ -6,6 +6,12 @@ import SwiftUI
 /// the audit entry and never rebuilds later races or moves the pointer.
 struct PadCorrectionView: View {
     let meetID: String
+    /// When launched from an upheld race-specific protest, jump straight to
+    /// that race with the reason prefilled (mirrors the website's
+    /// correction?raceId=…&reason=… deep link). Both default to nil for the
+    /// normal director-launched flow.
+    var initialRaceID: String? = nil
+    var initialReason: String? = nil
 
     @EnvironmentObject private var session: PadSessionViewModel
     @StateObject private var model = CorrectionViewModel()
@@ -34,7 +40,7 @@ struct PadCorrectionView: View {
             }
         }
         .preferredColorScheme(.dark)
-        .task { await model.load(meetID: meetID) }
+        .task { await model.load(meetID: meetID, preselectRaceID: initialRaceID, initialReason: initialReason) }
     }
 
     // ── Closed race picker ───────────────────────────────────────────────
@@ -178,13 +184,21 @@ final class CorrectionViewModel: ObservableObject {
     private var resultsMode = "places"
     private var notes = ""
 
-    func load(meetID: String) async {
+    func load(meetID: String, preselectRaceID: String? = nil, initialReason: String? = nil) async {
         isLoading = true
         defer { isLoading = false }
         do {
             let meet = try await api.desktopExport(meetID: meetID)
             closedRaces = meet.closedRaces()
             errorMessage = nil
+            // Deep-linked from an upheld protest: jump straight to the race
+            // and prefill the reason. If the race isn't a closed race (can't
+            // be corrected), fall back to the normal picker.
+            if let preselectRaceID,
+               let match = closedRaces.first(where: { $0.id == preselectRaceID }) {
+                select(race: match)
+                if let initialReason, !initialReason.isEmpty { reason = initialReason }
+            }
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }

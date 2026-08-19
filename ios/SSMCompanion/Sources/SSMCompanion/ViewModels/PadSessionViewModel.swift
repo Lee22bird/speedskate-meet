@@ -10,6 +10,7 @@ public enum PadSection: String, CaseIterable, Identifiable {
     case tabulator
     case announcer
     case referee
+    case protests
     case liveBoard
     case results
 
@@ -24,6 +25,7 @@ public enum PadSection: String, CaseIterable, Identifiable {
         case .tabulator: return "Tabulator"
         case .announcer: return "Announcer"
         case .referee: return "Referee"
+        case .protests: return "Protests"
         case .liveBoard: return "Live Board"
         case .results: return "Results"
         }
@@ -38,6 +40,7 @@ public enum PadSection: String, CaseIterable, Identifiable {
         case .tabulator: return "square.and.pencil"
         case .announcer: return "megaphone"
         case .referee: return "person.crop.rectangle.stack"
+        case .protests: return "exclamationmark.bubble"
         case .liveBoard: return "tv"
         case .results: return "list.number"
         }
@@ -55,6 +58,9 @@ public enum PadSection: String, CaseIterable, Identifiable {
         case .director: return role == .director
         case .blockBuilder, .registered, .checkIn: return role == .director || canBuildBlocks
         case .tabulator: return role == .director || role == .tabulator
+        // Officials inbox = judge (tabulator) + meet_director (director), the
+        // same requireRole('judge','meet_director') gate the website uses.
+        case .protests: return role == .director || role == .tabulator
         case .announcer, .referee: return role != nil
         case .liveBoard, .results: return true
         }
@@ -74,6 +80,10 @@ public final class PadSessionViewModel: ObservableObject {
     @Published public private(set) var state: RaceDayStateResponse?
     @Published public private(set) var isSendingAction = false
     @Published public var errorMessage: String?
+
+    /// Unresolved protests (new + review) from the polled race-day state —
+    /// feeds the sidebar badge on Director / Tabulator / Protests.
+    public var protestUnresolvedCount: Int { state?.protestUnresolvedCount ?? 0 }
 
     private let api: APIClient
     private var pollTask: Task<Void, Never>?

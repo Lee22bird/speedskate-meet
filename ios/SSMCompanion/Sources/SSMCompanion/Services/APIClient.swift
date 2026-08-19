@@ -197,6 +197,23 @@ public final class APIClient {
         try await request("/api/v1/meets/\(meetID)/race-day-state")
     }
 
+    // ── Protests (officials inbox — reuses the website's protest service) ──
+    public func protests(meetID: String) async throws -> ProtestsResponse {
+        try await request("/api/v1/meets/\(meetID)/protests")
+    }
+
+    public func ruleProtest(meetID: String, protestID: String,
+                            state: String, ruling: String) async throws -> ProtestRuleResponse {
+        try await request("/api/v1/meets/\(meetID)/protests/\(protestID)/rule",
+                          method: "POST",
+                          formBody: ["state": state, "ruling": ruling])
+    }
+
+    public func collectProtestFee(meetID: String, protestID: String) async throws -> ProtestActionResponse {
+        try await request("/api/v1/meets/\(meetID)/protests/\(protestID)/fee",
+                          method: "POST", formBody: [:])
+    }
+
     // ── Staff race-day controls ──────────────────────────────────────────
     // These reuse the website's existing Director-panel endpoints exactly —
     // no new control logic was added on the server for these actions.

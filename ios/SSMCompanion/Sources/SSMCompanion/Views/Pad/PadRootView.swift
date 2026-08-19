@@ -159,6 +159,10 @@ struct PadSidebar: View {
         }
     }
 
+    /// The web shows the unresolved-protest badge on the Director + Tabulator
+    /// tabs; we mirror that and also badge the dedicated Protests entry.
+    private let badgeSections: Set<PadSection> = [.director, .tabulator, .protests]
+
     private var boardsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             VStack(alignment: .leading, spacing: 2) {
@@ -181,6 +185,13 @@ struct PadSidebar: View {
                                     .font(.ssmRounded(15, weight: session.selectedSection == section ? .bold : .semibold))
                                     .foregroundStyle(session.selectedSection == section ? SSMTheme.orange : SSMTheme.textPrimary)
                                 Spacer()
+                                if badgeSections.contains(section), session.protestUnresolvedCount > 0 {
+                                    Text("\(session.protestUnresolvedCount)")
+                                        .font(.ssmRounded(11, weight: .heavy))
+                                        .foregroundStyle(.white)
+                                        .padding(.horizontal, 7).padding(.vertical, 2)
+                                        .background(SSMTheme.danger, in: Capsule())
+                                }
                                 if session.selectedSection == section {
                                     Circle().fill(SSMTheme.orange).frame(width: 7, height: 7)
                                 }
@@ -354,6 +365,9 @@ struct PadDetailRouter: View {
                 PadAnnouncerView()
             case .referee:
                 PadRefereeView()
+            case .protests:
+                PadProtestsView(meetID: meetID)
+                    .id(meetID)
             case .liveBoard:
                 PadEmbeddedScreen(title: session.selectedMeetName) {
                     LiveRaceDayView(meetID: meetID, meetName: session.selectedMeetName)
