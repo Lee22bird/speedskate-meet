@@ -128,6 +128,10 @@ function raceDayItemToJson(item, meet, regMap) {
     status: item.status || 'open',
     isOpenRace: !!item.isOpenRace,
     isQuadRace: !!item.isQuadRace,
+    // Relay race: each lane is a TEAM (skaterName = joined members, team =
+    // club). Display-only flag so the boards can frame lanes as teams; result
+    // entry is the same per-lane form the tabulator already posts.
+    isRelay: !!item.isRelayRace,
     lanes,
     isMerged,
     packLabel: isMerged ? mergePackLabel(meet, item) : null,

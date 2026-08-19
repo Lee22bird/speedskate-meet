@@ -452,6 +452,10 @@ struct PadTabulatorView: View {
     // numbers front-and-centre; tapped skaters drop into a live finish-order
     // column. Undo, tap-to-unplace, and auto-place the last skater.
 
+    /// A relay race's lanes are teams, not individuals — flips tap-target and
+    /// column labels from "skater" to "team".
+    private var isRelay: Bool { model.race?.isRelayRace == true }
+
     private var tapToPlaceCard: some View {
         let placed = model.placedLanes
         let unplaced = model.unplacedLanes
@@ -519,7 +523,7 @@ struct PadTabulatorView: View {
                 let columns = [GridItem(.adaptive(minimum: 132), spacing: 10)]
                 LazyVGrid(columns: columns, spacing: 10) {
                     ForEach(unplaced) { lane in
-                        FinishTapButton(lane: lane) {
+                        FinishTapButton(lane: lane, isRelay: isRelay) {
                             SSMHaptics.tap()
                             withAnimation(.easeOut(duration: 0.18)) {
                                 model.tapFinishOrder(lane: lane.lane)
@@ -532,7 +536,9 @@ struct PadTabulatorView: View {
                         SSMHaptics.tap()
                         withAnimation { model.placeRemaining() }
                     } label: {
-                        Label("Place last skater — \(shortName(last.skaterName))", systemImage: "flag.checkered")
+                        Label(isRelay ? "Place last team — \(last.team.isEmpty ? "Lane \(last.lane)" : last.team)"
+                                      : "Place last skater — \(shortName(last.skaterName))",
+                              systemImage: "flag.checkered")
                             .font(.ssmRounded(13, weight: .bold))
                             .frame(maxWidth: .infinity)
                     }
@@ -550,7 +556,7 @@ struct PadTabulatorView: View {
                 .font(.ssmRounded(11, weight: .heavy))
                 .foregroundStyle(SSMTheme.muted)
             if placed.isEmpty {
-                Text("Tap a skater as they cross the line.")
+                Text(isRelay ? "Tap a team as they cross the line." : "Tap a skater as they cross the line.")
                     .font(.ssmRounded(13, weight: .medium))
                     .foregroundStyle(SSMTheme.muted)
                     .padding(.vertical, 10)
@@ -569,12 +575,14 @@ struct PadTabulatorView: View {
                                             .font(.ssmRounded(12, weight: .heavy))
                                             .foregroundStyle(SSMTheme.sky)
                                     }
-                                    Text(lane.skaterName)
+                                    Text(isRelay ? (lane.team.isEmpty ? "Lane \(lane.lane)" : lane.team) : lane.skaterName)
                                         .font(.ssmRounded(14, weight: .bold))
                                         .foregroundStyle(SSMTheme.textPrimary)
                                         .lineLimit(1)
                                 }
-                                Text("Lane \(lane.lane)\(lane.team.isEmpty ? "" : " · \(lane.team)")")
+                                Text(isRelay
+                                     ? "Lane \(lane.lane)\(lane.skaterName.isEmpty ? "" : " · \(lane.skaterName)")"
+                                     : "Lane \(lane.lane)\(lane.team.isEmpty ? "" : " · \(lane.team)")")
                                     .font(.ssmRounded(10, weight: .medium))
                                     .foregroundStyle(SSMTheme.muted)
                                     .lineLimit(1)
@@ -605,7 +613,7 @@ struct PadTabulatorView: View {
                 ViewThatFits(in: .horizontal) {
                     HStack {
                         Text("LANE").frame(width: 52, alignment: .leading)
-                        Text("SKATER").frame(maxWidth: .infinity, alignment: .leading)
+                        Text(isRelay ? "TEAM" : "SKATER").frame(maxWidth: .infinity, alignment: .leading)
                             .frame(minWidth: 200)
                         Text("PLACE").frame(width: 76)
                         Text("TIME").frame(width: 110)
@@ -698,23 +706,43 @@ struct PadTabulatorView: View {
 /// skaters by helmet), name below. Tapping drops them into the finish order.
 struct FinishTapButton: View {
     let lane: LaneEdit
+    /// Relay: the tap target is a TEAM, so lead with the club + members, not a
+    /// helmet number and one skater's first name.
+    var isRelay: Bool = false
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             VStack(spacing: 4) {
-                Text(lane.helmetNumber.map { $0.isEmpty ? "L\(lane.lane)" : "#\($0)" } ?? "L\(lane.lane)")
-                    .font(.ssmRounded(30, weight: .heavy))
-                    .foregroundStyle(SSMTheme.textPrimary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-                Text(firstName(lane.skaterName))
-                    .font(.ssmRounded(14, weight: .bold))
-                    .foregroundStyle(SSMTheme.textPrimary)
-                    .lineLimit(1)
-                Text("Lane \(lane.lane)")
-                    .font(.ssmRounded(10, weight: .semibold))
-                    .foregroundStyle(SSMTheme.muted)
+                if isRelay {
+                    Text(lane.team.isEmpty ? "Lane \(lane.lane)" : lane.team)
+                        .font(.ssmRounded(20, weight: .heavy))
+                        .foregroundStyle(SSMTheme.textPrimary)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.6)
+                        .multilineTextAlignment(.center)
+                    Text(lane.skaterName)
+                        .font(.ssmRounded(12, weight: .semibold))
+                        .foregroundStyle(SSMTheme.muted)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.center)
+                    Text("Lane \(lane.lane)")
+                        .font(.ssmRounded(10, weight: .semibold))
+                        .foregroundStyle(SSMTheme.muted)
+                } else {
+                    Text(lane.helmetNumber.map { $0.isEmpty ? "L\(lane.lane)" : "#\($0)" } ?? "L\(lane.lane)")
+                        .font(.ssmRounded(30, weight: .heavy))
+                        .foregroundStyle(SSMTheme.textPrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                    Text(firstName(lane.skaterName))
+                        .font(.ssmRounded(14, weight: .bold))
+                        .foregroundStyle(SSMTheme.textPrimary)
+                        .lineLimit(1)
+                    Text("Lane \(lane.lane)")
+                        .font(.ssmRounded(10, weight: .semibold))
+                        .foregroundStyle(SSMTheme.muted)
+                }
             }
             .frame(maxWidth: .infinity)
             .frame(height: 96)

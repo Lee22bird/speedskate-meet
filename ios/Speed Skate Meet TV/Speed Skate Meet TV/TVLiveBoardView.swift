@@ -142,7 +142,7 @@ struct TVLiveBoardView: View {
             } else {
                 VStack(spacing: 12) {
                     ForEach(lanes) { lane in
-                        TVLaneRow(lane: lane)
+                        TVLaneRow(lane: lane, isRelay: item.isRelayRace)
                     }
                 }
             }
@@ -167,6 +167,9 @@ struct TVLiveBoardView: View {
             }
             if item.isMergedPack {
                 TVChip("MERGED PACK", color: SSMTheme.mergeAccent)
+            }
+            if item.isRelayRace {
+                TVChip("RELAY", color: SSMTheme.orange)
             }
             if item.isTimeTrial {
                 TVChip("TIME TRIAL", color: SSMTheme.sky2)
@@ -324,6 +327,8 @@ func medalColor(_ place: Int?) -> Color {
 
 struct TVLaneRow: View {
     let lane: LaneEntry
+    /// Relay lane = a team: lead with the club, members read below.
+    var isRelay: Bool = false
 
     private var place: Int? { placeInt(lane.place) }
     private var statusText: String? {
@@ -367,7 +372,7 @@ struct TVLaneRow: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 10) {
-                    Text(lane.skaterName)
+                    Text(isRelay ? (lane.team.isEmpty ? "Lane \(lane.lane)" : lane.team) : lane.skaterName)
                         .font(.ssmRounded(30, weight: .bold))
                         .foregroundStyle(SSMTheme.textPrimary)
                         .lineLimit(1)
@@ -379,7 +384,8 @@ struct TVLaneRow: View {
                             .background(SSMTheme.mergeAccent, in: Capsule())
                     }
                 }
-                Text([lane.team, lane.sponsor].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: "  •  "))
+                Text((isRelay ? [lane.skaterName, lane.sponsor] : [lane.team, lane.sponsor])
+                        .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: "  •  "))
                     .font(.ssmRounded(20, weight: .medium))
                     .foregroundStyle(SSMTheme.muted)
                     .lineLimit(1)

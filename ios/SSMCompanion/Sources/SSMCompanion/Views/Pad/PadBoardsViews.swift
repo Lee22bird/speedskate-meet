@@ -52,6 +52,7 @@ struct PadAnnouncerView: View {
                             .font(.ssmRounded(13, weight: .semibold))
                             .foregroundStyle(SSMTheme.muted)
                         if item.isMergedPack { MergeDivTag("MERGED") }
+                        if item.isRelayRace { RelayTag() }
                     }
                 }
             }
@@ -62,9 +63,12 @@ struct PadAnnouncerView: View {
     private func announcerCard(_ race: RaceDayItem) -> some View {
         SSMCard {
             VStack(alignment: .leading, spacing: 14) {
-                Text("NOW RACING — READ SHEET")
-                    .font(.ssmRounded(12, weight: .heavy))
-                    .foregroundStyle(SSMTheme.muted)
+                HStack(spacing: 8) {
+                    Text("NOW RACING — READ SHEET")
+                        .font(.ssmRounded(12, weight: .heavy))
+                        .foregroundStyle(SSMTheme.muted)
+                    if race.isRelayRace { RelayTag() }
+                }
                 if race.isMergedPack {
                     MergePackBanner(label: race.packLabel ?? "")
                 }
@@ -81,16 +85,25 @@ struct PadAnnouncerView: View {
                                     .font(.ssmRounded(20, weight: .heavy))
                                     .foregroundStyle(SSMTheme.sky)
                             }
-                            Text(lane.skaterName)
+                            // Relay: club is the headline, members read below.
+                            Text(race.isRelayRace ? (lane.team.isEmpty ? "Lane \(lane.lane)" : lane.team) : lane.skaterName)
                                 .font(.ssmRounded(22, weight: .heavy))
                                 .foregroundStyle(SSMTheme.textPrimary)
                             if let div = lane.division, !div.isEmpty {
                                 MergeDivTag(div)
                             }
                             Spacer()
-                            Text(lane.team)
-                                .font(.ssmRounded(15, weight: .bold))
+                            if !race.isRelayRace {
+                                Text(lane.team)
+                                    .font(.ssmRounded(15, weight: .bold))
+                                    .foregroundStyle(SSMTheme.muted)
+                            }
+                        }
+                        if race.isRelayRace, !lane.skaterName.isEmpty {
+                            Text(lane.skaterName)
+                                .font(.ssmRounded(14, weight: .semibold))
                                 .foregroundStyle(SSMTheme.muted)
+                                .padding(.leading, 48)
                         }
                         if let sponsor = lane.sponsor, !sponsor.isEmpty {
                             Text("Sponsored by \(sponsor)")
@@ -154,9 +167,12 @@ struct PadRefereeView: View {
                     Text(item.isMergedPack ? (item.packLabel ?? item.groupLabel) : item.groupLabel)
                         .font(.ssmRounded(22, weight: .heavy))
                         .foregroundStyle(SSMTheme.textPrimary)
-                    Text("\(item.distanceLabel) · \(item.stage)")
-                        .font(.ssmRounded(13, weight: .semibold))
-                        .foregroundStyle(SSMTheme.muted)
+                    HStack(spacing: 6) {
+                        Text("\(item.distanceLabel) · \(item.stage)")
+                            .font(.ssmRounded(13, weight: .semibold))
+                            .foregroundStyle(SSMTheme.muted)
+                        if item.isRelayRace { RelayTag() }
+                    }
                     if item.isMergedPack {
                         MergePackBanner(label: item.packLabel ?? "")
                     }
@@ -173,7 +189,7 @@ struct PadRefereeView: View {
                                     .font(.ssmRounded(14, weight: .heavy))
                                     .foregroundStyle(SSMTheme.sky)
                             }
-                            Text(lane.skaterName)
+                            Text(item.isRelayRace ? (lane.team.isEmpty ? "Lane \(lane.lane)" : lane.team) : lane.skaterName)
                                 .font(.ssmRounded(15, weight: .bold))
                                 .foregroundStyle(SSMTheme.textPrimary)
                                 .lineLimit(1)
@@ -181,7 +197,7 @@ struct PadRefereeView: View {
                                 MergeDivTag(div)
                             }
                             Spacer()
-                            Text(lane.team)
+                            Text(item.isRelayRace ? lane.skaterName : lane.team)
                                 .font(.ssmRounded(12, weight: .medium))
                                 .foregroundStyle(SSMTheme.muted)
                                 .lineLimit(1)

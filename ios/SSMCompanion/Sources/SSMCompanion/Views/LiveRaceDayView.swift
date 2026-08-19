@@ -279,8 +279,11 @@ struct LaneListCard: View {
     var body: some View {
         SSMCard {
             VStack(alignment: .leading, spacing: 12) {
-                Text(item.isMergedPack ? "Lanes — merged pack" : "Lanes")
-                    .font(.subheadline.bold()).foregroundStyle(SSMTheme.muted)
+                HStack(spacing: 8) {
+                    Text(item.isMergedPack ? "Lanes — merged pack" : item.isRelayRace ? "Lanes — relay teams" : "Lanes")
+                        .font(.subheadline.bold()).foregroundStyle(SSMTheme.muted)
+                    if item.isRelayRace { RelayTag() }
+                }
                 if item.isMergedPack {
                     MergePackBanner(label: item.packLabel ?? "")
                 }
@@ -295,7 +298,8 @@ struct LaneListCard: View {
                             .shadow(color: SSMTheme.orange.opacity(0.4), radius: 4, x: 0, y: 2)
                         VStack(alignment: .leading, spacing: 2) {
                             HStack(spacing: 6) {
-                                Text(lane.skaterName).font(.ssmRounded(17, weight: .bold)).foregroundStyle(SSMTheme.textPrimary)
+                                Text(item.isRelayRace ? (lane.team.isEmpty ? "Lane \(lane.lane)" : lane.team) : lane.skaterName)
+                                    .font(.ssmRounded(17, weight: .bold)).foregroundStyle(SSMTheme.textPrimary)
                                 if let div = lane.division, !div.isEmpty {
                                     MergeDivTag(div)
                                 }
@@ -304,7 +308,7 @@ struct LaneListCard: View {
                                 if let helmet = lane.helmetNumber {
                                     Text("#\(helmet)").font(.caption).foregroundStyle(SSMTheme.muted)
                                 }
-                                Text(lane.team).font(.caption).foregroundStyle(SSMTheme.muted)
+                                Text(item.isRelayRace ? lane.skaterName : lane.team).font(.caption).foregroundStyle(SSMTheme.muted)
                             }
                             if let sponsor = lane.sponsor {
                                 Text("Sponsored by \(sponsor)").font(.caption2).foregroundStyle(SSMTheme.sky2)

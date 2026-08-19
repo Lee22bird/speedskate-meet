@@ -231,6 +231,18 @@ public struct MergeDivTag: View {
     }
 }
 
+/// A small "RELAY" tag — relay lanes are teams, not individuals.
+public struct RelayTag: View {
+    public init() {}
+    public var body: some View {
+        Text("RELAY")
+            .font(.ssmRounded(10, weight: .heavy))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 7).padding(.vertical, 2)
+            .background(SSMTheme.orange, in: Capsule())
+    }
+}
+
 /// Banner above a merged-pack lane sheet: two divisions start together as one
 /// pack but are scored separately.
 public struct MergePackBanner: View {

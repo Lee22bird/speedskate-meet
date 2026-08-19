@@ -136,6 +136,9 @@ public struct RaceDayItem: Decodable, Identifiable, Hashable {
     public let status: String?
     public let isOpenRace: Bool?
     public let isQuadRace: Bool?
+    /// Relay race — each lane is a TEAM (skaterName = joined members, team =
+    /// club). Optional so older servers still decode.
+    public let isRelay: Bool?
     public let lanes: [LaneEntry]
     /// Day-of race merge (display only). When two races start as one pack,
     /// `mergedLanes` is the combined, renumbered, division-tagged sheet and
@@ -154,6 +157,9 @@ public struct RaceDayItem: Decodable, Identifiable, Hashable {
     /// The lanes a DISPLAY board should show: the combined pack sheet when
     /// merged, otherwise this race's own lanes. (Result entry never uses this.)
     public var displayLanes: [LaneEntry] { isMergedPack ? (mergedLanes ?? lanes) : lanes }
+
+    /// True when this is a relay race (lanes are teams, not individuals).
+    public var isRelayRace: Bool { isRelay == true }
 }
 
 public struct ComingUpItem: Decodable, Identifiable, Hashable {

@@ -149,6 +149,7 @@ struct PadDirectorView: View {
                             }
                             if current.isOpenRace == true { SSMChip("Open", color: SSMTheme.orange) }
                             if current.isQuadRace == true { SSMChip("Quad", color: SSMTheme.orange) }
+                            if current.isRelayRace { SSMChip("RELAY — lanes are teams", color: SSMTheme.mergeAccent) }
                         }
                         .fixedSize()
                     }
@@ -223,7 +224,8 @@ struct PadDirectorView: View {
     private func laneSheetCard(_ race: RaceDayItem) -> some View {
         SSMCard {
             VStack(alignment: .leading, spacing: 10) {
-                Text(race.isMergedPack ? "MERGED PACK — LANE SHEET" : "LANE SHEET")
+                Text(race.isMergedPack ? "MERGED PACK — LANE SHEET"
+                     : race.isRelayRace ? "RELAY — TEAM LANE SHEET" : "LANE SHEET")
                     .font(.ssmRounded(12, weight: .heavy))
                     .foregroundStyle(SSMTheme.muted)
                 if race.isMergedPack {
@@ -243,14 +245,15 @@ struct PadDirectorView: View {
                                         .font(.ssmRounded(14, weight: .heavy))
                                         .foregroundStyle(SSMTheme.sky)
                                 }
-                                Text(lane.skaterName)
+                                // Relay lane = a team: lead with the club.
+                                Text(race.isRelayRace ? (lane.team.isEmpty ? "Lane \(lane.lane)" : lane.team) : lane.skaterName)
                                     .font(.ssmRounded(16, weight: .bold))
                                     .foregroundStyle(SSMTheme.textPrimary)
                                 if let div = lane.division, !div.isEmpty {
                                     MergeDivTag(div)
                                 }
                             }
-                            Text(lane.team)
+                            Text(race.isRelayRace ? lane.skaterName : lane.team)
                                 .font(.ssmRounded(12, weight: .medium))
                                 .foregroundStyle(SSMTheme.muted)
                         }
