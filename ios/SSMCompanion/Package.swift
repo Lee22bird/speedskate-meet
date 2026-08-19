@@ -5,6 +5,7 @@ let package = Package(
     name: "SSMCompanion",
     platforms: [
         .iOS(.v17),
+        .tvOS(.v17),
         .macOS(.v14),
     ],
     products: [

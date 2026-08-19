@@ -195,7 +195,9 @@ struct RegistrationFormSheet: View {
                 }
             }
         }
-        .toggleStyle(SwitchToggleStyle(tint: SSMTheme.orange))
+        #if !os(tvOS)
+        .toggleStyle(SwitchToggleStyle(tint: SSMTheme.orange)) // no switch toggles on tvOS
+        #endif
     }
 
     private var showTimeTrials: Bool {
