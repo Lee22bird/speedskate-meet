@@ -4,7 +4,7 @@ const {
   hasRole, canEditMeet, canJudgeMeet, isMeetOwner, isAssignedTabulatorForMeet,
 } = require('../utils/auth');
 const {
-  isPublicMeet, meetRinkLabel, meetDateLabel, getMeetOr404,
+  isPublicMeet, meetRinkLabel, meetDateLabel, getMeetOr404, coachTeamRegistrations,
 } = require('../services/meetHelpers');
 const {
   orderedRaces, currentRaceInfo, raceDayProgress, laneRowsForRace,
@@ -16,6 +16,8 @@ const {
 const { staffAssignmentsForMeet } = require('../services/staffAssignments');
 const {
   protestsForMeet, normalizeProtest, findProtest, unresolvedProtestCount,
+  protestsForCoach, buildProtest, isRaceSpecific, raceProtestWindowClosed,
+  protestDeadlineMinutes, PROTEST_CATEGORIES, RACE_SPECIFIC_CATEGORIES,
 } = require('../services/protests');
 
 // Server-controlled "featured schedule" promo shown as a banner under the
@@ -500,6 +502,106 @@ module.exports = function createMobileApiRoutes(deps = {}) {
       protest: normalizeProtest(protest),
       unresolvedCount: unresolvedProtestCount(meet),
     });
+  });
+
+  // ── Coach: file protests from the app ────────────────────────────────────
+  // Mirrors the website's coach protest flow (routes/protestRoutes.js). A coach
+  // is linked to their skaters purely by team-name string match (there is no
+  // coachUserId). Additive JSON only; all writes go through buildProtest and
+  // land on the same meet.protests[] the officials inbox already reads.
+
+  function coachSkaters(meet, user) {
+    return coachTeamRegistrations(meet, String(user.team || ''));
+  }
+
+  function raceLabelForProtest(race) {
+    const div = race.division ? String(race.division).replace(/^\w/, c => c.toUpperCase()) : '';
+    return [race.groupLabel, div, race.distanceLabel].filter(Boolean).join(' · ');
+  }
+
+  // Meets where the logged-in coach has skaters (their team is registered).
+  router.get('/api/v1/my-coach-meets', (req, res) => {
+    const data = getSessionUser(req);
+    if (!data) return res.status(401).json({ ok:false, error:'Not logged in.' });
+    if (!hasRole(data.user, 'coach')) return res.json({ ok:true, isCoach:false, meets: [] });
+    const team = String(data.user.team || '');
+    const meets = (data.db.meets || [])
+      .filter(m => coachTeamRegistrations(m, team).length > 0)
+      .map(m => ({
+        id: m.id,
+        meetName: m.meetName || 'Untitled Meet',
+        date: m.date || '',
+        status: m.status || 'draft',
+        location: meetRinkLabel(data.db, m) || '',
+        mySkaterCount: coachTeamRegistrations(m, team).length,
+        myProtestCount: protestsForCoach(m, data.user.id).length,
+      }));
+    res.json({ ok:true, isCoach:true, team, meets });
+  });
+
+  // Everything the app needs to render the coach protest form for one meet,
+  // plus the coach's already-filed protests + their status.
+  router.get('/api/v1/meets/:meetId/coach/protest-form', (req, res) => {
+    const data = getSessionUser(req);
+    if (!data) return res.status(401).json({ ok:false, error:'Not logged in.' });
+    const meet = getMeetOr404(data.db, req.params.meetId);
+    if (!meet) return res.status(404).json({ ok:false, error:'Meet not found.' });
+    const myRegs = coachSkaters(meet, data.user);
+    if (!hasRole(data.user, 'coach') || myRegs.length === 0) {
+      return res.status(403).json({ ok:false, error:'You have no skaters registered in this meet.' });
+    }
+    const races = orderedRaces(meet)
+      .filter(r => r.type !== 'time_trial')
+      .map(r => ({ id: r.id, label: raceLabelForProtest(r) }));
+    res.json({
+      ok: true,
+      categories: PROTEST_CATEGORIES.map(c => ({ name: c, raceSpecific: RACE_SPECIFIC_CATEGORIES.includes(c) })),
+      races,
+      skaters: myRegs.map(r => ({ id: String(r.id), name: r.name || '', helmetNumber: r.helmetNumber || null })),
+      protestFee: Number(meet.protestFee || 0),
+      protestDeadlineMinutes: Number(meet.protestDeadlineMinutes || 0),
+      myProtests: protestsForCoach(meet, data.user.id).map(normalizeProtest),
+    });
+  });
+
+  router.post('/api/v1/meets/:meetId/coach/protest', (req, res) => {
+    const data = getSessionUser(req);
+    if (!data) return res.status(401).json({ ok:false, error:'Not logged in.' });
+    const meet = getMeetOr404(data.db, req.params.meetId);
+    if (!meet) return res.status(404).json({ ok:false, error:'Meet not found.' });
+    const myRegs = coachSkaters(meet, data.user);
+    if (!hasRole(data.user, 'coach') || myRegs.length === 0) {
+      return res.status(403).json({ ok:false, error:'You have no skaters registered in this meet.' });
+    }
+    const category = String(req.body.category || '');
+    // Skater-ownership leniency: silently drop a registrationId that isn't the
+    // coach's own skater (same as the website).
+    let registrationId = String(req.body.registrationId || '');
+    if (registrationId && !myRegs.some(r => String(r.id) === registrationId)) registrationId = '';
+    // Race-specific past-deadline block (online filing only).
+    if (isRaceSpecific(category)) {
+      const race = (meet.races || []).find(r => String(r.id) === String(req.body.raceId || ''));
+      if (race && raceProtestWindowClosed(meet, race)) {
+        return res.status(400).json({ ok:false,
+          error:`The online protest window for that race has closed (${protestDeadlineMinutes(meet)} minutes after it closed). See the meet director in person.` });
+      }
+    }
+    const built = buildProtest(meet, {
+      category,
+      raceId: req.body.raceId,
+      raceLabel: req.body.raceLabel,
+      registrationId,
+      statement: req.body.statement,
+      filedByUserId: data.user.id,
+      filedByName: data.user.name || data.user.fullName || data.user.email || 'Coach',
+      team: String(data.user.team || ''),
+    }, new Date().toISOString());
+    if (!built.ok) return res.status(400).json({ ok:false, error: built.error });
+    if (!Array.isArray(meet.protests)) meet.protests = [];
+    meet.protests.push(built.protest);
+    meet.updatedAt = new Date().toISOString();
+    saveDb(data.db);
+    res.json({ ok:true, protest: normalizeProtest(built.protest) });
   });
 
   return router;
