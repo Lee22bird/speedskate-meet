@@ -327,6 +327,9 @@ struct PadTabulatorView: View {
                 if model.pointerMovedAway {
                     pointerBanner
                 }
+                if model.restoredDraft {
+                    restoredBanner
+                }
                 raceHeader(race)
                 if race.mergeGroupId != nil {
                     mergedBanner
@@ -368,6 +371,23 @@ struct PadTabulatorView: View {
         }
         .padding(14)
         .background(SSMTheme.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private var restoredBanner: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "arrow.clockwise.circle.fill")
+                .foregroundStyle(SSMTheme.good)
+            Text("Restored your unsaved entries on this device — nothing was lost.")
+                .font(.ssmRounded(14, weight: .bold))
+                .foregroundStyle(SSMTheme.textPrimary)
+            Spacer()
+            Button("Discard") {
+                Task { await model.discardDraft(meetID: meetID) }
+            }
+            .buttonStyle(.ssmSoftPill)
+        }
+        .padding(14)
+        .background(SSMTheme.good.opacity(0.12), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     private var mergedBanner: some View {

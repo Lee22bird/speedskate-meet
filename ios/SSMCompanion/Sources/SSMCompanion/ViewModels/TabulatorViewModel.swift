@@ -2,7 +2,9 @@ import Foundation
 import SwiftUI
 
 /// One lane's editable result-entry state on the iPad tabulator board.
-public struct LaneEdit: Identifiable {
+/// Codable so in-progress entries can be persisted as a local draft (so a
+/// crash / backgrounding / relaunch never loses typed places or times).
+public struct LaneEdit: Identifiable, Codable {
     public let lane: Int
     public let registrationId: String?
     public var skaterName: String
@@ -67,9 +69,14 @@ public final class TabulatorViewModel: ObservableObject {
     /// Set when the meet's current race moved while this screen had unsaved
     /// edits — the view shows a banner instead of clobbering the entry.
     @Published public var pointerMovedAway = false
+    /// True when a locally-saved draft of unsaved entries was restored on load
+    /// (the view shows a "restored your entries" banner with a Discard option).
+    @Published public var restoredDraft = false
 
     private let api: APIClient
     private var loadedRaceID: String?
+    private var currentMeetID: String?
+    private var draftSaveTask: Task<Void, Never>?
 
     public init(api: APIClient = .shared) {
         self.api = api
@@ -94,8 +101,10 @@ public final class TabulatorViewModel: ObservableObject {
             }
             apply(race: exportRace, from: meet)
             loadedRaceID = raceID
+            currentMeetID = meetID
             errorMessage = nil
             pointerMovedAway = false
+            restoreDraftIfAny(for: exportRace)
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
@@ -113,6 +122,26 @@ public final class TabulatorViewModel: ObservableObject {
         }
     }
 
+    /// If an unsaved draft exists for the just-loaded race and still matches its
+    /// lane shape, restore the typed entries over the server's saved version.
+    private func restoreDraftIfAny(for exportRace: ExportRace) {
+        restoredDraft = false
+        guard let meetID = currentMeetID,
+              let draft = TabulationDraftStore.shared.load(meetID: meetID, raceID: exportRace.id)
+        else { return }
+        guard !draft.lanes.isEmpty,
+              draft.laneSet == Set(exportRace.laneEntries.map(\.lane)) else {
+            TabulationDraftStore.shared.clear(meetID: meetID, raceID: exportRace.id)
+            return
+        }
+        lanes = draft.lanes
+        finishOrder = draft.finishOrder
+        resultsMode = draft.resultsMode
+        notes = draft.notes
+        isDirty = true
+        restoredDraft = true
+    }
+
     private func apply(race exportRace: ExportRace, from meet: ExportMeet) {
         race = exportRace
         blockName = meet.blockName(forRace: exportRace.id)
@@ -125,7 +154,45 @@ public final class TabulatorViewModel: ObservableObject {
 
     // ── Edits ────────────────────────────────────────────────────────────
 
-    public func markDirty() { isDirty = true }
+    public func markDirty() {
+        isDirty = true
+        scheduleDraftSave()
+    }
+
+    // ── Local draft (never lose typed entries) ───────────────────────────
+
+    /// Debounced disk snapshot of the current entries. Cheap (small JSON).
+    private func scheduleDraftSave() {
+        draftSaveTask?.cancel()
+        draftSaveTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            guard !Task.isCancelled else { return }
+            self?.persistDraft()
+        }
+    }
+
+    private func persistDraft() {
+        guard isDirty, let meetID = currentMeetID, let raceID = loadedRaceID else { return }
+        TabulationDraftStore.shared.save(
+            TabulationDraft(meetID: meetID, raceID: raceID, lanes: lanes,
+                            finishOrder: finishOrder, resultsMode: resultsMode,
+                            notes: notes, savedAt: Date()))
+    }
+
+    private func clearDraft() {
+        draftSaveTask?.cancel()
+        if let meetID = currentMeetID, let raceID = loadedRaceID {
+            TabulationDraftStore.shared.clear(meetID: meetID, raceID: raceID)
+        }
+    }
+
+    /// Throw away the restored draft and reload the server's saved version.
+    public func discardDraft(meetID: String) async {
+        restoredDraft = false
+        clearDraft()
+        loadedRaceID = nil
+        await loadCurrentRace(meetID: meetID, currentRaceID: race?.id)
+    }
 
     /// Skaters still waiting to be placed (has a skater, not DQ'd, not yet
     /// tapped) — the buttons the operator taps as racers cross the line.
@@ -150,7 +217,7 @@ public final class TabulatorViewModel: ObservableObject {
         guard !finishOrder.contains(lane) else { return }
         finishOrder.append(lane)
         renumberFinishOrder()
-        isDirty = true
+        markDirty()
     }
 
     /// Remove one skater from the finish order and renumber everyone behind
@@ -162,7 +229,7 @@ public final class TabulatorViewModel: ObservableObject {
             lanes[idx].place = ""
         }
         renumberFinishOrder()
-        isDirty = true
+        markDirty()
     }
 
     /// Undo the most recent tap.
@@ -179,7 +246,7 @@ public final class TabulatorViewModel: ObservableObject {
             finishOrder.append(lane.lane)
         }
         renumberFinishOrder()
-        isDirty = true
+        markDirty()
     }
 
     public func clearFinishOrder() {
@@ -189,7 +256,7 @@ public final class TabulatorViewModel: ObservableObject {
             }
         }
         finishOrder = []
-        isDirty = true
+        markDirty()
     }
 
     /// Rewrite place strings to match the current finish order (1..N).
@@ -220,7 +287,7 @@ public final class TabulatorViewModel: ObservableObject {
         } else if lanes[idx].dqTimestamp.isEmpty {
             lanes[idx].dqTimestamp = ISO8601DateFormatter().string(from: Date())
         }
-        isDirty = true
+        markDirty()
     }
 
     // ── Time-trial session (the isTimeTrial RACE) ────────────────────────
@@ -310,7 +377,9 @@ public final class TabulatorViewModel: ObservableObject {
                 return false
             }
             errorMessage = nil
+            clearDraft()          // entries are safely on the server now
             isDirty = false
+            restoredDraft = false
             if close {
                 // The server advanced the meet pointer; force a fresh load.
                 loadedRaceID = nil
