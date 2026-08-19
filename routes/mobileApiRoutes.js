@@ -15,6 +15,10 @@ const {
 } = require('../services/standings');
 const { staffAssignmentsForMeet } = require('../services/staffAssignments');
 const {
+  relayDivisionsForRuleset, RELAY_DIVISION_BY_ID, eligibleForRelayDivision,
+} = require('../services/relayDivisions');
+const { buildRelayRacesFromTeams } = require('../services/relayGenerator');
+const {
   protestsForMeet, normalizeProtest, findProtest, unresolvedProtestCount,
   protestsForCoach, buildProtest, isRaceSpecific, raceProtestWindowClosed,
   protestDeadlineMinutes, PROTEST_CATEGORIES, RACE_SPECIFIC_CATEGORIES,
@@ -608,6 +612,97 @@ module.exports = function createMobileApiRoutes(deps = {}) {
     meet.updatedAt = new Date().toISOString();
     saveDb(data.db);
     res.json({ ok:true, protest: normalizeProtest(built.protest) });
+  });
+
+  // ── Director: relay builder (build teams + generate races, all on iPad) ────
+  // A relay race's lanes are teams; buildRelayRacesFromTeams turns
+  // meet.relayTeams into the actual races. This lets a director set relays up
+  // entirely on the iPad. Additive JSON; team/race writes reuse the same
+  // meet.relayTeams + relayGenerator the website uses. Eligibility (age/gender,
+  // quad opt-in) is computed server-side via eligibleForRelayDivision.
+
+  function relayTeamClub(memberRegIds, regById) {
+    const clubs = new Set(memberRegIds
+      .map(id => String((regById.get(String(id)) || {}).team || '').trim())
+      .filter(Boolean));
+    return clubs.size === 1 ? { club: [...clubs][0], mixed: false } : { club: '', mixed: true };
+  }
+
+  router.get('/api/v1/meets/:meetId/relay-builder', (req, res) => {
+    const data = getSessionUser(req);
+    if (!data) return res.status(401).json({ ok:false, error:'Not logged in.' });
+    const meet = getMeetOr404(data.db, req.params.meetId);
+    if (!meet) return res.status(404).json({ ok:false, error:'Meet not found.' });
+    if (!canEditMeet(data.user, meet)) return res.status(403).json({ ok:false, error:'Only a meet director can build relays.' });
+
+    const regs = meet.registrations || [];
+    const teams = Array.isArray(meet.relayTeams) ? meet.relayTeams : [];
+    const divisions = relayDivisionsForRuleset(meet.divisionScheme || meet.relayRuleset || '')
+      .map(div => {
+        const eligible = eligibleForRelayDivision(div, regs);
+        const divTeams = teams.filter(t => t.divisionId === div.id);
+        return {
+          id: div.id, size: div.size, label: div.label, ageRange: div.ageRange,
+          gender: div.gender, distance: div.distance,
+          eligible: eligible.map(r => ({ id: String(r.id), name: r.name || '',
+                                         age: (r.age == null ? null : Number(r.age)), team: r.team || '' })),
+          teams: divTeams.map(t => ({ id: t.id, memberRegIds: (t.memberRegIds || []).map(String),
+                                      club: t.club || '', mixed: !!t.mixed })),
+        };
+      })
+      // Only surface divisions that can actually be built (enough eligible) or
+      // already have teams — the full ruleset list is huge.
+      .filter(d => d.eligible.length >= d.size || d.teams.length > 0);
+
+    res.json({ ok:true, divisions, relayRaceCount: (meet.races || []).filter(r => r.isRelayRace).length });
+  });
+
+  // Replace the meet's relay teams with the director-submitted set (the director
+  // is authoritative on the iPad). Body: { teams: [{ divisionId, memberRegIds }] }.
+  router.post('/api/v1/meets/:meetId/relay-builder/teams', (req, res) => {
+    const data = getSessionUser(req);
+    if (!data) return res.status(401).json({ ok:false, error:'Not logged in.' });
+    const meet = getMeetOr404(data.db, req.params.meetId);
+    if (!meet) return res.status(404).json({ ok:false, error:'Meet not found.' });
+    if (!canEditMeet(data.user, meet)) return res.status(403).json({ ok:false, error:'Only a meet director can build relays.' });
+
+    const regById = new Map((meet.registrations || []).map(r => [String(r.id), r]));
+    const validRegIds = new Set(regById.keys());
+    const incoming = Array.isArray(req.body.teams) ? req.body.teams : [];
+    let nextId = 1;
+    const built = [];
+    for (const t of incoming) {
+      const div = RELAY_DIVISION_BY_ID.get(String(t.divisionId || ''));
+      if (!div) continue;
+      const members = [...new Set((t.memberRegIds || []).map(String))].filter(id => validRegIds.has(id));
+      if (members.length !== div.size) continue; // only complete teams
+      const { club, mixed } = relayTeamClub(members, regById);
+      built.push({ id: nextId++, divisionId: div.id, club, mixed,
+                   memberRegIds: members, color: '', updatedAt: new Date().toISOString() });
+    }
+    meet.relayTeams = built;
+    meet.updatedAt = new Date().toISOString();
+    saveDb(data.db);
+    res.json({ ok:true, savedTeams: built.length });
+  });
+
+  // Generate the relay races from the saved teams (reuses the website's engine).
+  router.post('/api/v1/meets/:meetId/relay-builder/generate', (req, res) => {
+    const data = getSessionUser(req);
+    if (!data) return res.status(401).json({ ok:false, error:'Not logged in.' });
+    const meet = getMeetOr404(data.db, req.params.meetId);
+    if (!meet) return res.status(404).json({ ok:false, error:'Meet not found.' });
+    if (!canEditMeet(data.user, meet)) return res.status(403).json({ ok:false, error:'Only a meet director can build relays.' });
+    const result = buildRelayRacesFromTeams(meet) || {};
+    meet.updatedAt = new Date().toISOString();
+    saveDb(data.db);
+    res.json({
+      ok: true,
+      created: (result.created || []).length,
+      updated: (result.updated || []).length,
+      skipped: (result.skipped || []).length,
+      relayRaceCount: (meet.races || []).filter(r => r.isRelayRace).length,
+    });
   });
 
   return router;
