@@ -477,3 +477,49 @@ public struct CoachProtestFiled: Decodable {
     public let ok: Bool
     public let protest: Protest
 }
+
+// ── Relay builder (director) ───────────────────────────────────────────────
+
+public struct RelaySkaterOption: Decodable, Identifiable, Hashable {
+    public let id: String
+    public let name: String
+    public let age: Int?
+    public let team: String
+}
+
+public struct RelayTeamData: Decodable, Identifiable, Hashable {
+    public let id: Int
+    public let memberRegIds: [String]
+    public let club: String
+    public let mixed: Bool
+}
+
+public struct RelayDivision: Decodable, Identifiable, Hashable {
+    public let id: String
+    public let size: Int
+    public let label: String
+    public let ageRange: String
+    public let gender: String
+    public let distance: String
+    public let eligible: [RelaySkaterOption]
+    public let teams: [RelayTeamData]
+}
+
+public struct RelayBuilderData: Decodable {
+    public let ok: Bool
+    public let divisions: [RelayDivision]
+    public let relayRaceCount: Int
+}
+
+public struct RelayTeamsResponse: Decodable {
+    public let ok: Bool
+    public let savedTeams: Int
+}
+
+public struct RelayGenerateResponse: Decodable {
+    public let ok: Bool
+    public let created: Int
+    public let updated: Int
+    public let skipped: Int
+    public let relayRaceCount: Int
+}

@@ -352,6 +352,9 @@ struct PadDetailRouter: View {
                 // staff-access round-trip and mutations hit the old meet.
                 PadBlockBuilderView(meetID: meetID)
                     .id(meetID)
+            case .relayBuilder:
+                PadRelayBuilderView(meetID: meetID)
+                    .id(meetID)
             case .registered:
                 PadRegisteredView(meetID: meetID)
                     .id(meetID)

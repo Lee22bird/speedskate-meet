@@ -724,6 +724,41 @@ public final class APIClient {
         }
     }
 
+    /// JSON POST with an arbitrary object body (nested arrays/dicts), for
+    /// endpoints like relay-builder/teams that need more than flat strings.
+    private func postJSONObject<T: Decodable>(_ path: String, body: [String: Any]) async throws -> T {
+        guard let url = URL(string: path, relativeTo: baseURL)?.absoluteURL else { throw APIError.invalidURL }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("application/json", forHTTPHeaderField: "Accept")
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let (data, response): (Data, URLResponse)
+        do { (data, response) = try await session.data(for: req) }
+        catch { throw APIError.network(error) }
+        guard let http = response as? HTTPURLResponse else { throw APIError.server("No response from server.") }
+        if http.statusCode == 401 { throw APIError.unauthorized }
+        if http.statusCode == 403 { throw APIError.server("You don't have access to this.") }
+        if http.statusCode >= 400 { throw APIError.server("Request failed (\(http.statusCode)).") }
+        do { return try JSONDecoder().decode(T.self, from: data) }
+        catch { throw APIError.decoding(error) }
+    }
+
+    // ── Relay builder (director) ──────────────────────────────────────────
+    public func relayBuilder(meetID: String) async throws -> RelayBuilderData {
+        try await request("/api/v1/meets/\(meetID)/relay-builder")
+    }
+
+    public func saveRelayTeams(meetID: String,
+                               teams: [(divisionId: String, memberRegIds: [String])]) async throws -> RelayTeamsResponse {
+        let payload: [String: Any] = ["teams": teams.map { ["divisionId": $0.divisionId, "memberRegIds": $0.memberRegIds] }]
+        return try await postJSONObject("/api/v1/meets/\(meetID)/relay-builder/teams", body: payload)
+    }
+
+    public func generateRelays(meetID: String) async throws -> RelayGenerateResponse {
+        try await postJSONObject("/api/v1/meets/\(meetID)/relay-builder/generate", body: [:])
+    }
+
     private func postJSON<T: Decodable>(_ path: String, body: [String: String]) async throws -> T {
         guard let url = URL(string: path, relativeTo: baseURL)?.absoluteURL else { throw APIError.invalidURL }
         var req = URLRequest(url: url)

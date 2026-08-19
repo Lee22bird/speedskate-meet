@@ -5,6 +5,7 @@ import SwiftUI
 public enum PadSection: String, CaseIterable, Identifiable {
     case director
     case blockBuilder
+    case relayBuilder
     case registered
     case checkIn
     case tabulator
@@ -20,6 +21,7 @@ public enum PadSection: String, CaseIterable, Identifiable {
         switch self {
         case .director: return "Race Day Control"
         case .blockBuilder: return "Block Builder"
+        case .relayBuilder: return "Relay Builder"
         case .registered: return "Registered"
         case .checkIn: return "Check-In"
         case .tabulator: return "Tabulator"
@@ -35,6 +37,7 @@ public enum PadSection: String, CaseIterable, Identifiable {
         switch self {
         case .director: return "flag.checkered"
         case .blockBuilder: return "square.stack.3d.up"
+        case .relayBuilder: return "person.3.fill"
         case .registered: return "person.text.rectangle"
         case .checkIn: return "person.crop.circle.badge.checkmark"
         case .tabulator: return "square.and.pencil"
@@ -56,7 +59,7 @@ public enum PadSection: String, CaseIterable, Identifiable {
     func allowed(for role: StaffRole?, canBuildBlocks: Bool) -> Bool {
         switch self {
         case .director: return role == .director
-        case .blockBuilder, .registered, .checkIn: return role == .director || canBuildBlocks
+        case .blockBuilder, .relayBuilder, .registered, .checkIn: return role == .director || canBuildBlocks
         case .tabulator: return role == .director || role == .tabulator
         // Officials inbox = judge (tabulator) + meet_director (director), the
         // same requireRole('judge','meet_director') gate the website uses.
