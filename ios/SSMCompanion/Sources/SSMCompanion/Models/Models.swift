@@ -174,19 +174,44 @@ public struct LiveRaceDayResponse: Decodable {
 
 // ── Results ──────────────────────────────────────────────────────────────
 
+/// One scored-distance column in a results section.
+public struct ResultsDistance: Decodable, Identifiable, Hashable {
+    public let raceId: String
+    public let label: String
+    public var id: String { raceId }
+}
+
+/// A skater's place/points in one race (for the per-distance matrix).
+public struct ResultsRaceScore: Decodable, Hashable {
+    public let raceId: String
+    public let place: Int?
+    public let points: Double?
+}
+
 public struct StandingRow: Decodable, Identifiable, Hashable {
     public let place: Int
     public let skaterName: String
     public let team: String
     public let sponsor: String?
     public let totalPoints: Double
+    public let raceScores: [ResultsRaceScore]?
+    public let tiebreakerUsed: Bool?
+    public let runoffNeeded: Bool?
 
     public var id: String { "\(place)-\(skaterName)-\(team)" }
+
+    /// Place this skater took in a given race, or nil if they didn't score it.
+    public func place(inRace raceId: String) -> Int? {
+        guard let score = raceScores?.first(where: { $0.raceId == raceId }),
+              let p = score.place, p > 0 else { return nil }
+        return p
+    }
 }
 
 public struct StandardResultsSection: Decodable, Identifiable, Hashable {
     public let groupLabel: String
     public let division: String
+    public let distances: [ResultsDistance]?
     public let standings: [StandingRow]
 
     public var id: String { "\(groupLabel)-\(division)" }
@@ -195,6 +220,7 @@ public struct StandardResultsSection: Decodable, Identifiable, Hashable {
 public struct QuadResultsSection: Decodable, Identifiable, Hashable {
     public let groupLabel: String
     public let distanceLabel: String
+    public let distances: [ResultsDistance]?
     public let standings: [StandingRow]
 
     public var id: String { "\(groupLabel)-\(distanceLabel)" }

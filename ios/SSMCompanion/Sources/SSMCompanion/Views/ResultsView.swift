@@ -24,10 +24,12 @@ public struct ResultsView: View {
                             .padding(.top, 60)
                     }
                     ForEach(data.standard) { section in
-                        ResultsSectionCard(title: "\(section.groupLabel) — \(section.division.capitalized)", rows: section.standings)
+                        ResultsMatrixCard(title: "\(section.groupLabel) — \(section.division.capitalized)",
+                                          distances: section.distances ?? [], rows: section.standings)
                     }
                     ForEach(data.quad) { section in
-                        ResultsSectionCard(title: "\(section.groupLabel) — \(section.distanceLabel)", rows: section.standings, accent: SSMTheme.sky2)
+                        ResultsMatrixCard(title: "\(section.groupLabel) — \(section.distanceLabel)",
+                                          distances: section.distances ?? [], rows: section.standings, accent: SSMTheme.sky2)
                     }
                     ForEach(data.open) { section in
                         OpenResultsSectionCard(section: section)
@@ -46,29 +48,38 @@ public struct ResultsView: View {
     }
 }
 
-private struct ResultsSectionCard: View {
+/// Per-division results matrix: each scored distance is a column, each
+/// skater's row shows the place they took in that race, with the total on the
+/// end — the whole division auditable at a glance. Falls back gracefully when
+/// the API sends no distances (older server): shows place + total only.
+private struct ResultsMatrixCard: View {
     let title: String
+    let distances: [ResultsDistance]
     let rows: [StandingRow]
     var accent: Color = SSMTheme.orange
 
+    // Column widths: a fixed place column, a fixed total column, and each
+    // distance gets an equal share of what's left. A horizontal scroll
+    // guards a division with many distances on a narrow width.
+    private let placeW: CGFloat = 30
+    private let distW: CGFloat = 54
+    private let totalW: CGFloat = 52
+
     var body: some View {
         SSMCard {
-            VStack(alignment: .leading, spacing: 10) {
-                Text(title).font(.headline).foregroundStyle(SSMTheme.textPrimary)
-                ForEach(rows) { row in
-                    HStack {
-                        Text("\(row.place)")
-                            .font(.headline)
-                            .foregroundStyle(accent)
-                            .frame(width: 28, alignment: .leading)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(row.skaterName).font(.subheadline.bold())
-                            Text(row.team).font(.caption).foregroundStyle(SSMTheme.muted)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(title)
+                    .font(.headline)
+                    .foregroundStyle(SSMTheme.textPrimary)
+                    .padding(.bottom, 10)
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        headerRow
+                        Divider().overlay(SSMTheme.cardBorder).padding(.vertical, 4)
+                        ForEach(rows) { row in
+                            matrixRow(row)
                         }
-                        Spacer()
-                        Text(formattedPoints(row.totalPoints))
-                            .font(.subheadline.bold())
-                            .foregroundStyle(SSMTheme.textPrimary)
                     }
                 }
             }
@@ -76,8 +87,58 @@ private struct ResultsSectionCard: View {
         .padding(.horizontal)
     }
 
+    private var headerRow: some View {
+        HStack(spacing: 0) {
+            Text("PL").frame(width: placeW, alignment: .center)
+            Text("SKATER").frame(minWidth: 150, alignment: .leading)
+            ForEach(distances) { d in
+                Text(d.label).frame(width: distW, alignment: .center).lineLimit(1)
+            }
+            Text("TOTAL").frame(width: totalW, alignment: .trailing)
+        }
+        .font(.caption2.weight(.heavy))
+        .foregroundStyle(SSMTheme.muted)
+    }
+
+    private func matrixRow(_ row: StandingRow) -> some View {
+        HStack(spacing: 0) {
+            Text("\(row.place)")
+                .font(.subheadline.bold())
+                .foregroundStyle(accent)
+                .frame(width: placeW, alignment: .center)
+
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(spacing: 5) {
+                    Text(row.skaterName).font(.subheadline.bold()).foregroundStyle(SSMTheme.textPrimary)
+                    if row.runoffNeeded == true {
+                        Text("RUN-OFF").font(.system(size: 9, weight: .heavy)).foregroundStyle(SSMTheme.danger)
+                    } else if row.tiebreakerUsed == true {
+                        Text("TB").font(.system(size: 9, weight: .heavy)).foregroundStyle(SSMTheme.sky2)
+                    }
+                }
+                Text(row.team).font(.caption2).foregroundStyle(SSMTheme.muted).lineLimit(1)
+            }
+            .frame(minWidth: 150, alignment: .leading)
+
+            ForEach(distances) { d in
+                Text(row.place(inRace: d.raceId).map(String.init) ?? "—")
+                    .font(.subheadline.weight(.semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(row.place(inRace: d.raceId) == nil ? SSMTheme.muted : SSMTheme.textPrimary)
+                    .frame(width: distW, alignment: .center)
+            }
+
+            Text(formattedPoints(row.totalPoints))
+                .font(.subheadline.bold())
+                .monospacedDigit()
+                .foregroundStyle(SSMTheme.textPrimary)
+                .frame(width: totalW, alignment: .trailing)
+        }
+        .padding(.vertical, 7)
+    }
+
     private func formattedPoints(_ value: Double) -> String {
-        value.rounded() == value ? "\(Int(value)) pts" : String(format: "%.1f pts", value)
+        value.rounded() == value ? "\(Int(value))" : String(format: "%.1f", value)
     }
 }
 

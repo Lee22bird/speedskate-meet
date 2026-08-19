@@ -38,13 +38,40 @@ const {
   MSSL_OPEN_GROUPS,
 } = require('./msslTemplate');
 
-// USARS SR150.1: ages are reckoned as of January 1 of the competitive year.
+function parseDateOnly(value) {
+  if (!value) return null;
+
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return null;
+    return new Date(value.getFullYear(), value.getMonth(), value.getDate(), 12);
+  }
+
+  const text = String(value).trim();
+  if (!text) return null;
+
+  const dateOnly = text.slice(0, 10);
+  const parsed = /^\d{4}-\d{2}-\d{2}$/.test(dateOnly)
+    ? new Date(`${dateOnly}T12:00:00`)
+    : new Date(text);
+
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function competitiveYearCutoffYear(meetDate = new Date()) {
+  const ref = parseDateOnly(meetDate) || new Date();
+  return ref.getMonth() >= 8 ? ref.getFullYear() + 1 : ref.getFullYear();
+}
+
+// USARS SR100.4 / SR150.1: ages are reckoned as of January 1 of the
+// competitive year. The competitive year starts September 1, so Sep-Dec meets
+// use the following January 1 as the cutoff.
 function usarsAge(birthdate, meetDate) {
-  const refYear = meetDate ? new Date(meetDate).getFullYear() : new Date().getFullYear();
   if (!birthdate) return null;
 
-  const bd = new Date(birthdate);
-  if (isNaN(bd.getTime())) return null;
+  const bd = parseDateOnly(birthdate);
+  if (!bd) return null;
+
+  const refYear = competitiveYearCutoffYear(meetDate);
 
   const jan1 = new Date(refYear, 0, 1);
   let age = jan1.getFullYear() - bd.getFullYear();
@@ -942,6 +969,10 @@ function ensureRegistrationTotalsAndNumbers(meet) {
 
 function entryLabelForRegistration(reg) {
   const opts = reg?.options || {};
+  const relayLabels = [
+    ...(Array.isArray(opts.relayEventLabels) ? opts.relayEventLabels : []),
+    ...(Array.isArray(opts.quadRelayEventLabels) ? opts.quadRelayEventLabels : []),
+  ].filter(Boolean);
   return [
     'challengeUp',
     'novice',
@@ -955,6 +986,7 @@ function entryLabelForRegistration(reg) {
     'relay4Person',
   ]
     .filter(k => opts[k])
+    .filter(k => !relayLabels.length || !['relay2Person', 'relay3Person', 'relay4Person'].includes(k))
     .map(k => {
       if (k === 'challengeUp') return 'CU';
       if (k === 'additional') return 'Additional';
@@ -964,6 +996,7 @@ function entryLabelForRegistration(reg) {
       if (k === 'relay4Person') return '4 Person Relay';
       return cap(k);
     })
+    .concat(relayLabels)
     .join(', ') || '—';
 }
 
@@ -1719,6 +1752,70 @@ function raceAuditTableHtml(race, standingsRows, options = {}) {
     </div>`;
 }
 
+// Compact per-division results matrix: one row per skater, one column per
+// scored distance showing the place they took in that race, and a Total
+// column. A pure pivot of the raceScores/totalPoints/overallPlace the
+// standings functions already computed — no recompute, no re-rank. This is
+// the auditable, paper-thrifty replacement for the stacked per-race tables.
+function resultsMatrixHtml(section, options = {}) {
+  const print = options.print === true;
+  const races = section.races || [];
+
+  // Disambiguate two races that share a distance label (rare — same distance
+  // on different days) by appending the day.
+  const labelCounts = {};
+  races.forEach(r => { const l = String(r.distanceLabel || ''); labelCounts[l] = (labelCounts[l] || 0) + 1; });
+  const seenLabel = {};
+  const columnLabel = r => {
+    const l = String(r.distanceLabel || '—');
+    if ((labelCounts[l] || 0) > 1) { seenLabel[l] = (seenLabel[l] || 0) + 1; return `${l} · D${r.dayIndex || seenLabel[l]}`; }
+    return l;
+  };
+
+  // Skaters who set a new record in a given race (flagged at results entry).
+  const recordByRace = new Map(races.map(r => [r.id, new Set(
+    (r.laneEntries || []).filter(l => l.record).map(l => String(l.registrationId))
+  )]));
+
+  const distHeaders = races.map(r =>
+    `<th style="text-align:center;white-space:nowrap">${esc(columnLabel(r))}</th>`).join('');
+
+  const bodyRows = (section.standings || []).map(row => {
+    const cells = races.map(r => {
+      const sc = (row.raceScores || []).find(s => s.raceId === r.id);
+      const place = sc && Number(sc.place) > 0 ? Number(sc.place) : null;
+      if (place == null) return `<td style="text-align:center;color:var(--muted,#8a94a6)">—</td>`;
+      const rec = recordByRace.get(r.id)?.has(String(row.registrationId))
+        ? ' <span title="New record" style="font-size:11px">🏅</span>' : '';
+      return `<td style="text-align:center;font-variant-numeric:tabular-nums"><strong>${place}</strong>${rec}</td>`;
+    }).join('');
+    const badges = `${row.tiebreakerUsed ? `<span class="tb-badge">TB</span>` : ''}${row.runoffNeeded ? `<span class="tb-badge tb-runoff">⚠️ Run-off</span>` : ''}`;
+    return `
+      <tr${row.runoffNeeded ? ' class="runoff-row"' : ''}>
+        <td style="text-align:center"><strong>${row.overallPlace}</strong></td>
+        <td>${esc(row.skaterName || '')}${badges}<div class="note" style="margin:0">${esc(row.team || '')}</div>${print ? '' : sponsorLineHtml(row.sponsor)}</td>
+        ${cells}
+        <td style="text-align:right;font-variant-numeric:tabular-nums"><strong>${Number(row.totalPoints || 0)}</strong></td>
+      </tr>`;
+  }).join('');
+
+  const colSpan = races.length + 3;
+  return `
+    <div class="audit-race audit-matrix">
+      <table${print ? '' : ' class="table"'}>
+        <thead>
+          <tr>
+            <th style="text-align:center">Pl</th>
+            <th>Skater</th>
+            ${distHeaders}
+            <th style="text-align:right">Total</th>
+          </tr>
+        </thead>
+        <tbody>${bodyRows || `<tr><td colspan="${colSpan}" class="muted">No scored results yet.</td></tr>`}</tbody>
+      </table>
+    </div>`;
+}
+
 function resultsSectionHtml(section, meet, options = {}) {
   const print = options.print === true;
   const tbMode = section.tbMode || 'sr832';
@@ -1758,18 +1855,16 @@ function resultsSectionHtml(section, meet, options = {}) {
     })
     .join('');
 
+  const matrixHtml = resultsMatrixHtml(section, options);
+
   if (print) {
+    // Compact matrix only — one table per division, places across each
+    // distance + total. Replaces the stacked per-race + overall tables that
+    // used to run several pages per division.
     return `
       <div class="section">
         <h2>${printTitle}</h2>
-        ${raceBreakdownHtml}
-        <div class="audit-race">
-          <h3 class="audit-race-title">Overall Championship Results</h3>
-          <table>
-            <thead><tr><th>Place</th><th>Skater</th><th>Team</th><th>Total Points</th></tr></thead>
-            <tbody>${standingsRows||`<tr><td colspan="4">No standings.</td></tr>`}</tbody>
-          </table>
-        </div>
+        ${matrixHtml}
       </div>`;
   }
 
@@ -1786,16 +1881,15 @@ function resultsSectionHtml(section, meet, options = {}) {
       </summary>
       <div class="audit-body">
         <div class="note" style="margin-bottom:10px">${subtitle}</div>
-        ${raceBreakdownHtml}
         <div class="audit-race audit-overall">
-          <h3 class="audit-race-title">Overall Results</h3>
           <div class="podium-grid">${podium||`<div class="muted">No scored finals yet.</div>`}</div>
           <div class="hr"></div>
-          <table class="table">
-            <thead><tr><th>Place</th><th>Skater</th><th>Team</th><th>Total Points</th></tr></thead>
-            <tbody>${standingsRows||`<tr><td colspan="4" class="muted">No standings yet.</td></tr>`}</tbody>
-          </table>
+          ${matrixHtml}
         </div>
+        <details class="audit-detail" style="margin-top:10px">
+          <summary class="note" style="cursor:pointer">Per-race detail — qualifying heats &amp; finals</summary>
+          <div style="margin-top:8px">${raceBreakdownHtml}</div>
+        </details>
       </div>
     </details>`;
 }
@@ -1840,6 +1934,7 @@ module.exports = {
   makeAdditionalRaceSlots,
   makeManualExtraRaceSlots,
   nextId,
+  competitiveYearCutoffYear,
   makeDivisionsTemplate,
   baseGroups,
   baseGroupsUSARS,

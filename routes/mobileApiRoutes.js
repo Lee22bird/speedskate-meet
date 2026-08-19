@@ -232,21 +232,38 @@ module.exports = function createMobileApiRoutes(deps = {}) {
     const meet = getMeetOr404(db, req.params.meetId);
     if (!meet || !isPublicMeet(meet)) return res.status(404).json({ ok:false, error:'Meet not found.' });
 
+    // Additive: `distances` (the scored-race columns, in order) + per-skater
+    // `raceScores` (place they took in each) let the app render the compact
+    // per-division results matrix. Pure pivot of what the standings already
+    // computed — no scoring logic here.
+    const sectionDistances = section => (section.races || []).map(r => ({
+      raceId: String(r.id), label: r.distanceLabel || '', dayIndex: r.dayIndex,
+    }));
+    const rowRaceScores = row => (row.raceScores || []).map(s => ({
+      raceId: String(s.raceId), place: s.place || null, points: s.points || 0,
+    }));
+
     const standard = computeMeetStandings(meet).map(section => ({
       groupLabel: section.groupLabel,
       division: section.division,
+      distances: sectionDistances(section),
       standings: section.standings.map(row => ({
         place: row.overallPlace, skaterName: row.skaterName, team: row.team,
         sponsor: row.sponsor || null, totalPoints: row.totalPoints,
+        raceScores: rowRaceScores(row),
+        tiebreakerUsed: !!row.tiebreakerUsed, runoffNeeded: !!row.runoffNeeded,
       })),
     }));
 
     const quad = computeQuadStandings(meet).map(section => ({
       groupLabel: section.groupLabel,
       distanceLabel: section.distanceLabel,
+      distances: sectionDistances(section),
       standings: section.standings.map(row => ({
         place: row.overallPlace, skaterName: row.skaterName, team: row.team,
         sponsor: row.sponsor || null, totalPoints: row.totalPoints,
+        raceScores: rowRaceScores(row),
+        tiebreakerUsed: !!row.tiebreakerUsed, runoffNeeded: !!row.runoffNeeded,
       })),
     }));
 
