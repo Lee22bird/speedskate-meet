@@ -12,6 +12,16 @@ function isOpenDivision(div) {
   return String(div || '').toLowerCase() === 'open';
 }
 
+// Results follow the meet's configured division order (youngest->oldest as set in
+// Meet Builder), NOT alphabetical. Returns the group's index in the given array;
+// an unmatched id sorts last so it falls back to the old alphabetical tiebreak.
+function groupOrderIndex(groups, groupId) {
+  const list = Array.isArray(groups) ? groups : [];
+  const gid = String(groupId || '');
+  for (let i = 0; i < list.length; i++) if (String(list[i].id) === gid) return i;
+  return Number.MAX_SAFE_INTEGER;
+}
+
 function computeMeetStandings(meet) {
   const tbMode = meet.tiebreaker || 'sr832';
   const standings = {};
@@ -134,12 +144,10 @@ function computeMeetStandings(meet) {
         tbMode,
       };
     })
-    .sort((a, b) => {
-      const byGroup = String(a.groupLabel).localeCompare(String(b.groupLabel));
-      return byGroup !== 0
-        ? byGroup
-        : String(a.division).localeCompare(String(b.division));
-    });
+    .sort((a, b) =>
+      groupOrderIndex(meet.groups, a.groupId) - groupOrderIndex(meet.groups, b.groupId)
+      || String(a.groupLabel).localeCompare(String(b.groupLabel))
+      || String(a.division).localeCompare(String(b.division)));
 }
 
 function computeQuadStandings(meet) {
@@ -236,7 +244,9 @@ function computeQuadStandings(meet) {
         standings: rows,
       };
     })
-    .sort((a, b) => String(a.groupLabel).localeCompare(String(b.groupLabel)));
+    .sort((a, b) =>
+      groupOrderIndex(meet.quadGroups, a.groupId) - groupOrderIndex(meet.quadGroups, b.groupId)
+      || String(a.groupLabel).localeCompare(String(b.groupLabel)));
 }
 
 function computeOpenResults(meet) {
@@ -247,12 +257,10 @@ function computeOpenResults(meet) {
         r.isFinal &&
         String(r.status || '') === 'closed'
     )
-    .sort((a, b) => {
-      const byGroup = String(a.groupLabel || '').localeCompare(String(b.groupLabel || ''));
-      return byGroup !== 0
-        ? byGroup
-        : Number(a.dayIndex || 0) - Number(b.dayIndex || 0);
-    })
+    .sort((a, b) =>
+      groupOrderIndex(meet.openGroups, a.groupId) - groupOrderIndex(meet.openGroups, b.groupId)
+      || String(a.groupLabel || '').localeCompare(String(b.groupLabel || ''))
+      || Number(a.dayIndex || 0) - Number(b.dayIndex || 0))
     .map(race => ({
       race,
       rows: (race.laneEntries || [])
