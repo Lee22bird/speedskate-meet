@@ -12,6 +12,7 @@ struct PadTabulatorView: View {
 
     @EnvironmentObject private var session: PadSessionViewModel
     @StateObject private var model = TabulatorViewModel()
+    @ObservedObject private var connectivity = ConnectivityMonitor.shared
     @State private var dqEditLane: DQLaneSelection?
     @State private var confirmClose = false
 
@@ -324,6 +325,9 @@ struct PadTabulatorView: View {
     private func boardBody(_ race: ExportRace) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
+                if !connectivity.isOnline {
+                    offlineBanner
+                }
                 if model.pointerMovedAway {
                     pointerBanner
                 }
@@ -371,6 +375,20 @@ struct PadTabulatorView: View {
         }
         .padding(14)
         .background(SSMTheme.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private var offlineBanner: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "wifi.slash")
+                .foregroundStyle(SSMTheme.danger)
+            Text("Offline — keep entering results. Everything's saved on this device; tap Save once you're back on wifi.")
+                .font(.ssmRounded(14, weight: .bold))
+                .foregroundStyle(SSMTheme.textPrimary)
+            Spacer()
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(SSMTheme.danger.opacity(0.12), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     private var restoredBanner: some View {

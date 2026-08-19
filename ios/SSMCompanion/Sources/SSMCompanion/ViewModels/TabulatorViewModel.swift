@@ -363,6 +363,9 @@ public final class TabulatorViewModel: ObservableObject {
         guard !isSaving else { return false }
         isSaving = true
         defer { isSaving = false }
+        // Snapshot the exact state we're about to submit, so even a crash
+        // mid-request can't lose it.
+        persistDraft()
         do {
             let response = try await api.saveRaceResults(
                 meetID: meetID,
@@ -389,8 +392,15 @@ public final class TabulatorViewModel: ObservableObject {
                 savedFlash = true
             }
             return true
+        } catch APIError.unauthorized {
+            // Session expired (e.g. logged in elsewhere). Entries stay on disk.
+            errorMessage = "Your session expired — your entries are safe on this device. Open Staff Log In again, then tap Save to retry."
+            return false
         } catch {
-            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            // Network/server failure — the draft is still on disk, so nothing
+            // is lost; the operator just retries.
+            let detail = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            errorMessage = "Couldn't save (\(detail)). Your entries are safe on this device — check the connection and tap Save to retry."
             return false
         }
     }
