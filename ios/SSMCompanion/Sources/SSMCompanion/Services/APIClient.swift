@@ -214,6 +214,25 @@ public final class APIClient {
                           method: "POST", formBody: [:])
     }
 
+    // ── Coach protest filing ──────────────────────────────────────────────
+    public func myCoachMeets() async throws -> CoachMeetsResponse {
+        try await request("/api/v1/my-coach-meets")
+    }
+
+    public func coachProtestForm(meetID: String) async throws -> CoachProtestForm {
+        try await request("/api/v1/meets/\(meetID)/coach/protest-form")
+    }
+
+    public func fileCoachProtest(meetID: String, category: String, raceID: String,
+                                 raceLabel: String, registrationID: String,
+                                 statement: String) async throws -> CoachProtestFiled {
+        try await request("/api/v1/meets/\(meetID)/coach/protest",
+                          method: "POST",
+                          formBody: ["category": category, "raceId": raceID,
+                                     "raceLabel": raceLabel, "registrationId": registrationID,
+                                     "statement": statement])
+    }
+
     // ── Staff race-day controls ──────────────────────────────────────────
     // These reuse the website's existing Director-panel endpoints exactly —
     // no new control logic was added on the server for these actions.

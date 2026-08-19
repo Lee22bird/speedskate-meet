@@ -282,6 +282,9 @@ public struct CurrentUser: Decodable, Hashable {
     public let email: String
     public let roles: [String]
     public let team: String
+
+    /// League directors also count as coaches on the server (hasRole).
+    public var isCoach: Bool { roles.contains("coach") || roles.contains("league_director") }
 }
 
 public struct MeResponse: Decodable {
@@ -422,4 +425,55 @@ public struct ProtestActionResponse: Decodable {
     public let ok: Bool
     public let protest: Protest
     public let unresolvedCount: Int
+}
+
+// ── Coach protest filing ───────────────────────────────────────────────────
+
+public struct CoachMeet: Decodable, Identifiable, Hashable {
+    public let id: AnyMeetID
+    public let meetName: String
+    public let date: String
+    public let status: String
+    public let location: String
+    public let mySkaterCount: Int
+    public let myProtestCount: Int
+}
+
+public struct CoachMeetsResponse: Decodable {
+    public let ok: Bool
+    public let isCoach: Bool
+    public let team: String?
+    public let meets: [CoachMeet]
+}
+
+public struct ProtestCategoryOption: Decodable, Identifiable, Hashable {
+    public let name: String
+    public let raceSpecific: Bool
+    public var id: String { name }
+}
+
+public struct ProtestRaceOption: Decodable, Identifiable, Hashable {
+    public let id: String
+    public let label: String
+}
+
+public struct ProtestSkaterOption: Decodable, Identifiable, Hashable {
+    public let id: String
+    public let name: String
+    public let helmetNumber: String?
+}
+
+public struct CoachProtestForm: Decodable {
+    public let ok: Bool
+    public let categories: [ProtestCategoryOption]
+    public let races: [ProtestRaceOption]
+    public let skaters: [ProtestSkaterOption]
+    public let protestFee: Double
+    public let protestDeadlineMinutes: Int
+    public let myProtests: [Protest]
+}
+
+public struct CoachProtestFiled: Decodable {
+    public let ok: Bool
+    public let protest: Protest
 }

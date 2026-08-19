@@ -557,7 +557,13 @@ module.exports = function createMobileApiRoutes(deps = {}) {
       ok: true,
       categories: PROTEST_CATEGORIES.map(c => ({ name: c, raceSpecific: RACE_SPECIFIC_CATEGORIES.includes(c) })),
       races,
-      skaters: myRegs.map(r => ({ id: String(r.id), name: r.name || '', helmetNumber: r.helmetNumber || null })),
+      skaters: myRegs.map(r => ({
+        id: String(r.id),
+        name: r.name || '',
+        // Helmet is a display label — stringify so it's always a string|null
+        // (stored data can be a number or a string).
+        helmetNumber: (r.helmetNumber == null || r.helmetNumber === '') ? null : String(r.helmetNumber),
+      })),
       protestFee: Number(meet.protestFee || 0),
       protestDeadlineMinutes: Number(meet.protestDeadlineMinutes || 0),
       myProtests: protestsForCoach(meet, data.user.id).map(normalizeProtest),

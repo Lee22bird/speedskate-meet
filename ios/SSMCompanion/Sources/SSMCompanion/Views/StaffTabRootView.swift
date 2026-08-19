@@ -13,6 +13,7 @@ public struct StaffTabRootView: View {
 
                     if auth.isLoggedIn {
                         StaffMeetsListView()
+                        CoachMeetsSection()
                     } else {
                         StaffLoginView()
                     }
