@@ -587,6 +587,41 @@ public final class APIClient {
                                          expectedRedirectPrefix: "/portal/meet/\(meetID)/")
     }
 
+    /// Clone a meet's setup into a new draft (copies divisions/pricing/blocks,
+    /// not registrations/results). Returns the new draft meet's id.
+    @discardableResult
+    public func cloneMeet(meetID: String) async throws -> String? {
+        // Success redirects to /portal/meet/{newId}/builder.
+        let location = try await portalRedirectPost("/portal/meet/\(meetID)/clone",
+                                                    expectedRedirectPrefix: "/portal/meet/")
+        let parts = location.split(separator: "/").map(String.init)
+        if let i = parts.firstIndex(of: "meet"), i + 1 < parts.count { return parts[i + 1] }
+        return nil
+    }
+
+    /// Archive a meet (soft delete — the website's archive action).
+    public func archiveMeet(meetID: String) async throws {
+        _ = try await portalRedirectPost("/portal/meet/\(meetID)/archive",
+                                         expectedRedirectPrefix: "/portal/archived-meets")
+    }
+
+    /// Fetch a time-trial event's results as CSV bytes for a share/export sheet.
+    public func fetchTimeTrialCSV(meetID: String, eventID: String) async throws -> Data {
+        guard let url = URL(string: "/portal/meet/\(meetID)/time-trials/\(eventID)/export.csv",
+                            relativeTo: baseURL)?.absoluteURL else { throw APIError.invalidURL }
+        let (data, response): (Data, URLResponse)
+        do { (data, response) = try await session.data(from: url) }
+        catch { throw APIError.network(error) }
+        guard let http = response as? HTTPURLResponse else { throw APIError.server("No response from server.") }
+        // A lost session redirects to the login HTML page; reject anything that
+        // isn't the CSV.
+        let contentType = (http.value(forHTTPHeaderField: "Content-Type") ?? "").lowercased()
+        guard http.statusCode == 200, !contentType.contains("html") else {
+            throw APIError.server("Couldn't export the CSV — log in again and retry.")
+        }
+        return data
+    }
+
     /// Fetch the score-sheets PDF (scope: meet | block | race). Returns the
     /// raw PDF bytes for a share/print sheet.
     public func fetchScoreSheetsPDF(meetID: String, scope: String,

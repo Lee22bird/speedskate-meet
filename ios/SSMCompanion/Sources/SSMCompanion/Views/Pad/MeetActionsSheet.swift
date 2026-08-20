@@ -71,6 +71,22 @@ final class MeetActionsViewModel: ObservableObject {
         }
     }
 
+    func clone() async {
+        await run {
+            let newID = try await self.api.cloneMeet(meetID: self.meetID)
+            self.statusFlash = newID != nil
+                ? "Draft clone created — it's in your meet list."
+                : "Draft clone created."
+        }
+    }
+
+    func archive() async {
+        await run {
+            try await self.api.archiveMeet(meetID: self.meetID)
+            self.statusFlash = "Meet archived."
+        }
+    }
+
     /// Fetch a score-sheets PDF and stage it as a shareable temp file.
     func fetchScoreSheets(scope: String, raceID: String? = nil, blockID: String? = nil) async {
         guard !isWorking else { return }
@@ -117,6 +133,8 @@ struct MeetActionsSheet: View {
     @State private var randomizeRaceID: String?
     @State private var confirmRandomize = false
     @State private var confirmFinalize = false
+    @State private var confirmClone = false
+    @State private var confirmArchive = false
 
     var body: some View {
         NavigationStack {
@@ -132,6 +150,7 @@ struct MeetActionsSheet: View {
                     }
 
                     statusCard
+                    lifecycleCard
                     randomizeCard
                     printCard
 
@@ -170,6 +189,16 @@ struct MeetActionsSheet: View {
             }
         } message: {
             Text("Marks the meet complete on the public site and swaps the Results toolbar. Race-day controls keep working, and you can reopen any time.")
+        }
+        .confirmationDialog("Clone this meet's setup?", isPresented: $confirmClone, titleVisibility: .visible) {
+            Button("Create Draft Clone") { Task { await model.clone() } }
+        } message: {
+            Text("Creates a new draft meet copying divisions, distances, pricing, and block names — not registrations, results, or check-ins.")
+        }
+        .confirmationDialog("Archive this meet?", isPresented: $confirmArchive, titleVisibility: .visible) {
+            Button("Archive Meet", role: .destructive) { Task { await model.archive() } }
+        } message: {
+            Text("Moves the meet to your archived list. You can unarchive it later from the website.")
         }
         .sheet(isPresented: Binding(get: { model.pdfFileURL != nil },
                                     set: { if !$0 { model.pdfFileURL = nil } })) {
@@ -212,6 +241,32 @@ struct MeetActionsSheet: View {
                     .foregroundStyle(SSMTheme.muted)
             }
             .disabled(model.isWorking)
+        }
+    }
+
+    private var lifecycleCard: some View {
+        SSMCard {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("🗂 MEET LIFECYCLE")
+                    .font(.ssmRounded(12, weight: .heavy))
+                    .foregroundStyle(SSMTheme.muted)
+                Text("Clone copies this meet's setup into a new draft (no registrations or results). Archive tidies a finished meet away.")
+                    .font(.ssmRounded(12, weight: .medium))
+                    .foregroundStyle(SSMTheme.muted)
+                HStack(spacing: 10) {
+                    Button { confirmClone = true } label: {
+                        Label("Clone Setup", systemImage: "doc.on.doc").frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.ssmSoftPill)
+                    if model.meet?.status == "complete" {
+                        Button { confirmArchive = true } label: {
+                            Label("Archive", systemImage: "archivebox").frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.ssmSoftPill)
+                    }
+                }
+                .disabled(model.isWorking)
+            }
         }
     }
 

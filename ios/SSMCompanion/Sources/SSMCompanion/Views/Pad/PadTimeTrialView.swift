@@ -77,6 +77,25 @@ final class TimeTrialViewModel: ObservableObject {
         }
     }
 
+    @Published var csvURL: URL?
+
+    /// Fetch this event's results as CSV and stage a shareable temp file.
+    func exportCSV() async {
+        guard !isWorking else { return }
+        isWorking = true
+        defer { isWorking = false }
+        do {
+            let data = try await api.fetchTimeTrialCSV(meetID: meetID, eventID: eventID)
+            let url = FileManager.default.temporaryDirectory
+                .appendingPathComponent("time-trial-results.csv")
+            try data.write(to: url, options: .atomic)
+            csvURL = url
+            errorMessage = nil
+        } catch {
+            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
     private func run(_ body: () async throws -> Void) async {
         guard !isWorking else { return }
         isWorking = true
@@ -120,7 +139,21 @@ struct PadTimeTrialView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Back to Race Day") { dismiss() }
                 }
+                if canManage {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button {
+                            Task { await model.exportCSV() }
+                        } label: {
+                            Label("Export CSV", systemImage: "square.and.arrow.up")
+                        }
+                        .disabled(model.isWorking)
+                    }
+                }
             }
+        }
+        .sheet(isPresented: Binding(get: { model.csvURL != nil },
+                                    set: { if !$0 { model.csvURL = nil } })) {
+            if let url = model.csvURL { PDFShareView(url: url) }
         }
         .preferredColorScheme(.dark)
         .task { await model.load(meetID: meetID, eventID: eventID) }
