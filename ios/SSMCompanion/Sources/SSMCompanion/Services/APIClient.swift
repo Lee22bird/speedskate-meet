@@ -759,6 +759,18 @@ public final class APIClient {
         try await postJSONObject("/api/v1/meets/\(meetID)/relay-builder/generate", body: [:])
     }
 
+    // ── Relay teams (coach) ───────────────────────────────────────────────
+    // A coach builds their own club's teams; the director generates the races.
+    public func coachRelayBuilder(meetID: String) async throws -> CoachRelayBuilderData {
+        try await request("/api/v1/meets/\(meetID)/coach/relay-builder")
+    }
+
+    public func saveCoachRelayTeams(meetID: String,
+                                    teams: [(divisionId: String, memberRegIds: [String])]) async throws -> RelayTeamsResponse {
+        let payload: [String: Any] = ["teams": teams.map { ["divisionId": $0.divisionId, "memberRegIds": $0.memberRegIds] }]
+        return try await postJSONObject("/api/v1/meets/\(meetID)/coach/relay-builder/teams", body: payload)
+    }
+
     private func postJSON<T: Decodable>(_ path: String, body: [String: String]) async throws -> T {
         guard let url = URL(string: path, relativeTo: baseURL)?.absoluteURL else { throw APIError.invalidURL }
         var req = URLRequest(url: url)

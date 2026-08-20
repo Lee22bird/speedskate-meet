@@ -705,5 +705,84 @@ module.exports = function createMobileApiRoutes(deps = {}) {
     });
   });
 
+  // ── Coach: relay team entry from the phone ─────────────────────────────────
+  // Coaches build their OWN club's relay teams; the director reviews and
+  // generates the races on the iPad/web. Additive JSON. A coach only ever sees
+  // and uses their own team's eligible skaters (team-name containment), and the
+  // save MERGES — it replaces only this coach's club's teams and leaves every
+  // other team (other coaches', the director's) untouched.
+  const sameClub = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
+
+  router.get('/api/v1/meets/:meetId/coach/relay-builder', (req, res) => {
+    const data = getSessionUser(req);
+    if (!data) return res.status(401).json({ ok:false, error:'Not logged in.' });
+    const meet = getMeetOr404(data.db, req.params.meetId);
+    if (!meet) return res.status(404).json({ ok:false, error:'Meet not found.' });
+    const team = String(data.user.team || '').trim();
+    if (!hasRole(data.user, 'coach') || coachSkaters(meet, data.user).length === 0) {
+      return res.status(403).json({ ok:false, error:'You have no skaters registered in this meet.' });
+    }
+    const regs = meet.registrations || [];
+    const teams = Array.isArray(meet.relayTeams) ? meet.relayTeams : [];
+    const divisions = relayDivisionsForRuleset(meet.divisionScheme || meet.relayRuleset || '')
+      .map(div => {
+        const eligible = eligibleForRelayDivision(div, regs).filter(r => sameClub(r.team, team));
+        const myTeams = teams.filter(t => t.divisionId === div.id && sameClub(t.club, team));
+        return {
+          id: div.id, size: div.size, label: div.label, ageRange: div.ageRange,
+          gender: div.gender, distance: div.distance,
+          eligible: eligible.map(r => ({ id: String(r.id), name: r.name || '',
+                                         age: (r.age == null ? null : Number(r.age)), team: r.team || '' })),
+          teams: myTeams.map(t => ({ id: t.id, memberRegIds: (t.memberRegIds || []).map(String),
+                                     club: t.club || '', mixed: !!t.mixed })),
+        };
+      })
+      .filter(d => d.eligible.length >= d.size || d.teams.length > 0);
+    res.json({ ok:true, team, divisions });
+  });
+
+  router.post('/api/v1/meets/:meetId/coach/relay-builder/teams', (req, res) => {
+    const data = getSessionUser(req);
+    if (!data) return res.status(401).json({ ok:false, error:'Not logged in.' });
+    const meet = getMeetOr404(data.db, req.params.meetId);
+    if (!meet) return res.status(404).json({ ok:false, error:'Meet not found.' });
+    const team = String(data.user.team || '').trim();
+    const myRegs = coachSkaters(meet, data.user);
+    if (!hasRole(data.user, 'coach') || myRegs.length === 0) {
+      return res.status(403).json({ ok:false, error:'You have no skaters registered in this meet.' });
+    }
+    const myRegIds = new Set(myRegs.map(r => String(r.id)));
+    const regs = meet.registrations || [];
+    // Eligibility per division, restricted to this coach's skaters — a coach
+    // can't slip in an ineligible or another team's skater.
+    const eligibleByDiv = new Map();
+    for (const div of relayDivisionsForRuleset(meet.divisionScheme || meet.relayRuleset || '')) {
+      eligibleByDiv.set(div.id, new Set(eligibleForRelayDivision(div, regs)
+        .filter(r => sameClub(r.team, team)).map(r => String(r.id))));
+    }
+    const existing = Array.isArray(meet.relayTeams) ? meet.relayTeams : [];
+    // Keep every team that isn't this coach's club (the coach is authoritative
+    // only over their own club's teams); preserve their ids.
+    const kept = existing.filter(t => !sameClub(t.club, team));
+    let maxId = kept.reduce((m, t) => Math.max(m, Number(t.id) || 0), 0);
+    const incoming = Array.isArray(req.body.teams) ? req.body.teams : [];
+    const mine = [];
+    for (const t of incoming) {
+      const div = RELAY_DIVISION_BY_ID.get(String(t.divisionId || ''));
+      if (!div) continue;
+      const elig = eligibleByDiv.get(div.id) || new Set();
+      const members = [...new Set((t.memberRegIds || []).map(String))]
+        .filter(id => myRegIds.has(id) && elig.has(id));
+      if (members.length !== div.size) continue; // only complete, all-mine, all-eligible teams
+      mine.push({ id: ++maxId, divisionId: div.id, club: team, mixed: false,
+                  memberRegIds: members, color: '', source: 'coach',
+                  submittedByUserId: String(data.user.id || ''), updatedAt: new Date().toISOString() });
+    }
+    meet.relayTeams = [...kept, ...mine];
+    meet.updatedAt = new Date().toISOString();
+    saveDb(data.db);
+    res.json({ ok:true, savedTeams: mine.length, totalTeams: meet.relayTeams.length });
+  });
+
   return router;
 };

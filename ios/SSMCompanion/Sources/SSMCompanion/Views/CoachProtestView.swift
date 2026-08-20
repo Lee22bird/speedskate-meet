@@ -12,16 +12,14 @@ public struct CoachMeetsSection: View {
         Group {
             if vm.isCoach && !vm.meets.isEmpty {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("My Team — File a Protest")  // coach section
+                    Text("My Team")  // coach section
                         .font(.ssmRounded(18, weight: .bold))
                         .foregroundStyle(.white)
                         .padding(.horizontal)
                     VStack(spacing: 12) {
                         ForEach(vm.meets) { meet in
-                            NavigationLink {
-                                CoachProtestView(meetID: meet.id.stringValue, meetName: meet.meetName)
-                            } label: {
-                                SSMCard {
+                            SSMCard {
+                                VStack(alignment: .leading, spacing: 12) {
                                     HStack(spacing: 10) {
                                         VStack(alignment: .leading, spacing: 3) {
                                             Text(meet.meetName)
@@ -35,11 +33,25 @@ public struct CoachMeetsSection: View {
                                         if meet.myProtestCount > 0 {
                                             SSMChip("\(meet.myProtestCount) filed", color: SSMTheme.sky2)
                                         }
-                                        Image(systemName: "chevron.right").foregroundStyle(SSMTheme.muted)
+                                    }
+                                    HStack(spacing: 10) {
+                                        NavigationLink {
+                                            CoachProtestView(meetID: meet.id.stringValue, meetName: meet.meetName)
+                                        } label: {
+                                            Label("File a Protest", systemImage: "exclamationmark.bubble")
+                                                .font(.ssmRounded(13, weight: .bold)).frame(maxWidth: .infinity)
+                                        }
+                                        .buttonStyle(.ssmSoftPill)
+                                        NavigationLink {
+                                            CoachRelayBuilderView(meetID: meet.id.stringValue, meetName: meet.meetName)
+                                        } label: {
+                                            Label("Relay Teams", systemImage: "person.3.fill")
+                                                .font(.ssmRounded(13, weight: .bold)).frame(maxWidth: .infinity)
+                                        }
+                                        .buttonStyle(.ssmSoftPill)
                                     }
                                 }
                             }
-                            .buttonStyle(.plain)
                         }
                     }
                     .padding(.horizontal)

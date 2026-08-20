@@ -514,6 +514,16 @@ public struct RelayBuilderData: Decodable {
 public struct RelayTeamsResponse: Decodable {
     public let ok: Bool
     public let savedTeams: Int
+    /// Only the coach endpoint reports this (director replaces all); optional.
+    public let totalTeams: Int?
+}
+
+/// Coach relay builder payload — same divisions shape as the director's, but
+/// scoped to the coach's own team (eligible + teams are their club only).
+public struct CoachRelayBuilderData: Decodable {
+    public let ok: Bool
+    public let team: String
+    public let divisions: [RelayDivision]
 }
 
 public struct RelayGenerateResponse: Decodable {
