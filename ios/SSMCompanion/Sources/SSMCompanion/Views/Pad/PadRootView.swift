@@ -371,6 +371,9 @@ struct PadDetailRouter: View {
             case .protests:
                 PadProtestsView(meetID: meetID)
                     .id(meetID)
+            case .scoreSheets:
+                PadScoreSheetsView(meetID: meetID)
+                    .id(meetID)
             case .liveBoard:
                 PadEmbeddedScreen(title: session.selectedMeetName) {
                     LiveRaceDayView(meetID: meetID, meetName: session.selectedMeetName)

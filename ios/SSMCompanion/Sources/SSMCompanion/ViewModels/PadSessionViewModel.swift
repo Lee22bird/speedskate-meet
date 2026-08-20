@@ -12,6 +12,7 @@ public enum PadSection: String, CaseIterable, Identifiable {
     case announcer
     case referee
     case protests
+    case scoreSheets
     case liveBoard
     case results
 
@@ -28,6 +29,7 @@ public enum PadSection: String, CaseIterable, Identifiable {
         case .announcer: return "Announcer"
         case .referee: return "Referee"
         case .protests: return "Protests"
+        case .scoreSheets: return "Score Sheets"
         case .liveBoard: return "Live Board"
         case .results: return "Results"
         }
@@ -44,6 +46,7 @@ public enum PadSection: String, CaseIterable, Identifiable {
         case .announcer: return "megaphone"
         case .referee: return "person.crop.rectangle.stack"
         case .protests: return "exclamationmark.bubble"
+        case .scoreSheets: return "printer"
         case .liveBoard: return "tv"
         case .results: return "list.number"
         }
@@ -64,6 +67,9 @@ public enum PadSection: String, CaseIterable, Identifiable {
         // Officials inbox = judge (tabulator) + meet_director (director), the
         // same requireRole('judge','meet_director') gate the website uses.
         case .protests: return role == .director || role == .tabulator
+        // Score sheets: meet_director + judge (tabulator) — same as the
+        // website's /score-sheets/print gate.
+        case .scoreSheets: return role == .director || role == .tabulator
         case .announcer, .referee: return role != nil
         case .liveBoard, .results: return true
         }
