@@ -5,7 +5,7 @@ const { canEditMeet, hasRole } = require('../utils/auth');
 const { getMeetOr404, meetDateLabel } = require('../services/meetHelpers');
 const { orderedRaces } = require('../services/raceDay');
 const {
-  PROTEST_CATEGORIES, RACE_SPECIFIC_CATEGORIES, isRaceSpecific,
+  PROTEST_CATEGORIES, isRaceSpecific,
   protestsForMeet, protestsForCoach, findProtest, buildProtest,
   protestDeadlineMinutes, raceProtestWindowClosed,
 } = require('../services/protests');
@@ -43,77 +43,100 @@ function stateBadge(state) {
 // ── Coach: filing form ───────────────────────────────────────────────────────
 function renderProtestForm(meet, user, error = '') {
   const teamRegs = (meet.registrations || []).filter(r => String(r.team || '').trim().toLowerCase() === String(user.team || '').trim().toLowerCase());
+  const hasFee = Number(meet.protestFee || 0) > 0;
+  const deadline = protestDeadlineMinutes(meet);
   return `
-    <div class="page-header"><h1>File a Protest</h1><div class="sub">${esc(meet.meetName)} • ${esc(user.team || 'Your Team')}</div></div>
-    <div class="action-row" style="margin-bottom:14px"><a class="btn2" href="/portal/coach">← Back to Coach Portal</a></div>
-    ${error ? `<div class="bad" style="margin-bottom:16px">${esc(error)}</div>` : ''}
+    <style>
+      .pf-wrap { max-width: 780px; }
+      .pf-back { margin-bottom: 16px; }
+      .pf-info { background: #fff7ed; border: 1px solid #fed7aa; border-left: 5px solid var(--orange);
+        border-radius: var(--radius); padding: 22px 24px; margin-bottom: 18px; }
+      .pf-info-title { font-size: 17px; font-weight: 800; color: var(--navy); margin-bottom: 8px;
+        display: flex; align-items: center; gap: 8px; }
+      .pf-info-body { font-size: 15px; line-height: 1.65; color: #7c2d12; }
+      .pf-info-body strong { color: #9a3412; }
+      .pf-info-row { margin-top: 12px; padding-top: 12px; border-top: 1px solid #fed7aa;
+        font-size: 14.5px; line-height: 1.55; color: #7c2d12; }
+      .pf-info-row strong { color: #9a3412; }
+      .pf-form .pf-field { margin-bottom: 22px; }
+      .pf-form .pf-field:last-of-type { margin-bottom: 0; }
+      .pf-form label.pf-label { display: block; font-size: 15px; font-weight: 700; color: var(--navy);
+        text-transform: none; letter-spacing: 0; margin-bottom: 7px; }
+      .pf-form .pf-hint { font-size: 13.5px; color: var(--muted); margin-top: 7px; line-height: 1.5; }
+      .pf-form select, .pf-form textarea { font-size: 15px; padding: 13px 14px; }
+      .pf-form textarea { min-height: 160px; line-height: 1.55; }
+      .pf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+      .pf-actions { display: flex; gap: 10px; align-items: center; margin-top: 26px; }
+      .pf-actions .btn-orange { font-size: 15px; font-weight: 800; padding: 14px 30px; }
+      .pf-actions .btn2 { font-size: 15px; padding: 14px 24px; }
+      @media (max-width: 640px) { .pf-grid { grid-template-columns: 1fr; } }
+    </style>
+    <div class="pf-wrap">
+      <div class="page-header"><h1>File a Protest</h1><div class="sub">${esc(meet.meetName)} • ${esc(user.team || 'Your Team')}</div></div>
+      <div class="action-row pf-back"><a class="btn2" href="/portal/coach">← Back to Coach Portal</a></div>
+      ${error ? `<div class="bad" style="margin-bottom:16px">${esc(error)}</div>` : ''}
 
-    <div class="card" style="border-left:5px solid var(--orange);margin-bottom:16px">
-      <div class="bold">Before you file</div>
-      <div class="note" style="margin-top:6px;line-height:1.55">
-        Per USARS <strong>SR503.2</strong>, the decision of a speed skating official is final — a
-        <strong>disqualification, placement, or foul call cannot be protested</strong>. A protest is a written
-        complaint concerning <strong>status, eligibility, conduct, competition, officials, or membership</strong>.
-        The chief referee (here: a judge or the meet director) decides protests. Notes are confidential and are
-        not published with results.
+      <div class="pf-info">
+        <div class="pf-info-title">⚑ Before you file</div>
+        <div class="pf-info-body">
+          Per USARS <strong>SR503.2</strong>, the decision of a speed skating official is final — a
+          <strong>disqualification, placement, or foul call cannot be protested</strong>. A protest is a written
+          complaint concerning <strong>status, eligibility, conduct, competition, officials, or membership</strong>.
+          The chief referee (here: a judge or the meet director) decides protests. Notes are confidential and are
+          not published with results.
+        </div>
+        ${hasFee ? `<div class="pf-info-row"><strong>Protest fee: ${money(meet.protestFee)}</strong> — non-refundable regardless of the outcome, and settled <strong>in person</strong> with the meet director (they'll find you). This form does not take payment. Your protest is accepted and reviewed right away.</div>` : ''}
+        ${deadline ? `<div class="pf-info-row">Race-specific protests must be filed within <strong>${deadline} minutes</strong> of that race finishing. After that, see the meet director to file in person.</div>` : ''}
       </div>
-      ${Number(meet.protestFee || 0) > 0 ? `<div class="note" style="margin-top:10px;line-height:1.5"><strong>Protest fee: ${money(meet.protestFee)}</strong> — non-refundable regardless of the outcome, and settled <strong>in person</strong> with the meet director (they'll find you). This form does not take payment. Your protest is accepted and reviewed right away.</div>` : ''}
-      ${protestDeadlineMinutes(meet) ? `<div class="note" style="margin-top:8px">Race-specific protests must be filed within <strong>${protestDeadlineMinutes(meet)} minutes</strong> of that race finishing. After that, see the meet director to file in person.</div>` : ''}
-    </div>
 
-    <div class="card">
-      <form method="POST" action="/portal/meet/${esc(meet.id)}/coach/protest">
-        <div class="form-grid cols-2">
-          <div>
-            <label>Category</label>
-            <select name="category" id="protestCategory" required>
-              <option value="">Choose…</option>
-              ${PROTEST_CATEGORIES.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('')}
+      <div class="card pf-form">
+        <form method="POST" action="/portal/meet/${esc(meet.id)}/coach/protest">
+          <div class="pf-grid">
+            <div class="pf-field">
+              <label class="pf-label">Category</label>
+              <select name="category" id="protestCategory" required>
+                <option value="">Choose…</option>
+                ${PROTEST_CATEGORIES.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('')}
+              </select>
+              <div class="pf-hint">Six USARS categories.</div>
+            </div>
+            <div class="pf-field">
+              <label class="pf-label">Race it occurred in</label>
+              <select name="raceId" id="protestRace"><option value="">Not race-specific</option>${raceOptions(meet)}</select>
+              <input type="hidden" name="raceLabel" id="protestRaceLabel" value="" />
+              <div class="pf-hint">Applies to Competition, Eligibility &amp; Conduct protests. Leave as “Not race-specific” otherwise.</div>
+            </div>
+          </div>
+          <div class="pf-field">
+            <label class="pf-label">Skater <span style="font-weight:600;color:var(--muted)">(optional — must be your team)</span></label>
+            <select name="registrationId">
+              <option value="">Not skater-specific</option>
+              ${teamRegs.map(r => `<option value="${esc(r.id)}">${esc(r.name || '')}${r.helmetNumber ? ' • #' + esc(r.helmetNumber) : ''}</option>`).join('')}
             </select>
-            <div class="note">Six USARS categories. Competition, Eligibility and Conduct are tied to a race.</div>
           </div>
-          <div id="protestRaceField">
-            <label>Race (if applicable)</label>
-            <select name="raceId" id="protestRace"><option value="">Not race-specific</option>${raceOptions(meet)}</select>
-            <input type="hidden" name="raceLabel" id="protestRaceLabel" value="" />
+          <div class="pf-field">
+            <label class="pf-label">Written statement</label>
+            <textarea name="statement" rows="6" maxlength="2000" required placeholder="Describe the complaint. Be specific — this is the written record the officials review."></textarea>
+            <div class="pf-hint">Up to 2000 characters.</div>
           </div>
-        </div>
-        <div style="margin-top:14px">
-          <label>Skater (optional — must be your team)</label>
-          <select name="registrationId">
-            <option value="">Not skater-specific</option>
-            ${teamRegs.map(r => `<option value="${esc(r.id)}">${esc(r.name || '')}${r.helmetNumber ? ' • #' + esc(r.helmetNumber) : ''}</option>`).join('')}
-          </select>
-        </div>
-        <div style="margin-top:14px">
-          <label>Written statement</label>
-          <textarea name="statement" rows="6" maxlength="2000" required placeholder="Describe the complaint. Be specific — this is the written record the officials review."></textarea>
-        </div>
-        <div class="action-row" style="margin-top:16px">
-          <button class="btn-orange" type="submit">Submit protest</button>
-          <a class="btn2" href="/portal/coach">Cancel</a>
-        </div>
-      </form>
+          <div class="pf-actions">
+            <button class="btn-orange" type="submit">Submit protest</button>
+            <a class="btn2" href="/portal/coach">Cancel</a>
+          </div>
+        </form>
+      </div>
     </div>
 
     <script>
       (function(){
-        var raceSpecific = ${JSON.stringify(RACE_SPECIFIC_CATEGORIES)};
-        var cat = document.getElementById('protestCategory');
-        var field = document.getElementById('protestRaceField');
         var race = document.getElementById('protestRace');
         var label = document.getElementById('protestRaceLabel');
-        function sync(){
-          var show = raceSpecific.indexOf(cat.value) !== -1;
-          field.style.display = show ? '' : 'none';
-          if(!show && race){ race.value=''; if(label) label.value=''; }
-        }
         function syncLabel(){
+          if(!race || !label) return;
           var opt = race.options[race.selectedIndex];
-          if(label) label.value = (opt && opt.getAttribute('data-label')) || '';
+          label.value = (opt && opt.getAttribute('data-label')) || '';
         }
-        if(cat){ cat.addEventListener('change', sync); sync(); }
-        if(race){ race.addEventListener('change', syncLabel); }
+        if(race){ race.addEventListener('change', syncLabel); syncLabel(); }
       })();
     </script>`;
 }

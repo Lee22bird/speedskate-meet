@@ -117,7 +117,10 @@ function buildProtest(meet, input, nowIso) {
       createdAt: nowIso,
       category,
       raceId,
-      raceLabel: String(input.raceLabel || ''),
+      // Only keep a race label when the race itself was kept (non-race-specific
+      // categories drop raceId), so a stray label can't cling to a protest that
+      // isn't tied to a race.
+      raceLabel: raceId ? String(input.raceLabel || '') : '',
       registrationId: String(input.registrationId || ''),
       filedByUserId: String(input.filedByUserId || ''),
       filedByName: String(input.filedByName || ''),
