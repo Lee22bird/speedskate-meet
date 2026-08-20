@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- SpeedSkate Meet does not track users across apps/websites, uses no
+	     third-party SDKs, and reads none of Apple's "required reason" APIs
+	     (no UserDefaults, no file-timestamp reads). Drafts are written as JSON
+	     to Application Support; account data is entered only to sign in to the
+	     user's own SpeedSkate Meet server and is declared in the App Privacy
+	     questionnaire, not collected for tracking. -->
+	<key>NSPrivacyTracking</key>
+	<false/>
+	<key>NSPrivacyTrackingDomains</key>
+	<array/>
+	<key>NSPrivacyCollectedDataTypes</key>
+	<array/>
+	<key>NSPrivacyAccessedAPITypes</key>
+	<array/>
+</dict>
+</plist>
