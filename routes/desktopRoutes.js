@@ -101,7 +101,11 @@ let importSession = null; // { baseUrl, cookie }
 
 module.exports = function createDesktopRoutes(deps = {}) {
   const router = express.Router();
-  const { getSessionUser, pageShell, loadDb, saveDb, nextId } = deps;
+  const { getSessionUser, pageShell, loadDb, saveDb, nextId, getMeetOr404 } = deps;
+  const protestSync = require('../services/desktopProtestSync');
+  const findLocalMeet = (db, id) => (typeof getMeetOr404 === 'function'
+    ? getMeetOr404(db, id)
+    : (db.meets || []).find(m => String(m.id) === String(id)));
 
   if (typeof pageShell !== 'function') throw new Error('desktopRoutes requires pageShell');
   if (typeof loadDb !== 'function') throw new Error('desktopRoutes requires loadDb');
@@ -739,6 +743,102 @@ module.exports = function createDesktopRoutes(deps = {}) {
     } catch (err) {
       return res.redirect('/desktop/import-meet/pick?error=' + encodeURIComponent('Could not download that meet.'));
     }
+  });
+
+  // ── Live protest sync (desktop-only) ───────────────────────────────────────
+  // Pull coach-filed protests from the ONLINE copy of an imported meet into this
+  // desktop meet, so officials at the table see phone-filed protests. One-way,
+  // best-effort; never blocks the offline meet. See services/desktopProtestSync.js.
+  function requireDesktop(res) {
+    if (process.env.SSM_DESKTOP !== '1') { res.status(400).send('Live protest sync is only available in SpeedSkateMeet Desktop.'); return false; }
+    return true;
+  }
+
+  router.get('/desktop/meet/:meetId/protest-sync', (req, res) => {
+    if (!requireDesktop(res)) return;
+    const data = typeof getSessionUser === 'function' ? getSessionUser(req) : null;
+    if (!data?.user) return res.redirect('/admin/login');
+    const db = loadDb();
+    const meet = findLocalMeet(db, req.params.meetId);
+    if (!meet) return res.status(404).send(pageShell({ title: 'Meet Not Found', user: data.user, bodyHtml: '<div class="card"><div class="danger">Meet not found.</div></div>' }));
+    const hosted = String(meet.importedFromHostedMeetId || '');
+    const baseUrl = String(meet.importedFromUrl || 'https://speedskatemeet.com');
+    const err = req.query.error ? `<div class="card" style="border-left:4px solid var(--red);margin-bottom:12px"><div class="danger">${esc(req.query.error)}</div></div>` : '';
+    const flash = req.query.flash ? `<div class="card" style="border-left:4px solid var(--green);margin-bottom:12px"><div style="color:#047857;font-weight:700">${esc(req.query.flash)}</div></div>` : '';
+    const header = `<div class="page-header"><h1>Live Protest Sync</h1><div class="sub">${esc(meet.meetName || '')}${hosted ? ' · online meet #' + esc(hosted) : ''}</div></div>`;
+    if (!hosted) {
+      return res.send(pageShell({ title: 'Live Protest Sync', user: data.user, meet, bodyHtml: `${header}<div class="card"><div class="note">This meet wasn't imported from an online meet, so there's nothing to sync. Live protest sync pulls coach phone protests from the online copy of a meet you downloaded via <strong>Import Meet</strong>.</div></div>` }));
+    }
+    const st = protestSync.statusFor(meet.id);
+    const statusHtml = st.connected
+      ? `<div class="card" style="border-left:5px solid var(--green)">
+           <div class="bold">Connected to ${esc(st.baseUrl)}</div>
+           <div class="note" style="margin-top:6px">${st.lastError ? '<span style="color:#c2410c">' + esc(st.lastError) + '</span>' : ('Synced ' + (st.lastSyncAt ? esc(new Date(st.lastSyncAt).toLocaleTimeString()) : 'just now'))} · ${esc(String(st.totalPulled || 0))} protest${(st.totalPulled === 1) ? '' : 's'} pulled this session.</div>
+           <div class="action-row" style="margin-top:12px">
+             <form method="POST" action="/desktop/meet/${esc(meet.id)}/protest-sync/now" style="margin:0"><button class="btn-orange" type="submit">Sync now</button></form>
+             <form method="POST" action="/desktop/meet/${esc(meet.id)}/protest-sync/disconnect" style="margin:0"><button class="btn2" type="submit">Disconnect</button></form>
+             <a class="btn2" href="/portal/meet/${esc(meet.id)}/protests">Go to Protests</a>
+           </div>
+         </div>`
+      : `<div class="card">
+           <div class="bold">Connect to pull coach phone protests</div>
+           <div class="note" style="margin-top:6px">Sign in to the online site once. While connected, protests coaches file from their phones are pulled into this meet about every ${Math.round((protestSync.DEFAULT_INTERVAL_MS || 25000) / 1000)} seconds. Rulings you make here stay on this desktop.</div>
+           <form method="POST" action="/desktop/meet/${esc(meet.id)}/protest-sync/connect" class="stack" style="margin-top:12px">
+             <div><label>Site URL</label><input name="baseUrl" value="${esc(baseUrl)}" required /></div>
+             <div><label>Email</label><input name="username" type="email" required /></div>
+             <div><label>Password</label><input name="password" type="password" required /></div>
+             <div class="action-row" style="margin-top:8px"><button class="btn-orange" type="submit">Connect &amp; sync</button></div>
+           </form>
+         </div>`;
+    res.send(pageShell({ title: 'Live Protest Sync', user: data.user, meet, bodyHtml: `${header}${flash}${err}${statusHtml}` }));
+  });
+
+  router.post('/desktop/meet/:meetId/protest-sync/connect', async (req, res) => {
+    if (!requireDesktop(res)) return;
+    const data = typeof getSessionUser === 'function' ? getSessionUser(req) : null;
+    if (!data?.user) return res.redirect('/admin/login');
+    const db = loadDb();
+    const meet = findLocalMeet(db, req.params.meetId);
+    if (!meet) return res.redirect('/desktop/open-meet');
+    const back = `/desktop/meet/${encodeURIComponent(meet.id)}/protest-sync`;
+    const hosted = String(meet.importedFromHostedMeetId || '');
+    if (!hosted) return res.redirect(back + '?error=' + encodeURIComponent('This meet was not imported from online.'));
+    const baseUrl = String(req.body.baseUrl || meet.importedFromUrl || '').trim().replace(/\/+$/, '');
+    const username = String(req.body.username || '').trim();
+    const password = String(req.body.password || '').trim();
+    if (!baseUrl || !username || !password) return res.redirect(back + '?error=' + encodeURIComponent('Site URL, email, and password are all required.'));
+    try {
+      const loginRes = await fetch(`${baseUrl}/admin/login`, {
+        method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ email: username, password }).toString(), redirect: 'manual',
+      });
+      const setCookie = loginRes.headers.get('set-cookie') || '';
+      const match = setCookie.match(/ssm_sess=[^;]+/);
+      if (!match) return res.redirect(back + '?error=' + encodeURIComponent('Login failed. Check your email and password.'));
+      const first = await protestSync.connect({
+        baseUrl, cookie: match[0], hostedMeetId: hosted, localMeetId: meet.id, loadDb, saveDb,
+      });
+      const msg = first && first.ok
+        ? `Connected. Pulled ${first.added} protest${first.added === 1 ? '' : 's'}.`
+        : `Connected${first && first.error ? ' — ' + first.error : '.'}`;
+      return res.redirect(back + '?flash=' + encodeURIComponent(msg));
+    } catch (err) {
+      return res.redirect(back + '?error=' + encodeURIComponent('Could not reach that site. Check the URL and your internet connection.'));
+    }
+  });
+
+  router.post('/desktop/meet/:meetId/protest-sync/now', async (req, res) => {
+    if (!requireDesktop(res)) return;
+    const back = `/desktop/meet/${encodeURIComponent(req.params.meetId)}/protest-sync`;
+    const r = await protestSync.syncNow();
+    const msg = r.ok ? `Synced. Pulled ${r.added} new protest${r.added === 1 ? '' : 's'}.` : (r.error || 'Sync failed.');
+    return res.redirect(back + (r.ok ? '?flash=' : '?error=') + encodeURIComponent(msg));
+  });
+
+  router.post('/desktop/meet/:meetId/protest-sync/disconnect', (req, res) => {
+    if (!requireDesktop(res)) return;
+    protestSync.disconnect();
+    return res.redirect(`/desktop/meet/${encodeURIComponent(req.params.meetId)}/protest-sync?flash=` + encodeURIComponent('Disconnected. The offline meet is unaffected.'));
   });
 
   return router;

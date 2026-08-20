@@ -119,7 +119,7 @@ function renderProtestForm(meet, user, error = '') {
 }
 
 // ── Officials: inbox ─────────────────────────────────────────────────────────
-function renderProtestInbox(meet, user, flash = '') {
+function renderProtestInbox(meet, user, flash = '', syncBanner = '') {
   const rows = protestsForMeet(meet);
   const canCorrect = canEditMeet(user, meet); // Correction Mode is meet-director only
   const cards = rows.slice().reverse().map(p => `
@@ -154,6 +154,7 @@ function renderProtestInbox(meet, user, flash = '') {
     <div class="page-header"><h1>Protests</h1><div class="sub">${esc(meet.meetName)} • ${esc(meetDateLabel(meet) || '')}</div></div>
     <div class="action-row" style="margin-bottom:14px"><a class="btn2" href="/portal/meet/${esc(meet.id)}/results">← Results</a></div>
     ${flash ? `<div class="good" style="margin-bottom:16px">${esc(flash)}</div>` : ''}
+    ${syncBanner}
     <div class="note" style="margin-bottom:14px">Confidential — officials only. Coaches see only the protests they filed.</div>
     ${cards}`;
 }
@@ -212,7 +213,25 @@ module.exports = function createProtestRoutes(deps = {}) {
   router.get('/portal/meet/:meetId/protests', requireRole('judge', 'meet_director'), (req, res) => {
     const meet = getMeetOr404(req.db, req.params.meetId);
     if (!meet) return res.redirect('/portal');
-    res.send(pageShell({ title: 'Protests', user: req.user, meet, activeTab: 'results', bodyHtml: renderProtestInbox(meet, req.user, req.query.flash || '') }));
+    // Desktop only: a live-protest-sync status banner so officials running an
+    // imported meet know whether coach phone protests are being pulled in.
+    let syncBanner = '';
+    if (process.env.SSM_DESKTOP === '1' && meet.importedFromHostedMeetId) {
+      const st = require('../services/desktopProtestSync').statusFor(meet.id);
+      syncBanner = st.connected
+        ? `<div class="card" style="border-left:4px solid var(--green);margin-bottom:12px"><div class="row between center" style="flex-wrap:wrap;gap:8px"><div class="note">🔌 <strong>Live protest sync on</strong> — coach phone protests pull in automatically${st.lastError ? ' · <span style="color:#c2410c">' + esc(st.lastError) + '</span>' : (st.lastSyncAt ? ' · synced ' + esc(new Date(st.lastSyncAt).toLocaleTimeString()) : '')}.</div><a class="btn2 btn-sm" href="/desktop/meet/${esc(meet.id)}/protest-sync">Manage</a></div></div>`
+        : `<div class="card" style="border-left:4px solid var(--orange);margin-bottom:12px"><div class="row between center" style="flex-wrap:wrap;gap:8px"><div class="note">📴 <strong>Live protest sync off</strong> — coach phone protests won't reach this desktop meet until you connect.</div><a class="btn-orange btn-sm" href="/desktop/meet/${esc(meet.id)}/protest-sync">Connect</a></div></div>`;
+    }
+    res.send(pageShell({ title: 'Protests', user: req.user, meet, activeTab: 'results', bodyHtml: renderProtestInbox(meet, req.user, req.query.flash || '', syncBanner) }));
+  });
+
+  // Officials: protests as JSON — read-only, additive. The SSM Desktop app calls
+  // this on the ONLINE copy of an imported meet to pull coach-filed (phone)
+  // protests down into a desktop-run meet. Same auth as the inbox above.
+  router.get('/portal/meet/:meetId/protests.json', requireRole('judge', 'meet_director'), (req, res) => {
+    const meet = getMeetOr404(req.db, req.params.meetId);
+    if (!meet) return res.status(404).json({ ok: false, error: 'Meet not found.' });
+    res.json({ ok: true, protests: protestsForMeet(meet) });
   });
 
   // Officials: rule
