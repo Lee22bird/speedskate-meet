@@ -538,6 +538,8 @@ public struct MeetSettings: Decodable {
     public let rinkId: Int
     public let rinkLabel: String
     public let customRinkName: String
+    public let lanes: Int
+    public let trackLength: Int
     public let baseEntryFee: Double
     public let additionalRaceFee: Double
     public let maxRegistrationFee: Double
@@ -548,6 +550,8 @@ public struct MeetSettings: Decodable {
 public struct MeetSettingsResponse: Decodable {
     public let ok: Bool
     public let settings: MeetSettings
+    /// Only the POST reports this — true when a lanes/track change rebuilt races.
+    public let racesRebuilt: Bool?
 }
 
 public struct Rink: Decodable, Identifiable, Hashable {

@@ -7,6 +7,7 @@ import SwiftUI
 struct PadMeetSettingsView: View {
     let meetID: String
     @StateObject private var vm = PadMeetSettingsViewModel()
+    @State private var confirmRebuild = false
 
     var body: some View {
         ScrollView {
@@ -18,6 +19,7 @@ struct PadMeetSettingsView: View {
                     basicsCard
                     venueCard
                     feesCard
+                    racingCard
                     actionBar
                 }
             }
@@ -113,10 +115,26 @@ struct PadMeetSettingsView: View {
         }
     }
 
+    private var racingCard: some View {
+        SSMCard {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("RACING").font(.ssmRounded(12, weight: .heavy)).foregroundStyle(SSMTheme.muted)
+                HStack(spacing: 12) {
+                    field("Lanes") { textInput($vm.lanes, placeholder: "e.g. 5", keyboard: .numberPad) }
+                    field("Track length (m)") { textInput($vm.trackLength, placeholder: "e.g. 100", keyboard: .numberPad) }
+                }
+                Text("⚠️ Changing lanes or track length rebuilds every race's heats and lane assignments. Do this before check-in, not mid-meet.")
+                    .font(.ssmRounded(12, weight: .semibold)).foregroundStyle(SSMTheme.orange)
+            }
+        }
+    }
+
     private var actionBar: some View {
         VStack(spacing: 10) {
             if vm.savedFlash {
-                Text("✓ Settings saved.").font(.ssmRounded(14, weight: .bold)).foregroundStyle(SSMTheme.good)
+                Text(vm.rebuildFlash ? "✓ Saved — races were rebuilt for the new lanes/track."
+                                     : "✓ Settings saved.")
+                    .font(.ssmRounded(14, weight: .bold)).foregroundStyle(SSMTheme.good)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             if let error = vm.errorMessage {
@@ -124,7 +142,7 @@ struct PadMeetSettingsView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             Button {
-                Task { await vm.save(meetID: meetID) }
+                if vm.racingChanged { confirmRebuild = true } else { Task { await vm.save(meetID: meetID) } }
             } label: {
                 Label(vm.isSaving ? "Saving…" : "Save Settings", systemImage: "checkmark.circle")
                     .frame(maxWidth: .infinity)
@@ -132,6 +150,11 @@ struct PadMeetSettingsView: View {
             .buttonStyle(.ssmPill)
             .disabled(vm.isSaving || !vm.canSave)
             .opacity(vm.isSaving || !vm.canSave ? 0.6 : 1)
+        }
+        .confirmationDialog("Rebuild races?", isPresented: $confirmRebuild, titleVisibility: .visible) {
+            Button("Save & Rebuild Races", role: .destructive) { Task { await vm.save(meetID: meetID) } }
+        } message: {
+            Text("You changed lanes or track length. Saving rebuilds every race's heats and lane assignments — do this before check-in, not mid-meet.")
         }
     }
 

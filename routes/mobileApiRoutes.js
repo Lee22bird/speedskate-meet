@@ -19,6 +19,7 @@ const {
   relayDivisionsForRuleset, RELAY_DIVISION_BY_ID, eligibleForRelayDivision,
 } = require('../services/relayDivisions');
 const { buildRelayRacesFromTeams } = require('../services/relayGenerator');
+const { rebuildRaceAssignmentsSafe } = require('../services/ttHelpers');
 const {
   protestsForMeet, normalizeProtest, findProtest, unresolvedProtestCount,
   protestsForCoach, buildProtest, isRaceSpecific, raceProtestWindowClosed,
@@ -807,6 +808,8 @@ module.exports = function createMobileApiRoutes(deps = {}) {
       rinkId: Number(meet.rinkId || 0),
       rinkLabel: meetRinkLabel(db, meet) || '',
       customRinkName: meet.customRinkName || '',
+      lanes: Number(meet.lanes || 4),
+      trackLength: Number(meet.trackLength || 100),
       baseEntryFee: Number(meet.baseEntryFee || 0),
       additionalRaceFee: Number(meet.additionalRaceFee || 0),
       maxRegistrationFee: Number(meet.maxRegistrationFee || 0),
@@ -871,9 +874,27 @@ module.exports = function createMobileApiRoutes(deps = {}) {
     } else if (typeof b.customRinkName === 'string' && Object.prototype.hasOwnProperty.call(b, 'customRinkName')) {
       meet.customRinkName = b.customRinkName.trim();
     }
+    // Lanes / track length feed heat splitting and lane rows — changing either
+    // rebuilds race assignments (the same safe rebuild the website runs). The app
+    // confirms first, so we return racesRebuilt for its follow-up message.
+    let racesRebuilt = false;
+    const oldLanes = Number(meet.lanes || 4);
+    const oldTrack = Number(meet.trackLength || 100);
+    if (b.lanes !== undefined && String(b.lanes).trim() !== '') {
+      const n = Number(b.lanes);
+      if (Number.isFinite(n) && n >= 1) meet.lanes = Math.floor(n);
+    }
+    if (b.trackLength !== undefined && String(b.trackLength).trim() !== '') {
+      const n = Number(b.trackLength);
+      if (Number.isFinite(n) && n >= 1) meet.trackLength = n;
+    }
+    if (Number(meet.lanes || 4) !== oldLanes || Number(meet.trackLength || 100) !== oldTrack) {
+      rebuildRaceAssignmentsSafe(meet);
+      racesRebuilt = true;
+    }
     meet.updatedAt = new Date().toISOString();
     saveDb(data.db);
-    res.json({ ok:true, settings: meetSettingsJson(meet, data.db) });
+    res.json({ ok:true, settings: meetSettingsJson(meet, data.db), racesRebuilt });
   });
 
   return router;

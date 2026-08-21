@@ -818,11 +818,11 @@ public final class APIClient {
     }
 
     /// Partial save — send only the fields to change; the server touches only
-    /// keys present in the body and never regenerates races.
+    /// keys present in the body. Returns the full response so the caller can see
+    /// `racesRebuilt` (true when a lanes/track change rebuilt race assignments).
     @discardableResult
-    public func saveMeetSettings(meetID: String, fields: [String: Any]) async throws -> MeetSettings {
-        let r: MeetSettingsResponse = try await postJSONObject("/api/v1/meets/\(meetID)/settings", body: fields)
-        return r.settings
+    public func saveMeetSettings(meetID: String, fields: [String: Any]) async throws -> MeetSettingsResponse {
+        try await postJSONObject("/api/v1/meets/\(meetID)/settings", body: fields)
     }
 
     // ── Relay teams (coach) ───────────────────────────────────────────────

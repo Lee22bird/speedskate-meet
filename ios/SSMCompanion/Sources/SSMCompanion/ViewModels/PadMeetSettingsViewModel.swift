@@ -15,6 +15,8 @@ public final class PadMeetSettingsViewModel: ObservableObject {
     @Published public var rinkId = 0
     @Published public var customRinkName = ""
     @Published public private(set) var rinks: [Rink] = []
+    @Published public var lanes = ""
+    @Published public var trackLength = ""
     @Published public var baseEntryFee = ""
     @Published public var additionalRaceFee = ""
     @Published public var maxRegistrationFee = ""
@@ -26,9 +28,19 @@ public final class PadMeetSettingsViewModel: ObservableObject {
     @Published public private(set) var loaded = false
     @Published public var errorMessage: String?
     @Published public var savedFlash = false
+    @Published public var rebuildFlash = false
+
+    private var originalLanes = 0
+    private var originalTrack = 0
 
     private let api: APIClient
     public init(api: APIClient = .shared) { self.api = api }
+
+    /// Lanes or track length differs from what loaded — saving will rebuild races.
+    public var racingChanged: Bool {
+        (Int(lanes.trimmingCharacters(in: .whitespaces)) ?? originalLanes) != originalLanes ||
+        (Int(trackLength.trimmingCharacters(in: .whitespaces)) ?? originalTrack) != originalTrack
+    }
 
     /// Money as a clean string: whole dollars drop the decimals ("25", not "25.0").
     private func money(_ v: Double) -> String {
@@ -48,6 +60,10 @@ public final class PadMeetSettingsViewModel: ObservableObject {
             registrationCloseTime = s.registrationCloseTime
             rinkId = s.rinkId
             customRinkName = s.customRinkName
+            lanes = String(s.lanes)
+            trackLength = String(s.trackLength)
+            originalLanes = s.lanes
+            originalTrack = s.trackLength
             if rinks.isEmpty { rinks = (try? await api.rinks()) ?? [] }
             baseEntryFee = money(s.baseEntryFee)
             additionalRaceFee = money(s.additionalRaceFee)
@@ -91,12 +107,21 @@ public final class PadMeetSettingsViewModel: ObservableObject {
         addNumber(&fields, "maxRegistrationFee", maxRegistrationFee)
         addNumber(&fields, "protestFee", protestFee)
         addNumber(&fields, "protestDeadlineMinutes", protestDeadlineMinutes)
+        addNumber(&fields, "lanes", lanes)
+        addNumber(&fields, "trackLength", trackLength)
+        rebuildFlash = false
         do {
-            let s = try await api.saveMeetSettings(meetID: meetID, fields: fields)
+            let r = try await api.saveMeetSettings(meetID: meetID, fields: fields)
+            let s = r.settings
             registrationCloseDate = s.registrationCloseDate
             registrationCloseTime = s.registrationCloseTime
             rinkId = s.rinkId
             customRinkName = s.customRinkName
+            lanes = String(s.lanes)
+            trackLength = String(s.trackLength)
+            originalLanes = s.lanes
+            originalTrack = s.trackLength
+            rebuildFlash = (r.racesRebuilt == true)
             baseEntryFee = money(s.baseEntryFee)
             additionalRaceFee = money(s.additionalRaceFee)
             maxRegistrationFee = money(s.maxRegistrationFee)
