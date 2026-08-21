@@ -84,6 +84,9 @@ struct PadSidebar: View {
     /// full-width.
     let closeDrawer: () -> Void
 
+    @State private var isCreatingMeet = false
+    @State private var createError: String?
+
     var body: some View {
         // Plain ScrollView + VStack (not List) — predictable hit-testing and
         // width inside the custom drawer overlay.
@@ -206,9 +209,43 @@ struct PadSidebar: View {
         }
     }
 
+    private func createNewMeet() async {
+        guard !isCreatingMeet else { return }
+        isCreatingMeet = true
+        defer { isCreatingMeet = false }
+        do {
+            guard let newID = try await APIClient.shared.createMeet() else {
+                createError = "Couldn't create the meet."
+                return
+            }
+            createError = nil
+            await staffMeets.load()
+            await session.selectMeet(id: newID, name: "New Meet")
+            session.selectedSection = .meetSettings   // land the director on setup
+            closeDrawer()
+        } catch {
+            createError = (error as? APIError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
     private var myMeetsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader("My Meets")
+            HStack {
+                sectionHeader("My Meets")
+                Spacer()
+                Button {
+                    Task { await createNewMeet() }
+                } label: {
+                    Label(isCreatingMeet ? "Creating…" : "New Meet", systemImage: "plus.circle.fill")
+                        .font(.ssmRounded(12, weight: .bold))
+                        .foregroundStyle(SSMTheme.orange)
+                }
+                .buttonStyle(.plain)
+                .disabled(isCreatingMeet)
+            }
+            if let createError {
+                Text(createError).font(.ssmRounded(11, weight: .semibold)).foregroundStyle(SSMTheme.danger)
+            }
             if staffMeets.meets.isEmpty {
                 Text(staffMeets.isLoading ? "Loading…" : "No assigned meets.")
                     .font(.ssmRounded(13, weight: .medium))

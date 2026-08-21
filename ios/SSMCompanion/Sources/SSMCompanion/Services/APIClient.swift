@@ -599,6 +599,17 @@ public final class APIClient {
         return nil
     }
 
+    /// Create a fresh draft meet. Returns the new meet's id.
+    @discardableResult
+    public func createMeet() async throws -> String? {
+        // Success redirects to /portal/meet/{newId}/builder.
+        let location = try await portalRedirectPost("/portal/create-meet",
+                                                    expectedRedirectPrefix: "/portal/meet/")
+        let parts = location.split(separator: "/").map(String.init)
+        if let i = parts.firstIndex(of: "meet"), i + 1 < parts.count { return parts[i + 1] }
+        return nil
+    }
+
     /// Archive a meet (soft delete — the website's archive action).
     public func archiveMeet(meetID: String) async throws {
         _ = try await portalRedirectPost("/portal/meet/\(meetID)/archive",
