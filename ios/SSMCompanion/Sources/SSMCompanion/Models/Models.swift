@@ -526,6 +526,25 @@ public struct CoachRelayBuilderData: Decodable {
     public let divisions: [RelayDivision]
 }
 
+/// Editable meet settings (phase 1 — identity + fees). Matches the additive
+/// GET/POST /api/v1/meets/:id/settings endpoints (a safe partial editor).
+public struct MeetSettings: Decodable {
+    public let meetName: String
+    public let date: String
+    public let endDate: String
+    public let startTime: String
+    public let baseEntryFee: Double
+    public let additionalRaceFee: Double
+    public let maxRegistrationFee: Double
+    public let protestFee: Double
+    public let protestDeadlineMinutes: Int
+}
+
+public struct MeetSettingsResponse: Decodable {
+    public let ok: Bool
+    public let settings: MeetSettings
+}
+
 public struct RelayGenerateResponse: Decodable {
     public let ok: Bool
     public let created: Int

@@ -784,5 +784,60 @@ module.exports = function createMobileApiRoutes(deps = {}) {
     res.json({ ok:true, savedTeams: mine.length, totalTeams: meet.relayTeams.length });
   });
 
+  // ── Director: Meet Settings (phase 1 — safe scalar fields) ─────────────────
+  // A SAFE partial-update editor for the iPad. The website's builder/save-meet
+  // is all-or-nothing (absent booleans/numbers reset to defaults) AND regenerates
+  // races on every save; this endpoint instead touches ONLY the keys present in
+  // the body and never regenerates races. Scope: identity + fees + protest. Lanes,
+  // track, division scheme, publish, rink, and registration window are deliberately
+  // NOT here (they rebuild races / change public state) — later phases.
+  function meetSettingsJson(meet) {
+    return {
+      meetName: meet.meetName || '',
+      date: meet.date || '',
+      endDate: meet.endDate || '',
+      startTime: meet.startTime || '',
+      baseEntryFee: Number(meet.baseEntryFee || 0),
+      additionalRaceFee: Number(meet.additionalRaceFee || 0),
+      maxRegistrationFee: Number(meet.maxRegistrationFee || 0),
+      protestFee: Number(meet.protestFee || 0),
+      protestDeadlineMinutes: Number(meet.protestDeadlineMinutes || 0),
+    };
+  }
+
+  router.get('/api/v1/meets/:meetId/settings', (req, res) => {
+    const data = getSessionUser(req);
+    if (!data) return res.status(401).json({ ok:false, error:'Not logged in.' });
+    const meet = getMeetOr404(data.db, req.params.meetId);
+    if (!meet) return res.status(404).json({ ok:false, error:'Meet not found.' });
+    if (!canEditMeet(data.user, meet)) return res.status(403).json({ ok:false, error:'Only a meet director can edit settings.' });
+    res.json({ ok:true, settings: meetSettingsJson(meet) });
+  });
+
+  router.post('/api/v1/meets/:meetId/settings', (req, res) => {
+    const data = getSessionUser(req);
+    if (!data) return res.status(401).json({ ok:false, error:'Not logged in.' });
+    const meet = getMeetOr404(data.db, req.params.meetId);
+    if (!meet) return res.status(404).json({ ok:false, error:'Meet not found.' });
+    if (!canEditMeet(data.user, meet)) return res.status(403).json({ ok:false, error:'Only a meet director can edit settings.' });
+
+    const b = req.body || {};
+    // Strings: only overwrite when the key is present. meetName won't blank out.
+    if (typeof b.meetName === 'string' && b.meetName.trim()) meet.meetName = b.meetName.trim().slice(0, 200);
+    if (typeof b.date === 'string') meet.date = b.date.trim();
+    if (typeof b.endDate === 'string') meet.endDate = b.endDate.trim();
+    if (typeof b.startTime === 'string') meet.startTime = b.startTime.trim();
+    // Non-negative money/number fields: only when present and valid.
+    for (const key of ['baseEntryFee','additionalRaceFee','maxRegistrationFee','protestFee','protestDeadlineMinutes']) {
+      if (b[key] !== undefined && b[key] !== null && String(b[key]).trim() !== '') {
+        const n = Number(b[key]);
+        if (Number.isFinite(n) && n >= 0) meet[key] = n;
+      }
+    }
+    meet.updatedAt = new Date().toISOString();
+    saveDb(data.db);
+    res.json({ ok:true, settings: meetSettingsJson(meet) });
+  });
+
   return router;
 };

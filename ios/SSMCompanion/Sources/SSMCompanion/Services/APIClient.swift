@@ -794,6 +794,20 @@ public final class APIClient {
         try await postJSONObject("/api/v1/meets/\(meetID)/relay-builder/generate", body: [:])
     }
 
+    // ── Meet settings (director, phase-1 editor) ──────────────────────────
+    public func meetSettings(meetID: String) async throws -> MeetSettings {
+        let r: MeetSettingsResponse = try await request("/api/v1/meets/\(meetID)/settings")
+        return r.settings
+    }
+
+    /// Partial save — send only the fields to change; the server touches only
+    /// keys present in the body and never regenerates races.
+    @discardableResult
+    public func saveMeetSettings(meetID: String, fields: [String: Any]) async throws -> MeetSettings {
+        let r: MeetSettingsResponse = try await postJSONObject("/api/v1/meets/\(meetID)/settings", body: fields)
+        return r.settings
+    }
+
     // ── Relay teams (coach) ───────────────────────────────────────────────
     // A coach builds their own club's teams; the director generates the races.
     public func coachRelayBuilder(meetID: String) async throws -> CoachRelayBuilderData {
