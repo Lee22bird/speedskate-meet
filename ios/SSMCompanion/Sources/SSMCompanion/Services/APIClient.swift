@@ -825,6 +825,17 @@ public final class APIClient {
                                          expectedRedirectPrefix: "/portal/meet/")
     }
 
+    // ── Per-division editor (director) ────────────────────────────────────
+    public func divisions(meetID: String) async throws -> DivisionsResponse {
+        try await request("/api/v1/meets/\(meetID)/divisions")
+    }
+
+    /// Save the per-group division config (regenerates races server-side).
+    @discardableResult
+    public func saveDivisions(meetID: String, groups: [[String: Any]]) async throws -> DivisionsSaveResponse {
+        try await postJSONObject("/api/v1/meets/\(meetID)/divisions", body: ["groups": groups])
+    }
+
     /// Partial save — send only the fields to change; the server touches only
     /// keys present in the body. Returns the full response so the caller can see
     /// `racesRebuilt` (true when a lanes/track change rebuilt race assignments).

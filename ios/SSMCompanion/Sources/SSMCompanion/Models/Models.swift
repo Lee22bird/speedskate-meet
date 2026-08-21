@@ -555,6 +555,35 @@ public struct MeetSettingsResponse: Decodable {
     public let racesRebuilt: Bool?
 }
 
+/// One division slot (novice/elite) as read from the divisions endpoint.
+public struct DivisionSlotDTO: Decodable {
+    public let enabled: Bool
+    public let ages: String
+    public let distances: [String]
+}
+
+public struct DivisionGroupDTO: Decodable, Identifiable {
+    public let index: Int
+    public let label: String
+    public let ages: String
+    public let gender: String
+    public let novice: DivisionSlotDTO
+    public let elite: DivisionSlotDTO
+    public var id: Int { index }
+}
+
+public struct DivisionsResponse: Decodable {
+    public let ok: Bool
+    public let scheme: String
+    public let groups: [DivisionGroupDTO]
+}
+
+public struct DivisionsSaveResponse: Decodable {
+    public let ok: Bool
+    public let racesRebuilt: Bool?
+    public let raceCount: Int?
+}
+
 public struct Rink: Decodable, Identifiable, Hashable {
     public let id: Int
     public let name: String

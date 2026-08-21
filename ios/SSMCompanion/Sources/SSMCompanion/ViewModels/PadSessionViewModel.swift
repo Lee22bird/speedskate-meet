@@ -5,6 +5,7 @@ import SwiftUI
 public enum PadSection: String, CaseIterable, Identifiable {
     case director
     case meetSettings
+    case divisions
     case blockBuilder
     case relayBuilder
     case registered
@@ -23,6 +24,7 @@ public enum PadSection: String, CaseIterable, Identifiable {
         switch self {
         case .director: return "Race Day Control"
         case .meetSettings: return "Meet Settings"
+        case .divisions: return "Divisions"
         case .blockBuilder: return "Block Builder"
         case .relayBuilder: return "Relay Builder"
         case .registered: return "Registered"
@@ -41,6 +43,7 @@ public enum PadSection: String, CaseIterable, Identifiable {
         switch self {
         case .director: return "flag.checkered"
         case .meetSettings: return "slider.horizontal.3"
+        case .divisions: return "list.bullet.rectangle"
         case .blockBuilder: return "square.stack.3d.up"
         case .relayBuilder: return "person.3.fill"
         case .registered: return "person.text.rectangle"
@@ -66,6 +69,7 @@ public enum PadSection: String, CaseIterable, Identifiable {
         switch self {
         case .director: return role == .director
         case .meetSettings: return role == .director
+        case .divisions: return role == .director
         case .blockBuilder, .relayBuilder, .registered, .checkIn: return role == .director || canBuildBlocks
         case .tabulator: return role == .director || role == .tabulator
         // Officials inbox = judge (tabulator) + meet_director (director), the

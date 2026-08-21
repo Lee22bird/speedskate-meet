@@ -120,8 +120,8 @@ struct PadMeetSettingsView: View {
     private var divisionsCard: some View {
         SSMCard {
             VStack(alignment: .leading, spacing: 12) {
-                Text("DIVISIONS").font(.ssmRounded(12, weight: .heavy)).foregroundStyle(SSMTheme.muted)
-                Text("The division set that generates your races. Switching re-applies that template and rebuilds races.")
+                Text("DIVISION SCHEME").font(.ssmRounded(12, weight: .heavy)).foregroundStyle(SSMTheme.muted)
+                Text("The division set that generates your races. Fine-tune individual divisions in the Divisions tab. Switching re-applies that template and rebuilds races.")
                     .font(.ssmRounded(12, weight: .medium)).foregroundStyle(SSMTheme.muted)
                 VStack(spacing: 6) {
                     schemeRow("standard", "Standard", "24 age groups · Novice + Elite")

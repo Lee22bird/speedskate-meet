@@ -385,6 +385,9 @@ struct PadDetailRouter: View {
             case .meetSettings:
                 PadMeetSettingsView(meetID: meetID)
                     .id(meetID)
+            case .divisions:
+                PadDivisionsView(meetID: meetID)
+                    .id(meetID)
             case .blockBuilder:
                 // .id(meetID) tears the view (and its @StateObject) down
                 // the instant the sidebar switches meets — otherwise the

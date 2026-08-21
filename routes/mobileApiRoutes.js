@@ -5,11 +5,11 @@ const {
 } = require('../utils/auth');
 const {
   isPublicMeet, meetRinkLabel, meetDateLabel, getMeetOr404, coachTeamRegistrations,
-  combineDateTime,
+  combineDateTime, generateConfiguredRacesForMeet, ensureAtLeastOneBlock,
 } = require('../services/meetHelpers');
 const {
   orderedRaces, currentRaceInfo, raceDayProgress, laneRowsForRace,
-  recentClosedRaces, raceDisplayStage,
+  recentClosedRaces, raceDisplayStage, ensureCurrentRace,
 } = require('../services/raceDay');
 const {
   computeMeetStandings, computeQuadStandings, computeOpenResults,
@@ -896,6 +896,73 @@ module.exports = function createMobileApiRoutes(deps = {}) {
     meet.updatedAt = new Date().toISOString();
     saveDb(data.db);
     res.json({ ok:true, settings: meetSettingsJson(meet, data.db), racesRebuilt });
+  });
+
+  // ── Director: per-division editor (novice/elite enable, ages, distances) ────
+  // Additive. Reads meet.groups; writes only the groups present in the body,
+  // then regenerates races (division config drives race generation). The app
+  // confirms first. Distances travel as a small array, padded to 4 slots.
+  function divisionSlotJson(d, fallbackAges) {
+    d = d || {};
+    return {
+      enabled: !!d.enabled,
+      ages: String(d.ages || fallbackAges || ''),
+      distances: (Array.isArray(d.distances) ? d.distances : []).slice(0, 4).map(x => String(x || '')),
+    };
+  }
+
+  router.get('/api/v1/meets/:meetId/divisions', (req, res) => {
+    const data = getSessionUser(req);
+    if (!data) return res.status(401).json({ ok:false, error:'Not logged in.' });
+    const meet = getMeetOr404(data.db, req.params.meetId);
+    if (!meet) return res.status(404).json({ ok:false, error:'Meet not found.' });
+    if (!canEditMeet(data.user, meet)) return res.status(403).json({ ok:false, error:'Only a meet director can edit divisions.' });
+    const groups = (meet.groups || []).map((g, i) => ({
+      index: i,
+      label: g.label || '',
+      ages: g.ages || '',
+      gender: g.gender || '',
+      novice: divisionSlotJson(g.divisions && g.divisions.novice, g.ages),
+      elite: divisionSlotJson(g.divisions && g.divisions.elite, g.ages),
+    }));
+    res.json({ ok:true, scheme: String(meet.divisionScheme || 'standard'), groups });
+  });
+
+  router.post('/api/v1/meets/:meetId/divisions', (req, res) => {
+    const data = getSessionUser(req);
+    if (!data) return res.status(401).json({ ok:false, error:'Not logged in.' });
+    const meet = getMeetOr404(data.db, req.params.meetId);
+    if (!meet) return res.status(404).json({ ok:false, error:'Meet not found.' });
+    if (!canEditMeet(data.user, meet)) return res.status(403).json({ ok:false, error:'Only a meet director can edit divisions.' });
+    if (!Array.isArray(meet.groups)) meet.groups = [];
+
+    const applySlot = (existing, posted, fallbackAges) => {
+      existing = existing || { enabled: false, cost: 0, distances: ['', '', '', ''] };
+      posted = posted || {};
+      const distances = (Array.isArray(posted.distances) ? posted.distances : []).map(x => String(x || '').trim());
+      while (distances.length < 4) distances.push('');
+      return { ...existing, enabled: !!posted.enabled,
+               ages: String(posted.ages || fallbackAges || '').trim(),
+               distances: distances.slice(0, 4) };
+    };
+
+    const incoming = Array.isArray(req.body.groups) ? req.body.groups : [];
+    for (const grp of incoming) {
+      const idx = Number(grp.index);
+      if (!Number.isInteger(idx) || idx < 0 || idx >= meet.groups.length) continue;
+      const g = meet.groups[idx];
+      if (!g.divisions) g.divisions = {};
+      if (grp.novice) g.divisions.novice = applySlot(g.divisions.novice, grp.novice, g.ages);
+      if (grp.elite) g.divisions.elite = applySlot(g.divisions.elite, grp.elite, g.ages);
+    }
+    // Division config drives race generation — rebuild like the website's save.
+    generateConfiguredRacesForMeet(meet);
+    rebuildRaceAssignmentsSafe(meet);
+    ensureAtLeastOneBlock(meet);
+    ensureCurrentRace(meet);
+    meet.updatedAt = new Date().toISOString();
+    saveDb(data.db);
+    res.json({ ok: true, racesRebuilt: true, raceCount: (meet.races || []).length });
   });
 
   return router;
