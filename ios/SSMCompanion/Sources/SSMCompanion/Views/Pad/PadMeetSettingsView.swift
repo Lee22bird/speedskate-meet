@@ -8,6 +8,7 @@ struct PadMeetSettingsView: View {
     let meetID: String
     @StateObject private var vm = PadMeetSettingsViewModel()
     @State private var confirmRebuild = false
+    @State private var pendingScheme: String?
 
     var body: some View {
         ScrollView {
@@ -20,6 +21,7 @@ struct PadMeetSettingsView: View {
                     venueCard
                     feesCard
                     racingCard
+                    divisionsCard
                     actionBar
                 }
             }
@@ -113,6 +115,57 @@ struct PadMeetSettingsView: View {
                     .font(.ssmRounded(12, weight: .medium)).foregroundStyle(SSMTheme.muted)
             }
         }
+    }
+
+    private var divisionsCard: some View {
+        SSMCard {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("DIVISIONS").font(.ssmRounded(12, weight: .heavy)).foregroundStyle(SSMTheme.muted)
+                Text("The division set that generates your races. Switching re-applies that template and rebuilds races.")
+                    .font(.ssmRounded(12, weight: .medium)).foregroundStyle(SSMTheme.muted)
+                VStack(spacing: 6) {
+                    schemeRow("standard", "Standard", "24 age groups · Novice + Elite")
+                    schemeRow("usars", "USARS National", "Full USARS divisions · SR832 tiebreak")
+                    schemeRow("mssl", "MSSL League", "League template + auto schedule")
+                }
+                if vm.isSwitchingScheme {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                        Text("Applying…").font(.ssmRounded(12, weight: .semibold)).foregroundStyle(SSMTheme.muted)
+                    }
+                }
+            }
+        }
+        .confirmationDialog("Switch divisions?", isPresented: Binding(get: { pendingScheme != nil },
+                                                                      set: { if !$0 { pendingScheme = nil } }),
+                            titleVisibility: .visible, presenting: pendingScheme) { scheme in
+            Button("Switch & Rebuild Races", role: .destructive) {
+                Task { await vm.switchScheme(meetID: meetID, to: scheme) }
+            }
+        } message: { _ in
+            Text("This replaces your divisions with the chosen template and rebuilds every race. Do it before check-in, not mid-meet.")
+        }
+    }
+
+    private func schemeRow(_ key: String, _ title: String, _ detail: String) -> some View {
+        let selected = vm.divisionScheme == key
+        return Button {
+            if !selected { pendingScheme = key }
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: selected ? "largecircle.fill.circle" : "circle")
+                    .foregroundStyle(selected ? SSMTheme.orange : SSMTheme.muted)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(.ssmRounded(15, weight: .bold)).foregroundStyle(SSMTheme.textPrimary)
+                    Text(detail).font(.caption).foregroundStyle(SSMTheme.muted)
+                }
+                Spacer()
+            }
+            .contentShape(Rectangle())
+            .padding(.vertical, 4)
+        }
+        .buttonStyle(.plain)
+        .disabled(vm.isSwitchingScheme)
     }
 
     private var racingCard: some View {

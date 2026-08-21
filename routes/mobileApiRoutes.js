@@ -810,6 +810,7 @@ module.exports = function createMobileApiRoutes(deps = {}) {
       customRinkName: meet.customRinkName || '',
       lanes: Number(meet.lanes || 4),
       trackLength: Number(meet.trackLength || 100),
+      divisionScheme: String(meet.divisionScheme || 'standard').toLowerCase(),
       baseEntryFee: Number(meet.baseEntryFee || 0),
       additionalRaceFee: Number(meet.additionalRaceFee || 0),
       maxRegistrationFee: Number(meet.maxRegistrationFee || 0),

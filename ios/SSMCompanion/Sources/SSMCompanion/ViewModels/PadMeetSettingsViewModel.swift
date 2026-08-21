@@ -17,6 +17,8 @@ public final class PadMeetSettingsViewModel: ObservableObject {
     @Published public private(set) var rinks: [Rink] = []
     @Published public var lanes = ""
     @Published public var trackLength = ""
+    @Published public private(set) var divisionScheme = "standard"
+    @Published public private(set) var isSwitchingScheme = false
     @Published public var baseEntryFee = ""
     @Published public var additionalRaceFee = ""
     @Published public var maxRegistrationFee = ""
@@ -62,6 +64,7 @@ public final class PadMeetSettingsViewModel: ObservableObject {
             customRinkName = s.customRinkName
             lanes = String(s.lanes)
             trackLength = String(s.trackLength)
+            divisionScheme = s.divisionScheme
             originalLanes = s.lanes
             originalTrack = s.trackLength
             if rinks.isEmpty { rinks = (try? await api.rinks()) ?? [] }
@@ -78,6 +81,26 @@ public final class PadMeetSettingsViewModel: ObservableObject {
     }
 
     public var canSave: Bool { !meetName.trimmingCharacters(in: .whitespaces).isEmpty }
+
+    /// Switch the division scheme (standard | usars | mssl). This re-applies the
+    /// scheme's full division template and rebuilds races, so the caller confirms
+    /// first. Reloads afterward so the editor shows the new scheme.
+    public func switchScheme(meetID: String, to scheme: String) async {
+        guard !isSwitchingScheme, scheme != divisionScheme else { return }
+        isSwitchingScheme = true
+        defer { isSwitchingScheme = false }
+        savedFlash = false
+        rebuildFlash = false
+        do {
+            try await api.setDivisionScheme(meetID: meetID, scheme: scheme)
+            await load(meetID: meetID)
+            errorMessage = nil
+            savedFlash = true
+            rebuildFlash = true   // a scheme switch always rebuilds races
+        } catch {
+            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+        }
+    }
 
     public func save(meetID: String) async {
         guard !isSaving, canSave else { return }
@@ -119,6 +142,7 @@ public final class PadMeetSettingsViewModel: ObservableObject {
             customRinkName = s.customRinkName
             lanes = String(s.lanes)
             trackLength = String(s.trackLength)
+            divisionScheme = s.divisionScheme
             originalLanes = s.lanes
             originalTrack = s.trackLength
             rebuildFlash = (r.racesRebuilt == true)

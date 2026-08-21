@@ -817,6 +817,14 @@ public final class APIClient {
         return r.rinks
     }
 
+    /// Apply a division scheme (standard | usars | mssl). Reuses the website's
+    /// endpoint, which re-applies the scheme template and rebuilds races.
+    public func setDivisionScheme(meetID: String, scheme: String) async throws {
+        _ = try await portalRedirectPost("/portal/meet/\(meetID)/division-scheme",
+                                         formFields: [("scheme", scheme)],
+                                         expectedRedirectPrefix: "/portal/meet/")
+    }
+
     /// Partial save — send only the fields to change; the server touches only
     /// keys present in the body. Returns the full response so the caller can see
     /// `racesRebuilt` (true when a lanes/track change rebuilt race assignments).
