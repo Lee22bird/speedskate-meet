@@ -16,6 +16,7 @@ struct PadMeetSettingsView: View {
                     ProgressView().frame(maxWidth: .infinity).padding(.top, 40)
                 } else {
                     basicsCard
+                    venueCard
                     feesCard
                     actionBar
                 }
@@ -52,6 +53,43 @@ struct PadMeetSettingsView: View {
                     field("End date (optional)") { textInput($vm.endDate, placeholder: "YYYY-MM-DD", keyboard: .numbersAndPunctuation) }
                 }
                 field("Start time") { textInput($vm.startTime, placeholder: "e.g. 9:00 AM") }
+            }
+        }
+    }
+
+    private var venueCard: some View {
+        SSMCard {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("VENUE & REGISTRATION").font(.ssmRounded(12, weight: .heavy)).foregroundStyle(SSMTheme.muted)
+                field("Rink") {
+                    Menu {
+                        ForEach(vm.rinks) { r in
+                            Button(r.label.isEmpty ? "Rink #\(r.id)" : r.label) { vm.selectRink(r) }
+                        }
+                        if !vm.rinks.isEmpty { Divider() }
+                        Button("Clear venue", role: .destructive) { vm.rinkId = 0; vm.customRinkName = "" }
+                    } label: {
+                        HStack {
+                            Text(vm.currentRinkLabel)
+                                .font(.ssmRounded(15, weight: .semibold))
+                                .foregroundStyle(vm.currentRinkLabel == "No venue set" ? SSMTheme.muted : SSMTheme.textPrimary)
+                                .lineLimit(1)
+                            Spacer()
+                            Image(systemName: "chevron.up.chevron.down").font(.caption).foregroundStyle(SSMTheme.muted)
+                        }
+                        .padding(12)
+                        .background(SSMTheme.cardBackgroundLight, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                }
+                field("Or type a custom venue") {
+                    textInput(Binding(get: { vm.customRinkName },
+                                      set: { vm.customRinkName = $0; if !$0.isEmpty { vm.rinkId = 0 } }),
+                              placeholder: "e.g. Community Ice Center")
+                }
+                HStack(spacing: 12) {
+                    field("Registration closes") { textInput($vm.registrationCloseDate, placeholder: "YYYY-MM-DD", keyboard: .numbersAndPunctuation) }
+                    field("Close time") { textInput($vm.registrationCloseTime, placeholder: "HH:MM (24h)", keyboard: .numbersAndPunctuation) }
+                }
             }
         }
     }

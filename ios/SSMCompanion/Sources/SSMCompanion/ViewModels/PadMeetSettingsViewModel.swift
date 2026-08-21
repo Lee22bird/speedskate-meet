@@ -10,6 +10,11 @@ public final class PadMeetSettingsViewModel: ObservableObject {
     @Published public var date = ""
     @Published public var endDate = ""
     @Published public var startTime = ""
+    @Published public var registrationCloseDate = ""
+    @Published public var registrationCloseTime = ""
+    @Published public var rinkId = 0
+    @Published public var customRinkName = ""
+    @Published public private(set) var rinks: [Rink] = []
     @Published public var baseEntryFee = ""
     @Published public var additionalRaceFee = ""
     @Published public var maxRegistrationFee = ""
@@ -39,6 +44,11 @@ public final class PadMeetSettingsViewModel: ObservableObject {
             date = s.date
             endDate = s.endDate
             startTime = s.startTime
+            registrationCloseDate = s.registrationCloseDate
+            registrationCloseTime = s.registrationCloseTime
+            rinkId = s.rinkId
+            customRinkName = s.customRinkName
+            if rinks.isEmpty { rinks = (try? await api.rinks()) ?? [] }
             baseEntryFee = money(s.baseEntryFee)
             additionalRaceFee = money(s.additionalRaceFee)
             maxRegistrationFee = money(s.maxRegistrationFee)
@@ -64,7 +74,16 @@ public final class PadMeetSettingsViewModel: ObservableObject {
             "date": date.trimmingCharacters(in: .whitespaces),
             "endDate": endDate.trimmingCharacters(in: .whitespaces),
             "startTime": startTime.trimmingCharacters(in: .whitespaces),
+            // Always send the close date so clearing it clears the window.
+            "registrationCloseDate": registrationCloseDate.trimmingCharacters(in: .whitespaces),
+            "registrationCloseTime": registrationCloseTime.trimmingCharacters(in: .whitespaces),
         ]
+        // Venue: a picked rink wins; otherwise a free-text name.
+        if rinkId > 0 {
+            fields["rinkId"] = rinkId
+        } else {
+            fields["customRinkName"] = customRinkName.trimmingCharacters(in: .whitespaces)
+        }
         // Money/number fields: send only when non-empty and valid, so a blank box
         // never posts a stray value.
         addNumber(&fields, "baseEntryFee", baseEntryFee)
@@ -74,6 +93,10 @@ public final class PadMeetSettingsViewModel: ObservableObject {
         addNumber(&fields, "protestDeadlineMinutes", protestDeadlineMinutes)
         do {
             let s = try await api.saveMeetSettings(meetID: meetID, fields: fields)
+            registrationCloseDate = s.registrationCloseDate
+            registrationCloseTime = s.registrationCloseTime
+            rinkId = s.rinkId
+            customRinkName = s.customRinkName
             baseEntryFee = money(s.baseEntryFee)
             additionalRaceFee = money(s.additionalRaceFee)
             maxRegistrationFee = money(s.maxRegistrationFee)
@@ -86,6 +109,16 @@ public final class PadMeetSettingsViewModel: ObservableObject {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
     }
+
+    /// The venue shown on the picker button — a chosen rink's label, else the
+    /// custom name, else a placeholder.
+    public var currentRinkLabel: String {
+        if rinkId > 0, let r = rinks.first(where: { $0.id == rinkId }) { return r.label }
+        let c = customRinkName.trimmingCharacters(in: .whitespaces)
+        return c.isEmpty ? "No venue set" : c
+    }
+
+    public func selectRink(_ r: Rink) { rinkId = r.id; customRinkName = "" }
 
     private func addNumber(_ fields: inout [String: Any], _ key: String, _ raw: String) {
         let t = raw.trimmingCharacters(in: .whitespaces)

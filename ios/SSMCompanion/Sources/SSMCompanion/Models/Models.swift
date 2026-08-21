@@ -533,6 +533,11 @@ public struct MeetSettings: Decodable {
     public let date: String
     public let endDate: String
     public let startTime: String
+    public let registrationCloseDate: String
+    public let registrationCloseTime: String
+    public let rinkId: Int
+    public let rinkLabel: String
+    public let customRinkName: String
     public let baseEntryFee: Double
     public let additionalRaceFee: Double
     public let maxRegistrationFee: Double
@@ -543,6 +548,19 @@ public struct MeetSettings: Decodable {
 public struct MeetSettingsResponse: Decodable {
     public let ok: Bool
     public let settings: MeetSettings
+}
+
+public struct Rink: Decodable, Identifiable, Hashable {
+    public let id: Int
+    public let name: String
+    public let city: String
+    public let state: String
+    public let label: String
+}
+
+public struct RinksResponse: Decodable {
+    public let ok: Bool
+    public let rinks: [Rink]
 }
 
 public struct RelayGenerateResponse: Decodable {

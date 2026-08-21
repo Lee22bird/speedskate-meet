@@ -794,10 +794,16 @@ public final class APIClient {
         try await postJSONObject("/api/v1/meets/\(meetID)/relay-builder/generate", body: [:])
     }
 
-    // ── Meet settings (director, phase-1 editor) ──────────────────────────
+    // ── Meet settings (director, phase-1/2 editor) ────────────────────────
     public func meetSettings(meetID: String) async throws -> MeetSettings {
         let r: MeetSettingsResponse = try await request("/api/v1/meets/\(meetID)/settings")
         return r.settings
+    }
+
+    /// Rinks for the venue picker.
+    public func rinks() async throws -> [Rink] {
+        let r: RinksResponse = try await request("/api/v1/rinks")
+        return r.rinks
     }
 
     /// Partial save — send only the fields to change; the server touches only

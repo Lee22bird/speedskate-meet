@@ -5,6 +5,7 @@ const {
 } = require('../utils/auth');
 const {
   isPublicMeet, meetRinkLabel, meetDateLabel, getMeetOr404, coachTeamRegistrations,
+  combineDateTime,
 } = require('../services/meetHelpers');
 const {
   orderedRaces, currentRaceInfo, raceDayProgress, laneRowsForRace,
@@ -791,12 +792,21 @@ module.exports = function createMobileApiRoutes(deps = {}) {
   // the body and never regenerates races. Scope: identity + fees + protest. Lanes,
   // track, division scheme, publish, rink, and registration window are deliberately
   // NOT here (they rebuild races / change public state) — later phases.
-  function meetSettingsJson(meet) {
+  function meetSettingsJson(meet, db) {
+    // registrationCloseAt is "YYYY-MM-DDTHH:MM:00" (combineDateTime) — split it
+    // back for the editor.
+    const closeAt = String(meet.registrationCloseAt || '');
+    const [closeDate, closeTimeRaw] = closeAt.includes('T') ? closeAt.split('T') : [closeAt, ''];
     return {
       meetName: meet.meetName || '',
       date: meet.date || '',
       endDate: meet.endDate || '',
       startTime: meet.startTime || '',
+      registrationCloseDate: closeDate || '',
+      registrationCloseTime: (closeTimeRaw || '').slice(0, 5),
+      rinkId: Number(meet.rinkId || 0),
+      rinkLabel: meetRinkLabel(db, meet) || '',
+      customRinkName: meet.customRinkName || '',
       baseEntryFee: Number(meet.baseEntryFee || 0),
       additionalRaceFee: Number(meet.additionalRaceFee || 0),
       maxRegistrationFee: Number(meet.maxRegistrationFee || 0),
@@ -805,13 +815,27 @@ module.exports = function createMobileApiRoutes(deps = {}) {
     };
   }
 
+  // Rinks list for the venue picker.
+  router.get('/api/v1/rinks', (req, res) => {
+    const data = getSessionUser(req);
+    if (!data) return res.status(401).json({ ok:false, error:'Not logged in.' });
+    const rinks = (data.db.rinks || []).map(r => ({
+      id: Number(r.id),
+      name: r.name || '',
+      city: r.city || '',
+      state: r.state || '',
+      label: [r.name, r.city, r.state].filter(Boolean).join(' • '),
+    }));
+    res.json({ ok:true, rinks });
+  });
+
   router.get('/api/v1/meets/:meetId/settings', (req, res) => {
     const data = getSessionUser(req);
     if (!data) return res.status(401).json({ ok:false, error:'Not logged in.' });
     const meet = getMeetOr404(data.db, req.params.meetId);
     if (!meet) return res.status(404).json({ ok:false, error:'Meet not found.' });
     if (!canEditMeet(data.user, meet)) return res.status(403).json({ ok:false, error:'Only a meet director can edit settings.' });
-    res.json({ ok:true, settings: meetSettingsJson(meet) });
+    res.json({ ok:true, settings: meetSettingsJson(meet, data.db) });
   });
 
   router.post('/api/v1/meets/:meetId/settings', (req, res) => {
@@ -834,9 +858,22 @@ module.exports = function createMobileApiRoutes(deps = {}) {
         if (Number.isFinite(n) && n >= 0) meet[key] = n;
       }
     }
+    // Registration window — recombine only when the form sent the date field
+    // (an empty date clears the window, matching the website).
+    if (Object.prototype.hasOwnProperty.call(b, 'registrationCloseDate')) {
+      meet.registrationCloseAt = combineDateTime(b.registrationCloseDate, b.registrationCloseTime);
+    }
+    // Venue: a chosen rink id wins (and clears any custom name); otherwise a
+    // custom name is stored as free text. Mirrors saveMeetIdentityFields.
+    if (b.rinkId !== undefined && Number(b.rinkId) > 0) {
+      meet.rinkId = Number(b.rinkId);
+      meet.customRinkName = '';
+    } else if (typeof b.customRinkName === 'string' && Object.prototype.hasOwnProperty.call(b, 'customRinkName')) {
+      meet.customRinkName = b.customRinkName.trim();
+    }
     meet.updatedAt = new Date().toISOString();
     saveDb(data.db);
-    res.json({ ok:true, settings: meetSettingsJson(meet) });
+    res.json({ ok:true, settings: meetSettingsJson(meet, data.db) });
   });
 
   return router;
