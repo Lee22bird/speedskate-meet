@@ -411,6 +411,9 @@ struct PadDetailRouter: View {
             case .quadBuilder:
                 PadSpecialGroupsView(meetID: meetID, kind: "quad")
                     .id(meetID)
+            case .staff:
+                PadStaffView(meetID: meetID)
+                    .id(meetID)
             case .blockBuilder:
                 // .id(meetID) tears the view (and its @StateObject) down
                 // the instant the sidebar switches meets — otherwise the

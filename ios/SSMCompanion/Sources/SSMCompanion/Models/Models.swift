@@ -599,6 +599,67 @@ public struct Rink: Decodable, Identifiable, Hashable {
     public let label: String
 }
 
+/// A person currently assigned to a staff role on a meet.
+public struct StaffAssignment: Decodable, Identifiable {
+    public let id: String
+    public let name: String
+    public let sslId: String
+    public let userId: String
+    public let avatarUrl: String
+    public let assignedAt: String
+}
+
+public struct StaffRoleRow: Decodable, Identifiable {
+    public let key: String
+    public let label: String
+    public let assignments: [StaffAssignment]
+    public var id: String { key }
+}
+
+public struct StaffResponse: Decodable {
+    public let ok: Bool
+    public let roles: [StaffRoleRow]
+}
+
+/// A search hit from SSL's staff directory. SSL returns `staff_*` keys (the
+/// server matches on those), but name/avatar have several aliases in the wild,
+/// so decode defensively.
+public struct StaffSearchPerson: Decodable, Identifiable, Hashable {
+    public let sslId: String
+    public let userId: String
+    public let name: String
+    public let avatarUrl: String
+    public var id: String { sslId.isEmpty ? userId : sslId }
+
+    private enum CodingKeys: String, CodingKey {
+        case staff_ssl_id, ssl_id, ssl_skater_id
+        case staff_user_id, user_id, id
+        case staff_name, name, full_name, displayName
+        case staff_avatar_url, avatar_url, profile_photo_url
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        func str(_ keys: [CodingKeys]) -> String {
+            for k in keys {
+                if let v = try? c.decodeIfPresent(String.self, forKey: k), !v.isEmpty { return v }
+                if let n = try? c.decodeIfPresent(Int.self, forKey: k) { return String(n) }
+            }
+            return ""
+        }
+        sslId = str([.staff_ssl_id, .ssl_id, .ssl_skater_id])
+        userId = str([.staff_user_id, .user_id, .id])
+        name = str([.staff_name, .name, .full_name, .displayName])
+        avatarUrl = str([.staff_avatar_url, .avatar_url, .profile_photo_url])
+    }
+}
+
+public struct StaffSearchResponse: Decodable {
+    public let ok: Bool
+    public let people: [StaffSearchPerson]
+    public let error: String?
+}
+
 /// One Open or Quad race group. Open groups carry a single `distance` and an
 /// editable age range; Quad groups carry a POSITIONAL `distances` array
 /// (slot = race day) with a fixed age range.

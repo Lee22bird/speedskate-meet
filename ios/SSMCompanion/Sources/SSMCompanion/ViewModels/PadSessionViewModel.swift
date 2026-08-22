@@ -9,6 +9,7 @@ public enum PadSection: String, CaseIterable, Identifiable {
     case relayTemplates
     case openBuilder
     case quadBuilder
+    case staff
     case blockBuilder
     case relayBuilder
     case registered
@@ -31,6 +32,7 @@ public enum PadSection: String, CaseIterable, Identifiable {
         case .relayTemplates: return "Relays"
         case .openBuilder: return "Open Races"
         case .quadBuilder: return "Quad Races"
+        case .staff: return "Staff"
         case .blockBuilder: return "Block Builder"
         case .relayBuilder: return "Relay Builder"
         case .registered: return "Registered"
@@ -53,6 +55,7 @@ public enum PadSection: String, CaseIterable, Identifiable {
         case .relayTemplates: return "figure.run"
         case .openBuilder: return "flag.2.crossed"
         case .quadBuilder: return "circle.grid.2x2"
+        case .staff: return "person.2.badge.gearshape"
         case .blockBuilder: return "square.stack.3d.up"
         case .relayBuilder: return "person.3.fill"
         case .registered: return "person.text.rectangle"
@@ -81,6 +84,7 @@ public enum PadSection: String, CaseIterable, Identifiable {
         case .divisions: return role == .director
         case .relayTemplates: return role == .director
         case .openBuilder, .quadBuilder: return role == .director
+        case .staff: return role == .director
         case .blockBuilder, .relayBuilder, .registered, .checkIn: return role == .director || canBuildBlocks
         case .tabulator: return role == .director || role == .tabulator
         // Officials inbox = judge (tabulator) + meet_director (director), the

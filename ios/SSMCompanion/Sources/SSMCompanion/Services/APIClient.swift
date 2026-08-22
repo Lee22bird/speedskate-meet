@@ -916,6 +916,56 @@ public final class APIClient {
         try await postJSONObject("/api/v1/meets/\(meetID)/settings", body: fields)
     }
 
+    // ── Staff assignments (director) ──────────────────────────────────────
+    /// Who is currently assigned, by role (additive JSON read).
+    public func staffAssignments(meetID: String) async throws -> [StaffRoleRow] {
+        let r: StaffResponse = try await request("/api/v1/meets/\(meetID)/staff")
+        return r.roles
+    }
+
+    /// Search SSL's approved staff directory for a role. This is the website's
+    /// own proxy endpoint — searching needs the live SSL server, so it can fail
+    /// independently of everything else in the app.
+    public func staffSearch(meetID: String, role: String, query: String) async throws -> [StaffSearchPerson] {
+        var c = URLComponents(string: "/api/meet/\(meetID)/staff-search")!
+        c.queryItems = [URLQueryItem(name: "role", value: role), URLQueryItem(name: "q", value: query)]
+        let r: StaffSearchResponse = try await request(c.string ?? "")
+        return r.people
+    }
+
+    /// Assign a person to a role. Posts to the website's endpoint, which
+    /// RE-VERIFIES the person against SSL before saving — that trust check is
+    /// deliberately not reimplemented here. Its failure answer is a redirect
+    /// carrying ?error=, so surface that as a real message.
+    public func assignStaff(meetID: String, role: String, person: StaffSearchPerson) async throws {
+        let location = try await portalRedirectPost(
+            "/portal/meet/\(meetID)/staff/assign",
+            formFields: [("staff_role", role),
+                         ("staff_ssl_id", person.sslId),
+                         ("staff_user_id", person.userId),
+                         ("staff_name", person.name),
+                         ("staff_avatar_url", person.avatarUrl)],
+            expectedRedirectPrefix: "/portal/meet/\(meetID)/")
+        try Self.throwIfRedirectCarriesError(location)
+    }
+
+    public func removeStaff(meetID: String, role: String, assignmentID: String) async throws {
+        let location = try await portalRedirectPost(
+            "/portal/meet/\(meetID)/staff/remove",
+            formFields: [("staff_role", role), ("staff_assignment_id", assignmentID)],
+            expectedRedirectPrefix: "/portal/meet/\(meetID)/")
+        try Self.throwIfRedirectCarriesError(location)
+    }
+
+    /// These portal endpoints signal failure by redirecting back with ?error=…
+    /// rather than a status code, so a 302 alone doesn't mean success.
+    private static func throwIfRedirectCarriesError(_ location: String) throws {
+        guard let q = URLComponents(string: location)?.queryItems,
+              let err = q.first(where: { $0.name == "error" })?.value,
+              !err.isEmpty else { return }
+        throw APIError.server(err)
+    }
+
     // ── Open / Quad builders (director) ───────────────────────────────────
     /// `kind` is "open" or "quad".
     public func specialGroups(meetID: String, kind: String) async throws -> SpecialGroupsResponse {

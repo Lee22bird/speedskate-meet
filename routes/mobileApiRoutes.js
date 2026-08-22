@@ -15,7 +15,7 @@ const {
 const {
   computeMeetStandings, computeQuadStandings, computeOpenResults,
 } = require('../services/standings');
-const { staffAssignmentsForMeet } = require('../services/staffAssignments');
+const { staffAssignmentsForMeet, STAFF_ROLES } = require('../services/staffAssignments');
 const {
   relayDivisionsForRuleset, RELAY_DIVISION_BY_ID, eligibleForRelayDivision,
 } = require('../services/relayDivisions');
@@ -1003,6 +1003,36 @@ module.exports = function createMobileApiRoutes(deps = {}) {
     meet.updatedAt = new Date().toISOString();
     saveDb(data.db);
     res.json({ ok:true, settings: meetSettingsJson(meet, data.db), racesRebuilt });
+  });
+
+  // ── Director: staff assignments (read) ────────────────────────────────────
+  // Read-only twin of the website's staff manager. Searching and assigning stay
+  // on the website's own endpoints (/api/meet/:id/staff-search and
+  // /portal/meet/:id/staff/{assign,remove}) because the assign path re-verifies
+  // the chosen person against SSL — that trust check is not duplicated here.
+  router.get('/api/v1/meets/:meetId/staff', (req, res) => {
+    const data = getSessionUser(req);
+    if (!data) return res.status(401).json({ ok:false, error:'Not logged in.' });
+    const meet = getMeetOr404(data.db, req.params.meetId);
+    if (!meet) return res.status(404).json({ ok:false, error:'Meet not found.' });
+    if (!canEditMeet(data.user, meet)) return res.status(403).json({ ok:false, error:'Only a meet director can manage staff.' });
+
+    const rows = staffAssignmentsForMeet(meet);
+    res.json({
+      ok: true,
+      roles: rows.map(r => ({
+        key: String(r.key),
+        label: String(r.label),
+        assignments: (r.assignments || []).map(a => ({
+          id: String(a.id || ''),
+          name: String(a.staff_name || ''),
+          sslId: String(a.staff_ssl_id || ''),
+          userId: String(a.staff_user_id || ''),
+          avatarUrl: String(a.staff_avatar_url || ''),
+          assignedAt: String(a.created_at || ''),
+        })),
+      })),
+    });
   });
 
   // ── Director: Open + Quad builders ────────────────────────────────────────
