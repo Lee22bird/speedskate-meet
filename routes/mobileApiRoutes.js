@@ -21,6 +21,9 @@ const {
 } = require('../services/relayDivisions');
 const { buildRelayRacesFromTeams } = require('../services/relayGenerator');
 const { rebuildRaceAssignmentsSafe } = require('../services/ttHelpers');
+const { makeSetupPresetFromMeet } = require('../services/meetHelpers');
+const { applySetupPresetToMeet } = require('../services/setupPresets');
+const { generatePinForMeet, clearPinForMeet } = require('../services/desktopMeetPinService');
 const { createBackup: createDesktopBackup } = require('../services/desktopBackupService');
 const { normalizeTimeTrialSettings, ensureTimeTrialEvent } = require('../services/timeTrialEvents');
 const {
@@ -1003,6 +1006,97 @@ module.exports = function createMobileApiRoutes(deps = {}) {
     meet.updatedAt = new Date().toISOString();
     saveDb(data.db);
     res.json({ ok:true, settings: meetSettingsJson(meet, data.db), racesRebuilt });
+  });
+
+  // ── Director: setup presets (reusable racing setup) ───────────────────────
+  // Presets are GLOBAL templates shared across meets. Saving snapshots this
+  // meet's racing setup; loading applies one via the same shared service the
+  // website's Meet Builder uses (services/setupPresets.js) — identity (name,
+  // dates, venue, status) is never touched, and neither are registrations.
+  router.get('/api/v1/meets/:meetId/presets', (req, res) => {
+    const data = getSessionUser(req);
+    if (!data) return res.status(401).json({ ok:false, error:'Not logged in.' });
+    const meet = getMeetOr404(data.db, req.params.meetId);
+    if (!meet) return res.status(404).json({ ok:false, error:'Meet not found.' });
+    if (!canEditMeet(data.user, meet)) return res.status(403).json({ ok:false, error:'Only a meet director can use setup presets.' });
+    const presets = (data.db.setupPresets || []).map(p => ({
+      id: String(p.id),
+      name: String(p.name || 'Untitled preset'),
+      scheme: String(p.divisionScheme || ''),
+      createdAt: String(p.createdAt || p.created_at || ''),
+    }));
+    res.json({ ok:true, presets });
+  });
+
+  router.post('/api/v1/meets/:meetId/presets/save', (req, res) => {
+    const data = getSessionUser(req);
+    if (!data) return res.status(401).json({ ok:false, error:'Not logged in.' });
+    const meet = getMeetOr404(data.db, req.params.meetId);
+    if (!meet) return res.status(404).json({ ok:false, error:'Meet not found.' });
+    if (!canEditMeet(data.user, meet)) return res.status(403).json({ ok:false, error:'Only a meet director can use setup presets.' });
+    const name = String(req.body.name || '').trim();
+    if (!name) return res.status(400).json({ ok:false, error:'Give the preset a name.' });
+    if (!Array.isArray(data.db.setupPresets)) data.db.setupPresets = [];
+    // Snapshots the meet AS SAVED — the app's settings/divisions endpoints have
+    // already persisted anything the director changed, so there is no form to
+    // flush first (unlike the website's button).
+    const preset = makeSetupPresetFromMeet(data.db, meet, name, data.user.id);
+    data.db.setupPresets.push(preset);
+    saveDb(data.db);
+    res.json({ ok:true, presetId: String(preset.id), name: String(preset.name || name) });
+  });
+
+  router.post('/api/v1/meets/:meetId/presets/load', (req, res) => {
+    const data = getSessionUser(req);
+    if (!data) return res.status(401).json({ ok:false, error:'Not logged in.' });
+    const meet = getMeetOr404(data.db, req.params.meetId);
+    if (!meet) return res.status(404).json({ ok:false, error:'Meet not found.' });
+    if (!canEditMeet(data.user, meet)) return res.status(403).json({ ok:false, error:'Only a meet director can use setup presets.' });
+    const preset = (data.db.setupPresets || []).find(p => String(p.id) === String(req.body.presetId || ''));
+    if (!preset) return res.status(404).json({ ok:false, error:'Setup preset not found.' });
+    // Loading replaces the racing setup and regenerates races — same refusal as
+    // every other regenerating edit once results exist.
+    if (racingHasStarted(meet)) {
+      return res.status(409).json({ ok:false, error:'Races have already been scored — loading a setup preset is locked once racing starts.' });
+    }
+    applySetupPresetToMeet(meet, preset, { onBeforeRegen: () => backupBeforeRegen(data.db, meet.id) });
+    saveDb(data.db);
+    res.json({ ok:true, name: String(preset.name || ''), raceCount: (meet.races || []).length });
+  });
+
+  // ── Director: desktop meet PIN ────────────────────────────────────────────
+  // The website's generate endpoint answers with an HTML page showing the PIN,
+  // so the app needs its own JSON twin. The PIN itself is only ever returned
+  // here at generation time — only its hash is stored.
+  router.get('/api/v1/meets/:meetId/desktop-pin', (req, res) => {
+    const data = getSessionUser(req);
+    if (!data) return res.status(401).json({ ok:false, error:'Not logged in.' });
+    const meet = getMeetOr404(data.db, req.params.meetId);
+    if (!meet) return res.status(404).json({ ok:false, error:'Meet not found.' });
+    if (!canEditMeet(data.user, meet)) return res.status(403).json({ ok:false, error:'Only a meet director can manage the desktop PIN.' });
+    res.json({
+      ok: true,
+      hasPin: !!String(meet.desktop_pin_hash || '').trim(),
+      createdAt: String(meet.desktop_pin_created_at || ''),
+      expiresAt: String(meet.desktop_pin_expires_at || ''),
+    });
+  });
+
+  router.post('/api/v1/meets/:meetId/desktop-pin', (req, res) => {
+    const data = getSessionUser(req);
+    if (!data) return res.status(401).json({ ok:false, error:'Not logged in.' });
+    const meet = getMeetOr404(data.db, req.params.meetId);
+    if (!meet) return res.status(404).json({ ok:false, error:'Meet not found.' });
+    if (!canEditMeet(data.user, meet)) return res.status(403).json({ ok:false, error:'Only a meet director can manage the desktop PIN.' });
+    const action = String(req.body.action || 'generate').toLowerCase();
+    if (action === 'clear') {
+      clearPinForMeet(meet);
+      saveDb(data.db);
+      return res.json({ ok:true, hasPin:false, pin:null, expiresAt:'' });
+    }
+    const result = generatePinForMeet(meet);
+    saveDb(data.db);
+    res.json({ ok:true, hasPin:true, pin: String(result.pin), expiresAt: String(result.expiresAt || '') });
   });
 
   // ── Director: staff assignments (read) ────────────────────────────────────

@@ -916,6 +916,48 @@ public final class APIClient {
         try await postJSONObject("/api/v1/meets/\(meetID)/settings", body: fields)
     }
 
+    // ── Setup presets (director) ──────────────────────────────────────────
+    public func setupPresets(meetID: String) async throws -> [SetupPreset] {
+        let r: PresetsResponse = try await request("/api/v1/meets/\(meetID)/presets")
+        return r.presets
+    }
+
+    @discardableResult
+    public func saveSetupPreset(meetID: String, name: String) async throws -> PresetSaveResponse {
+        try await postJSONObject("/api/v1/meets/\(meetID)/presets/save", body: ["name": name])
+    }
+
+    /// Replaces this meet's racing setup with the preset's and regenerates
+    /// races. Never touches the meet's name, dates, venue, or registrations.
+    @discardableResult
+    public func loadSetupPreset(meetID: String, presetID: String) async throws -> PresetLoadResponse {
+        try await postJSONObject("/api/v1/meets/\(meetID)/presets/load", body: ["presetId": presetID])
+    }
+
+    // ── Desktop meet PIN (director) ───────────────────────────────────────
+    public func desktopPinStatus(meetID: String) async throws -> DesktopPinResponse {
+        try await request("/api/v1/meets/\(meetID)/desktop-pin")
+    }
+
+    @discardableResult
+    public func setDesktopPin(meetID: String, action: String) async throws -> DesktopPinResponse {
+        try await postJSONObject("/api/v1/meets/\(meetID)/desktop-pin", body: ["action": action])
+    }
+
+    // ── Send results to SSL (director) ────────────────────────────────────
+    /// Pushes official results to skaters' SSL career profiles. Uses the
+    /// website's own endpoint (it builds and posts the results package); its
+    /// answer is a redirect carrying ?ok= or ?error=.
+    @discardableResult
+    public func sendResultsToSSL(meetID: String) async throws -> String {
+        let location = try await portalRedirectPost("/portal/meet/\(meetID)/results/send-to-ssl",
+                                                    expectedRedirectPrefix: "/portal/meet/\(meetID)/")
+        try Self.throwIfRedirectCarriesError(location)
+        if let q = URLComponents(string: location)?.queryItems,
+           let ok = q.first(where: { $0.name == "ok" })?.value, !ok.isEmpty { return ok }
+        return "Results sent to SSL."
+    }
+
     // ── Staff assignments (director) ──────────────────────────────────────
     /// Who is currently assigned, by role (additive JSON read).
     public func staffAssignments(meetID: String) async throws -> [StaffRoleRow] {

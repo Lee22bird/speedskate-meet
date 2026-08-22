@@ -48,6 +48,17 @@ public final class PadMeetSettingsViewModel: ObservableObject {
     private var originalTTCounts = false
     @Published public var schemeFlash: String?
 
+    // Setup presets + desktop PIN live on this screen too (both are meet setup).
+    @Published public private(set) var presets: [SetupPreset] = []
+    @Published public var newPresetName = ""
+    @Published public private(set) var isPresetWorking = false
+    @Published public var presetFlash: String?
+    @Published public var presetError: String?
+    @Published public private(set) var hasDesktopPin = false
+    @Published public private(set) var desktopPinExpiresAt = ""
+    /// Only populated right after generating — the server stores a hash only.
+    @Published public var freshPin: String?
+
     private let api: APIClient
     public init(api: APIClient = .shared) { self.api = api }
 
@@ -96,6 +107,11 @@ public final class PadMeetSettingsViewModel: ObservableObject {
             originalTTDistance = s.ttDistance
             originalTTCounts = s.ttCountsForOverall
             if rinks.isEmpty { rinks = (try? await api.rinks()) ?? [] }
+            presets = (try? await api.setupPresets(meetID: meetID)) ?? presets
+            if let pin = try? await api.desktopPinStatus(meetID: meetID) {
+                hasDesktopPin = pin.hasPin
+                desktopPinExpiresAt = pin.expiresAt ?? ""
+            }
             baseEntryFee = money(s.baseEntryFee)
             additionalRaceFee = money(s.additionalRaceFee)
             maxRegistrationFee = money(s.maxRegistrationFee)
@@ -210,6 +226,70 @@ public final class PadMeetSettingsViewModel: ObservableObject {
             savedFlash = true
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
+    // MARK: Setup presets
+
+    public func savePreset(meetID: String) async {
+        let name = newPresetName.trimmingCharacters(in: .whitespaces)
+        guard !isPresetWorking, !name.isEmpty else { return }
+        isPresetWorking = true
+        defer { isPresetWorking = false }
+        presetFlash = nil; presetError = nil
+        do {
+            let r = try await api.saveSetupPreset(meetID: meetID, name: name)
+            newPresetName = ""
+            presets = (try? await api.setupPresets(meetID: meetID)) ?? presets
+            presetFlash = "Saved “\(r.name)” — you can load it into any meet."
+        } catch {
+            presetError = (error as? APIError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
+    public func loadPreset(meetID: String, presetID: String) async {
+        guard !isPresetWorking else { return }
+        isPresetWorking = true
+        defer { isPresetWorking = false }
+        presetFlash = nil; presetError = nil
+        do {
+            let r = try await api.loadSetupPreset(meetID: meetID, presetID: presetID)
+            await load(meetID: meetID)   // the whole racing setup just changed
+            presetFlash = "Loaded “\(r.name)” — \(r.raceCount) race\(r.raceCount == 1 ? "" : "s") generated. Your meet name and dates are unchanged."
+        } catch {
+            presetError = (error as? APIError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
+    // MARK: Desktop PIN
+
+    public func generateDesktopPin(meetID: String) async {
+        guard !isPresetWorking else { return }
+        isPresetWorking = true
+        defer { isPresetWorking = false }
+        presetError = nil
+        do {
+            let r = try await api.setDesktopPin(meetID: meetID, action: "generate")
+            hasDesktopPin = r.hasPin
+            desktopPinExpiresAt = r.expiresAt ?? ""
+            freshPin = r.pin
+        } catch {
+            presetError = (error as? APIError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
+    public func clearDesktopPin(meetID: String) async {
+        guard !isPresetWorking else { return }
+        isPresetWorking = true
+        defer { isPresetWorking = false }
+        presetError = nil
+        do {
+            let r = try await api.setDesktopPin(meetID: meetID, action: "clear")
+            hasDesktopPin = r.hasPin
+            desktopPinExpiresAt = ""
+            freshPin = nil
+        } catch {
+            presetError = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
     }
 

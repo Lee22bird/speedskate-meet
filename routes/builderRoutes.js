@@ -28,6 +28,7 @@ const {
   rebuildRaceAssignmentsSafe,
 } = require('../services/ttHelpers');
 const { ensureTimeTrialEvent, normalizeTimeTrialSettings } = require('../services/timeTrialEvents');
+const { applySetupPresetToMeet } = require('../services/setupPresets');
 const { raceDisplayStage, ensureCurrentRace } = require('../services/raceDay');
 const { generatePinForMeet, clearPinForMeet } = require('../services/desktopMeetPinService');
 const { createBackup: createDesktopBackup } = require('../services/desktopBackupService');
@@ -230,92 +231,11 @@ router.post('/portal/meet/:meetId/setup-presets/load', requireRole('meet_directo
   // meet-specific details before applying the reusable racing setup so loading
   // a preset never erases the name, dates, venue, status, or notes.
   saveMeetIdentityFields(meet, req.body, req.db);
-  const loadAsMssl = preset.divisionScheme === 'mssl' || isMsslPresetName(preset.name);
-  meet.divisionScheme = loadAsMssl ? 'mssl' : (preset.divisionScheme || meet.divisionScheme || (meet.usarsDivisions ? 'usars' : 'standard'));
-  meet.usarsDivisions = meet.divisionScheme === 'usars';
-  meet.relayRuleset = loadAsMssl ? 'mssl' : (preset.relayRuleset || meet.relayRuleset || 'usars');
-
-  // Copy only allowed fields from preset into meet
-  meet.groups = JSON.parse(JSON.stringify(preset.groups || []));
-  meet.openGroups = JSON.parse(JSON.stringify(preset.openGroups || []));
-  meet.quadGroups = JSON.parse(JSON.stringify(preset.quadGroups || []));
-  meet.additionalGroups = JSON.parse(JSON.stringify(preset.additionalGroups || preset.additionalRaceGroups || preset.additionalRaces || preset.skateabilityGroups || []));
-  meet.additionalRaces = meet.additionalGroups.map(g => ({ ...g }));
-  meet.additionalRaceGroups = meet.additionalGroups.map(g => ({ ...g }));
-  meet.skateabilityGroups = meet.additionalGroups.map(g => ({ ...g }));
-  meet.tiebreaker = preset.tiebreaker || meet.tiebreaker;
-  meet.baseEntryFee = Number(preset.baseEntryFee || 0);
-  // Load new global pricing fields with migration from old per-group costs
-  if(preset.noviceEventFee !== undefined) {
-    meet.noviceEventFee = Number(preset.noviceEventFee || 0);
-  } else {
-    // Migration: extract from first group with novice cost
-    const oldCost = (preset.groups||[]).reduce((c,g)=>g.divisions?.novice?.cost||c,0);
-    meet.noviceEventFee = Number(oldCost || 0);
-  }
-  if(preset.eliteEventFee !== undefined) {
-    meet.eliteEventFee = Number(preset.eliteEventFee || 0);
-  } else {
-    // Migration: extract from first group with elite cost
-    const oldCost = (preset.groups||[]).reduce((c,g)=>g.divisions?.elite?.cost||c,0);
-    meet.eliteEventFee = Number(oldCost || 0);
-  }
-  meet.openEventFee = Number(preset.openEventFee || 0);
-  meet.quadEventFee = Number(preset.quadEventFee || 0);
-  meet.relayEventFee = Number(preset.relayEventFee || 0);
-  meet.timeTrialEventFee = Number(preset.timeTrialEventFee || 0);
-  meet.additionalRaceFee = Number(preset.additionalRaceFee || 0);
-  meet.maxRegistrationFee = Number(preset.maxRegistrationFee || 0);
-  meet.trackLength = preset.trackLength || meet.trackLength;
-  const presetLaneCount = Number(preset.lanes);
-  if (Number.isFinite(presetLaneCount) && presetLaneCount > 0) meet.lanes = presetLaneCount;
-  const presetTrackLength = Number(preset.trackLength);
-  if (Number.isFinite(presetTrackLength) && presetTrackLength > 0) meet.trackLength = presetTrackLength;
-  meet.timeTrialsEnabled = !!preset.timeTrialsEnabled;
-  meet.relayTemplates = JSON.parse(JSON.stringify(preset.relayTemplates || meet.relayTemplates || []));
-  const presetRelayRaces = Array.isArray(preset.relayRaces) ? JSON.parse(JSON.stringify(preset.relayRaces)) : [];
-  meet.relayEnabled = !!preset.relayEnabled || presetRelayRaces.length > 0;
-  meet.judgesPanelRequired = !!preset.judgesPanelRequired;
-
-  // Named legacy MSSL presets predate the dedicated ruleset and may contain
-  // Nationals quad/relay rows. Refresh their racing structure from the exact
-  // league-office template while retaining pricing and meet identity.
-  if (loadAsMssl) applyDivisionScheme(meet, 'mssl');
-
-  // Presets should restore the director's relay races too. Relay Builder creates
-  // actual race shells, so saving only relayEnabled was not enough for templates.
-  if (!loadAsMssl) {
-    meet.races = (meet.races || []).filter(r => !r.isRelayRace);
-    for (const relay of presetRelayRaces) {
-      relay.isRelayRace = true;
-      relay.division = relay.division || 'relay';
-      relay.status = relay.status || 'open';
-      relay.laneEntries = Array.isArray(relay.laneEntries) ? relay.laneEntries : [];
-      meet.races.push(relay);
-    }
-  }
-
-  // Presets should restore the director's block layout, not erase it.
-  // Rebuild race structure from the preset settings using the configured generator,
-  // then map saved block raceIds onto the current meet's race IDs wherever possible.
-  createDesktopBackupIfActive(req.db, 'before_race_generation', meet.id);
-  generateConfiguredRacesForMeet(meet);
-  rebuildRaceAssignmentsSafe(meet);
-  if (loadAsMssl) {
-    meet.blocks = generateScheduleBlocks(meet, { mode: 'replace', style: 'league' }).blocks;
-  } else {
-    restorePresetBlocksIntoMeet(preset, meet);
-  }
-
-  // Mirror Additionals into compatibility aliases for existing saved data.
-  meet.additionalGroups = makeAdditionalRaceSlots(meet.additionalGroups || meet.additionalRaceGroups || meet.additionalRaces || meet.skateabilityGroups);
-  meet.additionalRaces = meet.additionalGroups.map(g => ({ ...g }));
-  meet.additionalRaceGroups = meet.additionalGroups.map(g => ({ ...g }));
-  meet.skateabilityGroups = meet.additionalGroups.map(g => ({ ...g }));
-  // Preset pricing can change global fees, so refresh existing registration totals immediately.
-  ensureRegistrationTotalsAndNumbers(meet);
-  ensureCurrentRace(meet);
-  meet.updatedAt = nowIso();
+  // Racing setup lives in a shared service so this route and the app's additive
+  // preset endpoint can never drift apart.
+  applySetupPresetToMeet(meet, preset, {
+    onBeforeRegen: () => createDesktopBackupIfActive(req.db, 'before_race_generation', meet.id),
+  });
   saveDb(req.db);
   res.redirect(`/portal/meet/${meet.id}/builder?presetLoaded=1`);
 });

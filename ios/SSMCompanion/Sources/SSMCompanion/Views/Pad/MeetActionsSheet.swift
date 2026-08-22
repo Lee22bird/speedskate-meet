@@ -94,6 +94,13 @@ final class MeetActionsViewModel: ObservableObject {
         }
     }
 
+    func sendResultsToSSL() async {
+        await run {
+            let message = try await self.api.sendResultsToSSL(meetID: self.meetID)
+            self.statusFlash = message
+        }
+    }
+
     /// Fetch a score-sheets PDF and stage it as a shareable temp file.
     func fetchScoreSheets(scope: String, raceID: String? = nil, blockID: String? = nil) async {
         guard !isWorking else { return }
@@ -142,6 +149,7 @@ struct MeetActionsSheet: View {
     @State private var confirmFinalize = false
     @State private var confirmClone = false
     @State private var confirmArchive = false
+    @State private var confirmSendSSL = false
 
     var body: some View {
         NavigationStack {
@@ -159,6 +167,7 @@ struct MeetActionsSheet: View {
                     statusCard
                     lifecycleCard
                     randomizeCard
+                    sslCard
                     printCard
 
                     if let message = model.errorMessage {
@@ -273,6 +282,28 @@ struct MeetActionsSheet: View {
                 }
                 .disabled(model.isWorking)
             }
+        }
+    }
+
+    private var sslCard: some View {
+        SSMCard {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("🏅 SEND RESULTS TO SSL")
+                    .font(.ssmRounded(12, weight: .heavy)).foregroundStyle(SSMTheme.muted)
+                Text("Pushes this meet's official results to skaters' SpeedSkateLeague career profiles. Safe to send more than once.")
+                    .font(.ssmRounded(12, weight: .medium)).foregroundStyle(SSMTheme.muted)
+                Button { confirmSendSSL = true } label: {
+                    Label("Send Results to SSL", systemImage: "arrow.up.circle")
+                        .font(.ssmRounded(14, weight: .bold)).frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.ssmSoftPill)
+                .disabled(model.isWorking)
+            }
+        }
+        .confirmationDialog("Send results to SSL?", isPresented: $confirmSendSSL, titleVisibility: .visible) {
+            Button("Send Results") { Task { await model.sendResultsToSSL() } }
+        } message: {
+            Text("Sends official results from this meet to SSL career profiles. Needs an internet connection.")
         }
     }
 

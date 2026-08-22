@@ -599,6 +599,41 @@ public struct Rink: Decodable, Identifiable, Hashable {
     public let label: String
 }
 
+/// A saved, reusable racing setup (global template shared across meets).
+public struct SetupPreset: Decodable, Identifiable {
+    public let id: String
+    public let name: String
+    public let scheme: String
+    public let createdAt: String
+}
+
+public struct PresetsResponse: Decodable {
+    public let ok: Bool
+    public let presets: [SetupPreset]
+}
+
+public struct PresetSaveResponse: Decodable {
+    public let ok: Bool
+    public let presetId: String
+    public let name: String
+}
+
+public struct PresetLoadResponse: Decodable {
+    public let ok: Bool
+    public let name: String
+    public let raceCount: Int
+}
+
+/// Desktop meet PIN. `pin` is only ever returned at generation time — the
+/// server stores a hash, so it can never be read back.
+public struct DesktopPinResponse: Decodable {
+    public let ok: Bool
+    public let hasPin: Bool
+    public let pin: String?
+    public let createdAt: String?
+    public let expiresAt: String?
+}
+
 /// A person currently assigned to a staff role on a meet.
 public struct StaffAssignment: Decodable, Identifiable {
     public let id: String

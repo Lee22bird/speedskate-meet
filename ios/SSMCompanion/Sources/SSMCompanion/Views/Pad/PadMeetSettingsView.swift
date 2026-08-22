@@ -9,6 +9,7 @@ struct PadMeetSettingsView: View {
     @StateObject private var vm = PadMeetSettingsViewModel()
     @State private var confirmRebuild = false
     @State private var pendingScheme: String?
+    @State private var pendingPresetLoad: SetupPreset?
 
     var body: some View {
         ScrollView {
@@ -40,6 +41,8 @@ struct PadMeetSettingsView: View {
                     timeTrialsCard
                     divisionsCard
                     actionBar
+                    presetsCard
+                    desktopPinCard
                 }
             }
             .padding(24)
@@ -290,6 +293,103 @@ struct PadMeetSettingsView: View {
         await vm.save(meetID: meetID)
         if vm.savedFlash, !vm.meetName.isEmpty {
             session.selectedMeetName = vm.meetName
+        }
+    }
+
+    private var presetsCard: some View {
+        SSMCard {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("SETUP PRESETS").font(.ssmRounded(12, weight: .heavy)).foregroundStyle(SSMTheme.muted)
+                Text("Save this meet's racing setup — divisions, opens, quads, relays, fees, lanes — and reuse it next time. Loading one never changes a meet's name, dates, or registrations.")
+                    .font(.ssmRounded(12, weight: .medium)).foregroundStyle(SSMTheme.muted)
+                HStack(spacing: 10) {
+                    textInput($vm.newPresetName, placeholder: "Name this setup…")
+                    Button { Task { await vm.savePreset(meetID: meetID) } } label: {
+                        Label("Save", systemImage: "square.and.arrow.down").font(.ssmRounded(13, weight: .bold))
+                    }
+                    .buttonStyle(.ssmSoftPill)
+                    .disabled(vm.isPresetWorking || vm.newPresetName.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+                if !vm.presets.isEmpty {
+                    Divider().overlay(SSMTheme.cardBorder)
+                    ForEach(vm.presets) { preset in
+                        HStack(spacing: 10) {
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(preset.name)
+                                    .font(.ssmRounded(14, weight: .bold)).foregroundStyle(SSMTheme.textPrimary)
+                                if !preset.scheme.isEmpty {
+                                    Text(preset.scheme.uppercased()).font(.caption).foregroundStyle(SSMTheme.muted)
+                                }
+                            }
+                            Spacer()
+                            Button { pendingPresetLoad = preset } label: {
+                                Label("Load", systemImage: "tray.and.arrow.up").font(.ssmRounded(12, weight: .bold))
+                            }
+                            .buttonStyle(.ssmSoftPill)
+                            .disabled(vm.isPresetWorking)
+                        }
+                    }
+                }
+                if let flash = vm.presetFlash {
+                    Text("✓ \(flash)").font(.ssmRounded(13, weight: .bold)).foregroundStyle(SSMTheme.good)
+                }
+                if let err = vm.presetError {
+                    Text(err).font(.ssmRounded(13, weight: .semibold)).foregroundStyle(SSMTheme.danger)
+                }
+            }
+        }
+        .confirmationDialog("Load this setup?",
+                            isPresented: Binding(get: { pendingPresetLoad != nil },
+                                                 set: { if !$0 { pendingPresetLoad = nil } }),
+                            titleVisibility: .visible, presenting: pendingPresetLoad) { preset in
+            Button("Load & Rebuild Races", role: .destructive) {
+                Task { await vm.loadPreset(meetID: meetID, presetID: preset.id) }
+            }
+        } message: { _ in
+            Text("Replaces this meet's divisions, fees, and racing setup, then regenerates races. Your meet name, dates, venue, and registrations stay as they are.")
+        }
+    }
+
+    private var desktopPinCard: some View {
+        SSMCard {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text("DESKTOP PIN").font(.ssmRounded(12, weight: .heavy)).foregroundStyle(SSMTheme.muted)
+                    Spacer()
+                    SSMChip(vm.hasDesktopPin ? "SET" : "NONE",
+                            color: vm.hasDesktopPin ? SSMTheme.good : SSMTheme.muted)
+                }
+                Text("A 6-digit PIN that unlocks this meet in the SSM Desktop app on meet day.")
+                    .font(.ssmRounded(12, weight: .medium)).foregroundStyle(SSMTheme.muted)
+                if let pin = vm.freshPin {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(pin)
+                            .font(.system(size: 34, weight: .heavy, design: .rounded))
+                            .foregroundStyle(SSMTheme.orange)
+                        Text("Write this down now — it can't be shown again.")
+                            .font(.ssmRounded(12, weight: .bold)).foregroundStyle(SSMTheme.textPrimary)
+                    }
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(SSMTheme.cardBackgroundLight, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+                HStack(spacing: 10) {
+                    Button { Task { await vm.generateDesktopPin(meetID: meetID) } } label: {
+                        Label(vm.hasDesktopPin ? "New PIN" : "Generate PIN", systemImage: "key")
+                            .font(.ssmRounded(13, weight: .bold))
+                    }
+                    .buttonStyle(.ssmSoftPill)
+                    .disabled(vm.isPresetWorking)
+                    if vm.hasDesktopPin {
+                        Button(role: .destructive) { Task { await vm.clearDesktopPin(meetID: meetID) } } label: {
+                            Label("Clear", systemImage: "xmark.circle").font(.ssmRounded(13, weight: .bold))
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(SSMTheme.danger)
+                        .disabled(vm.isPresetWorking)
+                    }
+                }
+            }
         }
     }
 
