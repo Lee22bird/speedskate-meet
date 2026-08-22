@@ -599,6 +599,14 @@ public final class APIClient {
         return nil
     }
 
+    /// Unarchive a meet — JSON endpoint (the website's redirect flow can't
+    /// distinguish success from denial). Returns the restored status.
+    @discardableResult
+    public func unarchiveMeet(meetID: String) async throws -> String {
+        let r: MeetStatusResponse = try await postJSONObject("/api/v1/meets/\(meetID)/unarchive", body: [:])
+        return r.status
+    }
+
     /// Create a fresh draft meet. Returns the new meet's id.
     @discardableResult
     public func createMeet() async throws -> String? {

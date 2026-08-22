@@ -37,6 +37,7 @@ struct PadMeetSettingsView: View {
                     venueCard
                     feesCard
                     racingCard
+                    timeTrialsCard
                     divisionsCard
                     actionBar
                 }
@@ -95,7 +96,7 @@ struct PadMeetSettingsView: View {
                 .tint(SSMTheme.orange)
                 .disabled(vm.status == "archived")
                 Text(vm.status == "archived"
-                     ? "This meet is archived. Unarchive it on the website to change visibility."
+                     ? "This meet is archived. Unarchive it from Director Tools → Meet Actions."
                      : "Published meets appear on Find a Meet and accept online registration. Takes effect when you save.")
                     .font(.ssmRounded(12, weight: .medium))
                     .foregroundStyle(SSMTheme.muted)
@@ -223,6 +224,34 @@ struct PadMeetSettingsView: View {
                 }
                 Text("⚠️ Changing lanes or track length rebuilds every race's heats and lane assignments. Do this before check-in, not mid-meet.")
                     .font(.ssmRounded(12, weight: .semibold)).foregroundStyle(SSMTheme.orange)
+            }
+        }
+    }
+
+    private var timeTrialsCard: some View {
+        SSMCard {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("TIME TRIALS").font(.ssmRounded(12, weight: .heavy)).foregroundStyle(SSMTheme.muted)
+                Toggle(isOn: $vm.ttEventEnabled) {
+                    Text("Time Trial event")
+                        .font(.ssmRounded(15, weight: .bold))
+                        .foregroundStyle(SSMTheme.textPrimary)
+                }
+                .tint(SSMTheme.orange)
+                if vm.ttEventEnabled {
+                    HStack(spacing: 12) {
+                        field("Distance") { textInput($vm.ttDistance, placeholder: "e.g. 100m") }
+                            .frame(maxWidth: 180)
+                        Toggle(isOn: $vm.ttCountsForOverall) {
+                            Text("Counts for overall standings")
+                                .font(.ssmRounded(13, weight: .semibold))
+                                .foregroundStyle(SSMTheme.textPrimary)
+                        }
+                        .tint(SSMTheme.orange)
+                    }
+                }
+                Text("Runs youngest to oldest. Skaters opt in on their registration; place the event in the running order in Block Builder.")
+                    .font(.ssmRounded(12, weight: .medium)).foregroundStyle(SSMTheme.muted)
             }
         }
     }

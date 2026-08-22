@@ -21,6 +21,7 @@ const {
 const { buildRelayRacesFromTeams } = require('../services/relayGenerator');
 const { rebuildRaceAssignmentsSafe } = require('../services/ttHelpers');
 const { createBackup: createDesktopBackup } = require('../services/desktopBackupService');
+const { normalizeTimeTrialSettings, ensureTimeTrialEvent } = require('../services/timeTrialEvents');
 
 // Desktop-run meets snapshot before any destructive race regeneration, exactly
 // like the website's builder saves do (createDesktopBackupIfActive in server.js).
@@ -860,6 +861,12 @@ module.exports = function createMobileApiRoutes(deps = {}) {
       divisionScheme: String(meet.divisionScheme || 'standard').toLowerCase(),
       status: String(meet.status || 'draft').toLowerCase(),
       published: isPublicMeet(meet),
+      // Time-trial event config (read WITHOUT mutating — normalize ORs several
+      // flags, so mirror its read here).
+      ttEventEnabled: !!((meet.timeTrialEvent && meet.timeTrialEvent.enabled) || meet.timeTrialsEnabled
+        || (Array.isArray(meet.timeTrialEvents) && meet.timeTrialEvents.some(e => e && e.type === 'time_trial_event' && e.enabled !== false))),
+      ttDistance: String((meet.timeTrialEvent && meet.timeTrialEvent.distance) || '100m'),
+      ttCountsForOverall: !!(meet.timeTrialEvent && meet.timeTrialEvent.countsForOverall),
       baseEntryFee: Number(meet.baseEntryFee || 0),
       additionalRaceFee: Number(meet.additionalRaceFee || 0),
       maxRegistrationFee: Number(meet.maxRegistrationFee || 0),
@@ -943,6 +950,26 @@ module.exports = function createMobileApiRoutes(deps = {}) {
       meet.isPublic = wantPublic;
       if (preMeet) meet.status = wantPublic ? 'published' : 'draft';
     }
+    // Time-trial event config. Disabling must ALSO flip the materialized
+    // event's flag and timeTrialsEnabled — normalizeTimeTrialSettings ORs all
+    // three, so clearing only one would snap back to enabled.
+    if (b.ttEventEnabled !== undefined || typeof b.ttDistance === 'string' || b.ttCountsForOverall !== undefined) {
+      meet.timeTrialEvent = meet.timeTrialEvent || {};
+      if (typeof b.ttDistance === 'string' && b.ttDistance.trim()) {
+        meet.timeTrialEvent.distance = b.ttDistance.trim().slice(0, 20);
+      }
+      if (b.ttCountsForOverall !== undefined) meet.timeTrialEvent.countsForOverall = !!b.ttCountsForOverall;
+      if (b.ttEventEnabled !== undefined) {
+        const on = !!b.ttEventEnabled;
+        meet.timeTrialEvent.enabled = on;
+        if (!on) meet.timeTrialsEnabled = false;
+        (meet.timeTrialEvents || []).forEach(e => {
+          if (e && e.type === 'time_trial_event') e.enabled = on;
+        });
+      }
+      normalizeTimeTrialSettings(meet);
+      ensureTimeTrialEvent(meet); // materializes/syncs the event when enabled; no-op when off
+    }
     // Lanes / track length feed heat splitting and lane rows — changing either
     // rebuilds race assignments (the same safe rebuild the website runs). The app
     // confirms first, so we return racesRebuilt for its follow-up message.
@@ -972,6 +999,25 @@ module.exports = function createMobileApiRoutes(deps = {}) {
     meet.updatedAt = new Date().toISOString();
     saveDb(data.db);
     res.json({ ok:true, settings: meetSettingsJson(meet, data.db), racesRebuilt });
+  });
+
+  // ── Director: unarchive a meet (JSON twin of adminRoutes' redirect flow) ───
+  router.post('/api/v1/meets/:meetId/unarchive', (req, res) => {
+    const data = getSessionUser(req);
+    if (!data) return res.status(401).json({ ok:false, error:'Not logged in.' });
+    const meet = getMeetOr404(data.db, req.params.meetId);
+    if (!meet) return res.status(404).json({ ok:false, error:'Meet not found.' });
+    if (!canEditMeet(data.user, meet)) return res.status(403).json({ ok:false, error:'Only a meet director can unarchive.' });
+    if (String(meet.status || '').toLowerCase() !== 'archived') {
+      return res.json({ ok:true, status: String(meet.status || 'draft') }); // idempotent
+    }
+    // Same restore rule as the website (adminRoutes unarchive).
+    meet.status = meet.previousStatus && meet.previousStatus !== 'archived' ? meet.previousStatus : 'complete';
+    meet.archivedAt = '';
+    meet.archivedByUserId = null;
+    meet.updatedAt = new Date().toISOString();
+    saveDb(data.db);
+    res.json({ ok:true, status: String(meet.status) });
   });
 
   // ── Director: per-division editor (novice/elite enable, ages, distances) ────

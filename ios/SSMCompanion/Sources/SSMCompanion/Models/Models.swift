@@ -545,6 +545,9 @@ public struct MeetSettings: Decodable {
     public let divisionScheme: String
     public let status: String
     public let published: Bool
+    public let ttEventEnabled: Bool
+    public let ttDistance: String
+    public let ttCountsForOverall: Bool
     public let baseEntryFee: Double
     public let additionalRaceFee: Double
     public let maxRegistrationFee: Double
@@ -594,6 +597,11 @@ public struct Rink: Decodable, Identifiable, Hashable {
     public let city: String
     public let state: String
     public let label: String
+}
+
+public struct MeetStatusResponse: Decodable {
+    public let ok: Bool
+    public let status: String
 }
 
 public struct RinksResponse: Decodable {

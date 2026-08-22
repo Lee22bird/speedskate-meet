@@ -87,6 +87,13 @@ final class MeetActionsViewModel: ObservableObject {
         }
     }
 
+    func unarchive() async {
+        await run {
+            let status = try await self.api.unarchiveMeet(meetID: self.meetID)
+            self.statusFlash = "Meet unarchived — back to \(status)."
+        }
+    }
+
     /// Fetch a score-sheets PDF and stage it as a shareable temp file.
     func fetchScoreSheets(scope: String, raceID: String? = nil, blockID: String? = nil) async {
         guard !isWorking else { return }
@@ -226,11 +233,10 @@ struct MeetActionsSheet: View {
                         }
                         .buttonStyle(.ssmSoftPill)
                     case "archived":
-                        // Archived meets are managed on the website — don't
-                        // offer Finalize here (it would silently un-archive).
-                        Text("Managed on the website")
-                            .font(.ssmRounded(11, weight: .semibold))
-                            .foregroundStyle(SSMTheme.muted)
+                        Button("Unarchive Meet") {
+                            Task { await model.unarchive() }
+                        }
+                        .buttonStyle(.ssmSoftPill)
                     default:
                         Button("Finalize Meet") { confirmFinalize = true }
                             .buttonStyle(.ssmPill)

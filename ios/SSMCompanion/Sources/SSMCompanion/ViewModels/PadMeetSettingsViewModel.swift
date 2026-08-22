@@ -22,6 +22,9 @@ public final class PadMeetSettingsViewModel: ObservableObject {
     @Published public private(set) var isSwitchingScheme = false
     @Published public var published = false
     @Published public private(set) var status = "draft"
+    @Published public var ttEventEnabled = false
+    @Published public var ttDistance = ""
+    @Published public var ttCountsForOverall = false
     @Published public var baseEntryFee = ""
     @Published public var additionalRaceFee = ""
     @Published public var maxRegistrationFee = ""
@@ -40,6 +43,9 @@ public final class PadMeetSettingsViewModel: ObservableObject {
     private var originalPublished = false
     private var originalCloseDate = ""
     private var originalCloseTime = ""
+    private var originalTTEnabled = false
+    private var originalTTDistance = ""
+    private var originalTTCounts = false
     @Published public var schemeFlash: String?
 
     private let api: APIClient
@@ -83,6 +89,12 @@ public final class PadMeetSettingsViewModel: ObservableObject {
             originalPublished = s.published
             originalCloseDate = s.registrationCloseDate
             originalCloseTime = s.registrationCloseTime
+            ttEventEnabled = s.ttEventEnabled
+            ttDistance = s.ttDistance
+            ttCountsForOverall = s.ttCountsForOverall
+            originalTTEnabled = s.ttEventEnabled
+            originalTTDistance = s.ttDistance
+            originalTTCounts = s.ttCountsForOverall
             if rinks.isEmpty { rinks = (try? await api.rinks()) ?? [] }
             baseEntryFee = money(s.baseEntryFee)
             additionalRaceFee = money(s.additionalRaceFee)
@@ -155,6 +167,13 @@ public final class PadMeetSettingsViewModel: ObservableObject {
         addNumber(&fields, "trackLength", trackLength)
         // Publish: only when the user flipped it on this screen (dirty-tracked).
         if published != originalPublished { fields["published"] = published }
+        // Time-trial config: also dirty-tracked, so a stale screen can't flip it.
+        let ttDist = ttDistance.trimmingCharacters(in: .whitespaces)
+        if ttEventEnabled != originalTTEnabled || ttDist != originalTTDistance || ttCountsForOverall != originalTTCounts {
+            fields["ttEventEnabled"] = ttEventEnabled
+            if !ttDist.isEmpty { fields["ttDistance"] = ttDist }
+            fields["ttCountsForOverall"] = ttCountsForOverall
+        }
         rebuildFlash = false
         schemeFlash = nil
         do {
@@ -174,6 +193,12 @@ public final class PadMeetSettingsViewModel: ObservableObject {
             originalPublished = s.published
             originalCloseDate = s.registrationCloseDate
             originalCloseTime = s.registrationCloseTime
+            ttEventEnabled = s.ttEventEnabled
+            ttDistance = s.ttDistance
+            ttCountsForOverall = s.ttCountsForOverall
+            originalTTEnabled = s.ttEventEnabled
+            originalTTDistance = s.ttDistance
+            originalTTCounts = s.ttCountsForOverall
             rebuildFlash = (r.racesRebuilt == true)
             baseEntryFee = money(s.baseEntryFee)
             additionalRaceFee = money(s.additionalRaceFee)
