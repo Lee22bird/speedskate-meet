@@ -80,11 +80,14 @@ public enum PadSection: String, CaseIterable, Identifiable {
     func allowed(for role: StaffRole?, canBuildBlocks: Bool) -> Bool {
         switch self {
         case .director: return role == .director
-        case .meetSettings: return role == .director
-        case .divisions: return role == .director
-        case .relayTemplates: return role == .director
-        case .openBuilder, .quadBuilder: return role == .director
-        case .staff: return role == .director
+        // Meet-setup boards are gated SERVER-side on canEditMeet, which staff
+        // assignment alone does not grant (only meet ownership, or an assigned
+        // tabulator, does). `canBuildBlocks` IS that same canEditMeet answer, so
+        // gate on it — otherwise someone assigned as "Meet Director" would see
+        // these boards and hit a 403 on every one.
+        case .meetSettings, .divisions, .relayTemplates,
+             .openBuilder, .quadBuilder, .staff:
+            return canBuildBlocks
         case .blockBuilder, .relayBuilder, .registered, .checkIn: return role == .director || canBuildBlocks
         case .tabulator: return role == .director || role == .tabulator
         // Officials inbox = judge (tabulator) + meet_director (director), the
