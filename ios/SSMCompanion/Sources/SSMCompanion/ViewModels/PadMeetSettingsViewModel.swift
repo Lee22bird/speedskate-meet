@@ -19,6 +19,8 @@ public final class PadMeetSettingsViewModel: ObservableObject {
     @Published public var trackLength = ""
     @Published public private(set) var divisionScheme = "standard"
     @Published public private(set) var isSwitchingScheme = false
+    @Published public var published = false
+    @Published public private(set) var status = "draft"
     @Published public var baseEntryFee = ""
     @Published public var additionalRaceFee = ""
     @Published public var maxRegistrationFee = ""
@@ -65,6 +67,8 @@ public final class PadMeetSettingsViewModel: ObservableObject {
             lanes = String(s.lanes)
             trackLength = String(s.trackLength)
             divisionScheme = s.divisionScheme
+            published = s.published
+            status = s.status
             originalLanes = s.lanes
             originalTrack = s.trackLength
             if rinks.isEmpty { rinks = (try? await api.rinks()) ?? [] }
@@ -132,6 +136,7 @@ public final class PadMeetSettingsViewModel: ObservableObject {
         addNumber(&fields, "protestDeadlineMinutes", protestDeadlineMinutes)
         addNumber(&fields, "lanes", lanes)
         addNumber(&fields, "trackLength", trackLength)
+        fields["published"] = published
         rebuildFlash = false
         do {
             let r = try await api.saveMeetSettings(meetID: meetID, fields: fields)
@@ -143,6 +148,8 @@ public final class PadMeetSettingsViewModel: ObservableObject {
             lanes = String(s.lanes)
             trackLength = String(s.trackLength)
             divisionScheme = s.divisionScheme
+            published = s.published
+            status = s.status
             originalLanes = s.lanes
             originalTrack = s.trackLength
             rebuildFlash = (r.racesRebuilt == true)

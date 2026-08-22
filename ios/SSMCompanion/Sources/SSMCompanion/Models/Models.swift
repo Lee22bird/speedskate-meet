@@ -541,6 +541,8 @@ public struct MeetSettings: Decodable {
     public let lanes: Int
     public let trackLength: Int
     public let divisionScheme: String
+    public let status: String
+    public let published: Bool
     public let baseEntryFee: Double
     public let additionalRaceFee: Double
     public let maxRegistrationFee: Double

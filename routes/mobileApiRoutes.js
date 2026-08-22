@@ -811,6 +811,8 @@ module.exports = function createMobileApiRoutes(deps = {}) {
       lanes: Number(meet.lanes || 4),
       trackLength: Number(meet.trackLength || 100),
       divisionScheme: String(meet.divisionScheme || 'standard').toLowerCase(),
+      status: String(meet.status || 'draft').toLowerCase(),
+      published: isPublicMeet(meet),
       baseEntryFee: Number(meet.baseEntryFee || 0),
       additionalRaceFee: Number(meet.additionalRaceFee || 0),
       maxRegistrationFee: Number(meet.maxRegistrationFee || 0),
@@ -874,6 +876,19 @@ module.exports = function createMobileApiRoutes(deps = {}) {
       meet.customRinkName = '';
     } else if (typeof b.customRinkName === 'string' && Object.prototype.hasOwnProperty.call(b, 'customRinkName')) {
       meet.customRinkName = b.customRinkName.trim();
+    }
+    // Publish toggle. meet.status doubles as the publish flag ('published') AND
+    // the lifecycle state ('live'/'complete'/'archived'), and isPublicMeet() ORs
+    // meet.isPublic with it. So only move `status` between the pre-meet states
+    // (draft <-> published); for a meet that is already live/complete, flip the
+    // independent isPublic flag and LEAVE the lifecycle alone. Archived meets are
+    // never published from here.
+    if (b.published !== undefined && String(meet.status || '').toLowerCase() !== 'archived') {
+      const wantPublic = !!b.published;
+      const current = String(meet.status || 'draft').toLowerCase();
+      const preMeet = current === 'draft' || current === 'published' || current === '';
+      meet.isPublic = wantPublic;
+      if (preMeet) meet.status = wantPublic ? 'published' : 'draft';
     }
     // Lanes / track length feed heat splitting and lane rows — changing either
     // rebuilds race assignments (the same safe rebuild the website runs). The app

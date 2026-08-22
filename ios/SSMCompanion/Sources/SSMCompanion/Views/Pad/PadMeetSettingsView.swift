@@ -18,6 +18,7 @@ struct PadMeetSettingsView: View {
                     ProgressView().frame(maxWidth: .infinity).padding(.top, 40)
                 } else {
                     basicsCard
+                    publishCard
                     venueCard
                     feesCard
                     racingCard
@@ -57,6 +58,32 @@ struct PadMeetSettingsView: View {
                     field("End date (optional)") { textInput($vm.endDate, placeholder: "YYYY-MM-DD", keyboard: .numbersAndPunctuation) }
                 }
                 field("Start time") { textInput($vm.startTime, placeholder: "e.g. 9:00 AM") }
+            }
+        }
+    }
+
+    /// Publish = listed on the public site + open for online registration.
+    private var publishCard: some View {
+        SSMCard {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("VISIBILITY").font(.ssmRounded(12, weight: .heavy)).foregroundStyle(SSMTheme.muted)
+                    Spacer()
+                    SSMChip(vm.published ? "PUBLIC" : "DRAFT",
+                            color: vm.published ? SSMTheme.good : SSMTheme.muted)
+                }
+                Toggle(isOn: $vm.published) {
+                    Text("Publish this meet")
+                        .font(.ssmRounded(15, weight: .bold))
+                        .foregroundStyle(SSMTheme.textPrimary)
+                }
+                .tint(SSMTheme.orange)
+                .disabled(vm.status == "archived")
+                Text(vm.status == "archived"
+                     ? "This meet is archived. Unarchive it on the website to change visibility."
+                     : "Published meets appear on Find a Meet and accept online registration. Takes effect when you save.")
+                    .font(.ssmRounded(12, weight: .medium))
+                    .foregroundStyle(SSMTheme.muted)
             }
         }
     }
