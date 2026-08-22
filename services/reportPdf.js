@@ -49,7 +49,9 @@ function text(doc, value, x, y, width, opts = {}) {
       align: opts.align || 'left',
       lineBreak: opts.wrap === true,
       ellipsis: opts.wrap !== true,
-      height: opts.wrap === true ? undefined : (opts.height || (opts.size || 9) + 3),
+      // Wrapped text must carry an explicit height: with margin 0, pdfkit's own
+      // auto-pagination would add pages behind the cursor's back and desync it.
+      height: opts.wrap === true ? (opts.height || 200) : (opts.height || (opts.size || 9) + 3),
     });
 }
 
@@ -67,9 +69,10 @@ function makeCursor(doc, { title, meetName, subtitle }) {
     y = PAGE.margin;
     text(doc, meetName, PAGE.margin, y, usableWidth, { size: 15, bold: true });
     y += 19;
-    text(doc, title, PAGE.margin, y, usableWidth, { size: 11, bold: true, color: INK.muted });
+    text(doc, title, PAGE.margin, y, Math.floor(usableWidth * 0.55), { size: 11, bold: true, color: INK.muted });
     if (subtitle) {
-      text(doc, subtitle, PAGE.margin, y, usableWidth, { size: 9, color: INK.muted, align: 'right' });
+      const sw = Math.floor(usableWidth * 0.42);
+      text(doc, subtitle, PAGE.width - PAGE.margin - sw, y, sw, { size: 9, color: INK.muted, align: 'right' });
     }
     y += 15;
     doc.lineWidth(1).strokeColor(INK.rule)

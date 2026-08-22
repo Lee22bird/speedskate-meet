@@ -254,6 +254,13 @@ module.exports = function createProtestRoutes(deps = {}) {
   router.get('/portal/meet/:meetId/protests.json', requireRole('judge', 'meet_director'), (req, res) => {
     const meet = getMeetOr404(req.db, req.params.meetId);
     if (!meet) return res.status(404).json({ ok: false, error: 'Meet not found.' });
+    // Protests are confidential officials records — scope to THIS meet's
+    // officials, not any account that merely holds the judge/director role.
+    // canEditMeet is the meet-scoped check (owner + assigned tabulators);
+    // canJudgeMeet is deliberately NOT used here — it passes ANY judge.
+    if (!hasRole(req.user, 'super_admin') && !canEditMeet(req.user, meet)) {
+      return res.status(403).json({ ok: false, error: 'You are not an official on this meet.' });
+    }
     res.json({ ok: true, protests: protestsForMeet(meet) });
   });
 

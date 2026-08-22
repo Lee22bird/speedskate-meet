@@ -844,9 +844,10 @@ public final class APIClient {
         do { (data, response) = try await session.data(for: req) }
         catch { throw APIError.network(error) }
         guard let http = response as? HTTPURLResponse else { throw APIError.server("No response from server.") }
-        if http.statusCode == 401 { throw APIError.unauthorized }
-        if http.statusCode == 403 { throw APIError.server("You don't have access to this.") }
-        if http.statusCode >= 400 { throw APIError.server("Request failed (\(http.statusCode)).") }
+        // Surface the server's own {ok:false, error} message instead of a
+        // generic status line — "Only a meet director can edit settings." beats
+        // "You don't have access to this."
+        try Self.throwIfError(http: http, data: data)
         do { return try JSONDecoder().decode(T.self, from: data) }
         catch { throw APIError.decoding(error) }
     }
@@ -891,10 +892,12 @@ public final class APIClient {
         try await request("/api/v1/meets/\(meetID)/divisions")
     }
 
-    /// Save the per-group division config (regenerates races server-side).
+    /// Save the per-group division config (regenerates races server-side when
+    /// something changed). The scheme rides along so the server can refuse a
+    /// stale editor whose group indexes no longer match.
     @discardableResult
-    public func saveDivisions(meetID: String, groups: [[String: Any]]) async throws -> DivisionsSaveResponse {
-        try await postJSONObject("/api/v1/meets/\(meetID)/divisions", body: ["groups": groups])
+    public func saveDivisions(meetID: String, scheme: String, groups: [[String: Any]]) async throws -> DivisionsSaveResponse {
+        try await postJSONObject("/api/v1/meets/\(meetID)/divisions", body: ["scheme": scheme, "groups": groups])
     }
 
     /// Partial save — send only the fields to change; the server touches only

@@ -1,11 +1,11 @@
 import SwiftUI
 
-/// iPad Meet Settings editor (phase 1): a director edits identity + fees.
-/// Saves a safe partial update — lanes, divisions, publishing, rink, and the
-/// registration window are intentionally not here (they rebuild races or change
-/// public state) and come in later phases.
+/// iPad Meet Settings editor: identity, visibility, venue, registration window,
+/// fees, racing basics, and the division scheme. Saves are safe partial updates;
+/// anything that rebuilds races (lanes/track, scheme) confirms first.
 struct PadMeetSettingsView: View {
     let meetID: String
+    @EnvironmentObject private var session: PadSessionViewModel
     @StateObject private var vm = PadMeetSettingsViewModel()
     @State private var confirmRebuild = false
     @State private var pendingScheme: String?
@@ -16,6 +16,21 @@ struct PadMeetSettingsView: View {
                 intro
                 if vm.isLoading && !vm.loaded {
                     ProgressView().frame(maxWidth: .infinity).padding(.top, 40)
+                } else if !vm.loaded {
+                    // NEVER render the editable form when the load failed — an
+                    // all-blank form + Save would wipe the meet's real values.
+                    SSMCard {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text(vm.errorMessage ?? "Couldn't load this meet's settings.")
+                                .font(.ssmRounded(14, weight: .semibold))
+                                .foregroundStyle(SSMTheme.danger)
+                            Button { Task { await vm.load(meetID: meetID) } } label: {
+                                Label("Retry", systemImage: "arrow.clockwise")
+                                    .font(.ssmRounded(13, weight: .bold))
+                            }
+                            .buttonStyle(.ssmSoftPill)
+                        }
+                    }
                 } else {
                     basicsCard
                     publishCard
@@ -40,7 +55,7 @@ struct PadMeetSettingsView: View {
             Text("Meet Settings")
                 .font(.ssmRounded(24, weight: .heavy))
                 .foregroundStyle(SSMTheme.textPrimary)
-            Text("Edit the meet's basics and fees. Racing setup (lanes, divisions, publishing) stays on the web for now — changing it rebuilds races.")
+            Text("Everything about this meet — basics, visibility, venue, fees, and racing setup. Changes that rebuild races always ask first.")
                 .font(.ssmRounded(13, weight: .medium))
                 .foregroundStyle(SSMTheme.muted)
         }
@@ -98,7 +113,7 @@ struct PadMeetSettingsView: View {
                             Button(r.label.isEmpty ? "Rink #\(r.id)" : r.label) { vm.selectRink(r) }
                         }
                         if !vm.rinks.isEmpty { Divider() }
-                        Button("Clear venue", role: .destructive) { vm.rinkId = 0; vm.customRinkName = "" }
+                        Button("Clear custom name", role: .destructive) { vm.customRinkName = "" }
                     } label: {
                         HStack {
                             Text(vm.currentRinkLabel)
@@ -113,9 +128,7 @@ struct PadMeetSettingsView: View {
                     }
                 }
                 field("Or type a custom venue") {
-                    textInput(Binding(get: { vm.customRinkName },
-                                      set: { vm.customRinkName = $0; if !$0.isEmpty { vm.rinkId = 0 } }),
-                              placeholder: "e.g. Community Ice Center")
+                    textInput($vm.customRinkName, placeholder: "e.g. Community Ice Center")
                 }
                 HStack(spacing: 12) {
                     field("Registration closes") { textInput($vm.registrationCloseDate, placeholder: "YYYY-MM-DD", keyboard: .numbersAndPunctuation) }
@@ -161,6 +174,11 @@ struct PadMeetSettingsView: View {
                         Text("Applying…").font(.ssmRounded(12, weight: .semibold)).foregroundStyle(SSMTheme.muted)
                     }
                 }
+                if let flash = vm.schemeFlash {
+                    Text("✓ \(flash)")
+                        .font(.ssmRounded(12, weight: .bold))
+                        .foregroundStyle(SSMTheme.good)
+                }
             }
         }
         .confirmationDialog("Switch divisions?", isPresented: Binding(get: { pendingScheme != nil },
@@ -170,7 +188,7 @@ struct PadMeetSettingsView: View {
                 Task { await vm.switchScheme(meetID: meetID, to: scheme) }
             }
         } message: { _ in
-            Text("This replaces your divisions with the chosen template and rebuilds every race. Do it before check-in, not mid-meet.")
+            Text("This replaces your divisions with the chosen template and reloads this screen — unsaved edits here are discarded. Races regenerate when you save the Divisions tab.")
         }
     }
 
@@ -222,19 +240,27 @@ struct PadMeetSettingsView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             Button {
-                if vm.racingChanged { confirmRebuild = true } else { Task { await vm.save(meetID: meetID) } }
+                if vm.racingChanged { confirmRebuild = true } else { Task { await saveAndSync() } }
             } label: {
                 Label(vm.isSaving ? "Saving…" : "Save Settings", systemImage: "checkmark.circle")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.ssmPill)
-            .disabled(vm.isSaving || !vm.canSave)
-            .opacity(vm.isSaving || !vm.canSave ? 0.6 : 1)
+            .disabled(vm.isSaving || !vm.canSave || !vm.loaded)
+            .opacity(vm.isSaving || !vm.canSave || !vm.loaded ? 0.6 : 1)
         }
         .confirmationDialog("Rebuild races?", isPresented: $confirmRebuild, titleVisibility: .visible) {
-            Button("Save & Rebuild Races", role: .destructive) { Task { await vm.save(meetID: meetID) } }
+            Button("Save & Rebuild Races", role: .destructive) { Task { await saveAndSync() } }
         } message: {
             Text("You changed lanes or track length. Saving rebuilds every race's heats and lane assignments — do this before check-in, not mid-meet.")
+        }
+    }
+
+    /// Save, then keep the sidebar's meet name in sync with a rename.
+    private func saveAndSync() async {
+        await vm.save(meetID: meetID)
+        if vm.savedFlash, !vm.meetName.isEmpty {
+            session.selectedMeetName = vm.meetName
         }
     }
 

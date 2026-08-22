@@ -13,6 +13,7 @@ public final class CoachRelayBuilderViewModel: ObservableObject {
     @Published public var isSaving = false
     @Published public var errorMessage: String?
     @Published public var flash: String?
+    @Published public private(set) var locked = false
 
     private let api: APIClient
     public init(api: APIClient = .shared) { self.api = api }
@@ -24,6 +25,7 @@ public final class CoachRelayBuilderViewModel: ObservableObject {
             let d = try await api.coachRelayBuilder(meetID: meetID)
             team = d.team
             divisions = d.divisions
+            locked = d.locked == true
             var drafts: [String: [RelayDraftTeam]] = [:]
             for div in d.divisions {
                 var list = div.teams.map { RelayDraftTeam(slots: pad($0.memberRegIds, size: div.size)) }
@@ -93,13 +95,23 @@ public final class CoachRelayBuilderViewModel: ObservableObject {
     }
 
     public func save(meetID: String) async {
+        guard !isSaving else { return }
         isSaving = true
         defer { isSaving = false }
+        // A team with some names picked but not full is silently dropped by the
+        // server — tell the coach instead of letting it vanish.
+        let partial = draftTeams.values.flatMap { $0 }
+            .filter { t in !t.isComplete && t.slots.contains(where: { !$0.isEmpty }) }
+            .count
         do {
             let r = try await api.saveCoachRelayTeams(meetID: meetID, teams: collectTeams())
             errorMessage = nil
-            flash = "Saved \(r.savedTeams) team\(r.savedTeams == 1 ? "" : "s"). Your director places them in the running order."
+            var message = "Saved \(r.savedTeams) team\(r.savedTeams == 1 ? "" : "s"). Your director places them in the running order."
+            if partial > 0 {
+                message += " \(partial) unfinished team\(partial == 1 ? " wasn't" : "s weren't") saved — fill every skater slot first."
+            }
             await load(meetID: meetID)
+            flash = message
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }

@@ -14,18 +14,28 @@ test('race-specific categories only', () => {
 });
 
 test('buildProtest validates category + statement, strips raceId for meet-wide', () => {
-  const meet = { protests: [] };
+  // raceId must resolve to a REAL race in the meet — an unresolvable id would
+  // skip the deadline gate and break the uphold→correction deep link.
+  const meet = { protests: [], races: [{ id: 'r1', groupLabel: 'Juvenile Girls', division: 'novice', distanceLabel: '500m' }] };
   assert.equal(P.buildProtest(meet, { category: 'Nope', statement: 'x' }, 't').ok, false);
   assert.equal(P.buildProtest(meet, { category: 'Competition', statement: '' }, 't').ok, false);
   assert.equal(P.buildProtest(meet, { category: 'Competition', statement: 'a'.repeat(2001) }, 't').ok, false);
-  const good = P.buildProtest(meet, { category: 'Competition', raceId: 'r1', raceLabel: 'R', statement: 'bad call', filedByUserId: 'u1', filedByName: 'Coach', team: 'United' }, '2026-10-17T00:00:00Z');
+  const good = P.buildProtest(meet, { category: 'Competition', raceId: 'r1', raceLabel: 'CLIENT LABEL IGNORED', statement: 'bad call', filedByUserId: 'u1', filedByName: 'Coach', team: 'United' }, '2026-10-17T00:00:00Z');
   assert.equal(good.ok, true);
   assert.equal(good.protest.id, 'P-001');
   assert.equal(good.protest.raceId, 'r1');
   assert.equal(good.protest.state, 'new');
+  // the label is derived server-side from the resolved race, never trusted
+  // from the client form
+  assert.equal(good.protest.raceLabel, 'Juvenile Girls · Novice · 500m');
   // meet-wide category drops the raceId even if one is passed
   const wide = P.buildProtest(meet, { category: 'Officials', raceId: 'r1', statement: 'x' }, 't');
   assert.equal(wide.protest.raceId, '');
+  // a race-specific category with a BOGUS raceId drops it too (stored as
+  // meet-wide rather than pointing at a race that doesn't exist)
+  const bogus = P.buildProtest(meet, { category: 'Competition', raceId: 'nope', raceLabel: 'X', statement: 'x' }, 't');
+  assert.equal(bogus.protest.raceId, '');
+  assert.equal(bogus.protest.raceLabel, '');
 });
 
 test('coach containment: a coach sees only their own protests', () => {

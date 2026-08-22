@@ -829,14 +829,20 @@ module.exports = function createDesktopRoutes(deps = {}) {
 
   router.post('/desktop/meet/:meetId/protest-sync/now', async (req, res) => {
     if (!requireDesktop(res)) return;
+    const auth = typeof getSessionUser === 'function' ? getSessionUser(req) : null;
+    if (!auth?.user) return res.redirect('/admin/login');
     const back = `/desktop/meet/${encodeURIComponent(req.params.meetId)}/protest-sync`;
-    const r = await protestSync.syncNow();
+    let r;
+    try { r = await protestSync.syncNow(); }
+    catch (err) { r = { ok: false, error: err.message || 'Sync failed.' }; }
     const msg = r.ok ? `Synced. Pulled ${r.added} new protest${r.added === 1 ? '' : 's'}.` : (r.error || 'Sync failed.');
     return res.redirect(back + (r.ok ? '?flash=' : '?error=') + encodeURIComponent(msg));
   });
 
   router.post('/desktop/meet/:meetId/protest-sync/disconnect', (req, res) => {
     if (!requireDesktop(res)) return;
+    const auth = typeof getSessionUser === 'function' ? getSessionUser(req) : null;
+    if (!auth?.user) return res.redirect('/admin/login');
     protestSync.disconnect();
     return res.redirect(`/desktop/meet/${encodeURIComponent(req.params.meetId)}/protest-sync?flash=` + encodeURIComponent('Disconnected. The offline meet is unaffected.'));
   });

@@ -17,8 +17,24 @@ struct PadDivisionsView: View {
                     ProgressView().frame(maxWidth: .infinity).padding(.top, 40)
                 } else if vm.groups.isEmpty {
                     SSMCard {
-                        Text("No division groups yet. Pick a division scheme in Meet Settings first.")
-                            .font(.ssmRounded(14, weight: .medium)).foregroundStyle(SSMTheme.muted)
+                        VStack(alignment: .leading, spacing: 12) {
+                            if let error = vm.errorMessage {
+                                // A failed load must LOOK like a failed load — the
+                                // empty-state copy below would send the director
+                                // off to re-template their divisions.
+                                Text(error)
+                                    .font(.ssmRounded(14, weight: .semibold))
+                                    .foregroundStyle(SSMTheme.danger)
+                                Button { Task { await vm.load(meetID: meetID) } } label: {
+                                    Label("Retry", systemImage: "arrow.clockwise")
+                                        .font(.ssmRounded(13, weight: .bold))
+                                }
+                                .buttonStyle(.ssmSoftPill)
+                            } else {
+                                Text("No division groups yet. Pick a division scheme in Meet Settings first.")
+                                    .font(.ssmRounded(14, weight: .medium)).foregroundStyle(SSMTheme.muted)
+                            }
+                        }
                     }
                 } else {
                     ForEach($vm.groups) { $group in groupCard($group) }
@@ -78,9 +94,13 @@ struct PadDivisionsView: View {
                     labeled("Ages") {
                         input(slot.ages, placeholder: "e.g. 8-9", keyboard: .numbersAndPunctuation)
                     }
-                    .frame(maxWidth: 140)
-                    labeled("Distances") {
-                        input(slot.distances, placeholder: "500m, 1000m")
+                    .frame(maxWidth: 130)
+                    // Positional: box = race day. Leaving D1 empty and filling D2
+                    // is meaningful (no race day 1) and is preserved as-is.
+                    ForEach(0..<4, id: \.self) { i in
+                        labeled("Day \(i + 1)") {
+                            input(slot.distances[i], placeholder: "—")
+                        }
                     }
                 }
             }

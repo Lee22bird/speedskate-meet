@@ -60,6 +60,11 @@ function mergeProtests(meet, onlineProtests) {
 
 function statusFor(localMeetId) {
   if (!session || String(session.localMeetId) !== String(localMeetId)) return { connected: false };
+  // An expired online session is NOT connected — the UI must show the Connect
+  // form again instead of a green banner while protests silently stop arriving.
+  if (session.expired) {
+    return { connected: false, expired: true, lastError: session.lastError || 'Online session expired — reconnect to keep syncing.' };
+  }
   return {
     connected: true,
     baseUrl: session.baseUrl,
@@ -74,36 +79,48 @@ function statusFor(localMeetId) {
 
 async function syncNow() {
   if (!session) return { ok: false, error: 'Not connected.' };
-  const { baseUrl, cookie, hostedMeetId, localMeetId, loadDb, saveDb } = session;
+  // Capture the session this sync belongs to: Disconnect (or a re-Connect) can
+  // null/replace `session` while we're awaiting, and a late-resolving sync must
+  // never write status onto a different session — or crash on null.
+  const s = session;
+  if (s.inFlight) return { ok: false, error: 'A sync is already running.' };
+  s.inFlight = true;
+  const { baseUrl, cookie, hostedMeetId, localMeetId, loadDb, saveDb } = s;
   try {
     const res = await fetch(`${baseUrl}/portal/meet/${encodeURIComponent(hostedMeetId)}/protests.json`, {
       headers: { Cookie: cookie, Accept: 'application/json' },
       redirect: 'manual', // a redirect to /admin/login means the session lapsed
+      signal: AbortSignal.timeout(10000), // rink wifi black-holes must not stack sockets
     });
+    if (session !== s) return { ok: false, error: 'Disconnected.' };
     if (res.status === 401 || res.status === 403 || (res.status >= 300 && res.status < 400)) {
-      session.lastError = 'Online session expired — reconnect to keep syncing.';
+      s.lastError = 'Online session expired — reconnect to keep syncing.';
+      s.expired = true;
       stopTimer();
-      return { ok: false, error: session.lastError, expired: true };
+      return { ok: false, error: s.lastError, expired: true };
     }
     const payload = await res.json().catch(() => null);
+    if (session !== s) return { ok: false, error: 'Disconnected.' };
     if (!res.ok || !payload || !payload.ok || !Array.isArray(payload.protests)) {
-      session.lastError = (payload && payload.error) || 'Could not read protests from online.';
-      return { ok: false, error: session.lastError };
+      s.lastError = (payload && payload.error) || 'Could not read protests from online.';
+      return { ok: false, error: s.lastError };
     }
     const db = loadDb();
     const meet = (db.meets || []).find(m => String(m.id) === String(localMeetId));
-    if (!meet) { session.lastError = 'Local meet not found.'; return { ok: false, error: session.lastError }; }
+    if (!meet) { s.lastError = 'Local meet not found.'; return { ok: false, error: s.lastError }; }
     const added = mergeProtests(meet, payload.protests);
     if (added > 0) { meet.updatedAt = new Date().toISOString(); saveDb(db); }
-    session.lastSyncAt = new Date().toISOString();
-    session.lastError = null;
-    session.lastPulledCount = added;
-    session.totalPulled = (session.totalPulled || 0) + added;
+    s.lastSyncAt = new Date().toISOString();
+    s.lastError = null;
+    s.lastPulledCount = added;
+    s.totalPulled = (s.totalPulled || 0) + added;
     return { ok: true, added };
   } catch (err) {
-    // Offline / unreachable — keep the session and try again on the next tick.
-    session.lastError = 'Offline — could not reach the online site. Will retry.';
-    return { ok: false, error: session.lastError, offline: true };
+    // Offline / unreachable / timed out — keep the session, retry next tick.
+    if (session === s) s.lastError = 'Offline — could not reach the online site. Will retry.';
+    return { ok: false, error: 'Offline — could not reach the online site. Will retry.', offline: true };
+  } finally {
+    s.inFlight = false;
   }
 }
 
@@ -125,7 +142,8 @@ async function connect({ baseUrl, cookie, hostedMeetId, localMeetId, loadDb, sav
     hostedMeetId: String(hostedMeetId), localMeetId: String(localMeetId),
     loadDb, saveDb,
     connectedAt: new Date().toISOString(),
-    lastSyncAt: null, lastError: null, lastPulledCount: 0, totalPulled: 0, timer: null,
+    lastSyncAt: null, lastError: null, lastPulledCount: 0, totalPulled: 0,
+    timer: null, inFlight: false, expired: false,
   };
   const first = await syncNow();
   startTimer(intervalMs);

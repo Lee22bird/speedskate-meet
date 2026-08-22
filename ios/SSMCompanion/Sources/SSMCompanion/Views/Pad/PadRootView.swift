@@ -209,6 +209,14 @@ struct PadSidebar: View {
         }
     }
 
+    /// Meet creation matches the server's gate (meet_director or judge; super
+    /// admins implicitly). Coaches and plain accounts shouldn't see a button
+    /// that can only 403.
+    private var canCreateMeets: Bool {
+        let roles = auth.currentUser?.roles ?? []
+        return roles.contains("meet_director") || roles.contains("judge") || roles.contains("super_admin")
+    }
+
     private func createNewMeet() async {
         guard !isCreatingMeet else { return }
         isCreatingMeet = true
@@ -221,7 +229,11 @@ struct PadSidebar: View {
             createError = nil
             await staffMeets.load()
             await session.selectMeet(id: newID, name: "New Meet")
-            session.selectedSection = .meetSettings   // land the director on setup
+            // Land on setup — but only if this user's resolved role is allowed
+            // there (selectMeet just recomputed it; never bypass the gate).
+            if PadSection.meetSettings.allowed(for: session.role, canBuildBlocks: session.canBuildBlocks) {
+                session.selectedSection = .meetSettings
+            }
             closeDrawer()
         } catch {
             createError = (error as? APIError)?.errorDescription ?? error.localizedDescription
@@ -233,15 +245,17 @@ struct PadSidebar: View {
             HStack {
                 sectionHeader("My Meets")
                 Spacer()
-                Button {
-                    Task { await createNewMeet() }
-                } label: {
-                    Label(isCreatingMeet ? "Creating…" : "New Meet", systemImage: "plus.circle.fill")
-                        .font(.ssmRounded(12, weight: .bold))
-                        .foregroundStyle(SSMTheme.orange)
+                if canCreateMeets {
+                    Button {
+                        Task { await createNewMeet() }
+                    } label: {
+                        Label(isCreatingMeet ? "Creating…" : "New Meet", systemImage: "plus.circle.fill")
+                            .font(.ssmRounded(12, weight: .bold))
+                            .foregroundStyle(SSMTheme.orange)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isCreatingMeet)
                 }
-                .buttonStyle(.plain)
-                .disabled(isCreatingMeet)
             }
             if let createError {
                 Text(createError).font(.ssmRounded(11, weight: .semibold)).foregroundStyle(SSMTheme.danger)

@@ -20,6 +20,34 @@ const {
 } = require('../services/relayDivisions');
 const { buildRelayRacesFromTeams } = require('../services/relayGenerator');
 const { rebuildRaceAssignmentsSafe } = require('../services/ttHelpers');
+const { createBackup: createDesktopBackup } = require('../services/desktopBackupService');
+
+// Desktop-run meets snapshot before any destructive race regeneration, exactly
+// like the website's builder saves do (createDesktopBackupIfActive in server.js).
+function backupBeforeRegen(db, meetId) {
+  if (process.env.SSM_DESKTOP !== '1') return;
+  try { createDesktopBackup({ db, reason: 'before_race_generation', meetId }); }
+  catch (err) { console.warn('Desktop backup skipped (before_race_generation):', err.message); }
+}
+
+// Racing has started once any race is closed — from then on, edits that would
+// rebuild/rerandomize races are refused (the rebuild blanks closed races'
+// results and deletes heats/semis).
+function racingHasStarted(meet) {
+  return (meet.races || []).some(r => String(r.status || '') === 'closed');
+}
+
+// Mirror of server.js relayDeadlinePassed (keep in sync): datetime-local has no
+// timezone and prod runs UTC, so pin to UTC + a 12h grace so the lock never
+// trips EARLY for a US meet.
+function relayDeadlinePassed(meet) {
+  const raw = meet && meet.relayDeadline ? String(meet.relayDeadline).trim() : '';
+  if (!raw) return false;
+  const iso = /\dT\d/.test(raw) ? raw + 'Z' : raw;
+  const t = new Date(iso).getTime();
+  if (isNaN(t)) return false;
+  return Date.now() > t + 12 * 3600 * 1000;
+}
 const {
   protestsForMeet, normalizeProtest, findProtest, unresolvedProtestCount,
   protestsForCoach, buildProtest, isRaceSpecific, raceProtestWindowClosed,
@@ -671,7 +699,18 @@ module.exports = function createMobileApiRoutes(deps = {}) {
     const regById = new Map((meet.registrations || []).map(r => [String(r.id), r]));
     const validRegIds = new Set(regById.keys());
     const incoming = Array.isArray(req.body.teams) ? req.body.teams : [];
-    let nextId = 1;
+    const existing = Array.isArray(meet.relayTeams) ? meet.relayTeams : [];
+    // Replace is scoped to the divisions the payload mentions — teams in other
+    // divisions (e.g. coach submissions the editor never showed) survive. And
+    // team ids are PRESERVED for unchanged teams / minted above the existing
+    // max: generated relay races reference relayTeamId, so ids must never be
+    // renumbered from 1.
+    const postedDivIds = new Set(incoming.map(t => String(t.divisionId || '')).filter(Boolean));
+    const preserved = existing.filter(t => !postedDivIds.has(String(t.divisionId)));
+    let maxId = existing.reduce((m, t) => Math.max(m, Number(t.id) || 0), 0);
+    const teamKey = (divisionId, members) => `${divisionId}|${[...members].sort().join(',')}`;
+    const priorByKey = new Map(existing.map(t =>
+      [teamKey(String(t.divisionId), (t.memberRegIds || []).map(String)), t]));
     const built = [];
     for (const t of incoming) {
       const div = RELAY_DIVISION_BY_ID.get(String(t.divisionId || ''));
@@ -679,10 +718,12 @@ module.exports = function createMobileApiRoutes(deps = {}) {
       const members = [...new Set((t.memberRegIds || []).map(String))].filter(id => validRegIds.has(id));
       if (members.length !== div.size) continue; // only complete teams
       const { club, mixed } = relayTeamClub(members, regById);
-      built.push({ id: nextId++, divisionId: div.id, club, mixed,
-                   memberRegIds: members, color: '', updatedAt: new Date().toISOString() });
+      const prior = priorByKey.get(teamKey(div.id, members));
+      built.push({ id: prior ? Number(prior.id) : ++maxId, divisionId: div.id, club, mixed,
+                   memberRegIds: members, color: prior ? (prior.color || '') : '',
+                   updatedAt: new Date().toISOString() });
     }
-    meet.relayTeams = built;
+    meet.relayTeams = [...preserved, ...built];
     meet.updatedAt = new Date().toISOString();
     saveDb(data.db);
     res.json({ ok:true, savedTeams: built.length });
@@ -740,7 +781,7 @@ module.exports = function createMobileApiRoutes(deps = {}) {
         };
       })
       .filter(d => d.eligible.length >= d.size || d.teams.length > 0);
-    res.json({ ok:true, team, divisions });
+    res.json({ ok:true, team, divisions, locked: relayDeadlinePassed(meet) });
   });
 
   router.post('/api/v1/meets/:meetId/coach/relay-builder/teams', (req, res) => {
@@ -752,6 +793,10 @@ module.exports = function createMobileApiRoutes(deps = {}) {
     const myRegs = coachSkaters(meet, data.user);
     if (!hasRole(data.user, 'coach') || myRegs.length === 0) {
       return res.status(403).json({ ok:false, error:'You have no skaters registered in this meet.' });
+    }
+    // Same relay-deadline lock the website's coach relay save enforces.
+    if (relayDeadlinePassed(meet)) {
+      return res.status(403).json({ ok:false, error:'The relay deadline for this meet has passed — see the meet director to change teams.' });
     }
     const myRegIds = new Set(myRegs.map(r => String(r.id)));
     const regs = meet.registrations || [];
@@ -808,8 +853,10 @@ module.exports = function createMobileApiRoutes(deps = {}) {
       rinkId: Number(meet.rinkId || 0),
       rinkLabel: meetRinkLabel(db, meet) || '',
       customRinkName: meet.customRinkName || '',
-      lanes: Number(meet.lanes || 4),
-      trackLength: Number(meet.trackLength || 100),
+      // Round the integer fields — legacy data can hold a stray decimal (the
+      // website's own save never floored these), and the app decodes them as Int.
+      lanes: Math.round(Number(meet.lanes || 4)),
+      trackLength: Math.round(Number(meet.trackLength || 100)),
       divisionScheme: String(meet.divisionScheme || 'standard').toLowerCase(),
       status: String(meet.status || 'draft').toLowerCase(),
       published: isPublicMeet(meet),
@@ -817,7 +864,7 @@ module.exports = function createMobileApiRoutes(deps = {}) {
       additionalRaceFee: Number(meet.additionalRaceFee || 0),
       maxRegistrationFee: Number(meet.maxRegistrationFee || 0),
       protestFee: Number(meet.protestFee || 0),
-      protestDeadlineMinutes: Number(meet.protestDeadlineMinutes || 0),
+      protestDeadlineMinutes: Math.round(Number(meet.protestDeadlineMinutes || 0)),
     };
   }
 
@@ -861,7 +908,9 @@ module.exports = function createMobileApiRoutes(deps = {}) {
     for (const key of ['baseEntryFee','additionalRaceFee','maxRegistrationFee','protestFee','protestDeadlineMinutes']) {
       if (b[key] !== undefined && b[key] !== null && String(b[key]).trim() !== '') {
         const n = Number(b[key]);
-        if (Number.isFinite(n) && n >= 0) meet[key] = n;
+        // The minutes field is an integer everywhere it's read — round it so a
+        // stray decimal can't stick in the data.
+        if (Number.isFinite(n) && n >= 0) meet[key] = key === 'protestDeadlineMinutes' ? Math.round(n) : n;
       }
     }
     // Registration window — recombine only when the form sent the date field
@@ -869,12 +918,16 @@ module.exports = function createMobileApiRoutes(deps = {}) {
     if (Object.prototype.hasOwnProperty.call(b, 'registrationCloseDate')) {
       meet.registrationCloseAt = combineDateTime(b.registrationCloseDate, b.registrationCloseTime);
     }
-    // Venue: a chosen rink id wins (and clears any custom name); otherwise a
-    // custom name is stored as free text. Mirrors saveMeetIdentityFields.
+    // Venue. Display-wise the CUSTOM NAME wins when set (meetRinkLabel checks it
+    // first) and the website always leaves a rinkId behind it, so the two fields
+    // are processed INDEPENDENTLY — each key applies only when present. The app
+    // sends both on every save: picking a rink sends {rinkId:N, customRinkName:""}
+    // (clears the custom override), typing a custom name sends the name and
+    // leaves rinkId as-is — matching saveMeetIdentityFields.
     if (b.rinkId !== undefined && Number(b.rinkId) > 0) {
       meet.rinkId = Number(b.rinkId);
-      meet.customRinkName = '';
-    } else if (typeof b.customRinkName === 'string' && Object.prototype.hasOwnProperty.call(b, 'customRinkName')) {
+    }
+    if (typeof b.customRinkName === 'string') {
       meet.customRinkName = b.customRinkName.trim();
     }
     // Publish toggle. meet.status doubles as the publish flag ('published') AND
@@ -902,9 +955,17 @@ module.exports = function createMobileApiRoutes(deps = {}) {
     }
     if (b.trackLength !== undefined && String(b.trackLength).trim() !== '') {
       const n = Number(b.trackLength);
-      if (Number.isFinite(n) && n >= 1) meet.trackLength = n;
+      if (Number.isFinite(n) && n >= 1) meet.trackLength = Math.round(n);
     }
     if (Number(meet.lanes || 4) !== oldLanes || Number(meet.trackLength || 100) !== oldTrack) {
+      // The rebuild blanks closed races' results and deletes heats/semis — once
+      // racing has started this is refused outright. (Returning without saveDb
+      // discards the in-memory mutation above.)
+      if (racingHasStarted(meet)) {
+        return res.status(409).json({ ok:false,
+          error:'Races have already been scored — lane and track changes are locked once racing starts.' });
+      }
+      backupBeforeRegen(data.db, meet.id);
       rebuildRaceAssignmentsSafe(meet);
       racesRebuilt = true;
     }
@@ -950,6 +1011,12 @@ module.exports = function createMobileApiRoutes(deps = {}) {
     if (!meet) return res.status(404).json({ ok:false, error:'Meet not found.' });
     if (!canEditMeet(data.user, meet)) return res.status(403).json({ ok:false, error:'Only a meet director can edit divisions.' });
     if (!Array.isArray(meet.groups)) meet.groups = [];
+    // Group rows are addressed by index, so a stale editor (scheme switched
+    // underneath it) must not land its writes on different divisions.
+    const currentScheme = String(meet.divisionScheme || 'standard').toLowerCase();
+    if (String(req.body.scheme || '').toLowerCase() !== currentScheme) {
+      return res.status(409).json({ ok:false, error:'The division scheme changed since this screen loaded — reload Divisions and try again.' });
+    }
 
     const applySlot = (existing, posted, fallbackAges) => {
       existing = existing || { enabled: false, cost: 0, distances: ['', '', '', ''] };
@@ -962,22 +1029,35 @@ module.exports = function createMobileApiRoutes(deps = {}) {
     };
 
     const incoming = Array.isArray(req.body.groups) ? req.body.groups : [];
+    let changed = false;
     for (const grp of incoming) {
       const idx = Number(grp.index);
       if (!Number.isInteger(idx) || idx < 0 || idx >= meet.groups.length) continue;
       const g = meet.groups[idx];
       if (!g.divisions) g.divisions = {};
+      const before = JSON.stringify([g.divisions.novice, g.divisions.elite]);
       if (grp.novice) g.divisions.novice = applySlot(g.divisions.novice, grp.novice, g.ages);
       if (grp.elite) g.divisions.elite = applySlot(g.divisions.elite, grp.elite, g.ages);
+      if (JSON.stringify([g.divisions.novice, g.divisions.elite]) !== before) changed = true;
     }
-    // Division config drives race generation — rebuild like the website's save.
-    generateConfiguredRacesForMeet(meet);
-    rebuildRaceAssignmentsSafe(meet);
-    ensureAtLeastOneBlock(meet);
-    ensureCurrentRace(meet);
+    // Division config drives race generation — but ONLY regenerate when the
+    // save actually changed something (a no-op save, a double-tap, or an app
+    // retry must never wipe and re-randomize the meet), and never once racing
+    // has started.
+    if (changed) {
+      if (racingHasStarted(meet)) {
+        return res.status(409).json({ ok:false,
+          error:'Races have already been scored — division changes are locked once racing starts.' });
+      }
+      backupBeforeRegen(data.db, meet.id);
+      generateConfiguredRacesForMeet(meet);
+      rebuildRaceAssignmentsSafe(meet);
+      ensureAtLeastOneBlock(meet);
+      ensureCurrentRace(meet);
+    }
     meet.updatedAt = new Date().toISOString();
     saveDb(data.db);
-    res.json({ ok: true, racesRebuilt: true, raceCount: (meet.races || []).length });
+    res.json({ ok: true, racesRebuilt: changed, raceCount: (meet.races || []).length });
   });
 
   return router;

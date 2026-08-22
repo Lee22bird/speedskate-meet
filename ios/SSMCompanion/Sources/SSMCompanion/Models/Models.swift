@@ -524,6 +524,8 @@ public struct CoachRelayBuilderData: Decodable {
     public let ok: Bool
     public let team: String
     public let divisions: [RelayDivision]
+    /// True once the meet's relay deadline has passed — editing is closed.
+    public let locked: Bool?
 }
 
 /// Editable meet settings (phase 1 — identity + fees). Matches the additive

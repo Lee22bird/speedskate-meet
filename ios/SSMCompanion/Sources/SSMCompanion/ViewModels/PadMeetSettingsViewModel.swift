@@ -1,9 +1,10 @@
 import Foundation
 
-/// Drives the iPad Meet Settings editor (phase 1): identity + fees. Loads the
-/// current values from the additive settings endpoint and saves a partial
-/// update — only the fields shown here, never touching lanes/divisions/etc. and
-/// never regenerating races.
+/// Drives the iPad Meet Settings editor: identity, venue, registration window,
+/// fees, racing basics (lanes/track — saving a change there rebuilds races,
+/// behind a confirm), the division scheme, and the publish toggle. Saves are
+/// partial updates; publish and the registration window are only sent when the
+/// user actually changed them, so a stale screen can't clobber a newer value.
 @MainActor
 public final class PadMeetSettingsViewModel: ObservableObject {
     @Published public var meetName = ""
@@ -36,19 +37,27 @@ public final class PadMeetSettingsViewModel: ObservableObject {
 
     private var originalLanes = 0
     private var originalTrack = 0
+    private var originalPublished = false
+    private var originalCloseDate = ""
+    private var originalCloseTime = ""
+    @Published public var schemeFlash: String?
 
     private let api: APIClient
     public init(api: APIClient = .shared) { self.api = api }
 
-    /// Lanes or track length differs from what loaded — saving will rebuild races.
+    /// Lanes or track length differs from what loaded — saving will rebuild
+    /// races. Uses the SAME parse the save payload uses, so the confirm dialog
+    /// can never disagree with what actually gets sent.
     public var racingChanged: Bool {
-        (Int(lanes.trimmingCharacters(in: .whitespaces)) ?? originalLanes) != originalLanes ||
-        (Int(trackLength.trimmingCharacters(in: .whitespaces)) ?? originalTrack) != originalTrack
+        let l = parsedNumber(lanes).map { Int($0) } ?? originalLanes
+        let t = parsedNumber(trackLength).map { Int($0.rounded()) } ?? originalTrack
+        return l != originalLanes || t != originalTrack
     }
 
     /// Money as a clean string: whole dollars drop the decimals ("25", not "25.0").
     private func money(_ v: Double) -> String {
-        v.rounded() == v ? String(Int(v)) : String(format: "%.2f", v)
+        if v.rounded() == v, let i = Int(exactly: v.rounded()) { return String(i) }
+        return String(format: "%.2f", v)
     }
 
     public func load(meetID: String) async {
@@ -71,6 +80,9 @@ public final class PadMeetSettingsViewModel: ObservableObject {
             status = s.status
             originalLanes = s.lanes
             originalTrack = s.trackLength
+            originalPublished = s.published
+            originalCloseDate = s.registrationCloseDate
+            originalCloseTime = s.registrationCloseTime
             if rinks.isEmpty { rinks = (try? await api.rinks()) ?? [] }
             baseEntryFee = money(s.baseEntryFee)
             additionalRaceFee = money(s.additionalRaceFee)
@@ -95,12 +107,12 @@ public final class PadMeetSettingsViewModel: ObservableObject {
         defer { isSwitchingScheme = false }
         savedFlash = false
         rebuildFlash = false
+        schemeFlash = nil
         do {
             try await api.setDivisionScheme(meetID: meetID, scheme: scheme)
             await load(meetID: meetID)
             errorMessage = nil
-            savedFlash = true
-            rebuildFlash = true   // a scheme switch always rebuilds races
+            schemeFlash = "Division scheme applied. Review the Divisions tab — races regenerate when divisions are saved."
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
@@ -117,16 +129,21 @@ public final class PadMeetSettingsViewModel: ObservableObject {
             "date": date.trimmingCharacters(in: .whitespaces),
             "endDate": endDate.trimmingCharacters(in: .whitespaces),
             "startTime": startTime.trimmingCharacters(in: .whitespaces),
-            // Always send the close date so clearing it clears the window.
-            "registrationCloseDate": registrationCloseDate.trimmingCharacters(in: .whitespaces),
-            "registrationCloseTime": registrationCloseTime.trimmingCharacters(in: .whitespaces),
         ]
-        // Venue: a picked rink wins; otherwise a free-text name.
-        if rinkId > 0 {
-            fields["rinkId"] = rinkId
-        } else {
-            fields["customRinkName"] = customRinkName.trimmingCharacters(in: .whitespaces)
+        // Registration window: only send when the user changed it here, so a
+        // stale screen can't clobber an edit made elsewhere. An emptied date
+        // still clears the window.
+        let closeDate = registrationCloseDate.trimmingCharacters(in: .whitespaces)
+        let closeTime = registrationCloseTime.trimmingCharacters(in: .whitespaces)
+        if closeDate != originalCloseDate || closeTime != originalCloseTime {
+            fields["registrationCloseDate"] = closeDate
+            fields["registrationCloseTime"] = closeTime
         }
+        // Venue: send BOTH keys — the custom name is a display override that the
+        // server checks first (meetRinkLabel), so picking a rink must clear it
+        // and typing a name must not disturb the underlying rinkId.
+        if rinkId > 0 { fields["rinkId"] = rinkId }
+        fields["customRinkName"] = customRinkName.trimmingCharacters(in: .whitespaces)
         // Money/number fields: send only when non-empty and valid, so a blank box
         // never posts a stray value.
         addNumber(&fields, "baseEntryFee", baseEntryFee)
@@ -136,8 +153,10 @@ public final class PadMeetSettingsViewModel: ObservableObject {
         addNumber(&fields, "protestDeadlineMinutes", protestDeadlineMinutes)
         addNumber(&fields, "lanes", lanes)
         addNumber(&fields, "trackLength", trackLength)
-        fields["published"] = published
+        // Publish: only when the user flipped it on this screen (dirty-tracked).
+        if published != originalPublished { fields["published"] = published }
         rebuildFlash = false
+        schemeFlash = nil
         do {
             let r = try await api.saveMeetSettings(meetID: meetID, fields: fields)
             let s = r.settings
@@ -152,6 +171,9 @@ public final class PadMeetSettingsViewModel: ObservableObject {
             status = s.status
             originalLanes = s.lanes
             originalTrack = s.trackLength
+            originalPublished = s.published
+            originalCloseDate = s.registrationCloseDate
+            originalCloseTime = s.registrationCloseTime
             rebuildFlash = (r.racesRebuilt == true)
             baseEntryFee = money(s.baseEntryFee)
             additionalRaceFee = money(s.additionalRaceFee)
@@ -166,19 +188,29 @@ public final class PadMeetSettingsViewModel: ObservableObject {
         }
     }
 
-    /// The venue shown on the picker button — a chosen rink's label, else the
-    /// custom name, else a placeholder.
+    /// The venue shown on the picker button. The CUSTOM NAME wins when set —
+    /// that's the server's display rule (meetRinkLabel checks it first), and the
+    /// website leaves a rinkId behind custom-venue meets, so rink-first here
+    /// would show the wrong venue.
     public var currentRinkLabel: String {
-        if rinkId > 0, let r = rinks.first(where: { $0.id == rinkId }) { return r.label }
         let c = customRinkName.trimmingCharacters(in: .whitespaces)
-        return c.isEmpty ? "No venue set" : c
+        if !c.isEmpty { return c }
+        if rinkId > 0, let r = rinks.first(where: { $0.id == rinkId }) { return r.label }
+        return "No venue set"
     }
 
     public func selectRink(_ r: Rink) { rinkId = r.id; customRinkName = "" }
 
+    /// Comma-decimal tolerant numeric parse shared by the save payload and
+    /// racingChanged, so the two can never disagree.
+    private func parsedNumber(_ raw: String) -> Double? {
+        let t = raw.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: ".")
+        guard !t.isEmpty, let n = Double(t), n.isFinite, n >= 0 else { return nil }
+        return n
+    }
+
     private func addNumber(_ fields: inout [String: Any], _ key: String, _ raw: String) {
-        let t = raw.trimmingCharacters(in: .whitespaces)
-        guard !t.isEmpty, let n = Double(t), n >= 0 else { return }
+        guard let n = parsedNumber(raw) else { return }
         fields[key] = n
     }
 }

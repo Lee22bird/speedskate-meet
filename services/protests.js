@@ -108,8 +108,11 @@ function buildProtest(meet, input, nowIso) {
   if (!PROTEST_CATEGORIES.includes(category)) return { ok: false, error: 'Choose a valid protest category.' };
   if (!statement) return { ok: false, error: 'A written statement is required.' };
   if (statement.length > 2000) return { ok: false, error: 'Statement is too long (2000 character max).' };
-  const raceId = isRaceSpecific(category) ? String(input.raceId || '') : '';
-  const race = raceId ? (meet.races || []).find(r => String(r.id) === raceId) : null;
+  const postedRaceId = isRaceSpecific(category) ? String(input.raceId || '') : '';
+  const race = postedRaceId ? (meet.races || []).find(r => String(r.id) === postedRaceId) : null;
+  // Only keep a race id that resolves to a real race in this meet — a bogus id
+  // would skip the deadline gate and break the uphold->correction deep link.
+  const raceId = race ? postedRaceId : '';
   return {
     ok: true,
     protest: normalizeProtest({
@@ -120,7 +123,11 @@ function buildProtest(meet, input, nowIso) {
       // Only keep a race label when the race itself was kept (non-race-specific
       // categories drop raceId), so a stray label can't cling to a protest that
       // isn't tied to a race.
-      raceLabel: raceId ? String(input.raceLabel || '') : '',
+      // Label derived from the resolved race, never trusted from the client.
+      raceLabel: race
+        ? [race.groupLabel, String(race.division || '').replace(/^\w/, c => c.toUpperCase()), race.distanceLabel]
+            .filter(Boolean).join(' · ')
+        : '',
       registrationId: String(input.registrationId || ''),
       filedByUserId: String(input.filedByUserId || ''),
       filedByName: String(input.filedByName || ''),

@@ -1,12 +1,14 @@
 import Foundation
 
-/// One editable division slot (novice/elite). Distances are edited as a single
-/// comma-separated string ("500m, 1000m") — far friendlier on a touch form than
-/// four boxes — and split on save.
+/// One editable division slot (novice/elite). Distances are POSITIONAL — slot
+/// index = race day (D1..D4), and the race generator keys races on that index —
+/// so they are edited as four separate boxes and holes are preserved exactly.
+/// (A compacting edit would silently move a race to a different day and
+/// recreate it with a new id and empty results.)
 public struct EditableSlot {
     public var enabled: Bool
     public var ages: String
-    public var distances: String
+    public var distances: [String]   // always 4 entries, "" = no race that day
 }
 
 public struct EditableGroup: Identifiable {
@@ -53,9 +55,11 @@ public final class PadDivisionsViewModel: ObservableObject {
     }
 
     private func slot(_ d: DivisionSlotDTO, fallbackAges: String) -> EditableSlot {
-        EditableSlot(enabled: d.enabled,
-                     ages: d.ages.isEmpty ? fallbackAges : d.ages,
-                     distances: d.distances.filter { !$0.isEmpty }.joined(separator: ", "))
+        var ds = d.distances
+        while ds.count < 4 { ds.append("") }
+        return EditableSlot(enabled: d.enabled,
+                            ages: d.ages.isEmpty ? fallbackAges : d.ages,
+                            distances: Array(ds.prefix(4)))
     }
 
     /// Enabled divisions across all groups — drives the Save button count.
@@ -74,22 +78,25 @@ public final class PadDivisionsViewModel: ObservableObject {
              "elite": slotPayload(g.elite)]
         }
         do {
-            let r = try await api.saveDivisions(meetID: meetID, groups: payload)
+            // The scheme rides along so a stale editor (scheme switched under it)
+            // is refused by the server instead of writing onto the wrong groups.
+            let r = try await api.saveDivisions(meetID: meetID, scheme: scheme, groups: payload)
             errorMessage = nil
             let n = r.raceCount ?? 0
-            savedMessage = "Saved — \(n) race\(n == 1 ? "" : "s") generated from your divisions."
+            let rebuilt = r.racesRebuilt == true
+            await load(meetID: meetID)   // reflect exactly what the server kept
+            savedMessage = rebuilt
+                ? "Saved — \(n) race\(n == 1 ? "" : "s") generated from your divisions."
+                : "Saved — nothing changed, races untouched."
         } catch {
             errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
     }
 
     private func slotPayload(_ s: EditableSlot) -> [String: Any] {
-        let distances = s.distances
-            .split(separator: ",")
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty }
-        return ["enabled": s.enabled,
-                "ages": s.ages.trimmingCharacters(in: .whitespaces),
-                "distances": distances]
+        // Positional: trimmed in place, holes preserved, never compacted.
+        ["enabled": s.enabled,
+         "ages": s.ages.trimmingCharacters(in: .whitespaces),
+         "distances": s.distances.map { $0.trimmingCharacters(in: .whitespaces) }]
     }
 }

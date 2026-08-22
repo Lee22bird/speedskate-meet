@@ -21,13 +21,29 @@ public struct CoachRelayBuilderView: View {
                     ProgressView().frame(maxWidth: .infinity).padding(.top, 40)
                 } else if vm.divisions.isEmpty {
                     SSMCard {
-                        Text("No relay divisions have enough of your skaters yet. Relay eligibility is by age and gender from your registered skaters — you need at least a full team (2, 3, or 4) in a division.")
-                            .font(.ssmRounded(14, weight: .medium))
-                            .foregroundStyle(SSMTheme.muted)
+                        VStack(alignment: .leading, spacing: 12) {
+                            if let error = vm.errorMessage {
+                                // A failed load (expired session, no signal) must
+                                // not read as "your skaters aren't eligible."
+                                Text(error)
+                                    .font(.ssmRounded(14, weight: .semibold))
+                                    .foregroundStyle(SSMTheme.danger)
+                                Button { Task { await vm.load(meetID: meetID) } } label: {
+                                    Label("Retry", systemImage: "arrow.clockwise")
+                                        .font(.ssmRounded(13, weight: .bold))
+                                }
+                                .buttonStyle(.ssmSoftPill)
+                            } else {
+                                Text("No relay divisions have enough of your skaters yet. Relay eligibility is by age and gender from your registered skaters — you need at least a full team (2, 3, or 4) in a division.")
+                                    .font(.ssmRounded(14, weight: .medium))
+                                    .foregroundStyle(SSMTheme.muted)
+                            }
+                        }
                     }
                 } else {
+                    if vm.locked { lockedBanner }
                     ForEach(vm.divisions) { div in divisionCard(div) }
-                    saveBar
+                    if !vm.locked { saveBar }
                 }
             }
             .padding()
@@ -38,6 +54,17 @@ public struct CoachRelayBuilderView: View {
         .navigationTitle(meetName)
         .ssmInlineNavigationTitle()
         .task { await vm.load(meetID: meetID) }
+    }
+
+    private var lockedBanner: some View {
+        SSMCard {
+            HStack(spacing: 10) {
+                Image(systemName: "lock.fill").foregroundStyle(SSMTheme.orange)
+                Text("The relay deadline has passed — teams are locked. See the meet director to make changes.")
+                    .font(.ssmRounded(14, weight: .semibold))
+                    .foregroundStyle(SSMTheme.textPrimary)
+            }
+        }
     }
 
     private var intro: some View {

@@ -103,6 +103,7 @@ public final class RelayBuilderViewModel: ObservableObject {
 
     @discardableResult
     public func save(meetID: String) async -> Bool {
+        guard !isSaving else { return false }
         isSaving = true
         defer { isSaving = false }
         do {
