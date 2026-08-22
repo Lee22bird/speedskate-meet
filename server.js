@@ -129,6 +129,9 @@ const { RELAY_DIVISION_BY_ID } = require('./services/relayDivisions');
 const { renderBlockBuilderView } = require('./views/blockBuilderView');
 const { renderMeetBuilderView } = require('./views/meetBuilderView');
 const { renderDqReportView } = require('./views/dqReportView');
+const {
+  streamRaceListPdf, streamFinalResultsPdf, streamDqReportPdf,
+} = require('./services/printReportsPdf');
 const { renderOpenBuilderView } = require('./views/openBuilderView');
 const { renderQuadBuilderView } = require('./views/quadBuilderView');
 const { renderRelayBuilderView } = require('./views/relayBuilderView');
@@ -2220,6 +2223,9 @@ app.get('/meet/:meetId/results', (req, res) => {
 
 app.get('/portal/meet/:meetId/results/print', requireRole('meet_director','judge','coach'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId); if(!meet) return res.redirect('/portal');
+  if(String(req.query.format||'').toLowerCase()==='pdf') {
+    return streamFinalResultsPdf(res,{db:req.db,meet});
+  }
   const sections=computeMeetStandings(meet); const openSections=computeOpenResults(meet); const quadSections=computeQuadStandings(meet);
   const ttPrintHtml=renderTimeTrialFinalResultsPrintHtml(completedTimeTrialEvents(meet));
   const location = meetRinkLabel(req.db, meet);
@@ -2255,6 +2261,9 @@ app.get('/portal/meet/:meetId/results/print', requireRole('meet_director','judge
 app.get('/portal/meet/:meetId/results/dq-report', requireRole('meet_director','judge'), (req, res) => {
   const meet = getMeetOr404(req.db, req.params.meetId);
   if (!meet) return res.redirect('/portal');
+  if (String(req.query.format || '').toLowerCase() === 'pdf') {
+    return streamDqReportPdf(res, { db: req.db, meet });
+  }
   const rows = statusRowsForMeet(meet, { onlyDisqualifications: true });
   const location = meetRinkLabel(req.db, meet);
   const dateLine = meetDateLabel(meet);
@@ -2461,6 +2470,10 @@ app.get('/meet/:meetId/live', (req, res) => {
 
 app.get('/portal/meet/:meetId/registered/print-race-list', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId); if(!meet) return res.redirect('/portal');
+  // ?format=pdf streams the same content as a PDF (for AirPrint from the app).
+  if(String(req.query.format||'').toLowerCase()==='pdf') {
+    return streamRaceListPdf(res,{db:req.db,meet});
+  }
   const blocksByDay={};
   for(const block of meet.blocks||[]) { const day=block.day||'Day 1'; if(!blocksByDay[day]) blocksByDay[day]=[]; blocksByDay[day].push(block); }
   const breakTypes=['break','lunch','awards','practice'];

@@ -616,6 +616,67 @@ public final class APIClient {
                                          expectedRedirectPrefix: "/portal/archived-meets")
     }
 
+    /// The printable reports the server can stream as PDF (alongside score sheets).
+    public enum PrintReport: String, CaseIterable {
+        case raceList, blockSchedule, finalResults, dqReport
+
+        public var title: String {
+            switch self {
+            case .raceList: return "Race List"
+            case .blockSchedule: return "Block Schedule"
+            case .finalResults: return "Final Results"
+            case .dqReport: return "DQ Report"
+            }
+        }
+        public var detail: String {
+            switch self {
+            case .raceList: return "Every race in running order"
+            case .blockSchedule: return "Blocks with lane sheets"
+            case .finalResults: return "Standings, open, quad + statuses"
+            case .dqReport: return "Officials only · confidential"
+            }
+        }
+        public var systemImage: String {
+            switch self {
+            case .raceList: return "list.number"
+            case .blockSchedule: return "square.stack.3d.up"
+            case .finalResults: return "trophy"
+            case .dqReport: return "exclamationmark.triangle"
+            }
+        }
+        var path: String {
+            switch self {
+            case .raceList: return "registered/print-race-list"
+            case .blockSchedule: return "blocks/print"
+            case .finalResults: return "results/print"
+            case .dqReport: return "results/dq-report"
+            }
+        }
+        var filename: String {
+            switch self {
+            case .raceList: return "race-list.pdf"
+            case .blockSchedule: return "block-schedule.pdf"
+            case .finalResults: return "final-results.pdf"
+            case .dqReport: return "dq-report.pdf"
+            }
+        }
+    }
+
+    /// Fetch one of the printable reports as PDF bytes.
+    public func fetchReportPDF(meetID: String, report: PrintReport) async throws -> Data {
+        guard let url = URL(string: "/portal/meet/\(meetID)/\(report.path)?format=pdf",
+                            relativeTo: baseURL)?.absoluteURL else { throw APIError.invalidURL }
+        let (data, response): (Data, URLResponse)
+        do { (data, response) = try await session.data(from: url) }
+        catch { throw APIError.network(error) }
+        guard let http = response as? HTTPURLResponse else { throw APIError.server("No response from server.") }
+        guard http.statusCode == 200,
+              (http.value(forHTTPHeaderField: "Content-Type") ?? "").contains("pdf") else {
+            throw APIError.server("Couldn't fetch the \(report.title) — log in again and retry.")
+        }
+        return data
+    }
+
     /// Fetch a time-trial event's results as CSV bytes for a share/export sheet.
     public func fetchTimeTrialCSV(meetID: String, eventID: String) async throws -> Data {
         guard let url = URL(string: "/portal/meet/\(meetID)/time-trials/\(eventID)/export.csv",

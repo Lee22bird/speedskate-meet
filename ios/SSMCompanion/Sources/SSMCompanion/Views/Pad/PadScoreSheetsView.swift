@@ -18,6 +18,7 @@ struct PadScoreSheetsView: View {
                 scopeCard
                 layoutCard
                 actionBar
+                otherReportsCard
             }
             .padding(24)
             .frame(maxWidth: 820)
@@ -39,6 +40,52 @@ struct PadScoreSheetsView: View {
             Text("Printable paper worksheets — one per race, for judges to record places by hand. Share to AirPrint, Files, or email.")
                 .font(.ssmRounded(13, weight: .medium))
                 .foregroundStyle(SSMTheme.muted)
+        }
+    }
+
+    /// The other printable paperwork — same fetch-and-share flow as score sheets.
+    private var otherReportsCard: some View {
+        SSMCard {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("OTHER PRINTOUTS")
+                    .font(.ssmRounded(12, weight: .heavy))
+                    .foregroundStyle(SSMTheme.muted)
+                Text("The rest of the meet paperwork, as PDFs you can AirPrint or save.")
+                    .font(.ssmRounded(12, weight: .medium))
+                    .foregroundStyle(SSMTheme.muted)
+                ForEach(APIClient.PrintReport.allCases, id: \.rawValue) { report in
+                    Button {
+                        Task {
+                            await vm.fetchReport(meetID: meetID,
+                                                 meetName: session.selectedMeetName,
+                                                 report: report)
+                        }
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: report.systemImage)
+                                .font(.system(size: 16))
+                                .foregroundStyle(SSMTheme.orange)
+                                .frame(width: 24)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(report.title)
+                                    .font(.ssmRounded(15, weight: .bold))
+                                    .foregroundStyle(SSMTheme.textPrimary)
+                                Text(report.detail)
+                                    .font(.caption)
+                                    .foregroundStyle(SSMTheme.muted)
+                            }
+                            Spacer()
+                            Image(systemName: "square.and.arrow.up")
+                                .font(.caption)
+                                .foregroundStyle(SSMTheme.muted)
+                        }
+                        .contentShape(Rectangle())
+                        .padding(.vertical, 6)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(vm.isWorking)
+                }
+            }
         }
     }
 

@@ -28,6 +28,27 @@ public final class PadScoreSheetsViewModel: ObservableObject {
     private let api: APIClient
     public init(api: APIClient = .shared) { self.api = api }
 
+    /// Fetch one of the other printable reports (race list, block schedule,
+    /// final results, DQ report) and stage it for the share sheet.
+    public func fetchReport(meetID: String, meetName: String, report: APIClient.PrintReport) async {
+        guard !isWorking else { return }
+        isWorking = true
+        defer { isWorking = false }
+        do {
+            let data = try await api.fetchReportPDF(meetID: meetID, report: report)
+            let safe = meetName.lowercased()
+                .replacingOccurrences(of: " ", with: "-")
+                .filter { $0.isLetter || $0.isNumber || $0 == "-" }
+            let url = FileManager.default.temporaryDirectory
+                .appendingPathComponent("\(safe.isEmpty ? "meet" : safe)-\(report.filename)")
+            try data.write(to: url, options: .atomic)
+            pdfURL = url
+            errorMessage = nil
+        } catch {
+            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
     /// Resolve the chosen scope to the server's params and stage the PDF.
     public func generate(meetID: String, meetName: String, currentRaceID: String?) async {
         guard !isWorking else { return }

@@ -83,6 +83,7 @@ const { renderTimeTrialFinalResultsHtml } = require('../services/timeTrialResult
 const { generateScheduleBlocks } = require('../services/scheduleGenerator');
 const { createBackup: createDesktopBackup } = require('../services/desktopBackupService');
 const { streamScoreSheetsPdf } = require('../services/scoreSheetPdf');
+const { streamBlockSchedulePdf } = require('../services/printReportsPdf');
 const { invalidLaneStatus, sendIfInvalid } = require('../utils/validate');
 const {
   RACE_STATUS_OPTIONS,
@@ -1218,6 +1219,11 @@ router.get('/portal/meet/:meetId/blocks/print', requireRole('meet_director'), (r
   const pageBreaks = String(req.query.breaks || '') === '1';
   const showEmpty = String(req.query.empty || '') === '1';
   const layout = String(req.query.layout || 'compact');
+
+  // ?format=pdf streams the same schedule as a PDF (for AirPrint from the app).
+  if (String(req.query.format || '').toLowerCase() === 'pdf') {
+    return streamBlockSchedulePdf(res, { db: req.db, meet, showEmpty });
+  }
 
   res.send(renderBlockSchedulePrintPage({ req, meet, showNotes, pageBreaks, showEmpty, layout }));
 });
