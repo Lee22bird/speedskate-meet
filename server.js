@@ -76,6 +76,7 @@ const { asyncHandler } = require('./utils/asyncHandler');
 const {
   hasRole,
   canEditMeet,
+  isMeetPinUser, meetPinRoleFor,
 } = require('./utils/auth');
 
 const {
@@ -422,6 +423,16 @@ function staffRoleOptions(selectedRoles = []) {
 }
 
 
+// What a meet PIN is allowed to do on ITS OWN meet, expressed as the route roles
+// it satisfies. A PIN never satisfies a role check on any other meet, and never
+// on a route that isn't meet-scoped.
+const MEET_PIN_GRANTS = {
+  meet_director: ['meet_director', 'judge', 'announcer'],
+  tabulator: ['judge'],
+  referee: ['judge'],
+  announcer: ['announcer'],
+};
+
 function requireRole(...roles) {
   return (req,res,next)=>{
     const data=getSessionUser(req);
@@ -447,6 +458,20 @@ function requireRole(...roles) {
     }
     if(extendSession(data.db,data.token)) saveDb(data.db);
     req.db=data.db; req.user=data.user; req.sessionToken=data.token;
+    // Meet-PIN identities get their own branch and never fall through to the
+    // role checks below (hasRole is always false for them by design). Access is
+    // granted only on the PIN's own meet, and only for that PIN's role.
+    if (isMeetPinUser(data.user)) {
+      const pinMeetId = req.params && req.params.meetId;
+      if (pinMeetId) {
+        const pinMeet = getMeetOr404(data.db, pinMeetId);
+        const pinRole = pinMeet ? meetPinRoleFor(data.user, pinMeet) : null;
+        const grants = MEET_PIN_GRANTS[pinRole] || [];
+        if (pinRole && roles.some(role => grants.includes(role))) return next();
+      }
+      return res.status(403).send(pageShell({title:'Forbidden',user:data.user,
+        bodyHtml:`<div class="page-header"><h1>Forbidden</h1></div><div class="card"><div class="danger">Your meet PIN doesn't give you access to this page.</div></div>`}));
+    }
     if(hasRole(data.user,'super_admin')||roles.some(role=>hasRole(data.user,role))) return next();
     // A tabulator (judge role) only gets meet_director-gated routes on a meet
     // they created or were specifically assigned to tabulate — never every
