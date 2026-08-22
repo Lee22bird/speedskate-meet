@@ -22,6 +22,9 @@ const { buildRelayRacesFromTeams } = require('../services/relayGenerator');
 const { rebuildRaceAssignmentsSafe } = require('../services/ttHelpers');
 const { createBackup: createDesktopBackup } = require('../services/desktopBackupService');
 const { normalizeTimeTrialSettings, ensureTimeTrialEvent } = require('../services/timeTrialEvents');
+const {
+  relayTemplateRowsForRuleset, normalizeRelayTemplates, normalizeRelayAgeRange, makeRelayRace,
+} = require('../services/relayHelpers');
 
 // Desktop-run meets snapshot before any destructive race regeneration, exactly
 // like the website's builder saves do (createDesktopBackupIfActive in server.js).
@@ -999,6 +1002,159 @@ module.exports = function createMobileApiRoutes(deps = {}) {
     meet.updatedAt = new Date().toISOString();
     saveDb(data.db);
     res.json({ ok:true, settings: meetSettingsJson(meet, data.db), racesRebuilt });
+  });
+
+  // ── Director: relay templates (which relay divisions this meet offers) ─────
+  // The website's relay-builder/add-template save is an ALL-OR-NOTHING indexed
+  // full-form replace. This is the additive twin: rows are addressed by
+  // divisionId (never array index, so a stale editor can't write onto the wrong
+  // division), and only the divisions present in the body are touched.
+  function meetRelayRuleset(meet) {
+    return meet.relayRuleset || (meet.divisionScheme === 'mssl' ? 'mssl' : 'usars');
+  }
+
+  function relayRaceForDivision(meet, base, name, distance) {
+    return (meet.races || []).find(r =>
+      r.isRelayRace && base.divisionId && r.relayDivisionId === base.divisionId
+    ) || (meet.races || []).find(r =>
+      r.isRelayRace &&
+      String(r.groupLabel || '').trim().toLowerCase() === String(name || '').trim().toLowerCase() &&
+      String(r.distanceLabel || '').trim().toLowerCase() === String(distance || '').trim().toLowerCase()
+    ) || null;
+  }
+
+  // A relay race that has been run must never be silently removed.
+  function relayRaceHasResults(race) {
+    if (!race) return false;
+    if (String(race.status || '') === 'closed') return true;
+    return (race.laneEntries || []).some(l => String(l.place || '').trim() || String(l.time || '').trim());
+  }
+
+  router.get('/api/v1/meets/:meetId/relay-templates', (req, res) => {
+    const data = getSessionUser(req);
+    if (!data) return res.status(401).json({ ok:false, error:'Not logged in.' });
+    const meet = getMeetOr404(data.db, req.params.meetId);
+    if (!meet) return res.status(404).json({ ok:false, error:'Meet not found.' });
+    if (!canEditMeet(data.user, meet)) return res.status(403).json({ ok:false, error:'Only a meet director can edit relays.' });
+
+    const ruleset = meetRelayRuleset(meet);
+    const saved = normalizeRelayTemplates(meet.relayTemplates, ruleset);
+    const bases = relayTemplateRowsForRuleset(ruleset);
+    const rows = bases.map((base, idx) => {
+      const t = saved[idx] || {};
+      const type = String(t.type || base.type);
+      const age = String(t.age || base.age);
+      const distance = String(t.distance || base.distance);
+      const name = (base.discipline === 'quad' ? 'Quad ' : '') + [age, type, 'Relay'].filter(Boolean).join(' ');
+      const race = relayRaceForDivision(meet, base, name, distance);
+      return {
+        divisionId: String(base.divisionId || ''),
+        label: name,
+        type, age,
+        ageRange: String(t.ageRange || base.ageRange || ''),
+        distance,
+        notes: String(t.notes || base.notes || ''),
+        discipline: base.discipline || 'inline',
+        enabled: !!t.enabled,
+        raceId: race ? String(race.id) : null,
+        raceHasResults: relayRaceHasResults(race),
+      };
+    });
+    res.json({ ok:true, ruleset, rows });
+  });
+
+  router.post('/api/v1/meets/:meetId/relay-templates', (req, res) => {
+    const data = getSessionUser(req);
+    if (!data) return res.status(401).json({ ok:false, error:'Not logged in.' });
+    const meet = getMeetOr404(data.db, req.params.meetId);
+    if (!meet) return res.status(404).json({ ok:false, error:'Meet not found.' });
+    if (!canEditMeet(data.user, meet)) return res.status(403).json({ ok:false, error:'Only a meet director can edit relays.' });
+
+    const ruleset = meetRelayRuleset(meet);
+    const bases = relayTemplateRowsForRuleset(ruleset);
+    const saved = normalizeRelayTemplates(meet.relayTemplates, ruleset);
+    const baseByDiv = new Map(bases.map((b, i) => [String(b.divisionId), { base: b, idx: i }]));
+    const incoming = Array.isArray(req.body.rows) ? req.body.rows : [];
+    if (!Array.isArray(meet.races)) meet.races = [];
+
+    let created = 0;
+    let updated = 0;
+    for (const row of incoming) {
+      const hit = baseByDiv.get(String(row.divisionId || ''));
+      if (!hit) continue;                       // unknown division — ignore, never guess
+      const { base, idx } = hit;
+      const t = saved[idx] || {};
+      const enabled = !!row.enabled;
+      const type = String(row.type || t.type || base.type).trim();
+      const age = String(row.age || t.age || base.age).trim();
+      const ageRange = normalizeRelayAgeRange(row.ageRange !== undefined ? row.ageRange : (t.ageRange || base.ageRange || ''));
+      const distance = String(row.distance !== undefined ? row.distance : (t.distance || base.distance)).trim();
+      const notes = String(row.notes !== undefined ? row.notes : (t.notes || base.notes || '')).trim();
+      const isQuad = base.discipline === 'quad';
+      const name = (isQuad ? 'Quad ' : '') + [age, type, 'Relay'].filter(Boolean).join(' ');
+
+      saved[idx] = { ...t, enabled, type, age, ageRange, distance, notes,
+                     divisionId: base.divisionId, discipline: base.discipline || 'inline' };
+
+      if (enabled && name && distance) {
+        const race = relayRaceForDivision(meet, base, name, distance);
+        if (race) {
+          race.relayType = type;
+          race.relayAgeGroup = age;
+          race.relayAgeRange = ageRange;
+          race.ages = ageRange || age;
+          race.notes = notes;
+          if (base.divisionId) race.relayDivisionId = base.divisionId;
+          updated += 1;
+        } else {
+          const fresh = makeRelayRace({ name, distance, notes, relayType: type, ageGroup: age, ageRange, quad: isQuad });
+          if (base.divisionId) fresh.relayDivisionId = base.divisionId;
+          fresh.orderHint = 9800 + (meet.races || []).filter(r => r.isRelayRace).length;
+          meet.races.push(fresh);
+          created += 1;
+        }
+      }
+      // Disabling leaves any existing race alone (website parity) — removing a
+      // relay race is the explicit delete action below.
+    }
+
+    meet.relayTemplates = saved;
+    meet.updatedAt = new Date().toISOString();
+    saveDb(data.db);
+    res.json({ ok:true, created, updated,
+               relayRaceCount: (meet.races || []).filter(r => r.isRelayRace).length });
+  });
+
+  // Delete one relay race (and disable its template row), mirroring the
+  // website's relay-builder/delete — but refusing a race that has been run.
+  router.post('/api/v1/meets/:meetId/relay-templates/delete-race', (req, res) => {
+    const data = getSessionUser(req);
+    if (!data) return res.status(401).json({ ok:false, error:'Not logged in.' });
+    const meet = getMeetOr404(data.db, req.params.meetId);
+    if (!meet) return res.status(404).json({ ok:false, error:'Meet not found.' });
+    if (!canEditMeet(data.user, meet)) return res.status(403).json({ ok:false, error:'Only a meet director can edit relays.' });
+
+    const raceId = String(req.body.raceId || '');
+    const race = (meet.races || []).find(r => String(r.id) === raceId && r.isRelayRace);
+    if (!race) return res.status(404).json({ ok:false, error:'Relay race not found.' });
+    if (relayRaceHasResults(race)) {
+      return res.status(409).json({ ok:false, error:'That relay has already been raced — it can\'t be deleted.' });
+    }
+
+    meet.races = (meet.races || []).filter(r => String(r.id) !== raceId);
+    meet.blocks = (meet.blocks || []).map(b => ({ ...b, raceIds: (b.raceIds || []).filter(id => String(id) !== raceId) }));
+    if (Array.isArray(meet.relayTemplates)) {
+      meet.relayTemplates = meet.relayTemplates.map(t => {
+        const sameDiv = race.relayDivisionId && String(t.divisionId || '') === String(race.relayDivisionId);
+        const legacy = String(t.age || '') === String(race.relayAgeGroup || '')
+          && String(t.type || '') === String(race.relayType || '')
+          && String(t.distance || '') === String(race.distanceLabel || '');
+        return (sameDiv || legacy) ? { ...t, enabled: false } : t;
+      });
+    }
+    meet.updatedAt = new Date().toISOString();
+    saveDb(data.db);
+    res.json({ ok:true, relayRaceCount: (meet.races || []).filter(r => r.isRelayRace).length });
   });
 
   // ── Director: unarchive a meet (JSON twin of adminRoutes' redirect flow) ───

@@ -599,6 +599,35 @@ public struct Rink: Decodable, Identifiable, Hashable {
     public let label: String
 }
 
+/// One relay division the meet can offer (the website's relay template rows).
+public struct RelayTemplateRow: Decodable, Identifiable {
+    public let divisionId: String
+    public let label: String
+    public let type: String
+    public let age: String
+    public let ageRange: String
+    public let distance: String
+    public let notes: String
+    public let discipline: String
+    public let enabled: Bool
+    public let raceId: String?
+    public let raceHasResults: Bool
+    public var id: String { divisionId }
+}
+
+public struct RelayTemplatesResponse: Decodable {
+    public let ok: Bool
+    public let ruleset: String
+    public let rows: [RelayTemplateRow]
+}
+
+public struct RelayTemplatesSaveResponse: Decodable {
+    public let ok: Bool
+    public let created: Int
+    public let updated: Int
+    public let relayRaceCount: Int
+}
+
 public struct MeetStatusResponse: Decodable {
     public let ok: Bool
     public let status: String

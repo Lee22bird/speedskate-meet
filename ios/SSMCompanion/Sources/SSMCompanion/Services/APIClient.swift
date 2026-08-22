@@ -916,6 +916,23 @@ public final class APIClient {
         try await postJSONObject("/api/v1/meets/\(meetID)/settings", body: fields)
     }
 
+    // ── Relay templates (director: which relay divisions this meet offers) ─
+    public func relayTemplates(meetID: String) async throws -> RelayTemplatesResponse {
+        try await request("/api/v1/meets/\(meetID)/relay-templates")
+    }
+
+    /// Save only the rows passed — addressed by divisionId, never index.
+    @discardableResult
+    public func saveRelayTemplates(meetID: String, rows: [[String: Any]]) async throws -> RelayTemplatesSaveResponse {
+        try await postJSONObject("/api/v1/meets/\(meetID)/relay-templates", body: ["rows": rows])
+    }
+
+    /// Remove one generated relay race (refused server-side once it's been run).
+    @discardableResult
+    public func deleteRelayRace(meetID: String, raceID: String) async throws -> RelayTemplatesSaveResponse {
+        try await postJSONObject("/api/v1/meets/\(meetID)/relay-templates/delete-race", body: ["raceId": raceID])
+    }
+
     // ── Relay teams (coach) ───────────────────────────────────────────────
     // A coach builds their own club's teams; the director generates the races.
     public func coachRelayBuilder(meetID: String) async throws -> CoachRelayBuilderData {
