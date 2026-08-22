@@ -24,6 +24,10 @@ const { rebuildRaceAssignmentsSafe } = require('../services/ttHelpers');
 const { makeSetupPresetFromMeet } = require('../services/meetHelpers');
 const { applySetupPresetToMeet } = require('../services/setupPresets');
 const { generatePinForMeet, clearPinForMeet } = require('../services/desktopMeetPinService');
+const {
+  PIN_ROLES, PIN_ROLE_LABELS, createStaffPin, verifyStaffPin, revokeStaffPin,
+  regenerateStaffPin, staffPinsJson,
+} = require('../services/meetStaffPins');
 const { createBackup: createDesktopBackup } = require('../services/desktopBackupService');
 const { normalizeTimeTrialSettings, ensureTimeTrialEvent } = require('../services/timeTrialEvents');
 const {
@@ -213,7 +217,8 @@ function resolveStaffRole(user, meet) {
 
 module.exports = function createMobileApiRoutes(deps = {}) {
   const router = express.Router();
-  const { getSessionUser, loadDb, saveDb } = deps;
+  const { getSessionUser, loadDb, saveDb, createMeetPinSession, setCookie,
+          SESSION_COOKIE, MEET_PIN_SESSION_TTL_MS } = deps;
 
   if (typeof getSessionUser !== 'function') throw new Error('mobileApiRoutes requires getSessionUser');
   if (typeof loadDb !== 'function') throw new Error('mobileApiRoutes requires loadDb');
@@ -1097,6 +1102,86 @@ module.exports = function createMobileApiRoutes(deps = {}) {
     const result = generatePinForMeet(meet);
     saveDb(data.db);
     res.json({ ok:true, hasPin:true, pin: String(result.pin), expiresAt: String(result.expiresAt || '') });
+  });
+
+  // ── Director: staff PINs (account-free access for one meet) ───────────────
+  // Officials who won't make an SSL account get a named 6-digit PIN for ONE
+  // meet in ONE role. The PIN is shown once at creation and stored only as a
+  // salted hash. Their name rides along, so DQs and rulings are attributed to
+  // them rather than to whoever's account the iPad happens to be signed into.
+  router.get('/api/v1/meets/:meetId/staff-pins', (req, res) => {
+    const data = getSessionUser(req);
+    if (!data) return res.status(401).json({ ok:false, error:'Not logged in.' });
+    const meet = getMeetOr404(data.db, req.params.meetId);
+    if (!meet) return res.status(404).json({ ok:false, error:'Meet not found.' });
+    if (!canEditMeet(data.user, meet)) return res.status(403).json({ ok:false, error:'Only a meet director can manage meet PINs.' });
+    res.json({
+      ok: true,
+      roles: PIN_ROLES.map(r => ({ key: r, label: PIN_ROLE_LABELS[r] })),
+      pins: staffPinsJson(meet),
+    });
+  });
+
+  router.post('/api/v1/meets/:meetId/staff-pins', (req, res) => {
+    const data = getSessionUser(req);
+    if (!data) return res.status(401).json({ ok:false, error:'Not logged in.' });
+    const meet = getMeetOr404(data.db, req.params.meetId);
+    if (!meet) return res.status(404).json({ ok:false, error:'Meet not found.' });
+    if (!canEditMeet(data.user, meet)) return res.status(403).json({ ok:false, error:'Only a meet director can manage meet PINs.' });
+    const action = String(req.body.action || 'create').toLowerCase();
+    try {
+      if (action === 'revoke') {
+        revokeStaffPin(meet, String(req.body.pinId || ''));
+        saveDb(data.db);
+        return res.json({ ok:true, pins: staffPinsJson(meet) });
+      }
+      if (action === 'regenerate') {
+        const { row, pin } = regenerateStaffPin(meet, String(req.body.pinId || ''));
+        saveDb(data.db);
+        return res.json({ ok:true, pin, name: row.name, roleLabel: PIN_ROLE_LABELS[row.role] || 'Staff', pins: staffPinsJson(meet) });
+      }
+      const { row, pin } = createStaffPin(meet, {
+        name: req.body.name, role: req.body.role, createdByUserId: data.user.id,
+      });
+      saveDb(data.db);
+      return res.json({ ok:true, pin, name: row.name, roleLabel: PIN_ROLE_LABELS[row.role] || 'Staff', pins: staffPinsJson(meet) });
+    } catch (err) {
+      return res.status(400).json({ ok:false, error: err.message });
+    }
+  });
+
+  // ── Meet-PIN sign in (no account) ─────────────────────────────────────────
+  // Open to anyone: the PIN itself is the credential. Scoped to the meet it was
+  // issued for; the session it creates carries no platform roles.
+  router.post('/api/v1/meet-pin/login', (req, res) => {
+    const db = loadDb();
+    const meetId = String(req.body.meetId || '').trim();
+    const meet = (db.meets || []).find(m => String(m.id) === meetId);
+    if (!meet) return res.status(404).json({ ok:false, error:'Meet not found.' });
+    const row = verifyStaffPin(meet, req.body.pin);
+    if (!row) return res.status(401).json({ ok:false, error:'That PIN is not valid for this meet.' });
+    row.lastUsedAt = new Date().toISOString();
+    const token = createMeetPinSession(db, meet, row);
+    saveDb(db);
+    setCookie(res, SESSION_COOKIE, token, Math.floor(MEET_PIN_SESSION_TTL_MS / 1000));
+    res.json({
+      ok: true,
+      meetId: String(meet.id),
+      meetName: String(meet.meetName || ''),
+      name: String(row.name || ''),
+      role: String(row.role || ''),
+      roleLabel: PIN_ROLE_LABELS[row.role] || 'Staff',
+    });
+  });
+
+  // Meets a PIN holder could sign in to — public/live meets only, so the
+  // sign-in screen can offer a picker without exposing drafts.
+  router.get('/api/v1/meet-pin/meets', (req, res) => {
+    const db = loadDb();
+    const meets = (db.meets || [])
+      .filter(m => Array.isArray(m.staffPins) && m.staffPins.some(r => r && !r.revokedAt && r.pinHash))
+      .map(m => ({ id: String(m.id), meetName: String(m.meetName || ''), date: String(m.date || '') }));
+    res.json({ ok:true, meets });
   });
 
   // ── Director: staff assignments (read) ────────────────────────────────────

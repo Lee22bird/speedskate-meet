@@ -500,6 +500,7 @@ struct PadLoginSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var email = ""
     @State private var password = ""
+    @State private var showPin = false
 
     var body: some View {
         VStack(spacing: 18) {
@@ -547,6 +548,19 @@ struct PadLoginSheet: View {
             .buttonStyle(.ssmPill)
             .disabled(auth.isLoading || email.isEmpty || password.isEmpty)
 
+            // Account-free path for officials working one meet.
+            Divider().overlay(SSMTheme.cardBorder).padding(.vertical, 4)
+            Text("Working a meet but don't have an account? Your meet director can give you a 6-digit PIN.")
+                .font(.ssmRounded(12, weight: .medium))
+                .foregroundStyle(SSMTheme.muted)
+                .multilineTextAlignment(.center)
+            Button { showPin = true } label: {
+                Label("Sign in with a Meet PIN", systemImage: "number")
+                    .font(.ssmRounded(14, weight: .bold))
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.ssmSoftPill)
+
             Spacer()
         }
         .padding(.horizontal, 32)
@@ -554,5 +568,133 @@ struct PadLoginSheet: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(SSMTheme.pageBackground)
         .preferredColorScheme(.dark)
+        .sheet(isPresented: $showPin) {
+            MeetPinLoginSheet { dismiss() }
+                .environmentObject(auth)
+        }
+    }
+}
+
+/// Sign in with a meet PIN — pick the meet, punch the code. No account needed;
+/// access is scoped to that one meet and expires with it.
+struct MeetPinLoginSheet: View {
+    var onSignedIn: () -> Void
+
+    @EnvironmentObject private var auth: AuthViewModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var meets: [MeetPinMeetOption] = []
+    @State private var meetID: String = ""
+    @State private var pin = ""
+    @State private var isWorking = false
+    @State private var error: String?
+    @State private var welcome: String?
+
+    private var selectedMeetName: String {
+        meets.first(where: { $0.id == meetID })?.meetName ?? "Choose the meet"
+    }
+
+    var body: some View {
+        VStack(spacing: 18) {
+            Text("Meet PIN")
+                .font(.ssmRounded(24, weight: .heavy))
+                .foregroundStyle(SSMTheme.textPrimary)
+                .padding(.top, 28)
+            Text("Enter the 6-digit PIN your meet director gave you.")
+                .font(.ssmRounded(13, weight: .medium))
+                .foregroundStyle(SSMTheme.muted)
+                .multilineTextAlignment(.center)
+
+            if let welcome {
+                Text(welcome)
+                    .font(.ssmRounded(15, weight: .bold))
+                    .foregroundStyle(SSMTheme.good)
+                    .multilineTextAlignment(.center)
+            }
+
+            Menu {
+                ForEach(meets) { m in
+                    Button(m.date.isEmpty ? m.meetName : "\(m.meetName) — \(m.date)") { meetID = m.id }
+                }
+            } label: {
+                HStack {
+                    Text(selectedMeetName)
+                        .font(.ssmRounded(15, weight: .semibold))
+                        .foregroundStyle(meetID.isEmpty ? SSMTheme.muted : SSMTheme.textPrimary)
+                        .lineLimit(1)
+                    Spacer()
+                    Image(systemName: "chevron.up.chevron.down").font(.caption).foregroundStyle(SSMTheme.muted)
+                }
+                .padding(14)
+                .background(SSMTheme.cardBackgroundLight, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
+            .disabled(meets.isEmpty)
+
+            TextField("6-digit PIN", text: $pin)
+                .textFieldStyle(.plain)
+                .font(.system(size: 26, weight: .heavy, design: .rounded))
+                .multilineTextAlignment(.center)
+                .keyboardType(.numberPad)
+                .foregroundStyle(SSMTheme.textPrimary)
+                .padding(14)
+                .background(SSMTheme.cardBackgroundLight, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .onChange(of: pin) { _, v in
+                    let digits = v.filter(\.isNumber)
+                    if digits != v || digits.count > 6 { pin = String(digits.prefix(6)) }
+                }
+
+            if let error {
+                Text(error)
+                    .font(.ssmRounded(13, weight: .semibold))
+                    .foregroundStyle(SSMTheme.danger)
+                    .multilineTextAlignment(.center)
+            }
+            if meets.isEmpty {
+                Text("No meets are handing out PINs right now. Ask your meet director.")
+                    .font(.ssmRounded(12, weight: .medium))
+                    .foregroundStyle(SSMTheme.muted)
+                    .multilineTextAlignment(.center)
+            }
+
+            Button {
+                Task { await signIn() }
+            } label: {
+                if isWorking { ProgressView().frame(maxWidth: .infinity) }
+                else { Text("Sign In").frame(maxWidth: .infinity) }
+            }
+            .buttonStyle(.ssmPill)
+            .disabled(isWorking || meetID.isEmpty || pin.count != 6)
+
+            Button("Cancel") { dismiss() }
+                .font(.ssmRounded(13, weight: .bold))
+                .foregroundStyle(SSMTheme.muted)
+                .buttonStyle(.plain)
+
+            Spacer()
+        }
+        .padding(.horizontal, 32)
+        .frame(maxWidth: 460)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(SSMTheme.pageBackground)
+        .preferredColorScheme(.dark)
+        .task {
+            meets = (try? await APIClient.shared.meetPinMeets()) ?? []
+            if meetID.isEmpty { meetID = meets.first?.id ?? "" }
+        }
+    }
+
+    private func signIn() async {
+        guard !isWorking else { return }
+        isWorking = true
+        defer { isWorking = false }
+        error = nil
+        do {
+            let r = try await APIClient.shared.meetPinLogin(meetID: meetID, pin: pin)
+            welcome = "Welcome, \(r.name) — \(r.roleLabel) for \(r.meetName)."
+            await auth.refreshSession()
+            dismiss()
+            onSignedIn()
+        } catch {
+            self.error = (error as? APIError)?.errorDescription ?? error.localizedDescription
+        }
     }
 }

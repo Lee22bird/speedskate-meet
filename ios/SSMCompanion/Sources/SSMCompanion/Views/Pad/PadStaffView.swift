@@ -36,6 +36,7 @@ struct PadStaffView: View {
                         Text(error).font(.ssmRounded(13, weight: .semibold)).foregroundStyle(SSMTheme.danger)
                     }
                     ForEach(vm.roles) { role in roleCard(role) }
+                    pinsCard
                 }
             }
             .padding(24)
@@ -64,6 +65,91 @@ struct PadStaffView: View {
             Text("Staff").font(.ssmRounded(24, weight: .heavy)).foregroundStyle(SSMTheme.textPrimary)
             Text("Assign the people working this meet. Names come from SpeedSkateLeague, so searching needs an internet connection.")
                 .font(.ssmRounded(13, weight: .medium)).foregroundStyle(SSMTheme.muted)
+        }
+    }
+
+    /// Account-free access: a named 6-digit PIN for one person, one meet.
+    private var pinsCard: some View {
+        SSMCard {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("MEET PINS").font(.ssmRounded(12, weight: .heavy)).foregroundStyle(SSMTheme.muted)
+                Text("For officials who don't have an SSL account. Type their name, pick a role, and read them the PIN — it works on this meet only, and everything they do is recorded under their name.")
+                    .font(.ssmRounded(12, weight: .medium)).foregroundStyle(SSMTheme.muted)
+
+                if let fresh = vm.freshPin {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(fresh.pin)
+                            .font(.system(size: 38, weight: .heavy, design: .rounded))
+                            .foregroundStyle(SSMTheme.orange)
+                        Text("\(fresh.name) · \(fresh.role)")
+                            .font(.ssmRounded(14, weight: .bold)).foregroundStyle(SSMTheme.textPrimary)
+                        Text("Write this down or hand it over now — it can't be shown again.")
+                            .font(.ssmRounded(12, weight: .semibold)).foregroundStyle(SSMTheme.muted)
+                        Button("Done") { vm.freshPin = nil }
+                            .font(.ssmRounded(13, weight: .bold)).foregroundStyle(SSMTheme.sky2)
+                            .buttonStyle(.plain)
+                    }
+                    .padding(14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(SSMTheme.cardBackgroundLight, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+
+                HStack(spacing: 10) {
+                    TextField("Their name", text: $vm.newPinName)
+                        .font(.ssmRounded(15, weight: .semibold))
+                        .foregroundStyle(SSMTheme.textPrimary)
+                        .autocorrectionDisabled()
+                        .padding(10)
+                        .background(SSMTheme.cardBackgroundLight, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    Menu {
+                        ForEach(vm.pinRoles) { r in
+                            Button(r.label) { vm.newPinRole = r.key }
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(vm.pinRoles.first(where: { $0.key == vm.newPinRole })?.label ?? "Role")
+                                .font(.ssmRounded(13, weight: .bold))
+                            Image(systemName: "chevron.up.chevron.down").font(.caption2)
+                        }
+                        .padding(.horizontal, 12).padding(.vertical, 10)
+                        .background(SSMTheme.cardBackgroundLight, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .foregroundStyle(SSMTheme.textPrimary)
+                    }
+                    Button { Task { await vm.createPin(meetID: meetID) } } label: {
+                        Label("PIN", systemImage: "number").font(.ssmRounded(13, weight: .bold))
+                    }
+                    .buttonStyle(.ssmSoftPill)
+                    .disabled(vm.isWorking || vm.newPinName.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+
+                ForEach(vm.pins) { pin in
+                    HStack(spacing: 10) {
+                        Image(systemName: pin.active ? "number.circle.fill" : "number.circle")
+                            .font(.system(size: 20))
+                            .foregroundStyle(pin.active ? SSMTheme.orange : SSMTheme.muted)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(pin.name)
+                                .font(.ssmRounded(14, weight: .bold)).foregroundStyle(SSMTheme.textPrimary)
+                            Text(pin.active ? pin.roleLabel : "\(pin.roleLabel) · turned off")
+                                .font(.caption).foregroundStyle(SSMTheme.muted)
+                        }
+                        Spacer()
+                        if pin.active {
+                            Button { Task { await vm.regeneratePin(meetID: meetID, pin: pin) } } label: {
+                                Text("New code").font(.ssmRounded(12, weight: .bold))
+                            }
+                            .buttonStyle(.plain).foregroundStyle(SSMTheme.sky2)
+                            .disabled(vm.isWorking)
+                            Button { Task { await vm.revokePin(meetID: meetID, pin: pin) } } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 18)).foregroundStyle(SSMTheme.muted.opacity(0.7))
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(vm.isWorking)
+                        }
+                    }
+                }
+            }
         }
     }
 

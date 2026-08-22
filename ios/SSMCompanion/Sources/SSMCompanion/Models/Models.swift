@@ -599,6 +599,60 @@ public struct Rink: Decodable, Identifiable, Hashable {
     public let label: String
 }
 
+/// A meet PIN: account-free access for one person, one meet, one role.
+public struct MeetStaffPin: Decodable, Identifiable {
+    public let id: String
+    public let name: String
+    public let role: String
+    public let roleLabel: String
+    public let createdAt: String
+    public let expiresAt: String
+    public let lastUsedAt: String
+    public let revoked: Bool
+    public let active: Bool
+}
+
+public struct PinRoleOption: Decodable, Identifiable, Hashable {
+    public let key: String
+    public let label: String
+    public var id: String { key }
+}
+
+public struct StaffPinsResponse: Decodable {
+    public let ok: Bool
+    public let roles: [PinRoleOption]
+    public let pins: [MeetStaffPin]
+}
+
+/// Creating or regenerating returns the PLAINTEXT pin exactly once.
+public struct StaffPinCreateResponse: Decodable {
+    public let ok: Bool
+    public let pin: String?
+    public let name: String?
+    public let roleLabel: String?
+    public let pins: [MeetStaffPin]
+}
+
+public struct MeetPinLoginResponse: Decodable {
+    public let ok: Bool
+    public let meetId: String
+    public let meetName: String
+    public let name: String
+    public let role: String
+    public let roleLabel: String
+}
+
+public struct MeetPinMeetOption: Decodable, Identifiable, Hashable {
+    public let id: String
+    public let meetName: String
+    public let date: String
+}
+
+public struct MeetPinMeetsResponse: Decodable {
+    public let ok: Bool
+    public let meets: [MeetPinMeetOption]
+}
+
 /// A saved, reusable racing setup (global template shared across meets).
 public struct SetupPreset: Decodable, Identifiable {
     public let id: String

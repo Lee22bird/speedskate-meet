@@ -1,4 +1,24 @@
+// ── Meet-PIN identities ──────────────────────────────────────────────────────
+// A staff PIN produces a user with NO platform roles (services/meetStaffPins.js).
+// Every permission it has is decided here, and only ever for the ONE meet the
+// PIN belongs to — so a PIN can never reach another meet, and can never satisfy
+// a global role check.
+function isMeetPinUser(user) {
+  return !!(user && user.meetPinMeetId && user.meetPinRole);
+}
+
+// The role this PIN grants ON THIS MEET, or null when the user isn't a PIN user
+// or the meet isn't the one the PIN was issued for.
+function meetPinRoleFor(user, meet) {
+  if (!isMeetPinUser(user)) return null;
+  if (!meet || String(meet.id) !== String(user.meetPinMeetId)) return null;
+  return String(user.meetPinRole);
+}
+
 function hasRole(user, role) {
+  // PIN identities never satisfy a global role check — permissions come only
+  // from the meet-scoped helpers below.
+  if (isMeetPinUser(user)) return false;
   const roles = Array.isArray(user.roles) ? user.roles : [];
   if (roles.includes(role)) return true;
   if (roles.includes('league_director') && ['meet_director', 'judge', 'coach'].includes(role)) return true;
@@ -60,6 +80,7 @@ function meetLeague(meet) {
 }
 
 function isLeagueDirectorForMeet(user, meet) {
+  if (isMeetPinUser(user)) return false;   // a PIN is never a league director
   if (!user || !meet) return false;
   const roles = Array.isArray(user.roles) ? user.roles : [];
   if (!roles.includes('league_director')) return false;
@@ -116,6 +137,7 @@ function ensureMeetOwnership(meet, user = null) {
 }
 
 function isMeetOwner(user, meet) {
+  if (isMeetPinUser(user)) return false;   // a PIN never owns a meet
   if (!user || !meet) return false;
   ensureMeetOwnership(meet, user);
 
@@ -132,6 +154,7 @@ function isMeetOwner(user, meet) {
 // system-wide across every meet in the database.
 function isAssignedTabulatorForMeet(user, meet) {
   if (!user || !meet) return false;
+  if (isMeetPinUser(user)) return meetPinRoleFor(user, meet) === 'tabulator';
   const roles = Array.isArray(user.roles) ? user.roles : [];
   if (!roles.includes('judge')) return false;
 
@@ -151,6 +174,13 @@ function isAssignedTabulatorForMeet(user, meet) {
 }
 
 function canEditMeet(user, meet) {
+  // A meet-director PIN edits ONLY its own meet; every other PIN role, and every
+  // other meet, is refused outright (no fall-through to the checks below).
+  // NOTE: a TABULATOR pin deliberately does NOT get edit rights, even though an
+  // assigned tabulator with a real account does. canEditMeet also gates deleting
+  // and archiving the meet, and six digits handed across a scoring table should
+  // not unlock that. PIN tabulators can still tabulate, rule protests, and print.
+  if (isMeetPinUser(user)) return meetPinRoleFor(user, meet) === 'meet_director';
   if (isSuperAdmin(user)) return true;
   if (isLeagueDirectorForMeet(user, meet)) return true;
   // A tabulator who created this meet, or who was assigned as the tabulator
@@ -163,6 +193,11 @@ function canEditMeet(user, meet) {
 }
 
 function canJudgeMeet(user, meet) {
+  // Tabulator/referee PINs judge their own meet; meet-director PINs do too.
+  if (isMeetPinUser(user)) {
+    const role = meetPinRoleFor(user, meet);
+    return role === 'meet_director' || role === 'tabulator' || role === 'referee';
+  }
   if (isSuperAdmin(user)) return true;
   if (isLeagueDirectorForMeet(user, meet)) return true;
   const roles = Array.isArray(user?.roles) ? user.roles : [];
@@ -184,6 +219,8 @@ function canManageMeetSettings(user, meet) {
 
 module.exports = {
   hasRole,
+  isMeetPinUser,
+  meetPinRoleFor,
   isSuperAdmin,
   userSslId,
   userLeague,

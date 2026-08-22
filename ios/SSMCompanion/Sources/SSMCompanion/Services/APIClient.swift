@@ -916,6 +916,43 @@ public final class APIClient {
         try await postJSONObject("/api/v1/meets/\(meetID)/settings", body: fields)
     }
 
+    // ── Meet PINs (account-free staff access) ─────────────────────────────
+    public func staffPins(meetID: String) async throws -> StaffPinsResponse {
+        try await request("/api/v1/meets/\(meetID)/staff-pins")
+    }
+
+    /// Creates a PIN. The plaintext code comes back ONCE — show it, never store it.
+    @discardableResult
+    public func createStaffPin(meetID: String, name: String, role: String) async throws -> StaffPinCreateResponse {
+        try await postJSONObject("/api/v1/meets/\(meetID)/staff-pins",
+                                 body: ["action": "create", "name": name, "role": role])
+    }
+
+    @discardableResult
+    public func regenerateStaffPin(meetID: String, pinID: String) async throws -> StaffPinCreateResponse {
+        try await postJSONObject("/api/v1/meets/\(meetID)/staff-pins",
+                                 body: ["action": "regenerate", "pinId": pinID])
+    }
+
+    @discardableResult
+    public func revokeStaffPin(meetID: String, pinID: String) async throws -> StaffPinCreateResponse {
+        try await postJSONObject("/api/v1/meets/\(meetID)/staff-pins",
+                                 body: ["action": "revoke", "pinId": pinID])
+    }
+
+    /// Meets currently handing out PINs — for the sign-in picker.
+    public func meetPinMeets() async throws -> [MeetPinMeetOption] {
+        let r: MeetPinMeetsResponse = try await request("/api/v1/meet-pin/meets")
+        return r.meets
+    }
+
+    /// Sign in with a meet PIN. Sets the same session cookie a normal login
+    /// does, scoped to that one meet.
+    @discardableResult
+    public func meetPinLogin(meetID: String, pin: String) async throws -> MeetPinLoginResponse {
+        try await postJSONObject("/api/v1/meet-pin/login", body: ["meetId": meetID, "pin": pin])
+    }
+
     // ── Setup presets (director) ──────────────────────────────────────────
     public func setupPresets(meetID: String) async throws -> [SetupPreset] {
         let r: PresetsResponse = try await request("/api/v1/meets/\(meetID)/presets")

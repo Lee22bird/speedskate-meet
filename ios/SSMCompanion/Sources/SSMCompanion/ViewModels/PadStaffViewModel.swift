@@ -20,6 +20,14 @@ public final class PadStaffViewModel: ObservableObject {
     @Published public private(set) var isSearching = false
     @Published public var searchError: String?
 
+    // Meet PINs — account-free access for officials who won't make an SSL login.
+    @Published public private(set) var pins: [MeetStaffPin] = []
+    @Published public private(set) var pinRoles: [PinRoleOption] = []
+    @Published public var newPinName = ""
+    @Published public var newPinRole = "tabulator"
+    /// Set right after create/regenerate — the ONLY time the code is visible.
+    @Published public var freshPin: (name: String, role: String, pin: String)?
+
     private let api: APIClient
     private var searchTask: Task<Void, Never>?
     public init(api: APIClient = .shared) { self.api = api }
@@ -29,6 +37,13 @@ public final class PadStaffViewModel: ObservableObject {
         defer { isLoading = false }
         do {
             roles = try await api.staffAssignments(meetID: meetID)
+            if let p = try? await api.staffPins(meetID: meetID) {
+                pins = p.pins
+                pinRoles = p.roles
+                if !p.roles.contains(where: { $0.key == newPinRole }), let first = p.roles.first {
+                    newPinRole = first.key
+                }
+            }
             loaded = true
             errorMessage = nil
         } catch {
@@ -73,6 +88,52 @@ public final class PadStaffViewModel: ObservableObject {
                 self.searchResults = []
                 self.searchError = (error as? APIError)?.errorDescription ?? error.localizedDescription
             }
+        }
+    }
+
+    // MARK: Meet PINs
+
+    public func createPin(meetID: String) async {
+        let name = newPinName.trimmingCharacters(in: .whitespaces)
+        guard !isWorking, !name.isEmpty else { return }
+        isWorking = true
+        defer { isWorking = false }
+        errorMessage = nil
+        do {
+            let r = try await api.createStaffPin(meetID: meetID, name: name, role: newPinRole)
+            pins = r.pins
+            newPinName = ""
+            if let pin = r.pin { freshPin = (r.name ?? name, r.roleLabel ?? "", pin) }
+        } catch {
+            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
+    public func regeneratePin(meetID: String, pin: MeetStaffPin) async {
+        guard !isWorking else { return }
+        isWorking = true
+        defer { isWorking = false }
+        errorMessage = nil
+        do {
+            let r = try await api.regenerateStaffPin(meetID: meetID, pinID: pin.id)
+            pins = r.pins
+            if let code = r.pin { freshPin = (r.name ?? pin.name, r.roleLabel ?? pin.roleLabel, code) }
+        } catch {
+            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
+    public func revokePin(meetID: String, pin: MeetStaffPin) async {
+        guard !isWorking else { return }
+        isWorking = true
+        defer { isWorking = false }
+        errorMessage = nil
+        do {
+            let r = try await api.revokeStaffPin(meetID: meetID, pinID: pin.id)
+            pins = r.pins
+            statusFlash = "\(pin.name)'s PIN was turned off."
+        } catch {
+            errorMessage = (error as? APIError)?.errorDescription ?? error.localizedDescription
         }
     }
 

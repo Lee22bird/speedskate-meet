@@ -130,6 +130,9 @@ const { renderBlockBuilderView } = require('./views/blockBuilderView');
 const { renderMeetBuilderView } = require('./views/meetBuilderView');
 const { renderDqReportView } = require('./views/dqReportView');
 const {
+  verifyStaffPin, pinUserFor, isActive: isStaffPinActive,
+} = require('./services/meetStaffPins');
+const {
   streamRaceListPdf, streamFinalResultsPdf, streamDqReportPdf,
 } = require('./services/printReportsPdf');
 const { renderOpenBuilderView } = require('./views/openBuilderView');
@@ -351,10 +354,36 @@ function saveDb(db) {
   }
 }
 
+// A meet-PIN session carries no user row — just the meet + PIN row it belongs
+// to, re-resolved on every request so revoking a PIN logs the holder out at once.
+const MEET_PIN_SESSION_TTL_MS = 16 * 60 * 60 * 1000; // one long meet day
+function createMeetPinSession(db, meet, row) {
+  const token = crypto.randomBytes(24).toString('hex');
+  db.sessions = (db.sessions || []).filter(s => !(s.meetPin
+    && String(s.meetPin.rowId) === String(row.id)));
+  db.sessions.push({
+    token,
+    userId: null,
+    meetPin: { meetId: String(meet.id), rowId: String(row.id) },
+    createdAt: nowIso(),
+    expiresAt: new Date(Date.now() + MEET_PIN_SESSION_TTL_MS).toISOString(),
+  });
+  return token;
+}
+
 function getSessionUser(req) {
   const token=parseCookies(req)[SESSION_COOKIE]; if(!token) return null;
   const db=loadDb(); const sess=db.sessions.find(s=>s.token===token); if(!sess) return null;
   if(new Date(sess.expiresAt).getTime()<=Date.now()) return null;
+  // Meet-PIN sessions have no row in db.users — the identity is rebuilt from the
+  // meet's staff-PIN row each request, so revoking a PIN takes effect instantly.
+  if(sess.meetPin) {
+    const meet=(db.meets||[]).find(m=>String(m.id)===String(sess.meetPin.meetId));
+    if(!meet) return null;
+    const row=(meet.staffPins||[]).find(r=>String(r.id)===String(sess.meetPin.rowId));
+    if(!row||!isStaffPinActive(row)) return null;
+    return {db,session:sess,token,user:pinUserFor(meet,row)};
+  }
   const user=db.users.find(u=>u.id===sess.userId&&u.active!==false); if(!user) return null;
   return {db,session:sess,token,user};
 }
@@ -1515,6 +1544,56 @@ function ssmSignupExplanationCard() {
     </div>`;
 }
 
+// ── Meet PIN sign-in (no account) ────────────────────────────────────────────
+// For officials who don't have an SSL account: the director hands them a
+// 6-digit PIN for one meet, they punch it in here. Same session cookie as a
+// normal login, so every screen works — just scoped to that one meet.
+app.get('/meet-pin', (req, res) => {
+  const db = loadDb();
+  const meets = (db.meets || [])
+    .filter(m => Array.isArray(m.staffPins) && m.staffPins.some(r => r && !r.revokedAt && r.pinHash))
+    .map(m => `<option value="${esc(m.id)}">${esc(m.meetName || 'Meet')}${m.date ? ' — ' + esc(m.date) : ''}</option>`)
+    .join('');
+  const error = req.query.error ? `<div class="bad" style="margin-bottom:14px">${esc(req.query.error)}</div>` : '';
+  res.send(pageShell({ title: 'Meet PIN Sign In', user: null, bodyHtml: `
+    <div style="max-width:460px;margin:40px auto">
+      <div class="page-header"><h1>Sign in with a Meet PIN</h1>
+        <div class="sub">For officials working a meet without an account.</div></div>
+      ${error}
+      <div class="card">
+        ${meets ? `
+        <form method="POST" action="/meet-pin" class="stack">
+          <div><label>Meet</label><select name="meetId" required>${meets}</select></div>
+          <div><label>Your 6-digit PIN</label>
+            <input name="pin" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code" required /></div>
+          <div class="action-row" style="margin-top:8px">
+            <button class="btn-orange" type="submit">Sign In</button>
+            <a class="btn2" href="/admin/login">I have an account</a>
+          </div>
+        </form>` : `
+        <div class="muted">No meets are handing out PINs right now. Ask your meet director for one.</div>
+        <div class="action-row" style="margin-top:12px"><a class="btn2" href="/admin/login">Back to login</a></div>`}
+      </div>
+    </div>` }));
+});
+
+app.post('/meet-pin', (req, res) => {
+  const db = loadDb();
+  const meetId = String(req.body.meetId || '').trim();
+  const meet = (db.meets || []).find(m => String(m.id) === meetId);
+  const row = meet ? verifyStaffPin(meet, req.body.pin) : null;
+  if (!row) {
+    return res.redirect('/meet-pin?error=' + encodeURIComponent('That PIN is not valid for this meet.'));
+  }
+  row.lastUsedAt = nowIso();
+  const token = createMeetPinSession(db, meet, row);
+  saveDb(db);
+  setCookie(res, SESSION_COOKIE, token, Math.floor(MEET_PIN_SESSION_TTL_MS / 1000));
+  // Land them where their role actually works.
+  const dest = row.role === 'announcer' ? 'announcer' : row.role === 'referee' ? 'live' : 'judges';
+  return res.redirect(`/portal/meet/${encodeURIComponent(meet.id)}/race-day/${dest}`);
+});
+
 app.get('/admin/login', (req, res) => {
   const reset=req.query.reset;
   res.send(pageShell({title:'Staff Login',user:null, bodyHtml:`
@@ -1530,6 +1609,9 @@ app.get('/admin/login', (req, res) => {
             <button class="btn" type="submit" style="width:100%">Sign In</button>
             <a href="/admin/forgot-password" style="text-align:center;font-size:13px;color:var(--muted);display:block;margin-top:8px">Forgot password?</a>
           </form>
+          <div class="hr" style="margin:16px 0"></div>
+          <div class="note" style="margin-bottom:8px">Working a meet but don't have an account? Your meet director can give you a 6-digit PIN.</div>
+          <a class="btn2" href="/meet-pin" style="width:100%;text-align:center;justify-content:center">Sign in with a Meet PIN</a>
         </div>
         ${ssmSignupExplanationCard()}
       </div>
@@ -2523,6 +2605,8 @@ app.use('/', createDesktopRoutes({ getSessionUser, pageShell, loadDb, saveDb, re
 // ── Extracted route modules ────────────────────────────────────────────────────
 const routeDeps = {
   requireRole, pageShell, saveDb, loadDb, getSessionUser, TEAM_LIST, toggleSwitch, ADMIN_PHONE,
+  // meet-PIN sign in (account-free staff access)
+  createMeetPinSession, setCookie, SESSION_COOKIE, MEET_PIN_SESSION_TTL_MS,
   // views
   renderArchivedMeetsView, renderPendingMeetsView, renderPendingRinksView,
   renderStaffAccountsView, renderMeetBuilderView, renderOpenBuilderView,
