@@ -916,6 +916,19 @@ public final class APIClient {
         try await postJSONObject("/api/v1/meets/\(meetID)/settings", body: fields)
     }
 
+    // ── Open / Quad builders (director) ───────────────────────────────────
+    /// `kind` is "open" or "quad".
+    public func specialGroups(meetID: String, kind: String) async throws -> SpecialGroupsResponse {
+        try await request("/api/v1/meets/\(meetID)/\(kind)-groups")
+    }
+
+    @discardableResult
+    public func saveSpecialGroups(meetID: String, kind: String, scheme: String,
+                                  groups: [[String: Any]]) async throws -> SpecialGroupsSaveResponse {
+        try await postJSONObject("/api/v1/meets/\(meetID)/\(kind)-groups",
+                                 body: ["scheme": scheme, "groups": groups])
+    }
+
     // ── Relay templates (director: which relay divisions this meet offers) ─
     public func relayTemplates(meetID: String) async throws -> RelayTemplatesResponse {
         try await request("/api/v1/meets/\(meetID)/relay-templates")

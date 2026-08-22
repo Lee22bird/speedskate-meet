@@ -599,6 +599,32 @@ public struct Rink: Decodable, Identifiable, Hashable {
     public let label: String
 }
 
+/// One Open or Quad race group. Open groups carry a single `distance` and an
+/// editable age range; Quad groups carry a POSITIONAL `distances` array
+/// (slot = race day) with a fixed age range.
+public struct SpecialGroupDTO: Decodable, Identifiable {
+    public let id: String
+    public let label: String
+    public let ages: String
+    public let gender: String
+    public let enabled: Bool
+    public let distance: String
+    public let distances: [String]
+}
+
+public struct SpecialGroupsResponse: Decodable {
+    public let ok: Bool
+    public let scheme: String
+    public let groups: [SpecialGroupDTO]
+}
+
+public struct SpecialGroupsSaveResponse: Decodable {
+    public let ok: Bool
+    public let racesRebuilt: Bool
+    public let enabledCount: Int
+    public let raceCount: Int
+}
+
 /// One relay division the meet can offer (the website's relay template rows).
 public struct RelayTemplateRow: Decodable, Identifiable {
     public let divisionId: String

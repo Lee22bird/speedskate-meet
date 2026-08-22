@@ -6,6 +6,7 @@ const {
 const {
   isPublicMeet, meetRinkLabel, meetDateLabel, getMeetOr404, coachTeamRegistrations,
   combineDateTime, generateConfiguredRacesForMeet, ensureAtLeastOneBlock,
+  normalizeOpenGroups, normalizeQuadGroups,
 } = require('../services/meetHelpers');
 const {
   orderedRaces, currentRaceInfo, raceDayProgress, laneRowsForRace,
@@ -1003,6 +1004,114 @@ module.exports = function createMobileApiRoutes(deps = {}) {
     saveDb(data.db);
     res.json({ ok:true, settings: meetSettingsJson(meet, data.db), racesRebuilt });
   });
+
+  // ── Director: Open + Quad builders ────────────────────────────────────────
+  // The website's open-builder/save and quad-builder/save are indexed
+  // full-form replaces that regenerate races unconditionally. These additive
+  // twins address rows by GROUP ID (both normalizers already merge by id, so a
+  // stale editor can't land on the wrong division), touch only the groups the
+  // body names, and regenerate ONLY when something actually changed — with the
+  // same started-racing refusal and desktop backup as the divisions editor.
+  //
+  // Open groups carry one distance and an editable age range; quad groups carry
+  // a POSITIONAL distances array (slot = race day, like divisions) with a fixed
+  // age range.
+  function specialGroupsHandler(kind) {
+    const isOpen = kind === 'open';
+    const normalize = isOpen ? normalizeOpenGroups : normalizeQuadGroups;
+    const field = isOpen ? 'openGroups' : 'quadGroups';
+    const label = isOpen ? 'Open' : 'Quad';
+
+    return {
+      read(req, res) {
+        const data = getSessionUser(req);
+        if (!data) return res.status(401).json({ ok:false, error:'Not logged in.' });
+        const meet = getMeetOr404(data.db, req.params.meetId);
+        if (!meet) return res.status(404).json({ ok:false, error:'Meet not found.' });
+        if (!canEditMeet(data.user, meet)) return res.status(403).json({ ok:false, error:`Only a meet director can edit ${label} races.` });
+
+        const scheme = String(meet.divisionScheme || 'standard').toLowerCase();
+        const groups = normalize(meet[field], scheme);
+        res.json({
+          ok: true,
+          scheme,
+          groups: groups.map(g => ({
+            id: String(g.id),
+            label: String(g.label || ''),
+            ages: String(g.ages || ''),
+            gender: String(g.gender || ''),
+            enabled: !!g.enabled,
+            // Open: one distance. Quad: positional slots (never compacted).
+            distance: isOpen ? String(g.distance || '') : '',
+            distances: isOpen ? [] : (Array.isArray(g.distances) ? g.distances.map(x => String(x || '')) : []),
+          })),
+        });
+      },
+
+      write(req, res) {
+        const data = getSessionUser(req);
+        if (!data) return res.status(401).json({ ok:false, error:'Not logged in.' });
+        const meet = getMeetOr404(data.db, req.params.meetId);
+        if (!meet) return res.status(404).json({ ok:false, error:'Meet not found.' });
+        if (!canEditMeet(data.user, meet)) return res.status(403).json({ ok:false, error:`Only a meet director can edit ${label} races.` });
+
+        const scheme = String(meet.divisionScheme || 'standard').toLowerCase();
+        if (req.body.scheme !== undefined && String(req.body.scheme).toLowerCase() !== scheme) {
+          return res.status(409).json({ ok:false, error:'The division scheme changed since this screen loaded — reload and try again.' });
+        }
+
+        const groups = normalize(meet[field], scheme);
+        const byId = new Map(groups.map(g => [String(g.id), g]));
+        const incoming = Array.isArray(req.body.groups) ? req.body.groups : [];
+        let changed = false;
+
+        for (const row of incoming) {
+          const g = byId.get(String(row.id || ''));
+          if (!g) continue;                       // unknown id — ignore, never guess
+          const before = JSON.stringify(g);
+          if (row.enabled !== undefined) g.enabled = !!row.enabled;
+          if (isOpen) {
+            if (typeof row.ages === 'string' && row.ages.trim()) g.ages = row.ages.trim();
+            if (typeof row.distance === 'string' && row.distance.trim()) g.distance = row.distance.trim();
+          } else if (Array.isArray(row.distances)) {
+            // Positional: trimmed in place, holes preserved, length kept.
+            const next = row.distances.map(x => String(x || '').trim());
+            while (next.length < g.distances.length) next.push('');
+            g.distances = next.slice(0, Math.max(g.distances.length, next.length));
+          }
+          if (JSON.stringify(g) !== before) changed = true;
+        }
+
+        meet[field] = groups;
+        let racesRebuilt = false;
+        if (changed) {
+          if (racingHasStarted(meet)) {
+            return res.status(409).json({ ok:false,
+              error:`Races have already been scored — ${label} changes are locked once racing starts.` });
+          }
+          backupBeforeRegen(data.db, meet.id);
+          // Matches the website's open/quad saves: regenerate configured races,
+          // then make sure blocks + the current-race pointer stay valid.
+          generateConfiguredRacesForMeet(meet);
+          ensureAtLeastOneBlock(meet);
+          ensureCurrentRace(meet);
+          racesRebuilt = true;
+        }
+        meet.updatedAt = new Date().toISOString();
+        saveDb(data.db);
+        res.json({ ok:true, racesRebuilt,
+                   enabledCount: groups.filter(g => g.enabled).length,
+                   raceCount: (meet.races || []).length });
+      },
+    };
+  }
+
+  const openGroups = specialGroupsHandler('open');
+  const quadGroups = specialGroupsHandler('quad');
+  router.get('/api/v1/meets/:meetId/open-groups', openGroups.read);
+  router.post('/api/v1/meets/:meetId/open-groups', openGroups.write);
+  router.get('/api/v1/meets/:meetId/quad-groups', quadGroups.read);
+  router.post('/api/v1/meets/:meetId/quad-groups', quadGroups.write);
 
   // ── Director: relay templates (which relay divisions this meet offers) ─────
   // The website's relay-builder/add-template save is an ALL-OR-NOTHING indexed

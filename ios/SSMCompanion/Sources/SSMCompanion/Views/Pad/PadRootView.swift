@@ -405,6 +405,12 @@ struct PadDetailRouter: View {
             case .relayTemplates:
                 PadRelayTemplatesView(meetID: meetID)
                     .id(meetID)
+            case .openBuilder:
+                PadSpecialGroupsView(meetID: meetID, kind: "open")
+                    .id(meetID)
+            case .quadBuilder:
+                PadSpecialGroupsView(meetID: meetID, kind: "quad")
+                    .id(meetID)
             case .blockBuilder:
                 // .id(meetID) tears the view (and its @StateObject) down
                 // the instant the sidebar switches meets — otherwise the
