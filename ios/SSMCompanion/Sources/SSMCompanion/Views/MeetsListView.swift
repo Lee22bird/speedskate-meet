@@ -5,28 +5,35 @@ import UIKit
 import AppKit
 #endif
 
+/// Row used by the Live and Results tabs. Same calm treatment as the Meets tab:
+/// friendly dates, and a badge only when there's actually something happening.
 struct MeetRow: View {
     let meet: MeetSummary
 
     var body: some View {
-        SSMCard {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
+        SSMBubbleCard(tint: meet.isLiveNow ? SSMTheme.publicMint : nil) {
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(alignment: .firstTextBaseline) {
                     Text(meet.meetName)
                         .font(.ssmRounded(18, weight: .bold))
                         .foregroundStyle(SSMTheme.textPrimary)
-                    Spacer()
-                    SSMChip(meet.status.capitalized, color: meet.status == "live" ? SSMTheme.good : SSMTheme.sky2)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 8)
+                    if meet.isLiveNow {
+                        SSMChip("Live now", color: SSMTheme.publicMint)
+                    }
                 }
                 if !meet.date.isEmpty {
-                    Text(meet.date)
-                        .font(.ssmRounded(14, weight: .semibold))
-                        .foregroundStyle(SSMTheme.muted)
+                    Text(FriendlyDate.label(meet.date))
+                        .font(.ssmRounded(13, weight: .semibold))
+                        .foregroundStyle(SSMTheme.publicSky)
                 }
                 if !meet.location.isEmpty {
                     Text(meet.location)
                         .font(.caption)
                         .foregroundStyle(SSMTheme.muted)
+                        .lineLimit(1)
                 }
             }
         }
@@ -47,7 +54,7 @@ public struct MeetsListView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    SSMHeader(title: "Find a Meet")
+                    SSMHeader(title: "Find a Meet", subtitle: "Live races, results, and what's coming up.")
 
                     VStack(alignment: .leading, spacing: 12) {
                         SearchBar(text: $viewModel.searchText)
@@ -74,7 +81,7 @@ public struct MeetsListView: View {
                         // stops featuring the schedule, the normal empty state
                         // returns automatically.
                         if !(viewModel.selectedFilter == .nationals && viewModel.featuredSchedule != nil) {
-                            ContentUnavailableFallback(text: "No meets match those filters.")
+                            ContentUnavailableFallback(text: "Nothing here yet — try another filter.")
                                 .padding(.top, 40)
                         }
                     } else {
@@ -88,13 +95,10 @@ public struct MeetsListView: View {
 
                         VStack(alignment: .leading, spacing: 12) {
                             HStack {
-                                Label("Upcoming Meets", systemImage: "calendar")
-                                    .font(.ssmRounded(18, weight: .bold))
+                                Text("Coming up")
+                                    .font(.ssmRounded(20, weight: .heavy))
                                     .foregroundStyle(.white)
                                 Spacer()
-                                Text("View All")
-                                    .font(.ssmRounded(14, weight: .semibold))
-                                    .foregroundStyle(SSMTheme.sky)
                             }
                             .padding(.horizontal)
 
@@ -113,7 +117,7 @@ public struct MeetsListView: View {
                 .padding(.bottom, 80)
             }
             .scrollIndicators(.hidden)
-            .background(SSMTheme.pageBackground)
+            .background(SSMTheme.publicBackground)
             .ssmNavigationBarHidden(true)
             .navigationDestination(for: MeetSummary.self) { meet in
                 MeetDetailView(meet: meet)
@@ -124,36 +128,73 @@ public struct MeetsListView: View {
     }
 }
 
+/// Calm solid header for the public tabs — a soft navy panel with big rounded
+/// bottom corners, no streak artwork (see the SSM design direction).
 public struct SSMHeader: View {
     private let title: String
+    private let subtitle: String?
 
-    public init(title: String) {
+    public init(title: String, subtitle: String? = nil) {
         self.title = title
+        self.subtitle = subtitle
     }
 
     public var body: some View {
-        ZStack(alignment: .bottomLeading) {
-            SSMHeroArtwork()
-                .scaledToFill()
-                .frame(maxWidth: .infinity, minHeight: 178, maxHeight: 178)
-                .clipped()
-            LinearGradient(
-                colors: [.clear, .clear, SSMTheme.pageBackground.opacity(0.92)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .allowsHitTesting(false)
-
+        VStack(alignment: .leading, spacing: 6) {
+            Text("SPEED SKATE MEET")
+                .font(.ssmRounded(11, weight: .heavy))
+                .tracking(1.6)
+                .foregroundStyle(SSMTheme.publicSky.opacity(0.85))
             Text(title)
-                .font(.ssmRounded(36, weight: .heavy))
+                .font(.ssmRounded(34, weight: .heavy))
                 .foregroundStyle(.white)
                 .accessibilityAddTraits(.isHeader)
-                .padding(.horizontal, 18)
-                .padding(.bottom, 18)
+            if let subtitle {
+                Text(subtitle)
+                    .font(.ssmRounded(14, weight: .medium))
+                    .foregroundStyle(SSMTheme.muted)
+            }
         }
-        .frame(minHeight: 178)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 22)
+        .padding(.top, 22)
+        .padding(.bottom, 26)
+        .background(
+            UnevenRoundedRectangle(
+                bottomLeadingRadius: 34, bottomTrailingRadius: 34, style: .continuous
+            )
+            .fill(SSMTheme.publicCard)
+        )
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Speed Skate Meet. \(title).")
+    }
+}
+
+/// Turns the server's ISO dates ("2026-10-31", or a range) into something a
+/// parent would actually read: "Sat, Oct 31" — this year's dates drop the year.
+enum FriendlyDate {
+    private static let iso: DateFormatter = {
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.locale = Locale(identifier: "en_US_POSIX"); return f
+    }()
+
+    static func label(_ raw: String) -> String {
+        let parts = raw.components(separatedBy: " to ").map { $0.trimmingCharacters(in: .whitespaces) }
+        let formatted = parts.map(one)
+        if formatted.count == 2, formatted[0] != formatted[1] {
+            return "\(formatted[0]) – \(formatted[1])"
+        }
+        return formatted.first ?? raw
+    }
+
+    private static func one(_ raw: String) -> String {
+        guard let date = iso.date(from: raw) else { return raw }
+        let cal = Calendar.current
+        let out = DateFormatter()
+        out.locale = .current
+        out.setLocalizedDateFormatFromTemplate(
+            cal.component(.year, from: date) == cal.component(.year, from: Date()) ? "EEEMMMd" : "MMMdyyyy"
+        )
+        return out.string(from: date)
     }
 }
 
@@ -182,10 +223,10 @@ public struct SearchBar: View {
                 .accessibilityLabel("Clear search")
             }
         }
-        .padding(.horizontal, 18)
-        .frame(minHeight: 56)
-        .background(.black.opacity(0.24), in: SSMTheme.pillShape)
-        .overlay(SSMTheme.pillShape.strokeBorder(.white.opacity(0.13), lineWidth: 1))
+        .padding(.horizontal, 20)
+        .frame(minHeight: 54)
+        .background(SSMTheme.publicCardSoft, in: SSMTheme.pillShape)
+        .overlay(SSMTheme.pillShape.strokeBorder(SSMTheme.publicBorder, lineWidth: 1))
     }
 }
 
@@ -224,12 +265,11 @@ public struct FilterChip: View {
                 Text(chip.rawValue)
             }
             .font(.ssmRounded(14, weight: .semibold))
-            .foregroundStyle(isSelected ? .white : SSMTheme.muted)
-            .padding(.horizontal, 16)
+            .foregroundStyle(isSelected ? SSMTheme.publicBackground : SSMTheme.muted)
+            .padding(.horizontal, 18)
             .frame(minHeight: 42)
-            .background(isSelected ? SSMTheme.skyGradient : SSMTheme.inactiveChipGradient, in: SSMTheme.pillShape)
-            .overlay(SSMTheme.pillShape.strokeBorder(isSelected ? SSMTheme.orange.opacity(0.8) : .white.opacity(0.1), lineWidth: 1))
-            .shadow(color: isSelected ? SSMTheme.sky.opacity(0.24) : .clear, radius: 8)
+            .background(isSelected ? SSMTheme.publicSky : SSMTheme.publicCardSoft, in: SSMTheme.pillShape)
+            .overlay(SSMTheme.pillShape.strokeBorder(isSelected ? .clear : SSMTheme.publicBorder, lineWidth: 1))
         }
         .buttonStyle(.plain)
     }
@@ -242,10 +282,7 @@ public struct LiveNowCard: View {
     public init(meet: MeetSummary) { self.meet = meet }
 
     public var body: some View {
-        ZStack(alignment: .topLeading) {
-            SpeedStreaksBackground()
-            LinearGradient(colors: [.black.opacity(0.08), .black.opacity(0.72)], startPoint: .topTrailing, endPoint: .bottomLeading)
-
+        SSMBubbleCard(tint: SSMTheme.publicMint) {
             VStack(alignment: .leading, spacing: 13) {
                 LiveBadge()
                 Text(meet.meetName)
@@ -258,9 +295,9 @@ public struct LiveNowCard: View {
                         .foregroundStyle(.white)
 
                     HStack(alignment: .top, spacing: 14) {
-                        RacePreview(label: "CURRENT", name: live.current?.groupLabel ?? "Between races", color: SSMTheme.sky)
-                        Divider().overlay(.white.opacity(0.16))
-                        RacePreview(label: "NEXT", name: live.next?.groupLabel ?? live.coming.first?.groupLabel ?? "Schedule complete", color: SSMTheme.orange)
+                        RacePreview(label: "CURRENT", name: live.current?.groupLabel ?? "Between races", color: SSMTheme.publicMint)
+                        Divider().overlay(SSMTheme.publicBorder)
+                        RacePreview(label: "NEXT", name: live.next?.groupLabel ?? live.coming.first?.groupLabel ?? "Schedule complete", color: SSMTheme.publicPeach)
                     }
                     .frame(minHeight: 48)
                 } else {
@@ -271,17 +308,12 @@ public struct LiveNowCard: View {
 
                 Label("Watch Live", systemImage: "play.fill")
                     .font(.ssmRounded(17, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(SSMTheme.publicBackground)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
-                    .background(SSMTheme.skyGradient, in: SSMTheme.pillShape)
+                    .background(SSMTheme.publicMint, in: SSMTheme.pillShape)
             }
-            .padding(20)
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .clipShape(RoundedRectangle(cornerRadius: SSMTheme.cornerRadius, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: SSMTheme.cornerRadius, style: .continuous).strokeBorder(SSMTheme.sky.opacity(0.4), lineWidth: 1.5))
-        .shadow(color: .black.opacity(0.4), radius: 16, x: 0, y: 8)
         .task { await liveViewModel.load(meetID: meet.id.stringValue) }
     }
 }
@@ -310,39 +342,47 @@ public struct MeetCard: View {
     public init(meet: MeetSummary) { self.meet = meet }
 
     public var body: some View {
-        SSMCard {
+        SSMBubbleCard {
             HStack(spacing: 14) {
                 DefaultMeetArtwork(initials: meet.initials)
 
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 4) {
+                    // Only LIVE earns a badge — a "Published" chip on every card
+                    // is noise to someone just looking for their kid's meet.
+                    if meet.isLiveNow {
+                        SSMChip("Live now", color: SSMTheme.publicMint)
+                    }
                     Text(meet.meetName)
-                        .font(.ssmRounded(16, weight: .bold))
+                        .font(.ssmRounded(17, weight: .bold))
                         .foregroundStyle(.white)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                     if !meet.dateRangeLabel.isEmpty {
-                        Label(meet.dateRangeLabel, systemImage: "calendar")
-                            .font(.caption)
-                            .foregroundStyle(SSMTheme.muted)
+                        Text(FriendlyDate.label(meet.dateRangeLabel))
+                            .font(.ssmRounded(13, weight: .semibold))
+                            .foregroundStyle(SSMTheme.publicSky)
+                            .lineLimit(1)
                     }
                     if !meet.location.isEmpty {
-                        Label(meet.location, systemImage: "mappin.and.ellipse")
+                        Text(meet.location)
                             .font(.caption)
                             .foregroundStyle(SSMTheme.muted)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
                     }
-                    HStack(spacing: 0) {
-                        Text("\(meet.registrationCount) Registered")
-                            .foregroundStyle(SSMTheme.sky2)
-                        Text(" • \(meet.raceCount) Races")
-                            .foregroundStyle(SSMTheme.muted)
+                    if let counts = meet.countsLabel {
+                        Text(counts)
+                            .font(.caption2)
+                            .foregroundStyle(SSMTheme.muted.opacity(0.85))
+                            .lineLimit(1)
                     }
-                    .font(.caption2)
                 }
 
-                Spacer(minLength: 4)
+                Spacer(minLength: 8)
 
-                VStack(spacing: 8) {
-                    SSMChip(meet.status.capitalized, color: meet.isLiveNow ? SSMTheme.good : SSMTheme.sky2)
-                    Image(systemName: "chevron.right").foregroundStyle(SSMTheme.muted)
-                }
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(SSMTheme.muted.opacity(0.6))
             }
         }
     }
@@ -352,22 +392,17 @@ private struct DefaultMeetArtwork: View {
     let initials: String
 
     var body: some View {
-        ZStack {
-            SSMHeroArtwork()
-                .scaledToFill()
-            Color.black.opacity(0.34)
-            Text(initials)
-                .font(.ssmRounded(15, weight: .heavy))
-                .foregroundStyle(.white)
-                .shadow(color: .black, radius: 4)
-        }
-        .frame(width: 62, height: 62)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(SSMTheme.sky.opacity(0.28), lineWidth: 1)
-        )
-        .accessibilityLabel("Default SSM meet artwork")
+        Text(initials)
+            .font(.ssmRounded(17, weight: .heavy))
+            .foregroundStyle(SSMTheme.publicSky)
+            .frame(width: 58, height: 58)
+            .background(SSMTheme.publicCardSoft,
+                        in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .strokeBorder(SSMTheme.publicSky.opacity(0.18), lineWidth: 1)
+            )
+            .accessibilityHidden(true)
     }
 }
 
@@ -403,18 +438,22 @@ public struct MeetDetailView: View {
     public var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                ZStack(alignment: .bottomLeading) {
-                    SpeedStreaksBackground()
-                    Text(meet.meetName.uppercased())
-                        .font(.system(size: 30, weight: .black, design: .rounded).italic())
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(meet.meetName)
+                        .font(.ssmRounded(28, weight: .heavy))
                         .foregroundStyle(.white)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.6)
-                        .padding(18)
-                        .shadow(color: .black.opacity(0.4), radius: 6, x: 0, y: 2)
+                        .lineLimit(3)
+                        .minimumScaleFactor(0.7)
+                    if !meet.dateRangeLabel.isEmpty {
+                        Text(meet.dateRangeLabel)
+                            .font(.ssmRounded(14, weight: .semibold))
+                            .foregroundStyle(SSMTheme.publicSky)
+                    }
                 }
-                .frame(height: 130)
-                .clipShape(RoundedRectangle(cornerRadius: SSMTheme.cornerRadius, style: .continuous))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(22)
+                .background(SSMTheme.publicCard,
+                            in: RoundedRectangle(cornerRadius: SSMTheme.bubbleRadius, style: .continuous))
 
                 SSMCard {
                     VStack(alignment: .leading, spacing: 8) {

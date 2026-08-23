@@ -24,6 +24,19 @@ public struct MeetSummary: Decodable, Identifiable, Hashable {
         date
     }
 
+    /// "12 skaters · 8 races", pluralised properly, omitting whatever is zero.
+    /// Returns nil when there's nothing worth saying yet.
+    public var countsLabel: String? {
+        var parts: [String] = []
+        if registrationCount > 0 {
+            parts.append("\(registrationCount) skater\(registrationCount == 1 ? "" : "s")")
+        }
+        if raceCount > 0 {
+            parts.append("\(raceCount) race\(raceCount == 1 ? "" : "s")")
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
     public var initials: String {
         let words = meetName.split(separator: " ").prefix(2)
         let letters = words.compactMap { $0.first }.map(String.init).joined()

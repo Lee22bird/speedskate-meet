@@ -39,7 +39,7 @@ public struct ResultsView: View {
             .padding(.vertical)
             .padding(.bottom, 70)
         }
-        .background(SSMTheme.pageBackground)
+        .background(SSMTheme.publicBackground)
         .navigationTitle(meetName)
         .ssmInlineNavigationTitle()
         .ssmNavigationBarHidden(false)

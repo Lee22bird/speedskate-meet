@@ -37,7 +37,7 @@ public struct RootTabView: View {
 
             SSMFloatingTabBar(selectedTab: $selectedTab)
         }
-        .background(SSMTheme.pageBackground)
+        .background(SSMTheme.publicBackground)
         .preferredColorScheme(.dark)
         .tint(SSMTheme.orange)
         .environmentObject(auth)
@@ -138,7 +138,7 @@ private struct LiveTabRootView: View {
                 .padding(.bottom, 80)
             }
             .scrollIndicators(.hidden)
-            .background(SSMTheme.pageBackground)
+            .background(SSMTheme.publicBackground)
             .ssmNavigationBarHidden(true)
             .navigationDestination(for: MeetSummary.self) { meet in
                 LiveRaceDayView(meetID: meet.id.stringValue, meetName: meet.meetName)
@@ -178,7 +178,7 @@ private struct ResultsTabRootView: View {
                 .padding(.bottom, 80)
             }
             .scrollIndicators(.hidden)
-            .background(SSMTheme.pageBackground)
+            .background(SSMTheme.publicBackground)
             .ssmNavigationBarHidden(true)
             .navigationDestination(for: MeetSummary.self) { meet in
                 ResultsView(meetID: meet.id.stringValue, meetName: meet.meetName)
@@ -192,14 +192,18 @@ private struct ResultsTabRootView: View {
 struct ContentUnavailableFallback: View {
     let text: String
     var body: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "tray")
-                .font(.system(size: 36))
-                .foregroundStyle(SSMTheme.muted)
+        VStack(spacing: 14) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 34, weight: .light))
+                .foregroundStyle(SSMTheme.publicSky.opacity(0.7))
             Text(text)
+                .font(.ssmRounded(15, weight: .medium))
                 .foregroundStyle(SSMTheme.muted)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
         }
+        .padding(.vertical, 28)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(SSMTheme.pageBackground)
+        .background(SSMTheme.publicBackground)
     }
 }

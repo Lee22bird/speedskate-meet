@@ -113,6 +113,57 @@ public enum SSMTheme {
     public static let pillShape = RoundedRectangle(cornerRadius: 999, style: .continuous)
 
     public static let cardShadow = Color.black.opacity(0.45)
+
+    // ── Public surfaces ──────────────────────────────────────────────────
+    // The spectator side (Meets / Live / Results) reads calmer than the
+    // meet-running boards: the base is lifted off near-black, cards sit closer
+    // to the background, corners are plumper, and edges are whispers rather
+    // than outlines. These are SEPARATE tokens on purpose — the iPad
+    // meet-running UI keeps its tighter, higher-contrast look.
+    public static let publicBackground = Color(red: 0x0F/255, green: 0x18/255, blue: 0x2B/255)
+    public static let publicCard = Color(red: 0x1A/255, green: 0x25/255, blue: 0x3D/255)
+    public static let publicCardSoft = Color(red: 0x21/255, green: 0x2D/255, blue: 0x48/255)
+    public static let publicBorder = Color.white.opacity(0.06)
+    /// Gentle, low-saturation accents — calm next to the ops UI's bright sky/orange.
+    public static let publicSky = Color(red: 0x7D/255, green: 0xD3/255, blue: 0xFC/255)
+    public static let publicMint = Color(red: 0x6E/255, green: 0xE7/255, blue: 0xB7/255)
+    public static let publicPeach = Color(red: 0xFD/255, green: 0xBA/255, blue: 0x74/255)
+
+    public static let bubbleRadius: CGFloat = 28
+    public static let bubbleRadiusSmall: CGFloat = 20
+    public static let bubblePadding: CGFloat = 20
+    public static let bubbleShadow = Color.black.opacity(0.22)
+}
+
+/// A plump, softly-lit card for the public tabs. Rounder and airier than
+/// `SSMCard`, with a barely-there edge instead of a drawn border.
+public struct SSMBubbleCard<Content: View>: View {
+    private let tint: Color?
+    private let content: Content
+
+    public init(tint: Color? = nil, @ViewBuilder content: () -> Content) {
+        self.tint = tint
+        self.content = content()
+    }
+
+    public var body: some View {
+        content
+            .padding(SSMTheme.bubblePadding)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: SSMTheme.bubbleRadius, style: .continuous)
+                    .fill(SSMTheme.publicCard)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: SSMTheme.bubbleRadius, style: .continuous)
+                            .fill((tint ?? .clear).opacity(tint == nil ? 0 : 0.10))
+                    )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: SSMTheme.bubbleRadius, style: .continuous)
+                    .strokeBorder(tint?.opacity(0.28) ?? SSMTheme.publicBorder, lineWidth: 1)
+            )
+            .shadow(color: SSMTheme.bubbleShadow, radius: 14, x: 0, y: 6)
+    }
 }
 
 /// Diagonal blue/orange motion streaks — the racing-broadcast graphic behind
