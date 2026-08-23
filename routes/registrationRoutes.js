@@ -37,6 +37,8 @@ const {
 const { ensureCurrentRace } = require('../services/raceDay');
 const { renderMeetStaffList } = require('../services/staffAssignments');
 const { createBackup: createDesktopBackup } = require('../services/desktopBackupService');
+const { meetHasStartedRacing, startedRacingSummary, regenConfirmed } = require('../services/regenGuard');
+const { renderRegenConfirm } = require('../views/regenGuardView');
 const {
   ensureTimeTrialEvent,
   timeTrialEventAvailable,
@@ -1045,6 +1047,23 @@ function registrationOpsRedirect(meet, req, extra = '') {
 router.post('/portal/meet/:meetId/assign-races', requireRole('meet_director'), (req, res) => {
   const meet=getMeetOr404(req.db,req.params.meetId);
   if(!meet||!canEditMeet(req.user,meet)) return res.redirect('/portal');
+  // Rebuild Assignments rebuilds the race set with fresh lane entries — after
+  // racing has started that wipes entered places/times. Confirm before wiping,
+  // and back up first so it's recoverable.
+  const returnTo = String(req.query.returnTo || '');
+  if (meetHasStartedRacing(meet) && !regenConfirmed(req)) {
+    return res.send(pageShell({
+      title: 'Confirm Rebuild', user: req.user, meet, activeTab: 'registered',
+      bodyHtml: renderRegenConfirm({
+        meet,
+        actionUrl: `/portal/meet/${meet.id}/assign-races${returnTo ? `?returnTo=${encodeURIComponent(returnTo)}` : ''}`,
+        actionLabel: 'Rebuilding assignments',
+        cancelUrl: registrationOpsRedirect(meet, req, ''),
+        summary: startedRacingSummary(meet),
+      }),
+    }));
+  }
+  createDesktopBackupIfActive(req.db, 'before_race_generation', meet.id);
   rebuildRaceAssignmentsSafe(meet);
   ensureCurrentRace(meet);
   saveDb(req.db);

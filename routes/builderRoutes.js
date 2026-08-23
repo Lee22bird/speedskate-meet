@@ -35,6 +35,8 @@ const { createBackup: createDesktopBackup } = require('../services/desktopBackup
 const { saveMeetIdentityFields } = require('../services/meetIdentityFields');
 const { generateScheduleBlocks } = require('../services/scheduleGenerator');
 const { isMsslPresetName } = require('../services/msslTemplate');
+const { meetHasStartedRacing, startedRacingSummary, regenConfirmed } = require('../services/regenGuard');
+const { renderRegenConfirm } = require('../views/regenGuardView');
 
 
 function canManageSetupPresets(user) {
@@ -199,6 +201,22 @@ router.post('/portal/meet/:meetId/division-scheme', requireRole('meet_director')
   if (!meet || !canEditMeet(req.user, meet)) return res.redirect('/portal');
   const scheme = ['standard', 'mssl', 'usars'].includes(String(req.body.scheme || '').toLowerCase())
     ? String(req.body.scheme).toLowerCase() : 'standard';
+  // Switching division scheme rebuilds the division/quad/relay set (and, for MSSL,
+  // regenerates every race). After racing has started that erases entered results,
+  // so confirm first and back up before regenerating.
+  if (meetHasStartedRacing(meet) && !regenConfirmed(req)) {
+    return res.send(pageShell({
+      title: 'Confirm Scheme Switch', user: req.user, meet, activeTab: 'builder',
+      bodyHtml: renderRegenConfirm({
+        meet,
+        actionUrl: `/portal/meet/${meet.id}/division-scheme`,
+        actionLabel: 'Switching division scheme',
+        cancelUrl: `/portal/meet/${meet.id}/builder`,
+        summary: startedRacingSummary(meet),
+        hiddenInputs: [{ name: 'scheme', value: scheme }],
+      }),
+    }));
+  }
   // Always (re)apply the chosen scheme's full template — not only on a flag flip.
   // A meet already flagged usarsDivisions=true but carrying an incomplete group
   // list (stale meets missing Grand Classic/Masters/Veteran/Esquire + Premier)
