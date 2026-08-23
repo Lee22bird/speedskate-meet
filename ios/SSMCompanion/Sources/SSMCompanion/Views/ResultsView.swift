@@ -68,9 +68,11 @@ private struct ResultsMatrixCard: View {
     var body: some View {
         SSMCard {
             VStack(alignment: .leading, spacing: 0) {
+                // Coloured so a long results page reads as distinct races
+                // rather than one continuous wall of names.
                 Text(title)
-                    .font(.headline)
-                    .foregroundStyle(SSMTheme.textPrimary)
+                    .font(.ssmRounded(16, weight: .heavy))
+                    .foregroundStyle(SSMTheme.publicMint)
                     .padding(.bottom, 10)
 
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -148,7 +150,9 @@ private struct OpenResultsSectionCard: View {
     var body: some View {
         SSMCard {
             VStack(alignment: .leading, spacing: 10) {
-                Text("\(section.groupLabel) — \(section.distanceLabel)").font(.headline).foregroundStyle(SSMTheme.textPrimary)
+                Text("\(section.groupLabel) — \(section.distanceLabel)")
+                    .font(.ssmRounded(16, weight: .heavy))
+                    .foregroundStyle(SSMTheme.publicMint)
                 ForEach(section.results) { row in
                     HStack {
                         Text(row.place ?? "—").font(.headline).foregroundStyle(SSMTheme.orange).frame(width: 28, alignment: .leading)

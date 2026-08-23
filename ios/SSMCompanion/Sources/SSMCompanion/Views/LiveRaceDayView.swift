@@ -79,7 +79,8 @@ private struct DetailedLiveContent: View {
                         Text("After That").font(.subheadline.bold()).foregroundStyle(SSMTheme.muted)
                         ForEach(data.coming) { item in
                             Text("\(item.groupLabel) — \(item.distanceLabel)")
-                                .font(.subheadline)
+                                .font(.ssmRounded(15, weight: .semibold))
+                                .foregroundStyle(SSMTheme.publicPeach)
                         }
                     }
                 }
@@ -90,12 +91,25 @@ private struct DetailedLiveContent: View {
                 SSMCard {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Recent Results").font(.subheadline.bold()).foregroundStyle(SSMTheme.muted)
-                        ForEach(data.recentResults) { race in
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("\(race.groupLabel) — \(race.distanceLabel)").font(.subheadline.bold())
+                        // The race title carries its own colour so the eye can
+                        // find where one race ends and the next begins — a wall
+                        // of same-coloured names is hard to scan at a rink.
+                        ForEach(Array(data.recentResults.enumerated()), id: \.element.id) { index, race in
+                            VStack(alignment: .leading, spacing: 5) {
+                                if index > 0 {
+                                    Divider()
+                                        .overlay(SSMTheme.publicBorder)
+                                        .padding(.vertical, 4)
+                                }
+                                Text("\(race.groupLabel) — \(race.distanceLabel)")
+                                    .font(.ssmRounded(15, weight: .heavy))
+                                    .foregroundStyle(SSMTheme.publicMint)
                                 ForEach(race.results) { row in
                                     HStack {
-                                        Text(row.status ?? row.place ?? "—").bold().frame(width: 36, alignment: .leading)
+                                        Text(row.status ?? row.place ?? "—")
+                                            .bold()
+                                            .foregroundStyle(SSMTheme.muted)
+                                            .frame(width: 36, alignment: .leading)
                                         Text(row.skaterName)
                                         Spacer()
                                         Text(row.team).foregroundStyle(SSMTheme.muted).font(.caption)
