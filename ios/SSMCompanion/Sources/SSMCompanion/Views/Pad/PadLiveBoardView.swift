@@ -35,16 +35,48 @@ struct PadLiveBoardView: View {
         }
         .onDisappear { vm.stopAutoRefresh() }
         .fullScreenCover(isPresented: $fullScreen) {
-            ZStack {
-                SSMTheme.pageBackground.ignoresSafeArea()
-                if let data = vm.data {
-                    TVBoardContent(data: data, meetName: meetName,
-                                   chrome: .fullScreen { fullScreen = false })
-                }
-            }
-            .statusBarHidden(true)
-            .persistentSystemOverlays(.hidden)
+            TVBoardFullScreen(vm: vm, meetName: meetName) { fullScreen = false }
         }
+    }
+}
+
+/// Full-screen presentation for mirroring to the Apple TV. The only app control
+/// on screen — the ✕ exit — fades away a few seconds after the last touch so the
+/// mirrored board stays clean; tap anywhere to bring it back. The LIVE badge,
+/// meet name, and race count stay put since those belong on the board.
+private struct TVBoardFullScreen: View {
+    @ObservedObject var vm: LiveRaceDayViewModel
+    let meetName: String
+    let onExit: () -> Void
+
+    @State private var exitVisible = true
+    /// Bumping this restarts the auto-hide countdown (used on every tap).
+    @State private var revealTick = 0
+
+    var body: some View {
+        ZStack {
+            SSMTheme.pageBackground.ignoresSafeArea()
+            if let data = vm.data {
+                TVBoardContent(data: data, meetName: meetName,
+                               chrome: .fullScreen(exitVisible: exitVisible, onExit: onExit))
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture { reveal() }
+        .statusBarHidden(true)
+        .persistentSystemOverlays(.hidden)
+        .task(id: revealTick) {
+            // Show, then fade the exit control after a few quiet seconds.
+            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            if !Task.isCancelled {
+                withAnimation(.easeOut(duration: 0.5)) { exitVisible = false }
+            }
+        }
+    }
+
+    private func reveal() {
+        withAnimation(.easeIn(duration: 0.2)) { exitVisible = true }
+        revealTick &+= 1   // restart the countdown
     }
 }
 
@@ -55,8 +87,8 @@ private struct TVBoardContent: View {
     let meetName: String
 
     enum Chrome {
-        case inline(() -> Void)      // shows a "Full screen" button
-        case fullScreen(() -> Void)  // shows a small "Exit" affordance
+        case inline(() -> Void)                              // shows a "Full screen" button
+        case fullScreen(exitVisible: Bool, onExit: () -> Void)  // auto-hiding ✕
     }
     let chrome: Chrome
 
@@ -94,7 +126,7 @@ private struct TVBoardContent: View {
                     Label("Full screen", systemImage: "tv").font(.ssmRounded(15, weight: .bold))
                 }
                 .buttonStyle(.ssmSoftPill)
-            case .fullScreen(let exit):
+            case .fullScreen(let exitVisible, let exit):
                 Button(action: exit) {
                     Image(systemName: "xmark").font(.system(size: 17, weight: .bold))
                         .padding(10)
@@ -102,6 +134,8 @@ private struct TVBoardContent: View {
                         .foregroundStyle(.white)
                 }
                 .buttonStyle(.plain)
+                .opacity(exitVisible ? 1 : 0)
+                .allowsHitTesting(exitVisible)   // fully out of the way once hidden
             }
         }
         .padding(.horizontal, 24)
