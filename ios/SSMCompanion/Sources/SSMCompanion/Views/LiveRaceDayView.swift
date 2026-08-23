@@ -5,12 +5,6 @@ public struct LiveRaceDayView: View {
     let meetName: String
 
     @StateObject private var viewModel = LiveRaceDayViewModel()
-    @State private var mode: DisplayMode = .detailed
-
-    private enum DisplayMode: String, CaseIterable {
-        case detailed = "Live Race Day"
-        case board = "Live Board"
-    }
 
     public init(meetID: String, meetName: String) {
         self.meetID = meetID
@@ -18,26 +12,14 @@ public struct LiveRaceDayView: View {
     }
 
     public var body: some View {
-        ScrollView { 
+        ScrollView {
             VStack(spacing: 16) {
-                Picker("View", selection: $mode) {
-                    ForEach(DisplayMode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .tint(SSMTheme.orange)
-                .padding(.horizontal)
-
                 if viewModel.isLoading && viewModel.data == nil {
                     ProgressView().padding(.top, 60)
                 } else if let error = viewModel.errorMessage {
                     ContentUnavailableFallback(text: error)
                 } else if let data = viewModel.data {
-                    switch mode {
-                    case .detailed:
-                        DetailedLiveContent(data: data)
-                    case .board:
-                        LiveBoardContent(data: data)
-                    }
+                    LiveContent(data: data)
                 }
             }
             .padding(.vertical)
@@ -55,8 +37,8 @@ public struct LiveRaceDayView: View {
     }
 }
 
-// ── Full detail: current race + lanes, in staging, after that, recent results ─
-private struct DetailedLiveContent: View {
+// ── The live view: now racing + lanes, up next, coming up, recent results ─────
+private struct LiveContent: View {
     let data: LiveRaceDayResponse
 
     var body: some View {
@@ -122,122 +104,6 @@ private struct DetailedLiveContent: View {
                 .padding(.horizontal)
             }
         }
-    }
-}
-
-// ── Simplified Live Board: big readable current/next/last tiles ─────────────
-private struct LiveBoardContent: View {
-    let data: LiveRaceDayResponse
-
-    var body: some View {
-        VStack(spacing: 16) {
-            ZStack {
-                RoundedRectangle(cornerRadius: SSMTheme.cornerRadius)
-                    .fill(SSMTheme.navyGradient)
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("NOW RACING")
-                        .font(.caption.bold())
-                        .foregroundStyle(SSMTheme.orange)
-                    if let current = data.current {
-                        Text(current.groupLabel)
-                            .font(.ssmRounded(36, weight: .heavy))
-                            .foregroundStyle(.white)
-                        Text("\(current.division.map { $0.capitalized } ?? "") • \(current.distanceLabel) • \(current.stage)")
-                            .font(.subheadline)
-                            .foregroundStyle(.white.opacity(0.85))
-                        if current.lanes.count > 0 && current.lanes.count <= 4 {
-                            VStack(alignment: .leading, spacing: 4) {
-                                ForEach(current.lanes) { lane in
-                                    Text("\(lane.lane). \(lane.skaterName)")
-                                        .font(.ssmRounded(20, weight: .bold))
-                                        .foregroundStyle(.white)
-                                }
-                            }
-                            .padding(.top, 6)
-                        }
-                    } else {
-                        Text("Stand By").font(.ssmRounded(36, weight: .heavy)).foregroundStyle(.white.opacity(0.6))
-                    }
-                }
-                .padding(24)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .frame(minHeight: 180)
-            .padding(.horizontal)
-
-            HStack(spacing: 12) {
-                BoardTile(label: "Next", text: data.next?.groupLabel ?? "—", gradient: SSMTheme.skyGradient)
-                BoardTile(label: "In Staging", text: data.coming.first?.groupLabel ?? "—", gradient: LinearGradient(colors: [SSMTheme.good, SSMTheme.good.opacity(0.7)], startPoint: .top, endPoint: .bottom))
-            }
-            .padding(.horizontal)
-
-            ForEach(Array(data.recentResults.prefix(3))) { race in
-                RecentResultBoardCard(race: race)
-                    .padding(.horizontal)
-            }
-        }
-    }
-}
-
-private struct RecentResultBoardCard: View {
-    let race: RecentRace
-
-    var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: SSMTheme.cornerRadius)
-                .fill(SSMTheme.navyGradient)
-            VStack(alignment: .leading, spacing: 8) {
-                Text("FINAL")
-                    .font(.caption.bold())
-                    .foregroundStyle(SSMTheme.good)
-                Text(race.groupLabel)
-                    .font(.ssmRounded(24, weight: .heavy))
-                    .foregroundStyle(.white)
-                Text("\(race.division.map { $0.capitalized } ?? "") • \(race.distanceLabel)")
-                    .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.85))
-                if !race.results.isEmpty {
-                    VStack(alignment: .leading, spacing: 4) {
-                        ForEach(race.results.prefix(4)) { row in
-                            Text("\(placeLabel(row.place ?? row.status)). \(row.skaterName)")
-                                .font(.ssmRounded(18, weight: .bold))
-                                .foregroundStyle(.white)
-                        }
-                    }
-                    .padding(.top, 4)
-                }
-            }
-            .padding(20)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .frame(minHeight: 140)
-    }
-
-    private func placeLabel(_ raw: String?) -> String {
-        guard let raw, let place = Int(raw) else { return raw ?? "—" }
-        switch place {
-        case 1: return "1st"
-        case 2: return "2nd"
-        case 3: return "3rd"
-        default: return "\(place)th"
-        }
-    }
-}
-
-private struct BoardTile: View {
-    let label: String
-    let text: String
-    let gradient: LinearGradient
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(label.uppercased()).font(.ssmRounded(11, weight: .bold)).foregroundStyle(.white.opacity(0.85))
-            Text(text).font(.ssmRounded(17, weight: .bold)).foregroundStyle(.white).lineLimit(2)
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(gradient, in: RoundedRectangle(cornerRadius: SSMTheme.cornerRadius, style: .continuous))
-        .shadow(color: .black.opacity(0.12), radius: 8, x: 0, y: 4)
     }
 }
 
