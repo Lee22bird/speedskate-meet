@@ -2,7 +2,7 @@ const express = require('express');
 const crypto = require('crypto');
 const { esc, cap } = require('../utils/html');
 const { nowIso } = require('../utils/date');
-const { canEditMeet, canJudgeMeet, hasRole } = require('../utils/auth');
+const { canEditMeet, canJudgeMeet, hasRole, isMeetPinUser, meetPinRoleFor } = require('../utils/auth');
 const { raceDaySubTabs, meetTabs: _mt, announcerBoxHtml: _abh } = require('../utils/pageShell');
 const {
   getMeetOr404, meetRinkLabel, meetDateLabel, nextId,
@@ -1642,12 +1642,24 @@ router.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','j
     .merge-div-tag{display:inline-block;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;color:#6d28d9;background:#ede9fe;border-radius:4px;padding:1px 6px;margin-left:6px;vertical-align:middle}
   </style><div class="page-header"><h1>Race Day</h1><div class="sub">${esc(meet.meetName)}</div></div>${raceDaySubTabs(meet,mode)}${protestNotifyHtml(meet,mode)}`;
 
-  // Redirect judges/announcers away from director tab
-  if(mode==='director'&&!hasRole(req.user,'meet_director')&&!hasRole(req.user,'super_admin')) {
-    return res.redirect(`/portal/meet/${meet.id}/race-day/${hasRole(req.user,'judge')?'judges':'announcer'}`);
-  }
-  if(mode==='judges'&&!hasRole(req.user,'judge')&&!hasRole(req.user,'meet_director')&&!hasRole(req.user,'super_admin')) {
-    return res.redirect(`/portal/meet/${meet.id}/race-day/announcer`);
+  // Meet-PIN identities carry no platform roles (hasRole is always false), so the
+  // role-based redirects below would bounce them off their own screen. Route a PIN
+  // holder straight to the one race-day mode their PIN grants and skip those checks.
+  if(isMeetPinUser(req.user)) {
+    const pinRole = meetPinRoleFor(req.user, meet);
+    const pinMode = pinRole==='meet_director' ? 'director'
+      : pinRole==='tabulator' ? 'judges'
+      : pinRole==='referee' ? 'live'
+      : pinRole==='announcer' ? 'announcer' : '';
+    if(pinMode && mode!==pinMode) return res.redirect(`/portal/meet/${meet.id}/race-day/${pinMode}`);
+  } else {
+    // Redirect judges/announcers away from director tab
+    if(mode==='director'&&!hasRole(req.user,'meet_director')&&!hasRole(req.user,'super_admin')) {
+      return res.redirect(`/portal/meet/${meet.id}/race-day/${hasRole(req.user,'judge')?'judges':'announcer'}`);
+    }
+    if(mode==='judges'&&!hasRole(req.user,'judge')&&!hasRole(req.user,'meet_director')&&!hasRole(req.user,'super_admin')) {
+      return res.redirect(`/portal/meet/${meet.id}/race-day/announcer`);
+    }
   }
   if(mode==='director') {
     body+=renderDirectorBoard({

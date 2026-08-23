@@ -1,4 +1,5 @@
 const express = require('express');
+const { esc } = require('../utils/html');
 const { canManageMeetSettings } = require('../utils/auth');
 const { getMeetOr404 } = require('../services/meetHelpers');
 const {
@@ -6,6 +7,9 @@ const {
   upsertMeetStaffAssignment,
   clearMeetStaffAssignment,
 } = require('../services/staffAssignments');
+const {
+  createStaffPin, revokeStaffPin, regenerateStaffPin, PIN_ROLE_LABELS,
+} = require('../services/meetStaffPins');
 
 function configuredSslBaseUrl() {
   return String(
@@ -81,7 +85,67 @@ function personMatchesPosted(candidate, posted) {
 
 module.exports = function createStaffRoutes(deps = {}) {
   const router = express.Router();
-  const { requireRole, saveDb } = deps;
+  const { requireRole, saveDb, pageShell } = deps;
+
+  // The generated PIN is shown ONCE (no redirect — never put the code in a URL).
+  function pinRevealPage(req, meet, row, pin) {
+    return pageShell({
+      title: 'Meet PIN', user: req.user, meet, activeTab: 'builder',
+      bodyHtml: `
+        <div class="page-header"><h1>Meet PIN Created</h1><div class="sub">${esc(meet.meetName || '')}</div></div>
+        <div class="card" style="max-width:620px;border-left:5px solid var(--orange)">
+          <h2 style="margin-top:0">${esc(row.name)} — ${esc(PIN_ROLE_LABELS[row.role] || 'Staff')}</h2>
+          <div class="note" style="margin-bottom:12px">This PIN is shown once. Give it only to this person. They sign in at <strong>/meet-pin</strong> (pick this meet, enter the code).</div>
+          <div style="font-size:46px;font-weight:900;letter-spacing:.18em;color:var(--navy);line-height:1">${esc(pin)}</div>
+          <div class="action-row" style="margin-top:18px">
+            <a class="btn-orange" href="/portal/meet/${esc(meet.id)}/builder">Back To Meet Builder</a>
+            <a class="btn2" href="/meet-pin" target="_blank">Open Meet-PIN sign-in</a>
+          </div>
+        </div>`,
+    });
+  }
+
+  router.post('/portal/meet/:meetId/staff/pin/create', requireRole('meet_director'), (req, res) => {
+    const meetId = req.params.meetId;
+    try {
+      const meet = getMeetOr404(req.db, meetId);
+      if (!meet) throw new Error('Meet not found.');
+      if (!canManageMeetSettings(req.user, meet)) throw new Error('Only the meet owner or Super Admin can manage meet PINs.');
+      const { row, pin } = createStaffPin(meet, { name: req.body.name, role: req.body.role, createdByUserId: req.user.id });
+      saveDb(req.db);
+      return res.send(pinRevealPage(req, meet, row, pin));
+    } catch (err) {
+      return res.redirect(`/portal/meet/${encodeURIComponent(meetId)}/builder?error=${encodeURIComponent(err.message)}`);
+    }
+  });
+
+  router.post('/portal/meet/:meetId/staff/pin/regenerate', requireRole('meet_director'), (req, res) => {
+    const meetId = req.params.meetId;
+    try {
+      const meet = getMeetOr404(req.db, meetId);
+      if (!meet) throw new Error('Meet not found.');
+      if (!canManageMeetSettings(req.user, meet)) throw new Error('Only the meet owner or Super Admin can manage meet PINs.');
+      const { row, pin } = regenerateStaffPin(meet, String(req.body.pinId || ''));
+      saveDb(req.db);
+      return res.send(pinRevealPage(req, meet, row, pin));
+    } catch (err) {
+      return res.redirect(`/portal/meet/${encodeURIComponent(meetId)}/builder?error=${encodeURIComponent(err.message)}`);
+    }
+  });
+
+  router.post('/portal/meet/:meetId/staff/pin/revoke', requireRole('meet_director'), (req, res) => {
+    const meetId = req.params.meetId;
+    try {
+      const meet = getMeetOr404(req.db, meetId);
+      if (!meet) throw new Error('Meet not found.');
+      if (!canManageMeetSettings(req.user, meet)) throw new Error('Only the meet owner or Super Admin can manage meet PINs.');
+      revokeStaffPin(meet, String(req.body.pinId || ''));
+      saveDb(req.db);
+      return res.redirect(`/portal/meet/${encodeURIComponent(meetId)}/builder?saved=1`);
+    } catch (err) {
+      return res.redirect(`/portal/meet/${encodeURIComponent(meetId)}/builder?error=${encodeURIComponent(err.message)}`);
+    }
+  });
 
   router.get('/api/meet/:meetId/staff-search', requireRole('meet_director'), async (req, res) => {
     try {

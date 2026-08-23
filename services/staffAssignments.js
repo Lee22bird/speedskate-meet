@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const { esc } = require('../utils/html');
 const { nowIso } = require('../utils/date');
+const { PIN_ROLES, PIN_ROLE_LABELS, staffPinsJson } = require('./meetStaffPins');
 
 const STAFF_ROLES = [
   { key: 'meet_director', label: 'Meet Director', sslRole: 'meet_director' },
@@ -174,6 +175,7 @@ function renderMeetStaffList(meet, options = {}) {
 
 function renderMeetStaffManager({ meet, canManage = false }) {
   const rows = staffAssignmentsForMeet(meet);
+  const pins = canManage ? staffPinsJson(meet) : [];
   return `
     <div class="card meet-staff-manager" style="margin-bottom:16px" data-meet-staff-manager data-meet-id="${esc(meet.id)}" data-can-manage="${canManage ? '1' : '0'}">
       <div class="row between center" style="gap:12px;margin-bottom:14px">
@@ -209,6 +211,28 @@ function renderMeetStaffManager({ meet, canManage = false }) {
             </div>`;
         }).join('')}
       </div>
+
+      ${canManage ? `
+        <div class="meet-pin-manager" style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border)">
+          <div style="margin-bottom:10px">
+            <h2 style="margin:0;font-size:18px">Meet PINs</h2>
+            <div class="note">Account-free race-day sign-in — each person gets a 6-digit PIN for their role (no SSL login). They sign in at <strong>/meet-pin</strong>; DQs and rulings are recorded under their name. Works offline on SSM Desktop.</div>
+          </div>
+          <form method="POST" action="/portal/meet/${esc(meet.id)}/staff/pin/create" class="form-grid cols-3" style="margin-bottom:12px">
+            <div><label>Name</label><input name="name" placeholder="Jane Smith" maxlength="80" required></div>
+            <div><label>Role</label><select name="role">${PIN_ROLES.map(r => `<option value="${esc(r)}">${esc(PIN_ROLE_LABELS[r])}</option>`).join('')}</select></div>
+            <div style="align-self:flex-end"><button class="btn-orange" type="submit">Generate PIN</button></div>
+          </form>
+          ${pins.length ? `<div class="staff-pin-list">${pins.map(p => `
+            <div class="staff-person-line">
+              <div class="staff-pin-who"><strong>${esc(p.name)}</strong> <span class="staff-role-badge">${esc(p.roleLabel)}</span>${p.revoked ? ' <span class="chip">revoked</span>' : (p.active ? '' : ' <span class="chip">expired</span>')}${p.lastUsedAt ? ` <span class="note" style="display:inline">· last used ${esc(new Date(p.lastUsedAt).toLocaleString())}</span>` : ''}</div>
+              ${p.active ? `<div class="action-row" style="margin:0">
+                <form method="POST" action="/portal/meet/${esc(meet.id)}/staff/pin/regenerate" style="margin:0"><input type="hidden" name="pinId" value="${esc(p.id)}"><button class="btn2 btn-sm" type="submit">New code</button></form>
+                <form method="POST" action="/portal/meet/${esc(meet.id)}/staff/pin/revoke" style="margin:0" onsubmit="return confirm('Revoke this PIN? The holder is signed out immediately.')"><input type="hidden" name="pinId" value="${esc(p.id)}"><button class="btn-danger btn-sm" type="submit">Revoke</button></form>
+              </div>` : ''}
+            </div>`).join('')}</div>` : '<div class="note">No meet PINs yet.</div>'}
+        </div>` : ''}
+
       <style>
         .staff-person-line{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:4px 0;}
         .staff-person-line .staff-remove-form{margin:0;}
