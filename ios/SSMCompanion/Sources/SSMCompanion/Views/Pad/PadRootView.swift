@@ -444,9 +444,10 @@ struct PadDetailRouter: View {
                 PadScoreSheetsView(meetID: meetID)
                     .id(meetID)
             case .liveBoard:
-                PadEmbeddedScreen(title: session.selectedMeetName) {
-                    LiveRaceDayView(meetID: meetID, meetName: session.selectedMeetName)
-                }
+                // Purpose-built TV board (AirPlay to the rink's Apple TV), not
+                // the phone spectator view.
+                PadLiveBoardView(meetID: meetID, meetName: session.selectedMeetName)
+                    .id(meetID)
             case .results:
                 PadEmbeddedScreen(title: session.selectedMeetName) {
                     ResultsView(meetID: meetID, meetName: session.selectedMeetName)

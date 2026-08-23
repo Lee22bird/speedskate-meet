@@ -42,7 +42,7 @@ public enum PadSection: String, CaseIterable, Identifiable {
         case .referee: return "Referee"
         case .protests: return "Protests"
         case .scoreSheets: return "Score Sheets"
-        case .liveBoard: return "Live Board"
+        case .liveBoard: return "TV Board"
         case .results: return "Results"
         }
     }
