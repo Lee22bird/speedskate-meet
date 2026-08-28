@@ -33,6 +33,9 @@ import androidx.navigation.navArgument
 import com.speedskatemeet.android.ui.live.LiveScreen
 import com.speedskatemeet.android.ui.meets.MeetsScreen
 import com.speedskatemeet.android.ui.results.ResultsScreen
+import com.speedskatemeet.android.ui.coach.CoachToolsScreen
+import com.speedskatemeet.android.ui.staff.ProtestsScreen
+import com.speedskatemeet.android.ui.staff.StaffRaceDayScreen
 import com.speedskatemeet.android.ui.staff.StaffScreen
 import com.speedskatemeet.android.ui.theme.SsmColors
 
@@ -97,7 +100,7 @@ fun SsmNavHost() {
             composable(SsmTab.Meets.route) { MeetsScreen(navController) }
             composable(SsmTab.Live.route) { LiveScreen(navController, meetId = null, meetName = null) }
             composable(SsmTab.Results.route) { ResultsScreen(navController, meetId = null, meetName = null) }
-            composable(SsmTab.Staff.route) { StaffScreen() }
+            composable(SsmTab.Staff.route) { StaffScreen(navController) }
 
             composable(
                 "live/{meetId}?name={name}",
@@ -115,6 +118,49 @@ fun SsmNavHost() {
                         meetId = entry.arguments?.getString("meetId"),
                         meetName = entry.arguments?.getString("name"),
                     )
+                }
+            }
+            composable(
+                "staffday/{meetId}?name={name}",
+                arguments = listOf(
+                    navArgument("meetId") { type = NavType.StringType },
+                    navArgument("name") { type = NavType.StringType; defaultValue = "" },
+                ),
+            ) { entry ->
+                DetailScaffold(
+                    title = entry.arguments?.getString("name").orEmpty().ifEmpty { "Race Day" },
+                    navController = navController,
+                ) {
+                    StaffRaceDayScreen(
+                        navController,
+                        meetId = entry.arguments?.getString("meetId").orEmpty(),
+                        meetName = entry.arguments?.getString("name").orEmpty(),
+                    )
+                }
+            }
+            composable(
+                "protests/{meetId}?name={name}",
+                arguments = listOf(
+                    navArgument("meetId") { type = NavType.StringType },
+                    navArgument("name") { type = NavType.StringType; defaultValue = "" },
+                ),
+            ) { entry ->
+                DetailScaffold(title = "Protests", navController = navController) {
+                    ProtestsScreen(meetId = entry.arguments?.getString("meetId").orEmpty())
+                }
+            }
+            composable(
+                "coach/{meetId}?name={name}",
+                arguments = listOf(
+                    navArgument("meetId") { type = NavType.StringType },
+                    navArgument("name") { type = NavType.StringType; defaultValue = "" },
+                ),
+            ) { entry ->
+                DetailScaffold(
+                    title = entry.arguments?.getString("name").orEmpty().ifEmpty { "Coach Tools" },
+                    navController = navController,
+                ) {
+                    CoachToolsScreen(meetId = entry.arguments?.getString("meetId").orEmpty())
                 }
             }
             composable(

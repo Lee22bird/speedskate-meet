@@ -14,7 +14,12 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = 1
-        versionName = "0.1.0"
+        versionName = "0.2.0"
+
+        // Debug builds can point at a local server for end-to-end testing:
+        //   ./gradlew assembleDebug -PssmBaseUrl=http://10.0.2.2:10093
+        val ssmBaseUrl = (project.findProperty("ssmBaseUrl") as String?) ?: "https://speedskatemeet.com"
+        buildConfigField("String", "SSM_BASE_URL", "\"$ssmBaseUrl\"")
     }
 
     buildTypes {

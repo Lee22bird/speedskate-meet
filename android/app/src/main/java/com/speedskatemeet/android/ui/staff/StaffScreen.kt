@@ -39,6 +39,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.speedskatemeet.android.SsmApplication
+import androidx.navigation.NavHostController
+import com.speedskatemeet.android.network.CoachMeet
 import com.speedskatemeet.android.network.CurrentUser
 import com.speedskatemeet.android.network.MeetPinLoginRequest
 import com.speedskatemeet.android.network.MeetPinMeetOption
@@ -59,6 +61,8 @@ data class StaffUiState(
     val user: CurrentUser? = null,
     val pinIdentity: String? = null,       // "Jon Esterline — Tabulator for Fall Classic"
     val staffMeets: List<StaffMeet> = emptyList(),
+    val coachMeets: List<CoachMeet> = emptyList(),
+    val coachTeam: String? = null,
     val pinMeets: List<MeetPinMeetOption> = emptyList(),
     val isLoading: Boolean = true,
     val isWorking: Boolean = false,
@@ -78,8 +82,12 @@ class StaffViewModel(app: Application) : AndroidViewModel(app) {
             val me = runCatching { apiClient.api.me() }.getOrNull()
             if (me?.loggedIn == true) {
                 val meets = runCatching { apiClient.api.myStaffMeets() }.getOrNull()?.meets ?: emptyList()
+                val coach = runCatching { apiClient.api.myCoachMeets() }.getOrNull()
                 _uiState.value = _uiState.value.copy(
-                    user = me.user, staffMeets = meets, isLoading = false,
+                    user = me.user, staffMeets = meets,
+                    coachMeets = coach?.meets ?: emptyList(),
+                    coachTeam = coach?.team,
+                    isLoading = false,
                 )
             } else {
                 val pinMeets = runCatching { apiClient.api.meetPinMeets() }.getOrNull()?.meets ?: emptyList()
@@ -137,7 +145,7 @@ class StaffViewModel(app: Application) : AndroidViewModel(app) {
 /** Staff tab: signed out = account login + meet-PIN sign-in; signed in = your
  *  staff meets with roles (race-day tools come in the next phase). */
 @Composable
-fun StaffScreen(viewModel: StaffViewModel = viewModel()) {
+fun StaffScreen(navController: NavHostController, viewModel: StaffViewModel = viewModel()) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
     SsmBackground {
@@ -145,14 +153,14 @@ fun StaffScreen(viewModel: StaffViewModel = viewModel()) {
             state.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = SsmColors.Sky)
             }
-            state.user != null || state.pinIdentity != null -> SignedIn(state, viewModel)
+            state.user != null || state.pinIdentity != null -> SignedIn(navController, state, viewModel)
             else -> SignedOut(state, viewModel)
         }
     }
 }
 
 @Composable
-private fun SignedIn(state: StaffUiState, viewModel: StaffViewModel) {
+private fun SignedIn(navController: NavHostController, state: StaffUiState, viewModel: StaffViewModel) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(SsmSpacing.md),
@@ -173,18 +181,42 @@ private fun SignedIn(state: StaffUiState, viewModel: StaffViewModel) {
         }
         item { Text("YOUR MEETS", style = SsmType.label) }
         if (state.staffMeets.isEmpty()) {
-            item {
-                Text("No staff assignments yet. Race-day tools arrive here in the next update — for now, run the meet from the iPad or the website.",
-                    style = SsmType.caption)
-            }
+            item { Text("No staff assignments yet.", style = SsmType.caption) }
         }
-        items(state.staffMeets, key = { it.id }) { meet ->
-            Column(Modifier.fillMaxWidth().ssmBubbleCard().padding(SsmSpacing.md)) {
+        items(state.staffMeets, key = { "s-" + it.id }) { meet ->
+            Column(
+                Modifier.fillMaxWidth().ssmBubbleCard()
+                    .clickable { navController.navigate("staffday/${meet.id}?name=${meet.meetName}") }
+                    .padding(SsmSpacing.md),
+            ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(meet.meetName, style = SsmType.headline, modifier = Modifier.weight(1f))
                     Text(meet.role.replace('_', ' ').uppercase(), style = SsmType.label, color = SsmColors.Orange)
                 }
                 if (meet.date.isNotBlank()) Text(friendlyDate(meet.date), style = SsmType.caption, color = SsmColors.Sky)
+                Text("Race day tools →", style = SsmType.caption, color = SsmColors.Mint)
+            }
+        }
+        if (state.coachMeets.isNotEmpty()) {
+            item {
+                Text("COACH${state.coachTeam?.takeIf { it.isNotBlank() }?.let { " — $it" } ?: ""}".uppercase(),
+                    style = SsmType.label)
+            }
+            items(state.coachMeets, key = { "c-" + it.id }) { meet ->
+                Column(
+                    Modifier.fillMaxWidth().ssmBubbleCard(tint = SsmColors.Peach)
+                        .clickable { navController.navigate("coach/${meet.id}?name=${meet.meetName}") }
+                        .padding(SsmSpacing.md),
+                ) {
+                    Text(meet.meetName, style = SsmType.headline)
+                    if (meet.date.isNotBlank()) Text(friendlyDate(meet.date), style = SsmType.caption, color = SsmColors.Sky)
+                    Text(
+                        "${meet.mySkaterCount} of your skaters" +
+                            (if (meet.myProtestCount > 0) " · ${meet.myProtestCount} protest${if (meet.myProtestCount == 1) "" else "s"}" else "") +
+                            " · Protests & relays →",
+                        style = SsmType.caption, color = SsmColors.Peach,
+                    )
+                }
             }
         }
     }

@@ -17,7 +17,7 @@ import retrofit2.create
 import java.util.concurrent.TimeUnit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
 
-const val SSM_BASE_URL = "https://speedskatemeet.com"
+val SSM_BASE_URL: String = com.speedskatemeet.android.BuildConfig.SSM_BASE_URL
 private const val SESSION_COOKIE = "ssm_sess"
 
 /**
