@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Deep rink navy from the SSM icon art, so the cropped edges blend in. -->
+    <color name="ic_launcher_background">#071B3D</color>
+</resources>
