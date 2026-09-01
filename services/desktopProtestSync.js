@@ -114,6 +114,8 @@ async function syncNow() {
     s.lastError = null;
     s.lastPulledCount = added;
     s.totalPulled = (s.totalPulled || 0) + added;
+    // Each tick also flushes any desktop rulings still awaiting push (v2).
+    try { await flushPendingPushes(); } catch (_) { /* best-effort */ }
     return { ok: true, added };
   } catch (err) {
     // Offline / unreachable / timed out — keep the session, retry next tick.
@@ -122,6 +124,79 @@ async function syncNow() {
   } finally {
     s.inFlight = false;
   }
+}
+
+// ── v2: push rulings UP ───────────────────────────────────────────────────────
+// One-way (up) mirror of an official's outcome, mirroring v1's one-way (down)
+// pull. Only ruling/fee fields travel; best-effort like the pull — offline just
+// leaves the pending flag for the next tick. A pulled protest carries the online
+// id as hostedProtestId, which addresses the online row.
+
+function rulingPayload(p) {
+  return {
+    state: p.state || '',
+    ruling: p.ruling || '',
+    ruledByName: p.ruledByName || '',
+    ruledAt: p.ruledAt || '',
+    feeCollected: !!p.feeCollected,
+    feeCollectedBy: p.feeCollectedBy || '',
+    feeCollectedAt: p.feeCollectedAt || '',
+  };
+}
+
+// Flag a locally-ruled, online-origin protest to be pushed back. Desktop-only;
+// a no-op on the website and for protests that did not come from online (no
+// hostedProtestId). The CALLER persists the db. Returns whether it flagged.
+function markRulingForPush(meet, protest) {
+  if (process.env.SSM_DESKTOP !== '1') return false;
+  if (!protest || !protest.hostedProtestId) return false;
+  protest.remotePushPending = true;
+  return true;
+}
+
+async function pushOne(hostedProtestId, payload) {
+  const s = session;
+  if (!s) return { ok: false, error: 'Not connected.' };
+  const res = await fetch(
+    `${s.baseUrl}/portal/meet/${encodeURIComponent(s.hostedMeetId)}/protests/${encodeURIComponent(hostedProtestId)}/remote-ruling`,
+    {
+      method: 'POST',
+      headers: { Cookie: s.cookie, 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(payload),
+      redirect: 'manual',
+      signal: AbortSignal.timeout(10000),
+    });
+  if (res.status === 401 || res.status === 403 || (res.status >= 300 && res.status < 400)) {
+    return { ok: false, expired: true, error: 'Online session expired.' };
+  }
+  const body = await res.json().catch(() => null);
+  if (!res.ok || !body || !body.ok) return { ok: false, error: (body && body.error) || 'Push rejected.' };
+  return { ok: true };
+}
+
+// Flush every locally-ruled protest still awaiting push to the online meet.
+// Best-effort: not-connected / offline just leaves the flag for next time.
+async function flushPendingPushes() {
+  const s = session;
+  if (!s || s.expired) return { ok: false, pushed: 0 };
+  const db = s.loadDb();
+  const meet = (db.meets || []).find(m => String(m.id) === String(s.localMeetId));
+  if (!meet || !Array.isArray(meet.protests)) return { ok: true, pushed: 0 };
+  const pending = meet.protests.filter(p => p.remotePushPending && p.hostedProtestId);
+  if (!pending.length) return { ok: true, pushed: 0 };
+  let pushed = 0;
+  for (const p of pending) {
+    if (session !== s) break; // disconnected mid-flush
+    let r;
+    try { r = await pushOne(p.hostedProtestId, rulingPayload(p)); }
+    catch (_) { r = { ok: false, offline: true }; }
+    if (session !== s) break;
+    if (r.ok) { p.remotePushPending = false; p.remotePushedAt = new Date().toISOString(); pushed += 1; }
+    else if (r.expired) { s.expired = true; s.lastError = 'Online session expired — reconnect to keep syncing.'; stopTimer(); break; }
+    else break; // offline / transient — retry on the next tick
+  }
+  if (pushed > 0) { meet.updatedAt = new Date().toISOString(); s.saveDb(db); }
+  return { ok: true, pushed };
 }
 
 function stopTimer() {
@@ -158,5 +233,6 @@ function disconnect() {
 module.exports = {
   connect, disconnect, syncNow, statusFor,
   mergeProtests, naturalKey, mintLocalProtestId,
+  markRulingForPush, flushPendingPushes, rulingPayload,
   DEFAULT_INTERVAL_MS,
 };

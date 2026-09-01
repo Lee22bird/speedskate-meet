@@ -77,3 +77,44 @@ test('statusFor reports disconnected when no session is active', () => {
   S.disconnect();
   assert.equal(S.statusFor('anything').connected, false);
 });
+
+// ── v2 push-back ──────────────────────────────────────────────────────────────
+
+test('markRulingForPush is a no-op off the desktop', () => {
+  const prev = process.env.SSM_DESKTOP;
+  delete process.env.SSM_DESKTOP;
+  const p = { id: 'P-002', hostedProtestId: 'P-001' };
+  assert.equal(S.markRulingForPush({}, p), false);
+  assert.equal(p.remotePushPending, undefined);
+  if (prev !== undefined) process.env.SSM_DESKTOP = prev;
+});
+
+test('markRulingForPush only flags online-origin protests (has hostedProtestId)', () => {
+  const prev = process.env.SSM_DESKTOP;
+  process.env.SSM_DESKTOP = '1';
+  const local = { id: 'P-003' }; // filed locally, never came from online
+  assert.equal(S.markRulingForPush({}, local), false);
+  assert.equal(local.remotePushPending, undefined);
+  const pulled = { id: 'P-002', hostedProtestId: 'P-001' };
+  assert.equal(S.markRulingForPush({}, pulled), true);
+  assert.equal(pulled.remotePushPending, true);
+  if (prev === undefined) delete process.env.SSM_DESKTOP; else process.env.SSM_DESKTOP = prev;
+});
+
+test('rulingPayload carries only ruling/fee fields', () => {
+  const p = {
+    id: 'P-002', hostedProtestId: 'P-001', source: 'online', raceId: 'r10',
+    state: 'upheld', ruling: 'Reskate ordered', ruledByName: 'Ref Jo', ruledAt: 't1',
+    feeCollected: true, feeCollectedBy: 'Dir Sam', feeCollectedAt: 't2',
+  };
+  assert.deepEqual(S.rulingPayload(p), {
+    state: 'upheld', ruling: 'Reskate ordered', ruledByName: 'Ref Jo', ruledAt: 't1',
+    feeCollected: true, feeCollectedBy: 'Dir Sam', feeCollectedAt: 't2',
+  });
+});
+
+test('flushPendingPushes is a safe no-op when not connected', async () => {
+  S.disconnect();
+  const r = await S.flushPendingPushes();
+  assert.equal(r.pushed, 0);
+});

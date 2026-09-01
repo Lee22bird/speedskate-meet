@@ -770,10 +770,14 @@ module.exports = function createDesktopRoutes(deps = {}) {
       return res.send(pageShell({ title: 'Live Protest Sync', user: data.user, meet, bodyHtml: `${header}<div class="card"><div class="note">This meet wasn't imported from an online meet, so there's nothing to sync. Live protest sync pulls coach phone protests from the online copy of a meet you downloaded via <strong>Import Meet</strong>.</div></div>` }));
     }
     const st = protestSync.statusFor(meet.id);
+    const pendingPush = (meet.protests || []).filter(p => p.remotePushPending && p.hostedProtestId).length;
+    const pushNote = pendingPush
+      ? ` · <span style="color:#c2410c">${pendingPush} ruling${pendingPush === 1 ? '' : 's'} waiting to sync back</span>`
+      : ' · rulings sync back to the online meet';
     const statusHtml = st.connected
       ? `<div class="card" style="border-left:5px solid var(--green)">
            <div class="bold">Connected to ${esc(st.baseUrl)}</div>
-           <div class="note" style="margin-top:6px">${st.lastError ? '<span style="color:#c2410c">' + esc(st.lastError) + '</span>' : ('Synced ' + (st.lastSyncAt ? esc(new Date(st.lastSyncAt).toLocaleTimeString()) : 'just now'))} · ${esc(String(st.totalPulled || 0))} protest${(st.totalPulled === 1) ? '' : 's'} pulled this session.</div>
+           <div class="note" style="margin-top:6px">${st.lastError ? '<span style="color:#c2410c">' + esc(st.lastError) + '</span>' : ('Synced ' + (st.lastSyncAt ? esc(new Date(st.lastSyncAt).toLocaleTimeString()) : 'just now'))} · ${esc(String(st.totalPulled || 0))} protest${(st.totalPulled === 1) ? '' : 's'} pulled this session${pushNote}.</div>
            <div class="action-row" style="margin-top:12px">
              <form method="POST" action="/desktop/meet/${esc(meet.id)}/protest-sync/now" style="margin:0"><button class="btn-orange" type="submit">Sync now</button></form>
              <form method="POST" action="/desktop/meet/${esc(meet.id)}/protest-sync/disconnect" style="margin:0"><button class="btn2" type="submit">Disconnect</button></form>
@@ -782,7 +786,7 @@ module.exports = function createDesktopRoutes(deps = {}) {
          </div>`
       : `<div class="card">
            <div class="bold">Connect to pull coach phone protests</div>
-           <div class="note" style="margin-top:6px">Sign in to the online site once. While connected, protests coaches file from their phones are pulled into this meet about every ${Math.round((protestSync.DEFAULT_INTERVAL_MS || 25000) / 1000)} seconds. Rulings you make here stay on this desktop.</div>
+           <div class="note" style="margin-top:6px">Sign in to the online site once. While connected, protests coaches file from their phones are pulled into this meet about every ${Math.round((protestSync.DEFAULT_INTERVAL_MS || 25000) / 1000)} seconds, and rulings you make here sync back to the online meet so coaches see the outcome.</div>
            <form method="POST" action="/desktop/meet/${esc(meet.id)}/protest-sync/connect" class="stack" style="margin-top:12px">
              <div><label>Site URL</label><input name="baseUrl" value="${esc(baseUrl)}" required /></div>
              <div><label>Email</label><input name="username" type="email" required /></div>

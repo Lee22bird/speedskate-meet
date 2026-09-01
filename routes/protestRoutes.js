@@ -9,6 +9,7 @@ const {
   protestsForMeet, protestsForCoach, findProtest, buildProtest,
   protestDeadlineMinutes, raceProtestWindowClosed,
 } = require('../services/protests');
+const protestSync = require('../services/desktopProtestSync');
 
 function money(n) { return '$' + Number(n || 0).toFixed(0); }
 
@@ -264,6 +265,44 @@ module.exports = function createProtestRoutes(deps = {}) {
     res.json({ ok: true, protests: protestsForMeet(meet) });
   });
 
+  // Desktop protest sync v2 (push-back): a desktop-run meet mirrors an official's
+  // ruling/fee outcome UP to this online copy so the coach who filed from their
+  // phone sees the result in the app. Additive + strictly scoped: it touches ONLY
+  // the matched protest's ruling/fee fields — never races, results, or scoring.
+  // Same meet-scoped auth as protests.json (super_admin or an official on THIS
+  // meet). The desktop is the live meet authority, so its outcome wins.
+  router.post('/portal/meet/:meetId/protests/:protestId/remote-ruling', requireRole('judge', 'meet_director'), (req, res) => {
+    const meet = getMeetOr404(req.db, req.params.meetId);
+    if (!meet) return res.status(404).json({ ok: false, error: 'Meet not found.' });
+    if (!hasRole(req.user, 'super_admin') && !canEditMeet(req.user, meet)) {
+      return res.status(403).json({ ok: false, error: 'You are not an official on this meet.' });
+    }
+    const protest = findProtest(meet, req.params.protestId);
+    if (!protest) return res.status(404).json({ ok: false, error: 'Protest not found.' });
+    const b = req.body || {};
+    let changed = false;
+    if (b.state === 'upheld' || b.state === 'denied') {
+      protest.state = b.state;
+      protest.ruling = String(b.ruling || '').slice(0, 2000);
+      protest.ruledByName = String(b.ruledByName || '');
+      protest.ruledAt = String(b.ruledAt || '') || nowIso();
+      changed = true;
+    }
+    if (b.feeCollected === true || String(b.feeCollected) === 'true') {
+      protest.feeCollected = true;
+      protest.feeCollectedBy = String(b.feeCollectedBy || '');
+      protest.feeCollectedAt = String(b.feeCollectedAt || '') || nowIso();
+      changed = true;
+    }
+    if (!changed) return res.status(400).json({ ok: false, error: 'No ruling or fee outcome supplied.' });
+    // Audit trail: this outcome was decided on the desktop-run meet, mirrored up.
+    protest.ruledSource = 'desktop';
+    protest.ruledRemotelyAt = nowIso();
+    meet.updatedAt = nowIso();
+    saveDb(req.db);
+    res.json({ ok: true, applied: { id: protest.id, state: protest.state || '', feeCollected: !!protest.feeCollected } });
+  });
+
   // Officials: rule
   router.post('/portal/meet/:meetId/protests/:protestId/rule', requireRole('judge', 'meet_director'), (req, res) => {
     const meet = getMeetOr404(req.db, req.params.meetId);
@@ -279,6 +318,11 @@ module.exports = function createProtestRoutes(deps = {}) {
     protest.ruledAt = nowIso();
     meet.updatedAt = nowIso();
     saveDb(req.db);
+    // v2: mirror this ruling back to the online meet (desktop-run meets only).
+    if (protestSync.markRulingForPush(meet, protest)) {
+      saveDb(req.db);
+      protestSync.flushPendingPushes().catch(() => {});
+    }
     // Integration 1: an upheld race-specific protest opens Correction Mode (meet-director
     // only) with the reason prefilled. A judge without edit rights just records the ruling.
     if (state === 'upheld' && protest.raceId && canEditMeet(req.user, meet)) {
@@ -306,6 +350,11 @@ module.exports = function createProtestRoutes(deps = {}) {
     protest.feeCollectedAt = nowIso();
     meet.updatedAt = nowIso();
     saveDb(req.db);
+    // v2: mirror the fee outcome back to the online meet (desktop-run meets only).
+    if (protestSync.markRulingForPush(meet, protest)) {
+      saveDb(req.db);
+      protestSync.flushPendingPushes().catch(() => {});
+    }
     res.redirect(`/portal/meet/${encodeURIComponent(meet.id)}/protests?flash=${encodeURIComponent(`Fee for ${protest.id} marked collected.`)}`);
   });
 
