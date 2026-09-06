@@ -35,7 +35,7 @@ const { createBackup: createDesktopBackup } = require('../services/desktopBackup
 const { saveMeetIdentityFields } = require('../services/meetIdentityFields');
 const { generateScheduleBlocks } = require('../services/scheduleGenerator');
 const { isMsslPresetName } = require('../services/msslTemplate');
-const { meetHasStartedRacing, startedRacingSummary, regenConfirmed } = require('../services/regenGuard');
+const { meetHasStartedRacing, startedRacingSummary, regenConfirmed, wantsJsonAnswer } = require('../services/regenGuard');
 const { renderRegenConfirm } = require('../views/regenGuardView');
 
 
@@ -205,6 +205,15 @@ router.post('/portal/meet/:meetId/division-scheme', requireRole('meet_director')
   // regenerates every race). After racing has started that erases entered results,
   // so confirm first and back up before regenerating.
   if (meetHasStartedRacing(meet) && !regenConfirmed(req)) {
+    // The iPad/Android apps post here too (Accept: application/json) and can't
+    // render the HTML confirm page — give them a clean refusal instead.
+    if (wantsJsonAnswer(req)) {
+      const s = startedRacingSummary(meet);
+      return res.status(409).json({
+        ok: false,
+        error: `Races have already been scored (${s.closed} closed) — switching the division scheme would erase entered results, so it's locked from the app. If you truly need this, the website's Meet Builder asks for an explicit confirmation.`,
+      });
+    }
     return res.send(pageShell({
       title: 'Confirm Scheme Switch', user: req.user, meet, activeTab: 'builder',
       bodyHtml: renderRegenConfirm({

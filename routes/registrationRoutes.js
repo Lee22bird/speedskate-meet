@@ -37,7 +37,7 @@ const {
 const { ensureCurrentRace } = require('../services/raceDay');
 const { renderMeetStaffList } = require('../services/staffAssignments');
 const { createBackup: createDesktopBackup } = require('../services/desktopBackupService');
-const { meetHasStartedRacing, startedRacingSummary, regenConfirmed } = require('../services/regenGuard');
+const { meetHasStartedRacing, startedRacingSummary, regenConfirmed, wantsJsonAnswer } = require('../services/regenGuard');
 const { renderRegenConfirm } = require('../views/regenGuardView');
 const {
   ensureTimeTrialEvent,
@@ -1052,6 +1052,16 @@ router.post('/portal/meet/:meetId/assign-races', requireRole('meet_director'), (
   // and back up first so it's recoverable.
   const returnTo = String(req.query.returnTo || '');
   if (meetHasStartedRacing(meet) && !regenConfirmed(req)) {
+    // The iPad's Block Builder / front-desk Rebuild buttons post here with
+    // Accept: application/json and can't render the HTML confirm page — give
+    // them a clean 409 instead of an interstitial.
+    if (wantsJsonAnswer(req)) {
+      const s = startedRacingSummary(meet);
+      return res.status(409).json({
+        ok: false,
+        error: `Races have already been scored (${s.closed} closed) — rebuilding assignments would erase those results, so it's locked from the app. To rebuild anyway, use the website's Registered page, which asks for an explicit confirmation.`,
+      });
+    }
     return res.send(pageShell({
       title: 'Confirm Rebuild', user: req.user, meet, activeTab: 'registered',
       bodyHtml: renderRegenConfirm({

@@ -28,4 +28,12 @@ function regenConfirmed(req) {
   return String((req.body && req.body.confirmRegen) || (req.query && req.query.confirmRegen) || '') === '1';
 }
 
-module.exports = { meetHasStartedRacing, startedRacingSummary, regenConfirmed };
+// True when the client wants a JSON answer instead of an HTML confirm page —
+// the iPad/Android companions send Accept: application/json; browser form posts
+// send text/html. Lets guarded routes give apps a clean 409 message rather than
+// an interstitial they can't render.
+function wantsJsonAnswer(req) {
+  return String((req.headers && req.headers.accept) || '').includes('application/json');
+}
+
+module.exports = { meetHasStartedRacing, startedRacingSummary, regenConfirmed, wantsJsonAnswer };
