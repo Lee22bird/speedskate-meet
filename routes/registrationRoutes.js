@@ -13,12 +13,14 @@ const {
   hasRelayEvents,
   baseGroupsUSARS, makeQuadGroupsTemplate, applyDivisionScheme, defaultMeet,
 } = require('../services/meetHelpers');
-const { calcRegistrationCost } = require('../services/pricing');
+const { calcRegistrationCost, uniqueSelectedValues } = require('../services/pricing');
+const { registrationAvailability } = require('../services/registrationAvailability');
 const {
   normalizeRelayTemplates,
   relayRaceExists,
   makeRelayRace,
 } = require('../services/relayHelpers');
+const { RELAY_DIVISION_BY_ID } = require('../services/relayDivisions');
 const savedDevelopmentRoster = require('../data/springFlingRoster.json');
 const { buildDevelopmentTestRoster } = require('../services/devTestRoster');
 const { buildNationalsDevRoster } = require('../services/nationalsRoster');
@@ -65,6 +67,77 @@ function registrationTimeTrialSelection(meet, body = {}) {
   return event ? { selected: true, eventIds: [event.id] } : { selected: false, eventIds: [] };
 }
 
+function relayRulesetForMeet(meet = {}) {
+  const ruleset = String(meet.relayRuleset || meet.divisionScheme || '').toLowerCase();
+  return ruleset === 'mssl' ? 'mssl' : 'usars';
+}
+
+function relayTemplateDiscipline(row = {}) {
+  const div = RELAY_DIVISION_BY_ID.get(String(row.divisionId || ''));
+  return String(row.discipline || div?.discipline || 'inline').toLowerCase() === 'quad' ? 'quad' : 'inline';
+}
+
+function relayTemplateSize(row = {}) {
+  const div = RELAY_DIVISION_BY_ID.get(String(row.divisionId || ''));
+  const n = Number(row.size || div?.size || String(row.type || '').match(/\d/)?.[0] || 0);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function relayTemplateLabel(row = {}) {
+  const div = RELAY_DIVISION_BY_ID.get(String(row.divisionId || ''));
+  const label = String(div?.label || row.label || [row.age, row.type].filter(Boolean).join(' ') || '').trim();
+  const distance = String(row.distance || div?.distance || '').trim();
+  return [label, distance].filter(Boolean).join(' · ');
+}
+
+function registrationRelayTemplates(meet = {}) {
+  return normalizeRelayTemplates(meet.relayTemplates || [], relayRulesetForMeet(meet))
+    .filter(row => row && row.enabled !== false && String(row.divisionId || '').trim())
+    .map(row => ({
+      ...row,
+      id: String(row.divisionId || '').trim(),
+      discipline: relayTemplateDiscipline(row),
+      size: relayTemplateSize(row),
+      displayLabel: relayTemplateLabel(row),
+    }));
+}
+
+function selectedRelayRowsForIds(meet, ids, discipline) {
+  const wanted = new Set(uniqueSelectedValues(ids));
+  if (!wanted.size) return [];
+  return registrationRelayTemplates(meet)
+    .filter(row => row.discipline === discipline && wanted.has(row.id));
+}
+
+function renderRelayEventControls(meet, selectedOptions = {}, toggleSwitch) {
+  const selectedInline = new Set(uniqueSelectedValues(selectedOptions.relayEventIds || selectedOptions.relayDivisionIds));
+  const selectedQuad = new Set(uniqueSelectedValues(selectedOptions.quadRelayEventIds || selectedOptions.quadRelayDivisionIds));
+  const rows = registrationRelayTemplates(meet);
+  const inlineRows = rows.filter(row => row.discipline === 'inline');
+  const quadRows = rows.filter(row => row.discipline === 'quad');
+  const section = (title, name, list, selectedSet) => list.length ? `
+    <div class="toggle-row" style="flex-direction:column;align-items:stretch;gap:10px">
+      <div>
+        <div class="toggle-row-label">${esc(title)}</div>
+        <div class="toggle-row-desc">Each selected relay division counts as one event.</div>
+      </div>
+      <div style="display:grid;gap:8px">
+        ${list.map(row => `
+          <div class="toggle-row" style="margin:0">
+            <div>
+              <div class="toggle-row-label">${esc(row.displayLabel)}</div>
+              <div class="toggle-row-desc">${esc(row.size)} person relay${row.discipline === 'quad' ? ' · Quad' : ''}</div>
+            </div>
+            ${toggleSwitch(name, selectedSet.has(row.id), '', row.id)}
+          </div>`).join('')}
+      </div>
+    </div>` : '';
+
+  const inlineHtml = section('Relay Events', 'relayEventIds', inlineRows, selectedInline);
+  const quadHtml = section('Quad Relay Events', 'quadRelayEventIds', quadRows, selectedQuad);
+  return inlineHtml || quadHtml ? inlineHtml + quadHtml : '';
+}
+
 function registrationOptionLabels(meet, opts = {}) {
   const labels = [];
   if (opts.challengeUp) labels.push('Challenge Up');
@@ -74,34 +147,61 @@ function registrationOptionLabels(meet, opts = {}) {
   if (opts.quad) labels.push('Quad');
   if (opts.additional || opts.skateability) labels.push('Additional Races');
   if (opts.timeTrials) labels.push(timeTrialLabelForMeet(meet));
-  if (opts.relay2Person) labels.push('2 Person Relay');
-  if (opts.relay3Person) labels.push('3 Person Relay');
-  if (opts.relay4Person) labels.push('4 Person Relay');
-  if (opts.quadRelay2Person) labels.push('Quad 2 Person Relay');
-  if (opts.quadRelay3Person) labels.push('Quad 3 Person Relay');
+  const relayRows = [
+    ...selectedRelayRowsForIds(meet, opts.relayEventIds || opts.relayDivisionIds, 'inline'),
+    ...selectedRelayRowsForIds(meet, opts.quadRelayEventIds || opts.quadRelayDivisionIds, 'quad'),
+  ];
+  if (relayRows.length) {
+    relayRows.forEach(row => labels.push(row.displayLabel));
+  } else {
+    if (opts.relay2Person) labels.push('2 Person Relay');
+    if (opts.relay3Person) labels.push('3 Person Relay');
+    if (opts.relay4Person) labels.push('4 Person Relay');
+    if (opts.quadRelay2Person) labels.push('Quad 2 Person Relay');
+    if (opts.quadRelay3Person) labels.push('Quad 3 Person Relay');
+  }
   return labels;
 }
 
 function registrationOptionsFromBody(meet, body = {}) {
+  const available = registrationAvailability(meet);
   const tt = registrationTimeTrialSelection(meet, body);
+  const relayRows = registrationRelayTemplates(meet);
+  const inlineById = new Map(relayRows.filter(row => row.discipline === 'inline').map(row => [row.id, row]));
+  const quadById = new Map(relayRows.filter(row => row.discipline === 'quad').map(row => [row.id, row]));
+  const relayEventIds = uniqueSelectedValues(body.relayEventIds).filter(id => inlineById.has(id));
+  const quadRelayEventIds = uniqueSelectedValues(body.quadRelayEventIds).filter(id => quadById.has(id));
+  const inlineSelected = relayEventIds.map(id => inlineById.get(id)).filter(Boolean);
+  const quadSelected = quadRelayEventIds.map(id => quadById.get(id)).filter(Boolean);
+  const relay2Person = inlineSelected.some(row => row.size === 2);
+  const relay3Person = inlineSelected.some(row => row.size === 3);
+  const relay4Person = inlineSelected.some(row => row.size === 4);
+  const additionalGroupId = String(body.additionalGroupId || body.skateabilityGroupId || '');
+  const additional = !!(body.additional || body.skateability) && available.additionalGroups.some(group => String(group.id || '') === additionalGroupId);
   return {
-    challengeUp: !!body.challengeUp,
-    novice: !!body.novice,
-    elite: !!body.elite,
-    open: !!body.open,
-    quad: !!body.quad,
-    additional: !!(body.additional || body.skateability),
-    additionalGroupId: String(body.additionalGroupId || body.skateabilityGroupId || ''),
-    skateability: !!(body.additional || body.skateability),
-    skateabilityGroupId: String(body.additionalGroupId || body.skateabilityGroupId || ''),
+    challengeUp: available.challengeUp && !!body.challengeUp,
+    novice: available.novice && !!body.novice,
+    elite: available.elite && !!body.elite,
+    open: available.open && !!body.open,
+    quad: available.quad && !!body.quad,
+    additional,
+    additionalGroupId: additional ? additionalGroupId : '',
+    skateability: additional,
+    skateabilityGroupId: additional ? additionalGroupId : '',
     timeTrials: tt.selected,
     timeTrialEventIds: tt.eventIds,
-    relay2Person: !!body.relay2Person,
-    relay3Person: !!body.relay3Person,
-    relay4Person: !!body.relay4Person,
-    relays: !!(body.relay2Person || body.relay3Person || body.relay4Person),
-    quadRelay2Person: !!body.quadRelay2Person,
-    quadRelay3Person: !!body.quadRelay3Person,
+    relayEventIds,
+    relayDivisionIds: relayEventIds,
+    relayEventLabels: inlineSelected.map(row => row.displayLabel),
+    relay2Person,
+    relay3Person,
+    relay4Person,
+    relays: !!(relay2Person || relay3Person || relay4Person),
+    quadRelayEventIds,
+    quadRelayDivisionIds: quadRelayEventIds,
+    quadRelayEventLabels: quadSelected.map(row => row.displayLabel),
+    quadRelay2Person: quadSelected.some(row => row.size === 2),
+    quadRelay3Person: quadSelected.some(row => row.size === 3),
   };
 }
 
@@ -130,6 +230,9 @@ router.get('/meet/:meetId/register', (req, res) => {
   const timeTrialAvailable = timeTrialEventAvailable(meet);
   const timeTrialLabel = timeTrialAvailable ? timeTrialLabelForMeet(meet) : '';
   const relayEventsAvailable = hasRelayEvents(meet);
+  const available = registrationAvailability(meet);
+  const relayEventControls = relayEventsAvailable ? renderRelayEventControls(meet, {}, toggleSwitch) : '';
+  const singleAdditionalGroup = available.additionalGroups.length === 1 ? available.additionalGroups[0] : null;
   res.send(pageShell({title:'Register',user:data?.user||null, bodyHtml:`
     <div class="page-header"><h1>Register</h1><div class="sub">${esc(meet.meetName)}${meet.date?` • ${esc(meet.date)}`:''}</div></div>
     <div class="card">
@@ -155,22 +258,24 @@ router.get('/meet/:meetId/register', (req, res) => {
           </div>
           <datalist id="teams-reg">${TEAM_LIST.map(t=>`<option value="${esc(t)}"></option>`).join('')}</datalist>
           <div class="toggle-group">
-            <div class="toggle-row"><div><div class="toggle-row-label">Challenge Up</div></div>${toggleSwitch('challengeUp',false)}</div>
-            <div class="toggle-row"><div><div class="toggle-row-label">Novice</div></div>${toggleSwitch('novice',false)}</div>
-            <div class="toggle-row"><div><div class="toggle-row-label">Elite</div></div>${toggleSwitch('elite',false)}</div>
-            <div class="toggle-row"><div><div class="toggle-row-label">Open</div></div>${toggleSwitch('open',false)}</div>
-            ${(meet.quadGroups||[]).some(g=>g.enabled)?`<div class="toggle-row"><div><div class="toggle-row-label">Quad</div></div>${toggleSwitch('quad',false)}</div>`:''}
+            ${available.challengeUp?`<div class="toggle-row"><div><div class="toggle-row-label">Challenge Up</div></div>${toggleSwitch('challengeUp',false)}</div>`:''}
+            ${available.novice?`<div class="toggle-row"><div><div class="toggle-row-label">Novice</div></div>${toggleSwitch('novice',false)}</div>`:''}
+            ${available.elite?`<div class="toggle-row"><div><div class="toggle-row-label">Elite</div></div>${toggleSwitch('elite',false)}</div>`:''}
+            ${available.open?`<div class="toggle-row"><div><div class="toggle-row-label">Open</div></div>${toggleSwitch('open',false)}</div>`:''}
+            ${available.quad?`<div class="toggle-row"><div><div class="toggle-row-label">Quad</div></div>${toggleSwitch('quad',false)}</div>`:''}
             ${timeTrialAvailable?`<div class="toggle-row"><div><div class="toggle-row-label">${esc(timeTrialLabel)}</div></div>${toggleSwitch('timeTrials',false)}</div>`:''}
-            ${relayEventsAvailable?`<div class="toggle-row"><div><div class="toggle-row-label">2 Person Relay</div></div>${toggleSwitch('relay2Person',false)}</div><div class="toggle-row"><div><div class="toggle-row-label">3 Person Relay</div></div>${toggleSwitch('relay3Person',false)}</div><div class="toggle-row"><div><div class="toggle-row-label">4 Person Relay</div></div>${toggleSwitch('relay4Person',false)}</div>`:''}
-            ${relayEventsAvailable&&(meet.quadGroups||[]).some(g=>g.enabled)?`<div class="toggle-row"><div><div class="toggle-row-label">🛼 Quad 2 Person Relay</div></div>${toggleSwitch('quadRelay2Person',false)}</div><div class="toggle-row"><div><div class="toggle-row-label">🛼 Quad 3 Person Relay</div></div>${toggleSwitch('quadRelay3Person',false)}</div>`:''}
-            ${(meet.additionalGroups||meet.additionalRaceGroups||meet.additionalRaces||meet.skateabilityGroups||[]).length?`
+            ${relayEventControls}
+            ${singleAdditionalGroup?`
+              <input type="hidden" name="additionalGroupId" value="${esc(singleAdditionalGroup.id)}" />
+              <div class="toggle-row"><div><div class="toggle-row-label">${esc(singleAdditionalGroup.ageGroupLabel||'Additional Race')}</div>${singleAdditionalGroup.ages?`<div class="toggle-row-desc">${esc(singleAdditionalGroup.ages)}</div>`:''}</div>${toggleSwitch('additional',false)}</div>
+            `:available.additionalGroups.length?`
               <div class="toggle-row"><div><div class="toggle-row-label">Additional Races</div><div class="toggle-row-desc">Extra race division — select your group below if enabled</div></div>${toggleSwitch('additional',false)}</div>
               <div id="additional-group-row" style="display:none">
                 <div class="toggle-row" style="flex-direction:column;align-items:flex-start;gap:8px">
                   <div class="toggle-row-label">Additional Race Group</div>
                   <select name="additionalGroupId" style="width:100%">
                     <option value="">— Select group —</option>
-                    ${(meet.additionalGroups||meet.additionalRaceGroups||meet.additionalRaces||meet.skateabilityGroups||[]).map(sg=>`<option value="${esc(sg.id)}">${esc(sg.ageGroupLabel||'Additional Race')}${sg.ages?' ('+esc(sg.ages)+')':''}</option>`).join('')}
+                    ${available.additionalGroups.map(sg=>`<option value="${esc(sg.id)}">${esc(sg.ageGroupLabel||'Additional Race')}${sg.ages?' ('+esc(sg.ages)+')':''}</option>`).join('')}
                   </select>
                 </div>
               </div>
@@ -202,10 +307,10 @@ router.post('/meet/:meetId/register', (req, res) => {
   const birthdate=String(req.body.birthdate||'').trim();
   const compAge=usarsAge(birthdate,meet.date)||Number(req.body.age||0);
   const baseGroup=findAgeGroup(meet.groups,compAge,gender);
-  const finalGroup=challengeAdjustedGroup(meet,baseGroup,!!req.body.challengeUp);
+  const regOpts=registrationOptionsFromBody(meet, req.body);
+  const finalGroup=challengeAdjustedGroup(meet,baseGroup,regOpts.challengeUp);
   const meetNumber=(meet.registrations||[]).reduce((max,r)=>Math.max(max,Number(r.meetNumber)||0),0)+1;
   const regEmail=String(req.body.email||'').trim();
-  const regOpts=registrationOptionsFromBody(meet, req.body);
   const totalCost=calcRegistrationCost(meet,regOpts);
   const reg = {
     id:nextId(meet.registrations),createdAt:nowIso(),
@@ -265,6 +370,9 @@ function registrationForm(meet,reg,action,title) {
   const timeTrialLabel = timeTrialAvailable ? timeTrialLabelForMeet(meet) : '';
   const timeTrialSelected = timeTrialAvailable && registrationSelectedForTimeTrial(reg, ensureTimeTrialEvent(meet));
   const relayEventsAvailable = hasRelayEvents(meet);
+  const available = registrationAvailability(meet);
+  const relayEventControls = relayEventsAvailable ? renderRelayEventControls(meet, reg.options || {}, toggleSwitch) : '';
+  const singleAdditionalGroup = available.additionalGroups.length === 1 ? available.additionalGroups[0] : null;
   return `
     <div style="max-width:760px">
       <div class="page-header"><h1>${esc(title)}</h1><div class="sub">${isAdd ? 'Manual late-entry / race-day add' : 'Update racer details and event selections'}</div></div>
@@ -301,22 +409,24 @@ function registrationForm(meet,reg,action,title) {
           </div>
 
           <div class="toggle-group">
-            <div class="toggle-row"><div><div class="toggle-row-label">Challenge Up</div></div>${toggleSwitch('challengeUp',!!reg.options?.challengeUp)}</div>
-            <div class="toggle-row"><div><div class="toggle-row-label">Novice</div></div>${toggleSwitch('novice',!!reg.options?.novice)}</div>
-            <div class="toggle-row"><div><div class="toggle-row-label">Elite</div></div>${toggleSwitch('elite',!!reg.options?.elite)}</div>
-            <div class="toggle-row"><div><div class="toggle-row-label">Open</div></div>${toggleSwitch('open',!!reg.options?.open)}</div>
-            ${(meet.quadGroups||[]).some(g=>g.enabled)?`<div class="toggle-row"><div><div class="toggle-row-label">Quad</div></div>${toggleSwitch('quad',!!reg.options?.quad)}</div>`:''}
+            ${available.challengeUp?`<div class="toggle-row"><div><div class="toggle-row-label">Challenge Up</div></div>${toggleSwitch('challengeUp',!!reg.options?.challengeUp)}</div>`:''}
+            ${available.novice?`<div class="toggle-row"><div><div class="toggle-row-label">Novice</div></div>${toggleSwitch('novice',!!reg.options?.novice)}</div>`:''}
+            ${available.elite?`<div class="toggle-row"><div><div class="toggle-row-label">Elite</div></div>${toggleSwitch('elite',!!reg.options?.elite)}</div>`:''}
+            ${available.open?`<div class="toggle-row"><div><div class="toggle-row-label">Open</div></div>${toggleSwitch('open',!!reg.options?.open)}</div>`:''}
+            ${available.quad?`<div class="toggle-row"><div><div class="toggle-row-label">Quad</div></div>${toggleSwitch('quad',!!reg.options?.quad)}</div>`:''}
             ${timeTrialAvailable?`<div class="toggle-row"><div><div class="toggle-row-label">${esc(timeTrialLabel)}</div></div>${toggleSwitch('timeTrials',timeTrialSelected)}</div>`:''}
-            ${relayEventsAvailable?`<div class="toggle-row"><div><div class="toggle-row-label">2 Person Relay</div></div>${toggleSwitch('relay2Person',!!reg.options?.relay2Person)}</div><div class="toggle-row"><div><div class="toggle-row-label">3 Person Relay</div></div>${toggleSwitch('relay3Person',!!reg.options?.relay3Person)}</div><div class="toggle-row"><div><div class="toggle-row-label">4 Person Relay</div></div>${toggleSwitch('relay4Person',!!reg.options?.relay4Person)}</div>`:''}
-            ${relayEventsAvailable&&(meet.quadGroups||[]).some(g=>g.enabled)?`<div class="toggle-row"><div><div class="toggle-row-label">🛼 Quad 2 Person Relay</div></div>${toggleSwitch('quadRelay2Person',!!reg.options?.quadRelay2Person)}</div><div class="toggle-row"><div><div class="toggle-row-label">🛼 Quad 3 Person Relay</div></div>${toggleSwitch('quadRelay3Person',!!reg.options?.quadRelay3Person)}</div>`:''}
-            ${(meet.additionalGroups||meet.additionalRaceGroups||meet.additionalRaces||meet.skateabilityGroups||[]).length?`
+            ${relayEventControls}
+            ${singleAdditionalGroup?`
+              <input type="hidden" name="additionalGroupId" value="${esc(singleAdditionalGroup.id)}" />
+              <div class="toggle-row"><div><div class="toggle-row-label">${esc(singleAdditionalGroup.ageGroupLabel||'Additional Race')}</div>${singleAdditionalGroup.ages?`<div class="toggle-row-desc">${esc(singleAdditionalGroup.ages)}</div>`:''}</div>${toggleSwitch('additional',!!(reg.options?.additional||reg.options?.skateability))}</div>
+            `:available.additionalGroups.length?`
               <div class="toggle-row"><div><div class="toggle-row-label">Additional Races</div><div class="toggle-row-desc">Extra race division</div></div>${toggleSwitch('additional',!!(reg.options?.additional||reg.options?.skateability))}</div>
               <div id="edit-additional-group-row" style="${(reg.options?.additional||reg.options?.skateability)?'':'display:none'}">
                 <div class="toggle-row" style="flex-direction:column;align-items:flex-start;gap:8px">
                   <div class="toggle-row-label">Additional Race Group</div>
                   <select name="additionalGroupId" style="width:100%">
                     <option value="">— Select group —</option>
-                    ${(meet.additionalGroups||meet.additionalRaceGroups||meet.additionalRaces||meet.skateabilityGroups||[]).map(sg=>`<option value="${esc(sg.id)}" ${String((reg.options?.additionalGroupId||reg.options?.skateabilityGroupId)||'')===String(sg.id)?'selected':''}>${esc(sg.ageGroupLabel||'Additional Race')}${sg.ages?' ('+esc(sg.ages)+')':''}</option>`).join('')}
+                    ${available.additionalGroups.map(sg=>`<option value="${esc(sg.id)}" ${String((reg.options?.additionalGroupId||reg.options?.skateabilityGroupId)||'')===String(sg.id)?'selected':''}>${esc(sg.ageGroupLabel||'Additional Race')}${sg.ages?' ('+esc(sg.ages)+')':''}</option>`).join('')}
                   </select>
                 </div>
               </div>
@@ -940,11 +1050,11 @@ router.post('/portal/meet/:meetId/registered/add', requireRole('meet_director'),
   const birthdate=String(req.body.birthdate||'').trim();
   const compAge=usarsAge(birthdate,meet.date)||Number(req.body.age||0);
   const baseGroup=findAgeGroup(meet.groups,compAge,gender);
-  const finalGroup=challengeAdjustedGroup(meet,baseGroup,!!req.body.challengeUp);
+  const regOpts=registrationOptionsFromBody(meet, req.body);
+  const finalGroup=challengeAdjustedGroup(meet,baseGroup,regOpts.challengeUp);
   const meetNumber=(meet.registrations||[]).reduce((max,r)=>Math.max(max,Number(r.meetNumber)||0),0)+1;
   const requestedHelmet=Number(req.body.helmetNumber || 0);
   const helmetNumber=Number.isFinite(requestedHelmet)&&requestedHelmet>0 ? requestedHelmet : nextHelmetNumber(meet);
-  const regOpts=registrationOptionsFromBody(meet, req.body);
   const totalCost=calcRegistrationCost(meet,regOpts);
   const reg={
     id:nextId(meet.registrations),
@@ -1003,8 +1113,8 @@ router.post('/portal/meet/:meetId/registered/:regId/edit', requireRole('meet_dir
   const birthdate=String(req.body.birthdate||'').trim()||reg.birthdate||'';
   const compAge=usarsAge(birthdate,meet.date)||Number(reg.age||0);
   const baseGroup=findAgeGroup(meet.groups,compAge,gender);
-  const finalGroup=challengeAdjustedGroup(meet,baseGroup,!!req.body.challengeUp);
   const regOpts=registrationOptionsFromBody(meet, req.body);
+  const finalGroup=challengeAdjustedGroup(meet,baseGroup,regOpts.challengeUp);
   const requestedHelmet=Number(req.body.helmetNumber || 0);
   Object.assign(reg,{name:String(req.body.name||'').trim(),birthdate,age:compAge,gender,email:String(req.body.email||'').trim(),team:String(req.body.team||'Midwest Racing').trim()||'Midwest Racing',sponsor:String(req.body.sponsor||'').trim(),originalDivisionGroupId:baseGroup?.id||'',originalDivisionGroupLabel:baseGroup?.label||'',divisionGroupId:finalGroup?.id||'',divisionGroupLabel:finalGroup?.label||'Unassigned',helmetNumber:Number.isFinite(requestedHelmet)&&requestedHelmet>0 ? requestedHelmet : reg.helmetNumber,paid:!!req.body.paid,checkedIn:!!req.body.checkedIn,timeTrials:regOpts.timeTrials,timeTrialEventIds:regOpts.timeTrialEventIds,options:regOpts,totalCost:calcRegistrationCost(meet,regOpts)});
   syncTimeTrialQueueIfEnabled(meet);

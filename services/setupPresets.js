@@ -65,6 +65,7 @@ function applySetupPresetToMeet(meet, preset, { onBeforeRegen } = {}) {
   const presetTrackLength = Number(preset.trackLength);
   if (Number.isFinite(presetTrackLength) && presetTrackLength > 0) meet.trackLength = presetTrackLength;
   meet.timeTrialsEnabled = !!preset.timeTrialsEnabled;
+  meet.allowChallengeUp = !!preset.allowChallengeUp;
   meet.relayTemplates = JSON.parse(JSON.stringify(preset.relayTemplates || meet.relayTemplates || []));
   const presetRelayRaces = Array.isArray(preset.relayRaces) ? JSON.parse(JSON.stringify(preset.relayRaces)) : [];
   meet.relayEnabled = !!preset.relayEnabled || presetRelayRaces.length > 0;

@@ -438,7 +438,7 @@ function defaultMeet(ownerUser) {
     meetName:'New Meet', leagueAssociation:'', league:'', date:'', endDate:'', startTime:'', registrationCloseAt:'',
     rinkId:1, customRinkName:'', trackLength:100, lanes:7,
     meet_staff_assignments:[], staffAssignments:[],
-    timeTrialsEnabled:false, timeTrialEvent:{enabled:false,distance:'100m',runOrder:'youngest_oldest',countsForOverall:false}, timeTrialEvents:[], relayEnabled:false, judgesPanelRequired:true,
+    timeTrialsEnabled:false, timeTrialEvent:{enabled:false,distance:'100m',runOrder:'youngest_oldest',countsForOverall:false}, timeTrialEvents:[], relayEnabled:false, allowChallengeUp:false, judgesPanelRequired:true,
     desktop_pin_hash:'', desktop_pin_created_at:'', desktop_pin_expires_at:'',
     notes:'', scheduleNotes:'', relayNotes:'', isPublic:false, status:'draft', tiebreaker:'sr832', divisionScheme:'standard', relayRuleset:'usars',
     ...defaultPricingFields(),
@@ -497,6 +497,7 @@ function migrateMeet(meet,fallbackOwnerId) {
   if(!Number.isFinite(Number(meet.lanes))) meet.lanes=7;
   if(typeof meet.timeTrialsEnabled!=='boolean') meet.timeTrialsEnabled=false;
   if(typeof meet.relayEnabled!=='boolean') meet.relayEnabled=false;
+  if(typeof meet.allowChallengeUp!=='boolean') meet.allowChallengeUp=false;
   if(typeof meet.judgesPanelRequired!=='boolean') meet.judgesPanelRequired=true;
   if(typeof meet.desktop_pin_hash!=='string') meet.desktop_pin_hash='';
   if(typeof meet.desktop_pin_created_at!=='string') meet.desktop_pin_created_at='';
@@ -698,6 +699,7 @@ function makeSetupPresetFromMeet(db, meet, name, ownerUserId) {
     trackLength: Number(meet.trackLength || 100),
     lanes: Number(meet.lanes || 4),
     timeTrialsEnabled: !!meet.timeTrialsEnabled,
+    allowChallengeUp: !!meet.allowChallengeUp,
     relayEnabled: !!meet.relayEnabled || (meet.races || []).some(r => r.isRelayRace),
     divisionScheme: meet.divisionScheme || (meet.usarsDivisions ? 'usars' : 'standard'),
     relayRuleset: meet.relayRuleset || (meet.divisionScheme === 'mssl' ? 'mssl' : 'usars'),

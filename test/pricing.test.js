@@ -38,6 +38,35 @@ test('additional-race aliases count once and quad relay categories are charged',
   assert.strictEqual(countSelectedEventCategories({ quadRelay2Person: true, quadRelay3Person: true }), 2);
 });
 
+test('specific relay event ids count every selected relay division', () => {
+  const meet = { baseEntryFee: 40, additionalRaceFee: 10 };
+  const options = {
+    relayEventIds: ['r2_freshman_boys', 'r2_freshman_mixed'],
+  };
+
+  assert.strictEqual(countSelectedEventCategories(options), 2);
+  assert.strictEqual(calcRegistrationCost(meet, options), 50);
+});
+
+test('specific relay event ids do not double-count broad compatibility flags', () => {
+  const options = {
+    relayEventIds: ['r2_freshman_boys', 'r2_freshman_mixed'],
+    relay2Person: true,
+    relays: true,
+  };
+
+  assert.strictEqual(countSelectedEventCategories(options), 2);
+});
+
+test('specific quad relay event ids count every selected quad relay division', () => {
+  const options = {
+    quadRelayEventIds: ['q2_freshman_boys', 'q2_freshman_mixed'],
+    quadRelay2Person: true,
+  };
+
+  assert.strictEqual(countSelectedEventCategories(options), 2);
+});
+
 test('registration preview includes all server-side toggle categories and explicit arithmetic', () => {
   const html = buildCostWidget(40, 10, 0);
   assert.match(html, /quadRelay2Person/);

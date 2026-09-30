@@ -363,6 +363,15 @@ function renderMeetBuilderView({ db, meet, user = null, query = {} }) {
           <div class="page-header">
         <h2>Division Groups</h2>
         <div class="sub">Enable classes and set distances for each age group.</div>
+        <div class="card" style="margin-top:12px">
+          <div class="row between center" style="gap:12px">
+            <div>
+              <div class="bold">Allow Challenge Up</div>
+              <div class="note">Show Challenge Up as an option on this meet's registration form.</div>
+            </div>
+            ${toggleSwitch('allowChallengeUp', !!meet.allowChallengeUp)}
+          </div>
+        </div>
         <div class="action-row" style="margin-top:10px;align-items:center;gap:10px">
           <span class="note" style="margin:0">Division set:</span>
           <button type="submit" formaction="/portal/meet/${meet.id}/division-scheme" formmethod="post" name="scheme" value="standard"

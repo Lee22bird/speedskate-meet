@@ -3,9 +3,20 @@ function moneyNumber(value) {
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
+function uniqueSelectedValues(value) {
+  const values = Array.isArray(value) ? value : (value ? [value] : []);
+  return Array.from(new Set(
+    values
+      .map(v => String(v || '').trim())
+      .filter(Boolean)
+  ));
+}
+
 function countSelectedEventCategories(options = {}) {
   const opts = options || {};
   let count = 0;
+  const relayEventIds = uniqueSelectedValues(opts.relayEventIds || opts.relayDivisionIds);
+  const quadRelayEventIds = uniqueSelectedValues(opts.quadRelayEventIds || opts.quadRelayDivisionIds);
 
   if (opts.novice) count += 1;
   if (opts.elite) count += 1;
@@ -16,14 +27,23 @@ function countSelectedEventCategories(options = {}) {
   if (opts.additional || opts.skateability || opts.additionalRace) count += 1;
   if (Array.isArray(opts.specialRaceIds)) count += opts.specialRaceIds.length;
 
-  if (opts.relay2Person) count += 1;
-  if (opts.relay3Person) count += 1;
-  if (opts.relay4Person) count += 1;
-  if (opts.quadRelay2Person) count += 1;
-  if (opts.quadRelay3Person) count += 1;
+  if (relayEventIds.length) {
+    count += relayEventIds.length;
+  } else {
+    if (opts.relay2Person) count += 1;
+    if (opts.relay3Person) count += 1;
+    if (opts.relay4Person) count += 1;
+  }
+
+  if (quadRelayEventIds.length) {
+    count += quadRelayEventIds.length;
+  } else {
+    if (opts.quadRelay2Person) count += 1;
+    if (opts.quadRelay3Person) count += 1;
+  }
 
   // Backward compatibility for older registrations that only had a generic relays flag.
-  if (opts.relays && !opts.relay2Person && !opts.relay3Person && !opts.relay4Person) {
+  if (opts.relays && !relayEventIds.length && !opts.relay2Person && !opts.relay3Person && !opts.relay4Person) {
     count += 1;
   }
 
@@ -54,4 +74,5 @@ module.exports = {
   calcRegistrationCost,
   calculateRegistrationTotal,
   countSelectedEventCategories,
+  uniqueSelectedValues,
 };

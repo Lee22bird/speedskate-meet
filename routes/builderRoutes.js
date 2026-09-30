@@ -97,6 +97,7 @@ function saveMeetFields(meet, body, db) {
   meet.trackLength = numberFieldFromBody(body, ['trackLength', 'track_length'], meet.trackLength || 100, 1);
   meet.lanes = numberFieldFromBody(body, ['lanes', 'laneCount', 'lane_count'], meet.lanes || 4, 1);
   meet.timeTrialsEnabled=!!body.timeTrialsEnabled;
+  meet.allowChallengeUp=!!body.allowChallengeUp;
   meet.timeTrialEvent = {
     enabled: !!body.timeTrialEventEnabled,
     distance: String(body.timeTrialEventDistance || '100m').trim() || '100m',
