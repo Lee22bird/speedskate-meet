@@ -209,11 +209,16 @@ function relayEligibleRegistrationsForRace(meet, race) {
   const ageRange = relayAgeRangeForRace(meet, race);
   const relayRegs = (meet.registrations || []).filter(reg => {
     const opts = reg.options || {};
-    const relayOptionOk = optionKey === 'relays'
-      ? !!(opts.relays || opts.relay2Person || opts.relay3Person || opts.relay4Person)
-      : optionKey === 'quadRelays'
-        ? !!(opts.quadRelay2Person || opts.quadRelay3Person)
-        : !!opts[optionKey];
+    const hasConfiguredRelaySelections = Array.isArray(opts.relayEventIds) || Array.isArray(opts.quadRelayEventIds);
+    const relayOptionOk = hasConfiguredRelaySelections
+      ? (race.isQuadRace ? opts.quadRelayEventIds : opts.relayEventIds)
+          .map(String)
+          .includes(String(race.relayDivisionId || ''))
+      : optionKey === 'relays'
+        ? !!(opts.relays || opts.relay2Person || opts.relay3Person || opts.relay4Person)
+        : optionKey === 'quadRelays'
+          ? !!(opts.quadRelay2Person || opts.quadRelay3Person)
+          : !!opts[optionKey];
     if (!relayOptionOk) return false;
     return registrationMatchesRelayAgeRange(reg, meet, ageRange);
   });

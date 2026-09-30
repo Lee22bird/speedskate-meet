@@ -609,7 +609,14 @@ function migrateMeet(meet,fallbackOwnerId) {
       timeTrialEventIds:Array.isArray(reg.timeTrialEventIds)
         ? reg.timeTrialEventIds.map(String).filter(Boolean)
         : (Array.isArray(reg.options?.timeTrialEventIds) ? reg.options.timeTrialEventIds.map(String).filter(Boolean) : []),
-      relays:!!reg.options?.relays, relay2Person:!!reg.options?.relay2Person, relay3Person:!!reg.options?.relay3Person, relay4Person:!!reg.options?.relay4Person, quadRelay2Person:!!reg.options?.quadRelay2Person, quadRelay3Person:!!reg.options?.quadRelay3Person, additional:!!(reg.options?.additional || reg.options?.skateability), additionalGroupId:String(reg.options?.additionalGroupId || reg.options?.skateabilityGroupId || ''), skateability:!!(reg.options?.additional || reg.options?.skateability), skateabilityGroupId:String(reg.options?.additionalGroupId || reg.options?.skateabilityGroupId || '')},
+      relays:!!reg.options?.relays, relay2Person:!!reg.options?.relay2Person, relay3Person:!!reg.options?.relay3Person, relay4Person:!!reg.options?.relay4Person, quadRelay2Person:!!reg.options?.quadRelay2Person, quadRelay3Person:!!reg.options?.quadRelay3Person,
+      ...(Array.isArray(reg.options?.relayEventIds) ? { relayEventIds: reg.options.relayEventIds.map(String) } : {}),
+      ...(Array.isArray(reg.options?.relayDivisionIds) ? { relayDivisionIds: reg.options.relayDivisionIds.map(String) } : {}),
+      ...(Array.isArray(reg.options?.relayEventLabels) ? { relayEventLabels: reg.options.relayEventLabels.map(String) } : {}),
+      ...(Array.isArray(reg.options?.quadRelayEventIds) ? { quadRelayEventIds: reg.options.quadRelayEventIds.map(String) } : {}),
+      ...(Array.isArray(reg.options?.quadRelayDivisionIds) ? { quadRelayDivisionIds: reg.options.quadRelayDivisionIds.map(String) } : {}),
+      ...(Array.isArray(reg.options?.quadRelayEventLabels) ? { quadRelayEventLabels: reg.options.quadRelayEventLabels.map(String) } : {}),
+      additional:!!(reg.options?.additional || reg.options?.skateability), additionalGroupId:String(reg.options?.additionalGroupId || reg.options?.skateabilityGroupId || ''), skateability:!!(reg.options?.additional || reg.options?.skateability), skateabilityGroupId:String(reg.options?.additionalGroupId || reg.options?.skateabilityGroupId || '')},
   }));
 }
 
@@ -971,10 +978,10 @@ function ensureRegistrationTotalsAndNumbers(meet) {
 
 function entryLabelForRegistration(reg) {
   const opts = reg?.options || {};
-  const relayLabels = [
+  const relayLabels = [...new Set([
     ...(Array.isArray(opts.relayEventLabels) ? opts.relayEventLabels : []),
     ...(Array.isArray(opts.quadRelayEventLabels) ? opts.quadRelayEventLabels : []),
-  ].filter(Boolean);
+  ].filter(Boolean))];
   return [
     'challengeUp',
     'novice',

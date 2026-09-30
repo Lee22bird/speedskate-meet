@@ -27,7 +27,14 @@ function countSelectedEventCategories(options = {}) {
   if (opts.additional || opts.skateability || opts.additionalRace) count += 1;
   if (Array.isArray(opts.specialRaceIds)) count += opts.specialRaceIds.length;
 
-  if (relayEventIds.length) {
+  const selectedRelaySizes = new Set();
+  if (opts.relay2Person || opts.quadRelay2Person) selectedRelaySizes.add(2);
+  if (opts.relay3Person || opts.quadRelay3Person) selectedRelaySizes.add(3);
+  if (opts.relay4Person) selectedRelaySizes.add(4);
+
+  if (selectedRelaySizes.size) {
+    count += selectedRelaySizes.size;
+  } else if (relayEventIds.length) {
     count += relayEventIds.length;
   } else {
     if (opts.relay2Person) count += 1;
@@ -35,11 +42,13 @@ function countSelectedEventCategories(options = {}) {
     if (opts.relay4Person) count += 1;
   }
 
-  if (quadRelayEventIds.length) {
-    count += quadRelayEventIds.length;
-  } else {
-    if (opts.quadRelay2Person) count += 1;
-    if (opts.quadRelay3Person) count += 1;
+  if (!selectedRelaySizes.size) {
+    if (quadRelayEventIds.length) {
+      count += quadRelayEventIds.length;
+    } else {
+      if (opts.quadRelay2Person) count += 1;
+      if (opts.quadRelay3Person) count += 1;
+    }
   }
 
   // Backward compatibility for older registrations that only had a generic relays flag.

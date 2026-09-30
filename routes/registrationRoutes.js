@@ -102,40 +102,24 @@ function registrationRelayTemplates(meet = {}) {
     }));
 }
 
-function selectedRelayRowsForIds(meet, ids, discipline) {
-  const wanted = new Set(uniqueSelectedValues(ids));
-  if (!wanted.size) return [];
-  return registrationRelayTemplates(meet)
-    .filter(row => row.discipline === discipline && wanted.has(row.id));
-}
-
 function renderRelayEventControls(meet, selectedOptions = {}, toggleSwitch) {
-  const selectedInline = new Set(uniqueSelectedValues(selectedOptions.relayEventIds || selectedOptions.relayDivisionIds));
-  const selectedQuad = new Set(uniqueSelectedValues(selectedOptions.quadRelayEventIds || selectedOptions.quadRelayDivisionIds));
   const rows = registrationRelayTemplates(meet);
-  const inlineRows = rows.filter(row => row.discipline === 'inline');
-  const quadRows = rows.filter(row => row.discipline === 'quad');
-  const section = (title, name, list, selectedSet) => list.length ? `
-    <div class="toggle-row" style="flex-direction:column;align-items:stretch;gap:10px">
-      <div>
-        <div class="toggle-row-label">${esc(title)}</div>
-        <div class="toggle-row-desc">Each selected relay division counts as one event.</div>
-      </div>
-      <div style="display:grid;gap:8px">
-        ${list.map(row => `
-          <div class="toggle-row" style="margin:0">
-            <div>
-              <div class="toggle-row-label">${esc(row.displayLabel)}</div>
-              <div class="toggle-row-desc">${esc(row.size)} person relay${row.discipline === 'quad' ? ' · Quad' : ''}</div>
-            </div>
-            ${toggleSwitch(name, selectedSet.has(row.id), '', row.id)}
-          </div>`).join('')}
-      </div>
-    </div>` : '';
-
-  const inlineHtml = section('Relay Events', 'relayEventIds', inlineRows, selectedInline);
-  const quadHtml = section('Quad Relay Events', 'quadRelayEventIds', quadRows, selectedQuad);
-  return inlineHtml || quadHtml ? inlineHtml + quadHtml : '';
+  const selectedIds = new Set([
+    ...uniqueSelectedValues(selectedOptions.relayEventIds || selectedOptions.relayDivisionIds),
+    ...uniqueSelectedValues(selectedOptions.quadRelayEventIds || selectedOptions.quadRelayDivisionIds),
+  ]);
+  const options = [2, 3, 4].map(size => {
+    const enabledRows = rows.filter(row => row.size === size);
+    if (!enabledRows.length) return '';
+    const legacySelected = size === 2
+      ? selectedOptions.relay2Person || selectedOptions.quadRelay2Person
+      : size === 3
+        ? selectedOptions.relay3Person || selectedOptions.quadRelay3Person
+        : selectedOptions.relay4Person;
+    const checked = legacySelected || enabledRows.some(row => selectedIds.has(row.id));
+    return `<div class="toggle-row"><div><div class="toggle-row-label">${size} Person Relay</div></div>${toggleSwitch(`relay${size}Person`, checked)}</div>`;
+  }).join('');
+  return options ? `<div class="toggle-row" style="flex-direction:column;align-items:stretch;gap:8px"><div class="toggle-row-label">Relay Events</div>${options}</div>` : '';
 }
 
 function registrationOptionLabels(meet, opts = {}) {
@@ -147,19 +131,9 @@ function registrationOptionLabels(meet, opts = {}) {
   if (opts.quad) labels.push('Quad');
   if (opts.additional || opts.skateability) labels.push('Additional Races');
   if (opts.timeTrials) labels.push(timeTrialLabelForMeet(meet));
-  const relayRows = [
-    ...selectedRelayRowsForIds(meet, opts.relayEventIds || opts.relayDivisionIds, 'inline'),
-    ...selectedRelayRowsForIds(meet, opts.quadRelayEventIds || opts.quadRelayDivisionIds, 'quad'),
-  ];
-  if (relayRows.length) {
-    relayRows.forEach(row => labels.push(row.displayLabel));
-  } else {
-    if (opts.relay2Person) labels.push('2 Person Relay');
-    if (opts.relay3Person) labels.push('3 Person Relay');
-    if (opts.relay4Person) labels.push('4 Person Relay');
-    if (opts.quadRelay2Person) labels.push('Quad 2 Person Relay');
-    if (opts.quadRelay3Person) labels.push('Quad 3 Person Relay');
-  }
+  if (opts.relay2Person || opts.quadRelay2Person) labels.push('2 Person Relay');
+  if (opts.relay3Person || opts.quadRelay3Person) labels.push('3 Person Relay');
+  if (opts.relay4Person) labels.push('4 Person Relay');
   return labels;
 }
 
@@ -169,13 +143,18 @@ function registrationOptionsFromBody(meet, body = {}) {
   const relayRows = registrationRelayTemplates(meet);
   const inlineById = new Map(relayRows.filter(row => row.discipline === 'inline').map(row => [row.id, row]));
   const quadById = new Map(relayRows.filter(row => row.discipline === 'quad').map(row => [row.id, row]));
-  const relayEventIds = uniqueSelectedValues(body.relayEventIds).filter(id => inlineById.has(id));
-  const quadRelayEventIds = uniqueSelectedValues(body.quadRelayEventIds).filter(id => quadById.has(id));
+  const relay2Person = !!body.relay2Person;
+  const relay3Person = !!body.relay3Person;
+  const relay4Person = !!body.relay4Person;
+  const selectedSizes = new Set([
+    ...(relay2Person ? [2] : []),
+    ...(relay3Person ? [3] : []),
+    ...(relay4Person ? [4] : []),
+  ]);
+  const relayEventIds = relayRows.filter(row => row.discipline === 'inline' && selectedSizes.has(row.size)).map(row => row.id);
+  const quadRelayEventIds = relayRows.filter(row => row.discipline === 'quad' && selectedSizes.has(row.size)).map(row => row.id);
   const inlineSelected = relayEventIds.map(id => inlineById.get(id)).filter(Boolean);
   const quadSelected = quadRelayEventIds.map(id => quadById.get(id)).filter(Boolean);
-  const relay2Person = inlineSelected.some(row => row.size === 2);
-  const relay3Person = inlineSelected.some(row => row.size === 3);
-  const relay4Person = inlineSelected.some(row => row.size === 4);
   const additionalGroupId = String(body.additionalGroupId || body.skateabilityGroupId || '');
   const additional = !!(body.additional || body.skateability) && available.additionalGroups.some(group => String(group.id || '') === additionalGroupId);
   return {
@@ -192,16 +171,16 @@ function registrationOptionsFromBody(meet, body = {}) {
     timeTrialEventIds: tt.eventIds,
     relayEventIds,
     relayDivisionIds: relayEventIds,
-    relayEventLabels: inlineSelected.map(row => row.displayLabel),
-    relay2Person,
-    relay3Person,
-    relay4Person,
+    relayEventLabels: [...new Set(inlineSelected.map(row => `${row.size} Person Relay`))],
+    relay2Person: relay2Person && (inlineSelected.some(row => row.size === 2) || quadSelected.some(row => row.size === 2)),
+    relay3Person: relay3Person && (inlineSelected.some(row => row.size === 3) || quadSelected.some(row => row.size === 3)),
+    relay4Person: relay4Person && (inlineSelected.some(row => row.size === 4) || quadSelected.some(row => row.size === 4)),
     relays: !!(relay2Person || relay3Person || relay4Person),
     quadRelayEventIds,
     quadRelayDivisionIds: quadRelayEventIds,
-    quadRelayEventLabels: quadSelected.map(row => row.displayLabel),
-    quadRelay2Person: quadSelected.some(row => row.size === 2),
-    quadRelay3Person: quadSelected.some(row => row.size === 3),
+    quadRelayEventLabels: [...new Set(quadSelected.map(row => `${row.size} Person Relay`))],
+    quadRelay2Person: quadSelected.some(row => row.size === 2) && relay2Person,
+    quadRelay3Person: quadSelected.some(row => row.size === 3) && relay3Person,
   };
 }
 

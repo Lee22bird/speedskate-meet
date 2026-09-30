@@ -128,7 +128,7 @@ test('registration submission discards event choices that the director did not e
   assert.equal(meet.registrations[0].options.quadRelay3Person, false);
 });
 
-test('registration shows only explicitly enabled relay-builder rows', () => {
+test('registration groups enabled relay-builder rows by team size', () => {
   const meet = defaultMeet('owner');
   meet.id = 11;
   meet.status = 'published';
@@ -142,9 +142,14 @@ test('registration shows only explicitly enabled relay-builder rows', () => {
     send(value) { html = value; },
   });
 
-  assert.match(html, /name="relayEventIds"/);
+  assert.match(html, /name="relay2Person"/);
+  assert.match(html, /name="relay3Person"/);
+  assert.match(html, /name="relay4Person"/);
+  assert.doesNotMatch(html, /Juvenile 3 Person/);
+  assert.doesNotMatch(html, /Freshman 3 Person/);
+  assert.doesNotMatch(html, /Senior 3 Person/);
+  assert.doesNotMatch(html, /Master 3 Person/);
   assert.doesNotMatch(html, /name="quadRelayEventIds"/);
-  assert.doesNotMatch(html, /name="relay2Person"/);
   assert.doesNotMatch(html, /name="quadRelay2Person"/);
 });
 
