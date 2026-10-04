@@ -58,4 +58,19 @@ test('October dev import honors MSSL challenge-up entries for Elementary Girls E
   );
   assert.equal(freshmanGirlsHelmets.length, 9);
   assert.deepEqual(freshmanGirlsHelmets.sort(), ['53', '128', '543', '544', '552', '592', '655', '663', '703'].sort());
+
+  const mastersMenRaces = meet.races.filter(race =>
+    race.groupId === 'master_men' && race.division === 'elite'
+  );
+  assert.deepEqual([...new Set(mastersMenRaces.map(race => race.distanceLabel))].sort(), ['1000m', '1500m', '500m']);
+  for (const distance of ['500m', '1000m', '1500m']) {
+    const races = mastersMenRaces.filter(race => race.distanceLabel === distance);
+    assert.equal(races.length, 1, `${distance} should have only its direct final`);
+    assert.equal(races[0].stage, 'final');
+    assert.equal(races[0].laneEntries.length, 6, `${distance} should have six skaters and no heats`);
+    assert.deepEqual(races[0].laneEntries.map(entry => entry.skaterName).sort(), [
+      'Casey Chavez', 'Eddie Clapp', 'Lee Bird', 'Michael Chesny - H',
+      'Michael Gulley', 'Zackery Cox',
+    ].sort());
+  }
 });

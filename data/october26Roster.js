@@ -538,7 +538,7 @@ module.exports = [
     "gender": "men",
     "entries": [
       "MA",
-      "",
+      "MA",
       "",
       "",
       ""
@@ -1115,8 +1115,8 @@ module.exports = [
       "",
       "VT",
       "",
-      "MA",
-      "MA"
+      "",
+      ""
     ],
     "options": {
       "novice": false,
@@ -1207,8 +1207,8 @@ module.exports = [
       "",
       "VT",
       "",
-      "MA",
-      "MA"
+      "",
+      ""
     ],
     "options": {
       "novice": false,
@@ -1299,8 +1299,8 @@ module.exports = [
       "",
       "VT",
       "",
-      "MA",
-      "MA"
+      "",
+      ""
     ],
     "options": {
       "novice": false,
@@ -1713,8 +1713,8 @@ module.exports = [
       "MA",
       "ES",
       "VT",
-      "MA",
-      "MA"
+      "",
+      ""
     ],
     "options": {
       "novice": false,
