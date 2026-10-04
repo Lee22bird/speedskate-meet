@@ -20,7 +20,7 @@ module.exports = [
       "open": true,
       "quad": false,
       "relays": true,
-      "challengeUp": false
+      "challengeUp": true
     }
   },
   {
@@ -97,7 +97,7 @@ module.exports = [
     "team": "Infinity Racing Springfield",
     "helmetNumber": "",
     "birthdate": "2021-12-20",
-    "age": 4,
+    "age": 5,
     "gender": "women",
     "entries": [
       "",
@@ -112,7 +112,7 @@ module.exports = [
       "open": true,
       "quad": false,
       "relays": false,
-      "challengeUp": false
+      "challengeUp": true
     }
   },
   {
@@ -181,7 +181,7 @@ module.exports = [
       "open": true,
       "quad": false,
       "relays": true,
-      "challengeUp": false
+      "challengeUp": true
     }
   },
   {
@@ -212,7 +212,7 @@ module.exports = [
     "team": "Infinity Racing Springfield",
     "helmetNumber": 1171,
     "birthdate": "2016-12-01",
-    "age": 9,
+    "age": 10,
     "gender": "men",
     "entries": [
       "",
@@ -296,7 +296,7 @@ module.exports = [
       "open": true,
       "quad": true,
       "relays": true,
-      "challengeUp": false
+      "challengeUp": true
     }
   },
   {
@@ -319,7 +319,7 @@ module.exports = [
       "open": true,
       "quad": false,
       "relays": true,
-      "challengeUp": false
+      "challengeUp": true
     }
   },
   {
@@ -572,7 +572,7 @@ module.exports = [
       "open": true,
       "quad": true,
       "relays": true,
-      "challengeUp": false
+      "challengeUp": true
     }
   },
   {
@@ -618,7 +618,7 @@ module.exports = [
       "open": true,
       "quad": false,
       "relays": true,
-      "challengeUp": false
+      "challengeUp": true
     }
   },
   {
@@ -710,7 +710,7 @@ module.exports = [
       "open": true,
       "quad": true,
       "relays": true,
-      "challengeUp": false
+      "challengeUp": true
     }
   },
   {
@@ -718,7 +718,7 @@ module.exports = [
     "team": "Team United - Wichita",
     "helmetNumber": 128,
     "birthdate": "2015-11-08",
-    "age": 10,
+    "age": 11,
     "gender": "women",
     "entries": [
       "",
@@ -733,7 +733,7 @@ module.exports = [
       "open": true,
       "quad": false,
       "relays": true,
-      "challengeUp": false
+      "challengeUp": true
     }
   },
   {
@@ -833,7 +833,7 @@ module.exports = [
     "team": "Team United - Wichita",
     "helmetNumber": 637,
     "birthdate": "2011-12-27",
-    "age": 14,
+    "age": 15,
     "gender": "women",
     "entries": [
       "SR",
@@ -871,7 +871,7 @@ module.exports = [
       "open": true,
       "quad": true,
       "relays": true,
-      "challengeUp": false
+      "challengeUp": true
     }
   },
   {
@@ -879,7 +879,7 @@ module.exports = [
     "team": "Team United - Wichita",
     "helmetNumber": 592,
     "birthdate": "2013-11-19",
-    "age": 12,
+    "age": 13,
     "gender": "women",
     "entries": [
       "FR",
@@ -902,7 +902,7 @@ module.exports = [
     "team": "Team United - Wichita",
     "helmetNumber": "",
     "birthdate": "2014-12-18",
-    "age": 11,
+    "age": 12,
     "gender": "men",
     "entries": [
       "",
@@ -925,7 +925,7 @@ module.exports = [
     "team": "Team United - Wichita",
     "helmetNumber": "",
     "birthdate": "1999-11-07",
-    "age": 26,
+    "age": 27,
     "gender": "women",
     "entries": [
       "SR",
@@ -1132,7 +1132,7 @@ module.exports = [
     "team": "Team Velocity - Jefferson City",
     "helmetNumber": 1188,
     "birthdate": "",
-    "age": 126,
+    "age": 127,
     "gender": "women",
     "entries": [
       "MA",
@@ -1178,7 +1178,7 @@ module.exports = [
     "team": "Team Velocity - Jefferson City",
     "helmetNumber": 523,
     "birthdate": "2016-11-10",
-    "age": 9,
+    "age": 10,
     "gender": "women",
     "entries": [
       "FR",
@@ -1224,7 +1224,7 @@ module.exports = [
     "team": "Team Velocity - Jefferson City",
     "helmetNumber": 627,
     "birthdate": "2014-03-22",
-    "age": 1,
+    "age": 12,
     "gender": "men",
     "entries": [
       "",
@@ -1316,7 +1316,7 @@ module.exports = [
     "team": "Team Velocity - Jefferson City",
     "helmetNumber": 1171,
     "birthdate": "2008-11-10",
-    "age": 17,
+    "age": 18,
     "gender": "men",
     "entries": [
       "",
@@ -1362,7 +1362,7 @@ module.exports = [
     "team": "Team Velocity - Jefferson City",
     "helmetNumber": 1306,
     "birthdate": "2011-11-26",
-    "age": 14,
+    "age": 15,
     "gender": "women",
     "entries": [
       "",
@@ -1431,7 +1431,7 @@ module.exports = [
     "team": "Team Velocity - Jefferson City",
     "helmetNumber": 1173,
     "birthdate": "2012-10-12",
-    "age": 13,
+    "age": 14,
     "gender": "women",
     "entries": [
       "",
@@ -1446,7 +1446,7 @@ module.exports = [
       "open": true,
       "quad": false,
       "relays": true,
-      "challengeUp": false
+      "challengeUp": true
     }
   },
   {
@@ -1515,7 +1515,7 @@ module.exports = [
       "open": true,
       "quad": false,
       "relays": false,
-      "challengeUp": false
+      "challengeUp": true
     }
   },
   {
@@ -1538,7 +1538,7 @@ module.exports = [
       "open": true,
       "quad": false,
       "relays": false,
-      "challengeUp": false
+      "challengeUp": true
     }
   },
   {
@@ -1546,7 +1546,7 @@ module.exports = [
     "team": "Tulsa Surge - Tulsa",
     "helmetNumber": 620,
     "birthdate": "1981-10-27",
-    "age": 44,
+    "age": 45,
     "gender": "men",
     "entries": [
       "",
@@ -1584,7 +1584,7 @@ module.exports = [
       "open": true,
       "quad": false,
       "relays": true,
-      "challengeUp": false
+      "challengeUp": true
     }
   },
   {
@@ -1699,7 +1699,7 @@ module.exports = [
       "open": true,
       "quad": true,
       "relays": true,
-      "challengeUp": false
+      "challengeUp": true
     }
   },
   {
@@ -1707,7 +1707,7 @@ module.exports = [
     "team": "WSC Racing",
     "helmetNumber": 1178,
     "birthdate": "1966-11-11",
-    "age": 59,
+    "age": 60,
     "gender": "men",
     "entries": [
       "MA",
