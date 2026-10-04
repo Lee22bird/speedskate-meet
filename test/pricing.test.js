@@ -38,6 +38,11 @@ test('additional-race aliases count once and quad relay categories are charged',
   assert.strictEqual(countSelectedEventCategories({ quadRelay2Person: true, quadRelay3Person: true }), 2);
 });
 
+test('challenge up is charged as one additional event category', () => {
+  const meet = { baseEntryFee: 40, additionalRaceFee: 10 };
+  assert.strictEqual(calcRegistrationCost(meet, { elite: true, challengeUp: true }), 50);
+});
+
 test('specific relay event ids count every selected relay division', () => {
   const meet = { baseEntryFee: 40, additionalRaceFee: 10 };
   const options = {

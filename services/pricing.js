@@ -20,6 +20,10 @@ function countSelectedEventCategories(options = {}) {
 
   if (opts.novice) count += 1;
   if (opts.elite) count += 1;
+  // Challenge Up is an additional entered division, not a standalone class.
+  // Count it once so a base division plus Challenge Up receives the same
+  // additional-event fee as any other extra entry.
+  if (opts.challengeUp) count += 1;
   if (opts.open) count += 1;
   if (opts.quad) count += 1;
   if (opts.timeTrials) count += 1;
