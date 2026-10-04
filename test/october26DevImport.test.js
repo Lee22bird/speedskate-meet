@@ -34,6 +34,57 @@ test('October dev import honors MSSL challenge-up entries for Elementary Girls E
     { redirect() {}, status() { return this; }, send() {} }
   );
 
+  const scheduledHeats = {
+    elementary_girls: {
+      distances: ['300m', '500m', '700m'],
+      heats: [
+        ['Carlie Lentz', 'Rylee Washam', 'Rosalyn Reid', 'Jabree Scott', 'Maisey Hughes-Reece'],
+        ['McKinley Nigh', 'Koralyne Hick', 'Rozlyn Maness', 'Gabrielle Chesny'],
+      ],
+    },
+    sophomore_girls: {
+      distances: ['500m', '1000m', '1500m'],
+      heats: [
+        ['Skyler Kirkhart', 'Laney Stevens', 'Aubreigh Sommer', 'Alexandria Chesny'],
+        ['Stokley Shrewsbury', 'Journie Warkentin', 'Scarlett Neely', 'Anastasia Chesny'],
+      ],
+    },
+    senior_men: {
+      distances: ['500m', '1500m', '3000m'],
+      heats: [
+        ['Carlo Balderrama', 'Casey Chavez', 'Mason Shore', 'Noah Rumfelt'],
+        ['Richie Cabrera', 'Michael Coultis', 'Trenton Kramer', 'Shaun Speidel'],
+      ],
+    },
+    freshman_girls: {
+      distances: ['300m', '500m', '1000m'],
+      heats: [
+        ['McKinley Nigh', 'Koralyne Hick', 'Skyler Kirkhart', 'Karlee Meier', 'Alexandria Chesny'],
+        ['Jabree Scott', 'Journie Warkentin', 'Anastasia Chesny', 'Maisey Hughes-Reece'],
+      ],
+    },
+  };
+  const scheduledGroupIds = Object.keys(scheduledHeats);
+  for (const race of meet.races.filter(race => race.stage === 'heat')) {
+    assert.ok(scheduledGroupIds.includes(race.groupId), `${race.groupId} should not have heats`);
+  }
+  for (const reg of meet.registrations.filter(reg => reg.options.novice)) {
+    assert.ok((reg.options.importedEliteGroupIds || []).every(groupId =>
+      groupId === String(reg.originalDivisionGroupId)
+    ), `${reg.name} should not be imported into an elite challenge-up group`);
+  }
+  for (const [groupId, schedule] of Object.entries(scheduledHeats)) {
+    for (const distance of schedule.distances) {
+      const races = meet.races.filter(race =>
+        race.groupId === groupId && race.division === 'elite' &&
+        race.distanceLabel === distance && race.stage === 'heat'
+      ).sort((a, b) => a.heatNumber - b.heatNumber);
+      assert.equal(races.length, 2, `${groupId} ${distance} should have exactly two heats`);
+      assert.deepEqual(races.map(race => race.laneEntries.map(entry => entry.skaterName)), schedule.heats,
+        `${groupId} ${distance} should match the published heat lists`);
+    }
+  }
+
   const elementaryHeats = meet.races.filter(race =>
     race.groupId === 'elementary_girls' &&
     race.division === 'elite' &&

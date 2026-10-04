@@ -29,6 +29,94 @@ const OCTOBER_26_GROUP_CODES = [
   ['FR', 'Freshman'], ['SO', 'Sophomore'], ['JR', 'Junior'], ['SR', 'Senior'],
   ['CL', 'Classic'], ['MA', 'Master'], ['VT', 'Veteran'], ['ES', 'Esquire'],
 ];
+const OCTOBER_26_ELITE_SCHEDULE = {
+  elementary_girls: {
+    heats: [
+      ['Carlie Lentz', 'Rylee Washam', 'Rosalyn Reid', 'Jabree Scott', 'Maisey Hughes-Reece'],
+      ['McKinley Nigh', 'Koralyne Hick', 'Rozlyn Maness', 'Gabrielle Chesny'],
+    ],
+  },
+  sophomore_girls: {
+    heats: [
+      ['Skyler Kirkhart', 'Laney Stevens', 'Aubreigh Sommer', 'Alexandria Chesny'],
+      ['Stokley Shrewsbury', 'Journie Warkentin', 'Scarlett Neely', 'Anastasia Chesny'],
+    ],
+  },
+  senior_men: {
+    heats: [
+      ['Carlo Balderrama', 'Casey Chavez', 'Mason Shore', 'Noah Rumfelt'],
+      ['Richie Cabrera', 'Michael Coultis', 'Trenton Kramer', 'Shaun Speidel'],
+    ],
+  },
+  freshman_girls: {
+    heats: [
+      ['McKinley Nigh', 'Koralyne Hick', 'Skyler Kirkhart', 'Karlee Meier', 'Alexandria Chesny'],
+      ['Jabree Scott', 'Journie Warkentin', 'Anastasia Chesny', 'Maisey Hughes-Reece'],
+    ],
+  },
+  senior_women: {
+    final: ['Autumn Graves', 'Skylor Peck', 'Jaden Ramirez', 'Jaswanth Pidikidi', 'Shaylee Slawson', 'Secret Smith'],
+  },
+};
+
+function october26ScheduledGroups(name) {
+  const skater = String(name || '').trim().toLowerCase();
+  const groups = {};
+  for (const [groupId, schedule] of Object.entries(OCTOBER_26_ELITE_SCHEDULE)) {
+    const heat = schedule.heats?.findIndex(names => names.some(candidate => candidate.toLowerCase() === skater));
+    if (heat >= 0) groups[groupId] = heat + 1;
+    else if (schedule.final?.some(candidate => candidate.toLowerCase() === skater)) groups[groupId] = 0;
+  }
+  return groups;
+}
+
+function applyOctober26ScheduleHeats(meet) {
+  const scheduledHeatGroups = new Set(Object.entries(OCTOBER_26_ELITE_SCHEDULE)
+    .filter(([, schedule]) => schedule.heats)
+    .map(([groupId]) => groupId));
+
+  // The generic generator may split a scheduled field differently from the
+  // published schedule. Pool entrants across those generated heats first.
+  for (const [groupId, schedule] of Object.entries(OCTOBER_26_ELITE_SCHEDULE)) {
+    if (!schedule.heats) continue;
+    const races = (meet.races || []).filter(race =>
+      String(race.groupId) === groupId && race.division === 'elite' && race.stage === 'heat'
+    );
+    const entries = new Map(races.flatMap(race => race.laneEntries || []).map(entry => [
+      String(entry.skaterName || '').trim().toLowerCase(), entry,
+    ]));
+    for (const race of races) {
+      const names = schedule.heats[Number(race.heatNumber) - 1] || [];
+      race.laneEntries = names.map((name, index) => {
+        const entry = entries.get(name.toLowerCase());
+        return entry ? { ...entry, lane: index + 1 } : null;
+      }).filter(Boolean);
+    }
+  }
+
+  // This meet's published schedule only has heats in the four explicitly
+  // listed elite divisions. Keep any other generated fields as direct finals.
+  const unscheduledFamilies = new Map();
+  for (const race of meet.races || []) {
+    if (race.isOpenRace || race.isQuadRace || race.isRelayRace || race.isTimeTrial ||
+        !['heat', 'semi'].includes(String(race.stage || '')) || scheduledHeatGroups.has(String(race.groupId))) continue;
+    const key = `${race.groupId}|${race.division}|${race.dayIndex}|${race.distanceLabel}`;
+    if (!unscheduledFamilies.has(key)) unscheduledFamilies.set(key, []);
+    unscheduledFamilies.get(key).push(race);
+  }
+  for (const [key, generated] of unscheduledFamilies) {
+    const [groupId, division, dayIndex, distanceLabel] = key.split('|');
+    const family = (meet.races || []).filter(race =>
+      String(race.groupId) === groupId && String(race.division) === division &&
+      String(race.dayIndex) === dayIndex && String(race.distanceLabel) === distanceLabel
+    );
+    const final = family.find(race => race.stage === 'final');
+    if (!final) continue;
+    const entries = generated.flatMap(race => race.laneEntries || []);
+    final.laneEntries = entries.map((entry, index) => ({ ...entry, lane: index + 1 }));
+    meet.races = meet.races.filter(race => !generated.includes(race));
+  }
+}
 
 function october26EntryForGroup(label) {
   const text = String(label || '').toLowerCase();
@@ -58,9 +146,18 @@ function october26ChallengeOptions(row, sourceOptions, baseGroup, meet) {
   );
   const eliteGroupIds = [...new Set(eliteEntries
     .map(entry => october26GroupForEntry(meet.groups, entry.code, row.gender, age)?.id).filter(Boolean).map(String))];
+  const scheduledGroups = october26ScheduledGroups(row.name);
   const baseGroupId = String(baseGroup?.id || '');
-  const hasEliteEntry = eliteEntries.length > 0;
-  const challengesUpByAge = !isNovice && eliteGroupIds.some(groupId => groupId !== baseGroupId);
+  if (isNovice) {
+    for (const groupId of Object.keys(scheduledGroups)) {
+      if (groupId !== baseGroupId) delete scheduledGroups[groupId];
+    }
+  }
+  const scheduledGroupIds = new Set(Object.keys(OCTOBER_26_ELITE_SCHEDULE));
+  const exactEliteGroupIds = eliteGroupIds.filter(groupId => !scheduledGroupIds.has(groupId));
+  for (const groupId of Object.keys(scheduledGroups)) exactEliteGroupIds.push(groupId);
+  const hasEliteEntry = eliteEntries.length > 0 || Object.keys(scheduledGroups).length > 0;
+  const challengesUpByAge = !isNovice && exactEliteGroupIds.some(groupId => groupId !== baseGroupId);
   const quadEntry = String((row.entries || [])[0] || '').trim().toUpperCase().match(/^([A-Z]{2})$/);
   const quadGroup = quadEntry
     ? october26GroupForEntry(meet.quadGroups, quadEntry[1], row.gender, age)
@@ -71,7 +168,8 @@ function october26ChallengeOptions(row, sourceOptions, baseGroup, meet) {
     elite: !!sourceOptions.elite || hasEliteEntry,
     challengeUp: !isNovice && (!!sourceOptions.challengeUp || challengesUpByAge),
     importedNoviceGroupIds: noviceGroupIds,
-    importedEliteGroupIds: eliteGroupIds,
+    importedEliteGroupIds: [...new Set(exactEliteGroupIds)],
+    importedHeatByGroup: scheduledGroups,
     importedQuadGroupId: quadGroup?.id ? String(quadGroup.id) : '',
   };
 }
@@ -603,6 +701,7 @@ function importOctober26Roster(meet, { replace = true, checkedIn = false, paid =
       importedNoviceGroupIds: eventOptions.importedNoviceGroupIds,
       importedEliteGroupIds: eventOptions.importedEliteGroupIds,
       importedQuadGroupId: eventOptions.importedQuadGroupId,
+      importedHeatByGroup: eventOptions.importedHeatByGroup,
       open: !!source.open,
       quad: !!source.quad,
       timeTrials: false,
@@ -613,14 +712,16 @@ function importOctober26Roster(meet, { replace = true, checkedIn = false, paid =
       relay4Person: false,
       relays: false,
     };
-    const helmet = Number(row.helmetNumber) || nextMeetNumber++;
+    const numericHelmet = Number(row.helmetNumber);
+    const meetNumber = Number.isFinite(numericHelmet) && numericHelmet > 0 ? numericHelmet : nextMeetNumber++;
+    const helmet = String(row.helmetNumber || '').trim() || meetNumber;
     const reg = {
       id: nextRegId++, createdAt: nowIso(), importSource: OCTOBER_26_ROSTER_SOURCE,
       name: String(row.name || '').trim(), age, gender,
       team: String(row.team || 'Independent').trim() || 'Independent', sponsor: '',
       divisionGroupId: baseGroup?.id || '', divisionGroupLabel: baseGroup?.label || 'Unassigned',
       originalDivisionGroupId: baseGroup?.id || '', originalDivisionGroupLabel: baseGroup?.label || '',
-      meetNumber: helmet, birthdate: String(row.birthdate || ''), email: '', helmetNumber: helmet,
+      meetNumber, birthdate: String(row.birthdate || ''), email: '', helmetNumber: helmet,
       paid: !!paid, checkedIn: !!checkedIn, totalCost: 0,
       notes: `October entries: ${(row.entries || []).filter(Boolean).join(' / ')}`,
       options,
@@ -633,6 +734,7 @@ function importOctober26Roster(meet, { replace = true, checkedIn = false, paid =
   // individual/quad/open races and remove any template-generated relay races.
   meet.races = (meet.races || []).filter(race => !race.isRelayRace);
   rebuildRaceAssignmentsSafe(meet);
+  applyOctober26ScheduleHeats(meet);
   restoreBlockAssignmentsBySignature(meet, previousBlocks, previousRaces);
   ensureAtLeastOneBlock(meet);
   ensureCurrentRace(meet);
