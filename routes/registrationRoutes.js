@@ -5,7 +5,7 @@ const { canEditMeet, hasRole } = require('../utils/auth');
 const { sendEmail, emailHtmlWrap } = require('../services/email');
 const {
   getMeetOr404, meetRinkLabel, meetDateLabel,
-  usarsAge, ageForReg, normalizeSkaterGender, displayGenderLabel, findAgeGroup, challengeAdjustedGroup, findChallengeUpGroup,
+  usarsAge, ageForReg, ageMatch, normalizeSkaterGender, displayGenderLabel, findAgeGroup, challengeAdjustedGroup, findChallengeUpGroup,
   nextId, nextHelmetNumber, ensureRegistrationTotalsAndNumbers,
   isRegistrationClosed, isPublicMeet,
   generateAdditionalRacesForMeet, generateConfiguredRacesForMeet, ensureAtLeastOneBlock,
@@ -24,6 +24,58 @@ const { RELAY_DIVISION_BY_ID } = require('../services/relayDivisions');
 const { buildNationalsDevRoster } = require('../services/nationalsRoster');
 const october26Roster = require('../data/october26Roster');
 const OCTOBER_26_ROSTER_SOURCE = 'october_26_2026_roster';
+const OCTOBER_26_GROUP_CODES = [
+  ['TT', 'Tiny Tot'], ['PR', 'Primary'], ['JV', 'Juvenile'], ['EL', 'Elementary'],
+  ['FR', 'Freshman'], ['SO', 'Sophomore'], ['JR', 'Junior'], ['SR', 'Senior'],
+  ['CL', 'Classic'], ['MA', 'Master'], ['VT', 'Veteran'], ['ES', 'Esquire'],
+];
+
+function october26EntryForGroup(label) {
+  const text = String(label || '').toLowerCase();
+  return OCTOBER_26_GROUP_CODES.find(([, name]) => text.includes(name.toLowerCase()))?.[0] || '';
+}
+
+function october26GroupForEntry(groups, code, gender, age) {
+  const candidates = (groups || []).filter(group =>
+    october26EntryForGroup(group.label) === code &&
+    normalizeSkaterGender(group.gender) === normalizeSkaterGender(gender)
+  );
+  return candidates.find(group => ageMatch(group.ages, age)) || candidates[0] || null;
+}
+
+function october26ChallengeOptions(row, sourceOptions, baseGroup, meet) {
+  const entries = (row.entries || []).slice(1).map(value => {
+    const match = String(value || '').trim().toUpperCase().match(/^(NOV\s+)?([A-Z]{2})$/);
+    return match ? { novice: !!match[1], code: match[2] } : null;
+  }).filter(Boolean);
+  const age = Number(row.age || 0);
+  const baseGroupCode = october26EntryForGroup(baseGroup?.label);
+  const isNovice = !!sourceOptions.novice || entries.some(entry => entry.novice);
+  const noviceGroupIds = [...new Set(entries.filter(entry => entry.novice && entry.code === baseGroupCode)
+    .map(entry => october26GroupForEntry(meet.groups, entry.code, row.gender, age)?.id).filter(Boolean).map(String))];
+  const eliteEntries = entries.filter(entry => !entry.novice).filter(entry =>
+    !isNovice || entry.code === baseGroupCode
+  );
+  const eliteGroupIds = [...new Set(eliteEntries
+    .map(entry => october26GroupForEntry(meet.groups, entry.code, row.gender, age)?.id).filter(Boolean).map(String))];
+  const baseGroupId = String(baseGroup?.id || '');
+  const hasEliteEntry = eliteEntries.length > 0;
+  const challengesUpByAge = !isNovice && eliteGroupIds.some(groupId => groupId !== baseGroupId);
+  const quadEntry = String((row.entries || [])[0] || '').trim().toUpperCase().match(/^([A-Z]{2})$/);
+  const quadGroup = quadEntry
+    ? october26GroupForEntry(meet.quadGroups, quadEntry[1], row.gender, age)
+    : null;
+
+  return {
+    novice: isNovice,
+    elite: !!sourceOptions.elite || hasEliteEntry,
+    challengeUp: !isNovice && (!!sourceOptions.challengeUp || challengesUpByAge),
+    importedNoviceGroupIds: noviceGroupIds,
+    importedEliteGroupIds: eliteGroupIds,
+    importedQuadGroupId: quadGroup?.id ? String(quadGroup.id) : '',
+  };
+}
+
 const {
   rebuildRaceAssignmentsSafe, restoreBlockAssignmentsBySignature,
   raceImportSignature, raceFamilySignature, raceStageRankForRestore,
@@ -543,10 +595,14 @@ function importOctober26Roster(meet, { replace = true, checkedIn = false, paid =
     const gender = testRosterGenderForAge({ age, gender: row.gender });
     const baseGroup = findAgeGroup(meet.groups || [], age, gender);
     const source = row.options || {};
+    const eventOptions = october26ChallengeOptions(row, source, baseGroup, meet);
     const options = {
-      challengeUp: !!source.challengeUp,
-      novice: !!source.novice,
-      elite: !!source.elite,
+      novice: eventOptions.novice,
+      elite: eventOptions.elite,
+      challengeUp: eventOptions.challengeUp,
+      importedNoviceGroupIds: eventOptions.importedNoviceGroupIds,
+      importedEliteGroupIds: eventOptions.importedEliteGroupIds,
+      importedQuadGroupId: eventOptions.importedQuadGroupId,
       open: !!source.open,
       quad: !!source.quad,
       timeTrials: false,

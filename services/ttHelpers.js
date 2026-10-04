@@ -163,10 +163,14 @@ function raceGenderBucketFromLabelOrGender(value) {
 
 function raceMatchesRegAgeGender(race, reg, meet) {
   const age=ageForReg(reg,meet);
-  if(String(race.ages||'').trim()&&!ageMatch(race.ages,age)) return false;
   const raceBucket=raceGenderBucketFromLabelOrGender(race.gender||race.groupLabel||race.groupId||'');
   const regBucket=raceGenderBucketFromLabelOrGender(reg.gender||'');
-  return !raceBucket||!regBucket||raceBucket===regBucket;
+  if(raceBucket&&regBucket&&raceBucket!==regBucket) return false;
+  if(race.isQuadRace && Object.prototype.hasOwnProperty.call(reg.options || {}, 'importedQuadGroupId')) {
+    return String(reg.options.importedQuadGroupId || '') === String(race.groupId || '');
+  }
+  if(String(race.ages||'').trim()&&!ageMatch(race.ages,age)) return false;
+  return true;
 }
 
 // Kept as a named export for backward compatibility — now assigns lanes via a

@@ -942,12 +942,30 @@ function registrationMatchesStandardRace(reg, race, meet) {
 
   if (!div || !raceGroupId || !baseGroupId) return false;
 
+  const importedGroupIds = div === 'novice'
+    ? opts.importedNoviceGroupIds
+    : div === 'elite'
+      ? opts.importedEliteGroupIds
+      : null;
+  if (Array.isArray(importedGroupIds)) return importedGroupIds.includes(raceGroupId);
+
   if (meet?.divisionScheme === 'mssl' && (div === 'novice' || div === 'elite')) {
-    if (!opts[div]) return false;
     const age = ageForReg(reg, meet);
-    if (!ageMatch(race.ages, age)) return false;
     const wanted = normalizeSkaterGender(race.gender);
-    return !wanted || wanted === normalizeSkaterGender(reg.gender);
+    const genderMatches = !wanted || wanted === normalizeSkaterGender(reg.gender);
+    if (!genderMatches) return false;
+
+    if (raceGroupId === baseGroupId && ageMatch(race.ages, age)) {
+      if (opts[div]) return true;
+      return div === 'elite' && noviceChallengeCreatesOwnElite(reg);
+    }
+
+    if (div === 'elite' && eliteChallengeCreatesAgeGroup(reg)) {
+      const challengeGroup = findChallengeUpGroup(meet.groups || [], baseGroupId);
+      return !!challengeGroup && String(challengeGroup.id) === raceGroupId;
+    }
+
+    return false;
   }
 
   if (raceGroupId === baseGroupId) {

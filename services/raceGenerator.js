@@ -54,10 +54,28 @@ function registrationMatchesStandardRace(reg, race, meet) {
   const raceGroupId = String(race?.groupId || '');
   const baseGroupId = String(reg?.originalDivisionGroupId || reg?.divisionGroupId || '');
 
+  const importedGroupIds = div === 'novice'
+    ? opts.importedNoviceGroupIds
+    : div === 'elite'
+      ? opts.importedEliteGroupIds
+      : null;
+  if (Array.isArray(importedGroupIds)) return importedGroupIds.includes(raceGroupId);
+
   if (meet?.divisionScheme === 'mssl' && (div === 'novice' || div === 'elite')) {
-    return !!opts[div]
-      && simpleAgeMatch(race.ages, reg.age)
-      && (!simpleGender(race.gender) || simpleGender(race.gender) === simpleGender(reg.gender));
+    const genderMatches = !simpleGender(race.gender) || simpleGender(race.gender) === simpleGender(reg.gender);
+    if (!genderMatches) return false;
+
+    if (raceGroupId === baseGroupId && simpleAgeMatch(race.ages, reg.age)) {
+      if (opts[div]) return true;
+      return div === 'elite' && noviceChallengeCreatesOwnElite(reg);
+    }
+
+    if (div === 'elite' && eliteChallengeCreatesAgeGroup(reg)) {
+      const challengeGroup = findChallengeUpGroup(meet?.groups || [], baseGroupId);
+      return !!challengeGroup && String(challengeGroup.id) === raceGroupId;
+    }
+
+    return false;
   }
 
   if (raceGroupId === baseGroupId) {

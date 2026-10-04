@@ -1271,7 +1271,7 @@ module.exports = [
     "helmetNumber": 1315,
     "birthdate": "2008-08-14",
     "age": 18,
-    "gender": "men",
+    "gender": "women",
     "entries": [
       "",
       "NOV SR",
