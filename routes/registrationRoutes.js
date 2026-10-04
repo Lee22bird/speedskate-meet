@@ -11,7 +11,7 @@ const {
   generateAdditionalRacesForMeet, generateConfiguredRacesForMeet, ensureAtLeastOneBlock,
   buildRegistrationPricingPreview,
   hasRelayEvents,
-  baseGroupsUSARS, makeQuadGroupsTemplate, applyDivisionScheme, defaultMeet,
+  baseGroupsUSARS, makeQuadGroupsTemplate, applyDivisionScheme,
 } = require('../services/meetHelpers');
 const { calcRegistrationCost, uniqueSelectedValues } = require('../services/pricing');
 const { registrationAvailability } = require('../services/registrationAvailability');
@@ -21,14 +21,7 @@ const {
   makeRelayRace,
 } = require('../services/relayHelpers');
 const { RELAY_DIVISION_BY_ID } = require('../services/relayDivisions');
-const savedDevelopmentRoster = require('../data/springFlingRoster.json');
-const { buildDevelopmentTestRoster } = require('../services/devTestRoster');
 const { buildNationalsDevRoster } = require('../services/nationalsRoster');
-const { TRAINING_ROSTER_SOURCE, buildTrainingRoster115 } = require('../services/trainingRoster');
-const SPRING_FLING_TEST_ROSTER = Array.isArray(savedDevelopmentRoster) && savedDevelopmentRoster.length
-  ? savedDevelopmentRoster
-  : buildDevelopmentTestRoster();
-const TRAINING_ROSTER_115 = buildTrainingRoster115();
 const {
   rebuildRaceAssignmentsSafe, restoreBlockAssignmentsBySignature,
   raceImportSignature, raceFamilySignature, raceStageRankForRestore,
@@ -470,59 +463,6 @@ function springFlingOptionObject(row, meet) {
 }
 
 
-function importSpringFlingTestRoster(meet, { replace = true, checkedIn = true, paid = true } = {}) {
-  const previousBlocks = JSON.parse(JSON.stringify(meet.blocks || []));
-  const previousRaces = JSON.parse(JSON.stringify(meet.races || []));
-
-  if (replace) {
-    meet.registrations = [];
-  } else {
-    meet.registrations = (meet.registrations || []).filter(r => r.importSource !== 'spring_fling_2026_test');
-  }
-
-  let nextRegId = nextId(meet.registrations || []);
-  let nextMeetNumber = (meet.registrations || []).reduce((max, r) => Math.max(max, Number(r.meetNumber) || 0), 0) + 1;
-
-  for (const row of SPRING_FLING_TEST_ROSTER) {
-    const gender = testRosterGenderForAge(row);
-    const age = Number(row.age || 0);
-    const baseGroup = findAgeGroup(meet.groups || [], age, gender);
-    const options = springFlingOptionObject(row, meet);
-    const reg = {
-      id: nextRegId++,
-      createdAt: nowIso(),
-      importSource: 'spring_fling_2026_test',
-      name: String(row.name || '').trim(),
-      age,
-      gender,
-      team: String(row.team || 'Independent').trim() || 'Independent',
-      sponsor: '',
-      divisionGroupId: baseGroup?.id || '',
-      divisionGroupLabel: baseGroup?.label || 'Unassigned',
-      originalDivisionGroupId: baseGroup?.id || '',
-      originalDivisionGroupLabel: baseGroup?.label || '',
-      meetNumber: nextMeetNumber++,
-      birthdate: '',
-      email: '',
-      helmetNumber: Number(row.helmetNumber || 0) || '',
-      paid: !!paid,
-      checkedIn: !!checkedIn,
-      totalCost: 0,
-      options,
-    };
-    reg.totalCost = calcRegistrationCost(meet, reg.options);
-    meet.registrations.push(reg);
-  }
-
-  generateConfiguredRacesForMeet(meet);
-  rebuildRaceAssignmentsSafe(meet);
-  restoreBlockAssignmentsBySignature(meet, previousBlocks, previousRaces);
-  ensureAtLeastOneBlock(meet);
-  ensureCurrentRace(meet);
-  meet.updatedAt = nowIso();
-  return meet.registrations.filter(r => r.importSource === 'spring_fling_2026_test').length;
-}
-
 // Real 2026 Indoor Nationals field: 347 skaters (name-merged — official sheets
 // list some people under two numbers), national-sized age groups (Elementary
 // Girls 29, Senior Men 21, …) for stress-testing race generation against the
@@ -587,89 +527,10 @@ function importNationalsRoster(meet, { replace = true, checkedIn = true, paid = 
   return meet.registrations.filter(r => r.importSource === 'nationals_2026_roster').length;
 }
 
-function trainingRosterOptionObject(row, meet) {
-  const source = row.options || {};
-  const firstAdditional = (meet.additionalGroups || meet.additionalRaceGroups || meet.additionalRaces || meet.skateabilityGroups || []).find(group => group && group.enabled);
-  const relays = !!source.relays;
-  const additional = !!source.additional;
-  return {
-    challengeUp: !!source.challengeUp,
-    novice: !!source.novice,
-    elite: !!source.elite,
-    open: !!source.open,
-    quad: !!source.quad,
-    timeTrials: false,
-    relay2Person: relays,
-    relay3Person: relays,
-    relay4Person: relays,
-    relays,
-    additional,
-    additionalGroupId: additional && firstAdditional ? String(firstAdditional.id || '') : '',
-    skateability: additional,
-    skateabilityGroupId: additional && firstAdditional ? String(firstAdditional.id || '') : '',
-  };
-}
-
-function importTrainingRoster115(meet, { replace = true, checkedIn = true, paid = true } = {}) {
-  const previousBlocks = JSON.parse(JSON.stringify(meet.blocks || []));
-  const previousRaces = JSON.parse(JSON.stringify(meet.races || []));
-
-  if (replace) {
-    meet.registrations = [];
-  } else {
-    meet.registrations = (meet.registrations || []).filter(reg => reg.importSource !== TRAINING_ROSTER_SOURCE);
-  }
-
-  let nextRegId = nextId(meet.registrations || []);
-  let nextMeetNumber = (meet.registrations || []).reduce((max, reg) => Math.max(max, Number(reg.meetNumber) || 0), 0) + 1;
-
-  for (const row of TRAINING_ROSTER_115) {
-    const age = Number(row.age || 0);
-    const gender = testRosterGenderForAge(row);
-    const baseGroup = findAgeGroup(meet.groups || [], age, gender);
-    const options = trainingRosterOptionObject(row, meet);
-    const reg = {
-      id: nextRegId++,
-      createdAt: nowIso(),
-      importSource: TRAINING_ROSTER_SOURCE,
-      name: String(row.name || '').trim(),
-      age,
-      gender,
-      team: String(row.team || 'Independent').trim() || 'Independent',
-      sponsor: String(row.sponsor || '').trim(),
-      divisionGroupId: baseGroup?.id || '',
-      divisionGroupLabel: baseGroup?.label || String(row.ageGroup || 'Unassigned'),
-      originalDivisionGroupId: baseGroup?.id || '',
-      originalDivisionGroupLabel: baseGroup?.label || String(row.ageGroup || ''),
-      meetNumber: nextMeetNumber++,
-      birthdate: String(row.birthdate || ''),
-      email: String(row.email || ''),
-      helmetNumber: Number(row.helmetNumber || 0) || '',
-      paid: !!paid,
-      checkedIn: !!checkedIn,
-      totalCost: 0,
-      notes: String(row.notes || ''),
-      options,
-    };
-    reg.totalCost = calcRegistrationCost(meet, reg.options);
-    meet.registrations.push(reg);
-  }
-
-  generateConfiguredRacesForMeet(meet);
-  rebuildRaceAssignmentsSafe(meet);
-  restoreBlockAssignmentsBySignature(meet, previousBlocks, previousRaces);
-  ensureAtLeastOneBlock(meet);
-  ensureCurrentRace(meet);
-  meet.updatedAt = nowIso();
-  return meet.registrations.filter(reg => reg.importSource === TRAINING_ROSTER_SOURCE).length;
-}
-
 router.get('/portal/meet/:meetId/dev/import-spring-fling', requireRole('super_admin'), (req, res) => {
   const meet = getMeetOr404(req.db, req.params.meetId);
   if (!meet) return res.redirect('/portal');
   if (!canEditMeet(req.user, meet)) return res.status(403).send('Forbidden');
-  const testCount = (meet.registrations || []).filter(r => r.importSource === 'spring_fling_2026_test').length;
-  const trainingCount = (meet.registrations || []).filter(r => r.importSource === TRAINING_ROSTER_SOURCE).length;
   res.send(pageShell({ title: 'Dev Import', user: req.user, meet, activeTab: 'registered', bodyHtml: `
     <div class="page-header"><h1>Dev Import Mode</h1><div class="sub">${esc(meet.meetName)} • Training and race-generation rosters</div></div>
     ${req.query.usarsSetup ? `<div class="card" style="border-left:5px solid #16a34a;background:rgba(22,163,74,.07);margin-bottom:18px"><strong>✓ Full USARS meet set up.</strong> All ${baseGroupsUSARS().length} age divisions and ${makeQuadGroupsTemplate().length} quad divisions are enabled with the SR832 tiebreaker. Import the 2026 Nationals roster below, then generate races.</div>` : ''}
@@ -691,50 +552,6 @@ router.get('/portal/meet/:meetId/dev/import-spring-fling', requireRole('super_ad
       </form>
     </div>
     <div class="card card-accent" style="margin-top:18px">
-      <h2>Load realistic test registrations</h2>
-      <p class="note">Imports ${SPRING_FLING_TEST_ROSTER.length} deterministic test skaters, including 6, 7, 8, 12, and 14-skater cohorts. This preserves saved blocks/templates, then rebuilds race lane entries for testing.</p>
-      <div class="stat-grid" style="margin:18px 0">
-        <div class="stat-card navy"><div class="stat-label">Current registrations</div><div class="stat-value">${(meet.registrations || []).length}</div></div>
-        <div class="stat-card sky"><div class="stat-label">Existing test rows</div><div class="stat-value">${testCount}</div></div>
-        <div class="stat-card orange"><div class="stat-label">Import size</div><div class="stat-value">${SPRING_FLING_TEST_ROSTER.length}</div></div>
-      </div>
-      <form method="POST" action="/portal/meet/${meet.id}/dev/import-spring-fling" class="stack" onsubmit="return confirm('Import Spring Fling test roster? This can replace current registrations, but it will preserve your block layout.');">
-        <div class="toggle-group">
-          <div class="toggle-row"><div><div class="toggle-row-label">Replace current registrations</div><div class="toggle-row-desc">Recommended for a clean stress test. Blocks and races are preserved/remapped.</div></div>${toggleSwitch('replace', true)}</div>
-          <div class="toggle-row"><div><div class="toggle-row-label">Mark skaters paid</div></div>${toggleSwitch('paid', true)}</div>
-          <div class="toggle-row"><div><div class="toggle-row-label">Mark skaters checked in</div></div>${toggleSwitch('checkedIn', true)}</div>
-        </div>
-        <div class="action-row">
-          <button class="btn-orange" type="submit" name="action" value="import">Import Test Roster</button>
-          <button class="btn-danger" type="submit" name="action" value="clear" onclick="return confirm('Clear only Spring Fling test registrations?')">Clear Test Rows</button>
-          <a class="btn2" href="/portal/meet/${meet.id}/registered">Back to Registered</a>
-        </div>
-      </form>
-    </div>
-    <div class="card" style="margin-top:18px;border-left:5px solid var(--sky2)">
-      <div class="row between center" style="gap:16px;flex-wrap:wrap">
-        <div><div class="chip chip-sky" style="margin-bottom:8px">Full Meet Training Kit</div><h2 style="margin:0">115-Skater Normal Meet</h2></div>
-        <div class="chip chip-orange">Large Training Roster</div>
-      </div>
-      <p class="note" style="margin-top:10px">Build and score a full simulated meet with 115 skaters across normal age groups, teams, novice and elite divisions, open races, quad, relays, and additional races.</p>
-      <div class="stat-grid" style="margin:18px 0">
-        <div class="stat-card navy"><div class="stat-label">Import size</div><div class="stat-value">${TRAINING_ROSTER_115.length}</div></div>
-        <div class="stat-card sky"><div class="stat-label">Existing training rows</div><div class="stat-value">${trainingCount}</div></div>
-        <div class="stat-card orange"><div class="stat-label">Teams</div><div class="stat-value">${new Set(TRAINING_ROSTER_115.map(row => row.team)).size}</div></div>
-      </div>
-      <form method="POST" action="/portal/meet/${meet.id}/dev/import-training-115" class="stack" onsubmit="return confirm('Import the 115-skater training roster? This can replace current registrations, but it will preserve your block layout.');">
-        <div class="toggle-group">
-          <div class="toggle-row"><div><div class="toggle-row-label">Replace current registrations</div><div class="toggle-row-desc">Recommended when practicing the complete meet workflow from check-in through final results.</div></div>${toggleSwitch('replace', true)}</div>
-          <div class="toggle-row"><div><div class="toggle-row-label">Mark skaters paid</div></div>${toggleSwitch('paid', true)}</div>
-          <div class="toggle-row"><div><div class="toggle-row-label">Mark skaters checked in</div></div>${toggleSwitch('checkedIn', true)}</div>
-        </div>
-        <div class="action-row">
-          <button class="btn-orange" type="submit" name="action" value="import">Import 115-Skater Training Roster</button>
-          <button class="btn-danger" type="submit" name="action" value="clear" onclick="return confirm('Clear only the 115-skater training registrations?')">Clear Training Rows</button>
-          <a class="btn2" href="/portal/meet/${meet.id}/registered">Back to Registered</a>
-        </div>
-      </form>
-
       <h2 style="margin-top:24px">2026 Nationals Roster (${buildNationalsDevRoster().length} skaters)</h2>
       <div class="note">Real 2026 Indoor Nationals field — every skater under their REAL helmet number with their real event entries (inline, quad, relays, quad relays), national-sized age groups (Elementary Girls 29, Senior Men 21, …) for stress-testing race generation across every bracket path. Flip <strong>USARS National divisions</strong> on in Meet Builder first so the full division set is available.</div>
       <form method="POST" action="/portal/meet/${meet.id}/dev/import-nationals" class="stack" onsubmit="return confirm('Import the 2026 Nationals roster (${buildNationalsDevRoster().length} skaters)? This can replace current registrations, but it will preserve your block layout.');">
@@ -751,14 +568,6 @@ router.get('/portal/meet/:meetId/dev/import-spring-fling', requireRole('super_ad
         </div>
       </form>
 
-      <h2 style="margin-top:24px">2026 Nationals — Golden Master (real results, scored)</h2>
-      <div class="note">Loads the <strong>real 2026 Indoor Nationals bracket with actual finishes</strong> as a brand-new meet, then SSM's own standings engine crowns the divisions. This is the browser-drivable twin of the golden-master reconciliation — the Results page should reproduce the official champions (50/50). Creates a <strong>separate</strong> meet; your current meet is untouched.</div>
-      <form method="POST" action="/portal/meet/${meet.id}/dev/load-nationals-scored" class="stack" onsubmit="return confirm('Create a new fully-scored 2026 Nationals meet (real results)? This does not touch the current meet.');">
-        <div class="action-row">
-          <button class="btn-orange" type="submit">Load Scored 2026 Nationals → New Meet</button>
-          <a class="btn2" href="/portal/meet/${meet.id}/registered">Back to Registered</a>
-        </div>
-      </form>
     </div>` }));
 });
 
@@ -780,70 +589,6 @@ router.post('/portal/meet/:meetId/dev/setup-usars', requireRole('super_admin'), 
   meet.updatedAt = nowIso();
   saveDb(req.db);
   return res.redirect(`/portal/meet/${meet.id}/dev/import-spring-fling?usarsSetup=1`);
-});
-
-router.post('/portal/meet/:meetId/dev/import-spring-fling', requireRole('super_admin'), (req, res) => {
-  const meet = getMeetOr404(req.db, req.params.meetId);
-  if (!meet) return res.redirect('/portal');
-  if (!canEditMeet(req.user, meet)) return res.status(403).send('Forbidden');
-
-  const previousBlocks = JSON.parse(JSON.stringify(meet.blocks || []));
-  const previousRaces = JSON.parse(JSON.stringify(meet.races || []));
-
-  if (String(req.body.action || '') === 'clear') {
-    createDesktopBackupIfActive(req.db, 'before_import_clear', meet.id);
-    meet.registrations = (meet.registrations || []).filter(r => r.importSource !== 'spring_fling_2026_test');
-    createDesktopBackupIfActive(req.db, 'before_race_generation', meet.id);
-    generateConfiguredRacesForMeet(meet);
-    rebuildRaceAssignmentsSafe(meet);
-    restoreBlockAssignmentsBySignature(meet, previousBlocks, previousRaces);
-    ensureAtLeastOneBlock(meet);
-    ensureCurrentRace(meet);
-    saveDb(req.db);
-    return res.redirect(`/portal/meet/${meet.id}/registered?devCleared=1`);
-  }
-
-  createDesktopBackupIfActive(req.db, 'before_import', meet.id);
-  createDesktopBackupIfActive(req.db, 'before_race_generation', meet.id);
-  const count = importSpringFlingTestRoster(meet, {
-    replace: !!req.body.replace,
-    checkedIn: !!req.body.checkedIn,
-    paid: !!req.body.paid,
-  });
-  saveDb(req.db);
-  return res.redirect(`/portal/meet/${meet.id}/registered?devImported=${count}`);
-});
-
-router.post('/portal/meet/:meetId/dev/import-training-115', requireRole('super_admin'), (req, res) => {
-  const meet = getMeetOr404(req.db, req.params.meetId);
-  if (!meet) return res.redirect('/portal');
-  if (!canEditMeet(req.user, meet)) return res.status(403).send('Forbidden');
-
-  const previousBlocks = JSON.parse(JSON.stringify(meet.blocks || []));
-  const previousRaces = JSON.parse(JSON.stringify(meet.races || []));
-
-  if (String(req.body.action || '') === 'clear') {
-    createDesktopBackupIfActive(req.db, 'before_import_clear', meet.id);
-    meet.registrations = (meet.registrations || []).filter(reg => reg.importSource !== TRAINING_ROSTER_SOURCE);
-    createDesktopBackupIfActive(req.db, 'before_race_generation', meet.id);
-    generateConfiguredRacesForMeet(meet);
-    rebuildRaceAssignmentsSafe(meet);
-    restoreBlockAssignmentsBySignature(meet, previousBlocks, previousRaces);
-    ensureAtLeastOneBlock(meet);
-    ensureCurrentRace(meet);
-    saveDb(req.db);
-    return res.redirect(`/portal/meet/${meet.id}/registered?devCleared=1`);
-  }
-
-  createDesktopBackupIfActive(req.db, 'before_import', meet.id);
-  createDesktopBackupIfActive(req.db, 'before_race_generation', meet.id);
-  const count = importTrainingRoster115(meet, {
-    replace: !!req.body.replace,
-    checkedIn: !!req.body.checkedIn,
-    paid: !!req.body.paid,
-  });
-  saveDb(req.db);
-  return res.redirect(`/portal/meet/${meet.id}/registered?devImported=${count}`);
 });
 
 router.post('/portal/meet/:meetId/dev/import-nationals', requireRole('super_admin'), (req, res) => {
@@ -879,51 +624,6 @@ router.post('/portal/meet/:meetId/dev/import-nationals', requireRole('super_admi
   return res.redirect(`/portal/meet/${meet.id}/registered?devImported=${count}`);
 });
 
-// Golden-master (browser-drivable): build the REAL scored 2026 Nationals as a
-// fresh meet, so the live Results page reproduces the official champions using
-// SSM's own standings code. Identical pipeline to
-// tools/nationals/reconcile_nationals.js (nationals_heats -> IR -> meet ->
-// computeMeetStandings) — the only added logic is persisting the built meet.
-// Creates a NEW meet and never mutates the meet it was launched from.
-router.post('/portal/meet/:meetId/dev/load-nationals-scored', requireRole('super_admin'), (req, res) => {
-  const launchMeet = getMeetOr404(req.db, req.params.meetId);
-  if (!launchMeet) return res.redirect('/portal');
-  if (!canEditMeet(req.user, launchMeet)) return res.status(403).send('Forbidden');
-
-  // Lazy-require the heavy Nationals data + adapters so app boot stays fast.
-  const nationalsHeats = require('../data/nationals_heats.js');
-  const { nationalsToIR } = require('../services/importAdapters/nationalsAdapter');
-  const { buildMeetFromIR } = require('../services/meetImport');
-
-  const { ir } = nationalsToIR(nationalsHeats);
-  const built = buildMeetFromIR(ir);
-
-  const base = defaultMeet(req.user);
-  const meet = {
-    ...base,
-    ...built.meet,
-    id: nextId(req.db.meets),
-    meetName: '2026 Nationals — Golden Master',
-    leagueAssociation: 'USARS', league: 'USARS',
-    status: 'published', isPublic: false,
-    tiebreaker: 'sr832',
-    // Re-assert ownership + timestamps (built.meet may carry blank/owner fields).
-    createdByUserId: base.createdByUserId,
-    meet_owner_user_id: base.meet_owner_user_id,
-    meet_owner_ssl_id: base.meet_owner_ssl_id,
-    meet_owner_name: base.meet_owner_name,
-    ownership_locked: true,
-    createdAt: nowIso(), updatedAt: nowIso(),
-    goldenMaster: true,
-  };
-  // Make the meet portal-complete without disturbing scoring (verified: still 50/50).
-  ensureAtLeastOneBlock(meet);
-  ensureCurrentRace(meet);
-
-  req.db.meets.push(meet);
-  saveDb(req.db);
-  return res.redirect(`/portal/meet/${meet.id}/results?goldenMaster=1`);
-});
 
 
 function normalizePackageMeetId(value) {
