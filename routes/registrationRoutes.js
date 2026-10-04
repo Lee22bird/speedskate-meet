@@ -22,6 +22,8 @@ const {
 } = require('../services/relayHelpers');
 const { RELAY_DIVISION_BY_ID } = require('../services/relayDivisions');
 const { buildNationalsDevRoster } = require('../services/nationalsRoster');
+const october26Roster = require('../data/october26Roster');
+const OCTOBER_26_ROSTER_SOURCE = 'october_26_2026_roster';
 const {
   rebuildRaceAssignmentsSafe, restoreBlockAssignmentsBySignature,
   raceImportSignature, raceFamilySignature, raceStageRankForRestore,
@@ -527,6 +529,56 @@ function importNationalsRoster(meet, { replace = true, checkedIn = true, paid = 
   return meet.registrations.filter(r => r.importSource === 'nationals_2026_roster').length;
 }
 
+
+function importOctober26Roster(meet, { replace = true, checkedIn = false, paid = false } = {}) {
+  const previousBlocks = JSON.parse(JSON.stringify(meet.blocks || []));
+  const previousRaces = JSON.parse(JSON.stringify(meet.races || []));
+  if (replace) meet.registrations = [];
+  else meet.registrations = (meet.registrations || []).filter(r => r.importSource !== OCTOBER_26_ROSTER_SOURCE);
+
+  let nextRegId = nextId(meet.registrations || []);
+  let nextMeetNumber = (meet.registrations || []).reduce((max, r) => Math.max(max, Number(r.meetNumber) || 0), 0) + 1;
+  for (const row of october26Roster) {
+    const gender = row.gender === 'women' ? 'women' : 'men';
+    const age = Number(row.age || 0);
+    const baseGroup = findAgeGroup(meet.groups || [], age, gender);
+    const source = row.options || {};
+    const options = {
+      challengeUp: !!source.challengeUp,
+      novice: !!source.novice,
+      elite: !!source.elite,
+      open: !!source.open,
+      quad: !!source.quad,
+      timeTrials: false,
+      relay2Person: !!source.relays,
+      relay3Person: !!source.relays,
+      relay4Person: !!source.relays,
+      relays: !!source.relays,
+    };
+    const helmet = Number(row.helmetNumber) || nextMeetNumber++;
+    const reg = {
+      id: nextRegId++, createdAt: nowIso(), importSource: OCTOBER_26_ROSTER_SOURCE,
+      name: String(row.name || '').trim(), age, gender,
+      team: String(row.team || 'Independent').trim() || 'Independent', sponsor: '',
+      divisionGroupId: baseGroup?.id || '', divisionGroupLabel: baseGroup?.label || 'Unassigned',
+      originalDivisionGroupId: baseGroup?.id || '', originalDivisionGroupLabel: baseGroup?.label || '',
+      meetNumber: helmet, birthdate: String(row.birthdate || ''), email: '', helmetNumber: helmet,
+      paid: !!paid, checkedIn: !!checkedIn, totalCost: 0,
+      notes: `October entries: ${(row.entries || []).filter(Boolean).join(' / ')}`,
+      options,
+    };
+    reg.totalCost = calcRegistrationCost(meet, reg.options);
+    meet.registrations.push(reg);
+  }
+  generateConfiguredRacesForMeet(meet);
+  rebuildRaceAssignmentsSafe(meet);
+  restoreBlockAssignmentsBySignature(meet, previousBlocks, previousRaces);
+  ensureAtLeastOneBlock(meet);
+  ensureCurrentRace(meet);
+  meet.updatedAt = nowIso();
+  return meet.registrations.filter(r => r.importSource === OCTOBER_26_ROSTER_SOURCE).length;
+}
+
 router.get('/portal/meet/:meetId/dev/import-spring-fling', requireRole('super_admin'), (req, res) => {
   const meet = getMeetOr404(req.db, req.params.meetId);
   if (!meet) return res.redirect('/portal');
@@ -564,6 +616,21 @@ router.get('/portal/meet/:meetId/dev/import-spring-fling', requireRole('super_ad
         <div class="action-row">
           <button class="btn-orange" type="submit" name="action" value="import">Import 2026 Nationals Roster</button>
           <button class="btn-danger" type="submit" name="action" value="clear" onclick="return confirm('Clear only the Nationals roster registrations?')">Clear Nationals Rows</button>
+          <a class="btn2" href="/portal/meet/${meet.id}/registered">Back to Registered</a>
+        </div>
+      </form>
+
+      <h2 style="margin-top:24px">October 26 Roster (${october26Roster.length} skaters)</h2>
+      <div class="note">Roster exported from the October Wichita workbook: names, DOBs, teams, helmet numbers, and the October event columns. Entries are loaded with novice/elite, open, quad, relay, and Challenge Up flags.</div>
+      <form method="POST" action="/portal/meet/${meet.id}/dev/import-october-26" class="stack" onsubmit="return confirm('Import the October 26 roster (${october26Roster.length} skaters)?');">
+        <div class="toggle-group">
+          <div class="toggle-row"><div><div class="toggle-row-label">Replace current registrations</div><div class="toggle-row-desc">Recommended for loading the October roster into a clean dev meet.</div></div>${toggleSwitch('replace', true)}</div>
+          <div class="toggle-row"><div><div class="toggle-row-label">Mark skaters paid</div></div>${toggleSwitch('paid', false)}</div>
+          <div class="toggle-row"><div><div class="toggle-row-label">Mark skaters checked in</div></div>${toggleSwitch('checkedIn', false)}</div>
+        </div>
+        <div class="action-row">
+          <button class="btn-orange" type="submit" name="action" value="import">Import October 26 Roster</button>
+          <button class="btn-danger" type="submit" name="action" value="clear" onclick="return confirm('Clear only the October 26 roster registrations?')">Clear October Rows</button>
           <a class="btn2" href="/portal/meet/${meet.id}/registered">Back to Registered</a>
         </div>
       </form>
@@ -624,6 +691,28 @@ router.post('/portal/meet/:meetId/dev/import-nationals', requireRole('super_admi
   return res.redirect(`/portal/meet/${meet.id}/registered?devImported=${count}`);
 });
 
+
+
+router.post('/portal/meet/:meetId/dev/import-october-26', requireRole('super_admin'), (req, res) => {
+  const meet = getMeetOr404(req.db, req.params.meetId);
+  if (!meet) return res.redirect('/portal');
+  if (!canEditMeet(req.user, meet)) return res.status(403).send('Forbidden');
+  const previousBlocks = JSON.parse(JSON.stringify(meet.blocks || []));
+  const previousRaces = JSON.parse(JSON.stringify(meet.races || []));
+  if (String(req.body.action || '') === 'clear') {
+    meet.registrations = (meet.registrations || []).filter(r => r.importSource !== OCTOBER_26_ROSTER_SOURCE);
+    generateConfiguredRacesForMeet(meet);
+    rebuildRaceAssignmentsSafe(meet);
+    restoreBlockAssignmentsBySignature(meet, previousBlocks, previousRaces);
+    ensureAtLeastOneBlock(meet); ensureCurrentRace(meet); saveDb(req.db);
+    return res.redirect(`/portal/meet/${meet.id}/registered?devCleared=1`);
+  }
+  const count = importOctober26Roster(meet, {
+    replace: !!req.body.replace, checkedIn: !!req.body.checkedIn, paid: !!req.body.paid,
+  });
+  saveDb(req.db);
+  return res.redirect(`/portal/meet/${meet.id}/registered?devImported=${count}`);
+});
 
 
 function normalizePackageMeetId(value) {
