@@ -539,8 +539,8 @@ function importOctober26Roster(meet, { replace = true, checkedIn = false, paid =
   let nextRegId = nextId(meet.registrations || []);
   let nextMeetNumber = (meet.registrations || []).reduce((max, r) => Math.max(max, Number(r.meetNumber) || 0), 0) + 1;
   for (const row of october26Roster) {
-    const gender = row.gender === 'women' ? 'women' : 'men';
     const age = Number(row.age || 0);
+    const gender = testRosterGenderForAge({ age, gender: row.gender });
     const baseGroup = findAgeGroup(meet.groups || [], age, gender);
     const source = row.options || {};
     const options = {
