@@ -22,6 +22,9 @@ function configuredMssl() {
 test('MSSL office preset is isolated from Nationals quad and relay tables', () => {
   const meet = configuredMssl();
   assert.equal(meet.divisionScheme, 'mssl');
+  assert.equal(meet.groups.find(g => g.id === 'sophomore_girls').label, 'Sophomore Ladies');
+  assert.ok(meet.races.some(r => r.groupId === 'sophomore_girls' &&
+    r.division === 'elite' && r.groupLabel === 'Sophomore Ladies'));
   assert.equal(meet.usarsDivisions, false);
   assert.equal(meet.quadGroups.length, 8);
   assert.ok(meet.quadGroups.every(g => g.enabled && g.distances.filter(Boolean).length === 2));
@@ -94,6 +97,7 @@ test('MSSL scheme and custom schedule category survive reload; legacy names are 
   const meet = JSON.parse(JSON.stringify(configuredMssl()));
   migrateMeet(meet, 'owner');
   assert.equal(meet.divisionScheme, 'mssl');
+  assert.equal(meet.groups.find(g => g.id === 'sophomore_girls').label, 'Sophomore Ladies');
   assert.equal(meet.quadGroups.length, 8);
   assert.equal(meet.additionalGroups[0].scheduleCategory, 'middle');
   assert.equal(isMsslPresetName('MidSouthSpeedLeague'), true);

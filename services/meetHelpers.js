@@ -331,6 +331,7 @@ function baseGroupsUSARS() {
 // division's per-class settings by id; quads/relays/tiebreaker are left alone.
 function makeMsslGroupsTemplate() {
   return baseGroups().map(group => {
+    const label = group.id === 'sophomore_girls' ? 'Sophomore Ladies' : group.label;
     const config = MSSL_INLINE_CONFIG[group.id] || {};
     const divisions = makeDivisionsTemplate();
     for (const key of ['novice', 'elite']) {
@@ -344,7 +345,7 @@ function makeMsslGroupsTemplate() {
         distances: [...(row.distances || []), '', '', '', ''].slice(0, 4),
       };
     }
-    return { ...group, divisions };
+    return { ...group, label, divisions };
   });
 }
 
