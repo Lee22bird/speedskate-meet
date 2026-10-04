@@ -550,10 +550,12 @@ function importOctober26Roster(meet, { replace = true, checkedIn = false, paid =
       open: !!source.open,
       quad: !!source.quad,
       timeTrials: false,
-      relay2Person: !!source.relays,
-      relay3Person: !!source.relays,
-      relay4Person: !!source.relays,
-      relays: !!source.relays,
+      // Relays are built manually in Relay Builder from age-eligible skaters.
+      // Do not auto-create relay races or charge relay entries in this dev import.
+      relay2Person: false,
+      relay3Person: false,
+      relay4Person: false,
+      relays: false,
     };
     const helmet = Number(row.helmetNumber) || nextMeetNumber++;
     const reg = {
@@ -571,6 +573,9 @@ function importOctober26Roster(meet, { replace = true, checkedIn = false, paid =
     meet.registrations.push(reg);
   }
   generateConfiguredRacesForMeet(meet);
+  // Relay teams are selected later in Relay Builder; keep this import focused on
+  // individual/quad/open races and remove any template-generated relay races.
+  meet.races = (meet.races || []).filter(race => !race.isRelayRace);
   rebuildRaceAssignmentsSafe(meet);
   restoreBlockAssignmentsBySignature(meet, previousBlocks, previousRaces);
   ensureAtLeastOneBlock(meet);
@@ -620,7 +625,7 @@ router.get('/portal/meet/:meetId/dev/import-spring-fling', requireRole('super_ad
         </div>
       </form>
 
-      <h2 style="margin-top:24px">October 26 Roster (${october26Roster.length} skaters)</h2>
+      <h2 style="margin-top:24px">October 26 Race Import (${october26Roster.length} skaters)</h2>
       <div class="note">Roster exported from the October Wichita workbook: names, DOBs, teams, helmet numbers, and the October event columns. Entries are loaded with novice/elite, open, quad, relay, and Challenge Up flags.</div>
       <form method="POST" action="/portal/meet/${meet.id}/dev/import-october-26" class="stack" onsubmit="return confirm('Import the October 26 roster (${october26Roster.length} skaters)?');">
         <div class="toggle-group">
@@ -629,7 +634,7 @@ router.get('/portal/meet/:meetId/dev/import-spring-fling', requireRole('super_ad
           <div class="toggle-row"><div><div class="toggle-row-label">Mark skaters checked in</div></div>${toggleSwitch('checkedIn', false)}</div>
         </div>
         <div class="action-row">
-          <button class="btn-orange" type="submit" name="action" value="import">Import October 26 Roster</button>
+          <button class="btn-orange" type="submit" name="action" value="import">Import October 26 Race Roster</button>
           <button class="btn-danger" type="submit" name="action" value="clear" onclick="return confirm('Clear only the October 26 roster registrations?')">Clear October Rows</button>
           <a class="btn2" href="/portal/meet/${meet.id}/registered">Back to Registered</a>
         </div>
