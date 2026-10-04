@@ -20,7 +20,7 @@ module.exports = [
       "open": true,
       "quad": false,
       "relays": true,
-      "challengeUp": true
+      "challengeUp": false
     }
   },
   {
@@ -181,7 +181,7 @@ module.exports = [
       "open": true,
       "quad": false,
       "relays": true,
-      "challengeUp": true
+      "challengeUp": false
     }
   },
   {
@@ -227,7 +227,7 @@ module.exports = [
       "open": true,
       "quad": false,
       "relays": true,
-      "challengeUp": true
+      "challengeUp": false
     }
   },
   {
@@ -296,7 +296,7 @@ module.exports = [
       "open": true,
       "quad": true,
       "relays": true,
-      "challengeUp": true
+      "challengeUp": false
     }
   },
   {
@@ -319,7 +319,7 @@ module.exports = [
       "open": true,
       "quad": false,
       "relays": true,
-      "challengeUp": true
+      "challengeUp": false
     }
   },
   {
@@ -411,7 +411,7 @@ module.exports = [
       "open": true,
       "quad": false,
       "relays": true,
-      "challengeUp": false
+      "challengeUp": true
     }
   },
   {
@@ -572,7 +572,7 @@ module.exports = [
       "open": true,
       "quad": true,
       "relays": true,
-      "challengeUp": true
+      "challengeUp": false
     }
   },
   {
@@ -595,7 +595,7 @@ module.exports = [
       "open": true,
       "quad": true,
       "relays": true,
-      "challengeUp": false
+      "challengeUp": true
     }
   },
   {
@@ -618,7 +618,7 @@ module.exports = [
       "open": true,
       "quad": false,
       "relays": true,
-      "challengeUp": true
+      "challengeUp": false
     }
   },
   {
@@ -641,7 +641,7 @@ module.exports = [
       "open": true,
       "quad": true,
       "relays": true,
-      "challengeUp": false
+      "challengeUp": true
     }
   },
   {
@@ -710,7 +710,7 @@ module.exports = [
       "open": true,
       "quad": true,
       "relays": true,
-      "challengeUp": true
+      "challengeUp": false
     }
   },
   {
@@ -733,7 +733,7 @@ module.exports = [
       "open": true,
       "quad": false,
       "relays": true,
-      "challengeUp": true
+      "challengeUp": false
     }
   },
   {
@@ -894,7 +894,7 @@ module.exports = [
       "open": true,
       "quad": true,
       "relays": true,
-      "challengeUp": false
+      "challengeUp": true
     }
   },
   {
@@ -1170,7 +1170,7 @@ module.exports = [
       "open": true,
       "quad": true,
       "relays": true,
-      "challengeUp": false
+      "challengeUp": true
     }
   },
   {
@@ -1193,7 +1193,7 @@ module.exports = [
       "open": true,
       "quad": true,
       "relays": true,
-      "challengeUp": true
+      "challengeUp": false
     }
   },
   {
@@ -1239,7 +1239,7 @@ module.exports = [
       "open": true,
       "quad": false,
       "relays": true,
-      "challengeUp": false
+      "challengeUp": true
     }
   },
   {
@@ -1262,7 +1262,7 @@ module.exports = [
       "open": true,
       "quad": true,
       "relays": true,
-      "challengeUp": false
+      "challengeUp": true
     }
   },
   {
@@ -1469,7 +1469,7 @@ module.exports = [
       "open": true,
       "quad": false,
       "relays": false,
-      "challengeUp": false
+      "challengeUp": true
     }
   },
   {
@@ -1492,7 +1492,7 @@ module.exports = [
       "open": true,
       "quad": false,
       "relays": false,
-      "challengeUp": false
+      "challengeUp": true
     }
   },
   {
@@ -1584,7 +1584,7 @@ module.exports = [
       "open": true,
       "quad": false,
       "relays": true,
-      "challengeUp": true
+      "challengeUp": false
     }
   },
   {
@@ -1699,7 +1699,7 @@ module.exports = [
       "open": true,
       "quad": true,
       "relays": true,
-      "challengeUp": true
+      "challengeUp": false
     }
   },
   {

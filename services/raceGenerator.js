@@ -9,7 +9,7 @@ const { calculateRegistrationTotal } = require('./pricing');
 
 
 const CHALLENGE_TOWARD_SENIOR = {
-  tiny_tot_girls: 'primary_girls', primary_girls: 'juvenile_girls', juvenile_girls: 'elementary_girls', elementary_girls: 'freshman_girls', freshman_girls: 'sophomore_girls', sophomore_girls: 'junior_women', junior_women: 'senior_women', classic_women: 'senior_women', master_women: 'classic_women', veteran_women: 'master_women', esquire_women: 'veteran_women',
+  tiny_tot_girls: 'primary_girls', primary_girls: 'juvenile_girls', juvenile_girls: 'elementary_girls', elementary_girls: 'freshman_girls', freshman_girls: 'sophomore_ladies', sophomore_ladies: 'junior_ladies', junior_ladies: 'senior_ladies', senior_ladies: 'classic_ladies', classic_ladies: 'masters_ladies', masters_ladies: 'grand_masters_ladies', veteran_ladies: 'grand_veteran_ladies', esquire_ladies: 'grand_esquire_ladies',
   tiny_tot_boys: 'primary_boys', primary_boys: 'juvenile_boys', juvenile_boys: 'elementary_boys', elementary_boys: 'freshman_boys', freshman_boys: 'sophomore_boys', sophomore_boys: 'junior_men', junior_men: 'senior_men', classic_men: 'senior_men', master_men: 'classic_men', veteran_men: 'master_men', esquire_men: 'veteran_men',
 };
 
