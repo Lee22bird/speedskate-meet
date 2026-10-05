@@ -13,6 +13,11 @@ const {
   buildHeatRaceShell,
   shouldSplitIntoHeats,
 } = require('./raceGenerator');
+const {
+  MSSL_SEASON_OPENER_HEAT_GROUP_IDS,
+  isMsslSeasonOpener2026,
+  repairUnscoredDisallowedHeats,
+} = require('./msslHeatPolicy');
 // NOTE: currentRaceInfo + recentClosedRaces live in raceDay, but there is a require
 // cycle (raceDay → timeTrialEvents → meetHelpers → raceDay) AND raceDay reassigns
 // module.exports at the end — so any top-level require here (destructured OR whole-
@@ -513,6 +518,9 @@ function migrateMeet(meet,fallbackOwnerId) {
   if (!['standard', 'mssl', 'usars'].includes(meet.divisionScheme)) meet.divisionScheme = meet.usarsDivisions ? 'usars' : 'standard';
   meet.usarsDivisions = meet.divisionScheme === 'usars';
   meet.relayRuleset = String(meet.relayRuleset || (meet.divisionScheme === 'mssl' ? 'mssl' : 'usars')).toLowerCase();
+  if (isMsslSeasonOpener2026(meet) && !Array.isArray(meet.automaticHeatGroupIds)) {
+    meet.automaticHeatGroupIds = [...MSSL_SEASON_OPENER_HEAT_GROUP_IDS];
+  }
   meet.openGroups=normalizeOpenGroups(meet.openGroups, meet.divisionScheme);
   meet.quadGroups=normalizeQuadGroups(meet.quadGroups, meet.divisionScheme);
   // Group normalization must use the meet's OWN division scheme as the source of
@@ -536,6 +544,7 @@ function migrateMeet(meet,fallbackOwnerId) {
   if(!Array.isArray(meet.races)) meet.races=[];
   if(!Array.isArray(meet.blocks)) meet.blocks=[];
   if(!Array.isArray(meet.registrations)) meet.registrations=[];
+  repairUnscoredDisallowedHeats(meet);
   if(!meet.timeTrialEvent || typeof meet.timeTrialEvent !== 'object') {
     meet.timeTrialEvent = { enabled: !!meet.timeTrialsEnabled, distance: '100m', runOrder: 'youngest_oldest', countsForOverall: false };
   }

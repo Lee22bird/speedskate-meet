@@ -6,6 +6,7 @@ const {
 } = require('./raceSizing');
 const { assignRandomLaneEntries } = require('./laneAssignment');
 const { calculateRegistrationTotal } = require('./pricing');
+const { automaticHeatsAllowed } = require('./msslHeatPolicy');
 
 
 const CHALLENGE_TOWARD_SENIOR = {
@@ -225,7 +226,7 @@ function shouldSplitIntoHeats(baseRace, entryCount, laneCount) {
   return shouldSplitNormalRace(entryCount);
 }
 
-function buildRaceSetForEntries(baseRace, regs, laneCount) {
+function buildRaceSetForEntries(baseRace, regs, laneCount, { allowHeats = true } = {}) {
   // Sorting here only feeds team-balanced heat grouping below (distributeByTeam)
   // — it does not determine lane numbers. Lane numbers are assigned by an
   // independent random shuffle (assignRandomLaneEntries) so every skater in a
@@ -246,7 +247,7 @@ function buildRaceSetForEntries(baseRace, regs, laneCount) {
     }];
   }
 
-  if (!shouldSplitIntoHeats(baseRace, sorted.length, laneCount)) {
+  if (!allowHeats || !shouldSplitIntoHeats(baseRace, sorted.length, laneCount)) {
     return [{
       ...baseRace,
       stage: 'final',
@@ -545,7 +546,9 @@ function rebuildRaceAssignments(meet) {
       reg => registrationMatchesStandardRace(reg, baseRace, meet)
     );
 
-    newRaces.push(...buildRaceSetForEntries(baseRace, matchingRegs, laneCount));
+    newRaces.push(...buildRaceSetForEntries(baseRace, matchingRegs, laneCount, {
+      allowHeats: automaticHeatsAllowed(meet, baseRace),
+    }));
   }
 
   const quadBaseRaces = (meet.races || []).filter(

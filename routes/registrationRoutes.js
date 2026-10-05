@@ -23,6 +23,7 @@ const {
 const { RELAY_DIVISION_BY_ID } = require('../services/relayDivisions');
 const { buildNationalsDevRoster } = require('../services/nationalsRoster');
 const october26Roster = require('../data/october26Roster');
+const { MSSL_SEASON_OPENER_HEAT_GROUP_IDS } = require('../services/msslHeatPolicy');
 const OCTOBER_26_ROSTER_SOURCE = 'october_26_2026_roster';
 const OCTOBER_26_GROUP_CODES = [
   ['TT', 'Tiny Tot'], ['PR', 'Primary'], ['JV', 'Juvenile'], ['EL', 'Elementary'],
@@ -681,6 +682,7 @@ function importNationalsRoster(meet, { replace = true, checkedIn = true, paid = 
 
 
 function importOctober26Roster(meet, { replace = true, checkedIn = false, paid = false } = {}) {
+  meet.automaticHeatGroupIds = [...MSSL_SEASON_OPENER_HEAT_GROUP_IDS];
   const previousBlocks = JSON.parse(JSON.stringify(meet.blocks || []));
   const previousRaces = JSON.parse(JSON.stringify(meet.races || []));
   if (replace) meet.registrations = [];

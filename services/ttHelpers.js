@@ -4,6 +4,7 @@ const { ageForReg, ageMatch, ensureRegistrationTotalsAndNumbers, buildRaceSetFor
         divisionEnabledForRegistration, registrationMatchesStandardRace, baseRaceKey, ensureAtLeastOneBlock } = require('./meetHelpers');
 const { ensureCurrentRace } = require('./raceDay');
 const { assignRandomLaneEntries, reRandomizeLaneEntries } = require('./laneAssignment');
+const { automaticHeatsAllowed } = require('./msslHeatPolicy');
 
 function genderBucket(value) {
   const v=String(value||'').trim().toLowerCase();
@@ -244,7 +245,9 @@ function rebuildRaceAssignmentsSafe(meet) {
     if(isSpecialRace(race))continue;if(['heat','semi'].includes(String(race.stage||'')))continue;
     const key=baseKeyFor(race);if(seenBaseKeys.has(key))continue;seenBaseKeys.add(key);
     const matchingRegs=(meet.registrations||[]).filter(reg=>registrationMatchesStandardRace(reg,race,meet));
-    newRaces.push(...buildRaceSetForEntries({...race,parentRaceKey:key},matchingRegs,laneCount));
+    newRaces.push(...buildRaceSetForEntries({...race,parentRaceKey:key},matchingRegs,laneCount,{
+      allowHeats: automaticHeatsAllowed(meet, race),
+    }));
   }
   const quadBaseKeys=new Set();
   for(const race of meet.races||[]){

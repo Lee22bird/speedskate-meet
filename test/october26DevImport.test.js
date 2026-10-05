@@ -124,4 +124,11 @@ test('October dev import honors MSSL challenge-up entries for Elementary Girls E
       'Michael Gulley', 'Zackery Cox',
     ].sort());
   }
+
+  const { rebuildRaceAssignmentsSafe } = require('../services/ttHelpers');
+  rebuildRaceAssignmentsSafe(meet);
+  const generatedRounds = meet.races.filter(race => ['heat', 'semi'].includes(race.stage));
+  assert.ok(generatedRounds.length > 0, 'the allowed fields retain their scheduled heat rounds');
+  assert.ok(generatedRounds.every(race => scheduledGroupIds.includes(race.groupId)),
+    'rebuilding assignments does not reintroduce heats in other divisions');
 });
