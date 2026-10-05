@@ -10,8 +10,12 @@ const SR832_WEIGHTS = {
 };
 
 function normalizePlaceValue(place) {
-  const n = Number(String(place || '').trim());
-  return Number.isFinite(n) ? n : null;
+  if (place == null) return null;
+  const value = String(place).trim();
+  if (!value) return null;
+
+  const n = Number(value);
+  return Number.isInteger(n) && n > 0 ? n : null;
 }
 
 function usarsPointsForPlace(place) {
