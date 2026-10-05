@@ -611,7 +611,7 @@ function migrateMeet(meet,fallbackOwnerId) {
     originalDivisionGroupId:String(reg.originalDivisionGroupId||reg.divisionGroupId||''),
     originalDivisionGroupLabel:String(reg.originalDivisionGroupLabel||reg.divisionGroupLabel||''),
     meetNumber:Number(reg.meetNumber||idx+1), birthdate:String(reg.birthdate||''), email:String(reg.email||''),
-    helmetNumber:reg.helmetNumber===''||reg.helmetNumber==null?'':Number(reg.helmetNumber),
+    helmetNumber:normalizeHelmetNumber(reg.helmetNumber),
     paid:!!reg.paid, checkedIn:!!reg.checkedIn, totalCost:Number(reg.totalCost||0),
     timeTrials:!!(reg.timeTrials || reg.options?.timeTrials),
     timeTrialEventIds:Array.isArray(reg.timeTrialEventIds)
@@ -1004,8 +1004,16 @@ function nextHelmetNumber(meet) {
 function ensureRegistrationTotalsAndNumbers(meet) {
   for(const reg of meet.registrations||[]) {
     reg.totalCost=calculateRegistrationTotal(meet,reg);
-    if(!Number.isFinite(Number(reg.helmetNumber))||Number(reg.helmetNumber)<=0) reg.helmetNumber=nextHelmetNumber(meet);
+    const helmet=String(reg.helmetNumber??'').trim();
+    if(!helmet||(Number.isFinite(Number(helmet))&&Number(helmet)<=0)) reg.helmetNumber=nextHelmetNumber(meet);
   }
+}
+
+function normalizeHelmetNumber(value) {
+  if(value===''||value==null) return '';
+  const text=String(value).trim();
+  const numeric=Number(text);
+  return text&&Number.isFinite(numeric)?numeric:text;
 }
 
 

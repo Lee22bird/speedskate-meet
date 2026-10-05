@@ -100,7 +100,7 @@ function issuesForRegistration(reg, helmetCounts) {
   return list;
 }
 
-function renderRegisteredView({ meet, isSuperAdmin = false, sslSubmissionSummary = null }) {
+function renderRegisteredView({ meet, isSuperAdmin = false, sslSubmissionSummary = null, query = {} }) {
   const registrations = meet.registrations || [];
   const divisionOptions = Array.from(new Set(
     registrations
@@ -115,6 +115,9 @@ function renderRegisteredView({ meet, isSuperAdmin = false, sslSubmissionSummary
     : 'Team Submissions';
   const sslButtonNote = sslSummary.pending
     ? `<span class="ssl-submission-alert">${esc(sslSummary.pending)} new</span>`
+    : '';
+  const msslSyncNotice = query.msslImported || query.msslUpdated
+    ? `<div class="notice">MSSL snapshot applied: ${esc(query.msslImported || 0)} new registration${Number(query.msslImported) === 1 ? '' : 's'}, ${esc(query.msslUpdated || 0)} updated. Race sheets were not rebuilt.</div>`
     : '';
 
   /* ── roster maths (display only) ── */
@@ -387,6 +390,7 @@ function renderRegisteredView({ meet, isSuperAdmin = false, sslSubmissionSummary
       <h1>Registered</h1>
       <div class="sub">${esc(meet.meetName)} • <span id="registeredVisibleCount">${total}</span> of ${total} skaters${meet.registrationCloseAt ? ` • registration closes ${esc(meet.registrationCloseAt.replace('T', ' '))}` : ''}</div>
     </div>
+    ${msslSyncNotice}
 
     <div class="reg-band">
       <div class="reg-band-cell">
@@ -431,6 +435,7 @@ function renderRegisteredView({ meet, isSuperAdmin = false, sslSubmissionSummary
         <div class="action-row">
           <a class="${sslButtonClass}" href="/portal/ssl-packages?meetId=${encodeURIComponent(meet.id)}">${sslButtonLabel}</a>
           ${sslButtonNote}
+          <a class="btn2" href="/portal/meet/${encodeURIComponent(meet.id)}/mssl-sheet-sync">MSSL Sheet Sync</a>
           <a class="btn-orange" href="/meet/${meet.id}/register" target="_blank">Public Registration</a>
           ${isSuperAdmin ? `<a class="btn2" href="/portal/meet/${meet.id}/dev/import-spring-fling">Dev Import</a>` : ''}
           <a class="btn2" href="/portal/meet/${meet.id}/registered/print-race-list" target="_blank">Print Race List</a>

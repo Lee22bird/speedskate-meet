@@ -147,6 +147,7 @@ const createPublicRoutes = require('./routes/publicRoutes');
 const createAdminRoutes = require('./routes/adminRoutes');
 const createBuilderRoutes = require('./routes/builderRoutes');
 const createRegistrationRoutes = require('./routes/registrationRoutes');
+const createMsslSheetSyncRoutes = require('./routes/msslSheetSyncRoutes');
 const createRaceDayRoutes = require('./routes/raceDayRoutes');
 const createProtestRoutes = require('./routes/protestRoutes');
 const createSslImportRoutes = require('./routes/sslImportRoutes');
@@ -2645,6 +2646,7 @@ const routeDeps = {
 app.use('/', createAdminRoutes(routeDeps));
 app.use('/', createBuilderRoutes(routeDeps));
 app.use('/', createRegistrationRoutes(routeDeps));
+app.use('/', createMsslSheetSyncRoutes(routeDeps));
 app.use('/', createRaceDayRoutes(routeDeps));
 app.use('/', createProtestRoutes(routeDeps));
 app.use('/', createStaffRoutes(routeDeps));
