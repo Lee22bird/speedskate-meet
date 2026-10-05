@@ -84,17 +84,18 @@ test('new registrations never retain DOB and alphanumeric helmets survive meet m
   assert.equal(meet.registrations[0].helmetNumber, '638B');
 });
 
-test('preview route strips DOB before returning the confirmation page', () => {
+test('fetched-data preview strips DOB before returning the confirmation page', () => {
   const meet = meetFixture();
+  const sanitized = parseMsslSnapshot(snapshot);
   const router = createMsslSheetSyncRoutes({
     requireRole: () => (req, res, next) => next(),
     pageShell: ({ bodyHtml }) => bodyHtml,
     saveDb: () => {},
   });
-  const layer = router.stack.find(item => item.route?.path === '/portal/meet/:meetId/mssl-sheet-sync/preview');
+  const layer = router.stack.find(item => item.route?.path === '/portal/meet/:meetId/mssl-sheet-sync/review-fetched');
   const handler = layer.route.stack.at(-1).handle;
   const req = {
-    params: { meetId: meet.id }, body: { team: 'Team United', snapshot },
+    params: { meetId: meet.id }, body: { team: 'Team United', tabTitle: 'Team United', snapshot: sanitized.safeSnapshot, attendanceColumnIndex: sanitized.safeSelectedAttendance },
     db: { meets: [meet] }, user: { roles: ['super_admin'] },
   };
   const res = {
