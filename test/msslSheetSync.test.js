@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { makeMsslGroupsTemplate, migrateMeet } = require('../services/meetHelpers');
-const { parseMsslSnapshot, planMsslSync, applyMsslSync } = require('../services/msslSheetSync');
+const { parseMsslSnapshot, combineTeamAndAttendance, planMsslSync, applyMsslSync } = require('../services/msslSheetSync');
 const createMsslSheetSyncRoutes = require('../routes/msslSheetSyncRoutes');
 const googleSheets = require('../services/msslGoogleSheets');
 
@@ -15,8 +15,17 @@ const snapshot = [
 function meetFixture() {
   return {
     id: 123, divisionScheme: 'mssl', groups: makeMsslGroupsTemplate(), quadGroups: [],
-    registrations: [], baseEntryFee: 0, additionalRaceFee: 0,
+    registrations: [], baseEntryFee: 0, additionalRaceFee: 0, date: '2026-10-04', meetName: 'Season Opener',
   };
+}
+
+function pointsSnapshot(attendance) {
+  return [
+    'Helmet #\tNAME\tTEAM\tOctober - Wichita, KS',
+    'Quad Juvenile Girls\t\t\tAttendance Yes=1 No=0',
+    `638B\tSkater One\tTeam United\t${attendance}`,
+    '700\tSkater Two\tTeam United\t0',
+  ].join('\n');
 }
 
 test('parses only attending rows and excludes personal columns from parsed output', () => {
@@ -29,6 +38,30 @@ test('parses only attending rows and excludes personal columns from parsed outpu
     quad: false, novice: true, elite: true, challengeUp: true, open: false,
   });
   assert.equal(JSON.stringify(parsed).includes('2015-01-01'), false);
+});
+
+test('joins team roster fields with attendance from the matching Total Points meet block', () => {
+  const team = [
+    'Helmet #\tNAME\tDOB\tCurrent Age\tRace Age\tGender\tSkated LESS THAN 2 Years\tQuads\tNovice\tElite Division\tElite Challenge Up\tOpen',
+    '638B\tSkater One\t2015-01-01\t11\t11\tGirls\tTRUE\t\tYes\tYes\tYes\t',
+    '700\tSkater Two\t2014-01-01\t12\t12\tFemale\tFALSE\t1\t\t1\t\t',
+  ].join('\n');
+  const points = Object.fromEntries(['Quad', 'Novice', 'Elite', 'Open'].map(category => [`${category} Total Points`, pointsSnapshot(category === 'Elite' ? '1' : '0')]));
+  const combined = combineTeamAndAttendance(team, points, { ...meetFixture(), rinkLabel: 'Roller City • Wichita • KS' });
+  assert.equal(combined.error, undefined);
+  assert.match(combined.attendanceLabel, /October - Wichita/);
+  const parsed = parseMsslSnapshot(combined.snapshot);
+  assert.equal(parsed.rows.length, 1);
+  assert.equal(parsed.rows[0].name, 'Skater One');
+  assert.equal(parsed.rows[0].elite, true);
+  assert.equal(combined.snapshot.includes('2015-01-01'), false);
+});
+
+test('does not mistake a different meet attendance block for the current meet', () => {
+  const team = snapshot.split('\n').slice(1, 3).map(line => line.split('\t').slice(0, 12).join('\t')).join('\n');
+  const points = Object.fromEntries(['Quad', 'Novice', 'Elite', 'Open'].map(category => [`${category} Total Points`, pointsSnapshot('0').replace('October - Wichita, KS', 'November - Union, MO')]));
+  const combined = combineTeamAndAttendance(team, points, { ...meetFixture(), rinkLabel: 'Roller City • Wichita • KS' });
+  assert.match(combined.error, /Could not match/);
 });
 
 test('requires selection when a sheet snapshot contains multiple meet attendance columns', () => {
@@ -129,11 +162,15 @@ test('a bad tab selection keeps the team-tab choices and explains the roster-tab
     process.env.MSSL_SHEETS_REDIRECT_URI = 'https://example.test/callback';
     meet.msslSheetConnection = { encryptedRefreshToken: googleSheets.encryptToken('refresh', 'test-encryption-key') };
     googleSheets.accessToken = async () => 'bearer';
-    googleSheets.listTabs = async () => [{ title: 'Team United - Wichita' }, { title: 'OCT SCHEDULE' }];
-    googleSheets.fetchTab = async () => [
-      'Helmet #\tNAME\tRace Age\tGender\tQuads\tNovice\tElite Division\tOpen',
-      '703\tKoralyne Hick\t12\tGirls\t\tYes\tYes\t',
-    ].join('\n');
+    googleSheets.listTabs = async () => [
+      { title: 'Team United - Wichita' }, { title: 'OCT SCHEDULE' },
+      ...['Quad', 'Novice', 'Elite', 'Open'].map(name => ({ title: `${name} Total Points` })),
+    ];
+    googleSheets.fetchTab = async (_id, title) => title === 'OCT SCHEDULE'
+      ? 'Schedule\tData'
+      : title === 'Team United - Wichita'
+        ? 'Helmet #\tNAME\tRace Age\tGender\tQuads\tNovice\tElite Division\tOpen\n703\tKoralyne Hick\t12\tGirls\t\tYes\tYes\t'
+        : pointsSnapshot('0');
 
     const router = createMsslSheetSyncRoutes({
       requireRole: () => (req, res, next) => next(),
@@ -154,11 +191,11 @@ test('a bad tab selection keeps the team-tab choices and explains the roster-tab
     };
     await handler(req, res);
     assert.equal(res.statusCode, 400);
-    assert.match(res.html, /does not have the roster attendance columns/);
+    assert.match(res.html, /Could not find the Helmet # and NAME header row on the selected team tab/);
     assert.match(res.html, /option value="Team United - Wichita"/);
     assert.match(res.html, /name="team"[^>]*value="Team United - Wichita"/);
     assert.match(res.html, /value="OCT SCHEDULE" selected/);
-    assert.match(res.html, /not a schedule or points tab/);
+    assert.match(res.html, /checks attendance in the Quad, Novice, Elite, and Open Total Points tabs/);
   } finally {
     Object.assign(googleSheets, original);
     for (const [key, value] of Object.entries(oldEnv)) {

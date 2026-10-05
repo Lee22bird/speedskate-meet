@@ -2,9 +2,9 @@ const express = require('express');
 const crypto = require('crypto');
 const { esc } = require('../utils/html');
 const { canEditMeet } = require('../utils/auth');
-const { getMeetOr404 } = require('../services/meetHelpers');
+const { getMeetOr404, meetRinkLabel } = require('../services/meetHelpers');
 const { meetHasStartedRacing } = require('../services/regenGuard');
-const { parseMsslSnapshot, planMsslSync, applyMsslSync } = require('../services/msslSheetSync');
+const { parseMsslSnapshot, combineTeamAndAttendance, planMsslSync, applyMsslSync } = require('../services/msslSheetSync');
 const googleSheets = require('../services/msslGoogleSheets');
 
 module.exports = function createMsslSheetSyncRoutes({ requireRole, pageShell, saveDb, getSessionUser } = {}) {
@@ -35,9 +35,9 @@ module.exports = function createMsslSheetSyncRoutes({ requireRole, pageShell, sa
     const tabOptions = tabs.map(tab => `<option value="${esc(tab.title)}" ${tab.title === selectedTabTitle ? 'selected' : ''}>${esc(tab.title)}</option>`).join('');
     const fetchForm = configured && connected
       ? `<form method="POST" action="/portal/meet/${encodeURIComponent(meet.id)}/mssl-sheet-sync/fetch-preview" class="stack">
-          <div><label>MSSL team tab</label><select name="tabTitle" required>${tabOptions || '<option value="">No tabs available</option>'}</select></div>
+          <div><label>MSSL team roster tab</label><select name="tabTitle" required>${tabOptions || '<option value="">No tabs available</option>'}</select></div>
           <div><label>SSM team name</label><input name="team" required maxlength="120" placeholder="Team United - Wichita" value="${esc(selection.team || '')}"></div>
-          <div class="note">Choose the matching team roster tab, not a schedule or points tab. Fetches that tab directly from Google for a duplicate-safe preview; nothing is applied until you confirm it.</div>
+          <div class="note">Choose the team roster tab. SSM also checks attendance in the Quad, Novice, Elite, and Open Total Points tabs for this meet. The workbook is read-only; nothing is applied until you confirm the preview.</div>
           <button class="btn-orange" type="submit" ${tabs.length ? '' : 'disabled'}>Fetch and Build Preview</button>
         </form>`
       : '';
@@ -166,13 +166,26 @@ module.exports = function createMsslSheetSyncRoutes({ requireRole, pageShell, sa
     const team = String(req.body.team || '').trim();
     try {
       if (!tabTitle || !team) throw new Error('Choose a team tab and enter the SSM team name.');
-      const text = await googleSheets.fetchTab(googleSheets.config().spreadsheetId, tabTitle, await bearerFor(meet));
-      const parsed = parseMsslSnapshot(text, '');
+      const spreadsheetId = googleSheets.config().spreadsheetId;
+      const bearer = await bearerFor(meet);
+      const workbookTabs = await googleSheets.listTabs(spreadsheetId, bearer);
+      const pointTabTitles = ['Quad Total Points', 'Novice Total Points', 'Elite Total Points', 'Open Total Points'];
+      const missingTabs = pointTabTitles.filter(title => !workbookTabs.some(tab => tab.title.toLowerCase() === title.toLowerCase()));
+      if (missingTabs.length) throw new Error(`Could not find required attendance tabs: ${missingTabs.join(', ')}.`);
+      const [teamText, ...attendanceTexts] = await Promise.all([
+        googleSheets.fetchTab(spreadsheetId, tabTitle, bearer),
+        ...pointTabTitles.map(title => googleSheets.fetchTab(spreadsheetId, title, bearer)),
+      ]);
+      const combined = combineTeamAndAttendance(
+        teamText,
+        Object.fromEntries(pointTabTitles.map((title, index) => [title, attendanceTexts[index]])),
+        { ...meet, rinkLabel: meetRinkLabel(req.db, meet) },
+      );
+      if (combined.error) throw new Error(combined.error);
+      const parsed = parseMsslSnapshot(combined.snapshot);
+      parsed.attendanceLabel = combined.attendanceLabel;
       if (parsed.error) {
-        const hint = parsed.error.includes('Attendance Yes=1 No=0')
-          ? ` The selected tab, “${tabTitle},” does not have the roster attendance columns. Choose the matching team roster tab instead of a schedule or points tab.`
-          : '';
-        throw new Error(`${parsed.error}${hint}`);
+        throw new Error(parsed.error);
       }
       if (parsed.needsAttendanceChoice) return res.send(pageShell({ title: 'MSSL Sheet Sync', user: req.user, meet, activeTab: 'registered', bodyHtml: previewPage(req, meet, team, parsed, [], tabTitle) }));
       const plans = plansFor(parsed, meet, team);

@@ -20,6 +20,118 @@ function findHeaderIndex(row, choices) {
   return row.findIndex(value => normalizedChoices.includes(normalizeHeader(value)));
 }
 
+function attendanceHeader(value) {
+  return /attendance\s+yes\s*=\s*1\s+no\s*=\s*0/i.test(clean(value));
+}
+
+function selectedFlag(value) {
+  const flag = clean(value).toLowerCase();
+  return !!flag && !/^(0|no|n|false|off|-)$/i.test(flag);
+}
+
+function parseMeetAttendance(text, meet, label) {
+  const rows = parseTsv(text);
+  const commonHeader = rows.findIndex(row =>
+    findHeaderIndex(row, ['helmet #', 'helmet number']) >= 0 &&
+    findHeaderIndex(row, ['name', 'skater name']) >= 0
+  );
+  if (commonHeader < 0) return { error: `The ${label} tab has no Helmet # and NAME columns.` };
+  const helmetIndex = findHeaderIndex(rows[commonHeader], ['helmet #', 'helmet number']);
+  const nameIndex = findHeaderIndex(rows[commonHeader], ['name', 'skater name']);
+  const meetDate = new Date(`${clean(meet?.date)}T12:00:00`);
+  const month = Number.isNaN(meetDate.getTime()) ? '' : meetDate.toLocaleString('en-US', { month: 'long', timeZone: 'UTC' });
+  const monthShort = month.slice(0, 3).toLowerCase();
+  const attendanceCells = [];
+  rows.forEach((row, rowIndex) => row.forEach((value, columnIndex) => {
+    if (!attendanceHeader(value)) return;
+    let blockLabel = '';
+    for (let above = rowIndex - 1; above >= 0; above -= 1) {
+      const candidate = clean(rows[above]?.[columnIndex]);
+      if (candidate && /jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec/i.test(candidate)) {
+        blockLabel = candidate;
+        break;
+      }
+    }
+    if (blockLabel) attendanceCells.push({ rowIndex, columnIndex, label: blockLabel });
+  }));
+  if (!attendanceCells.length) return { error: `No attendance columns found on the ${label} tab.` };
+
+  const rinkLabel = clean(meet?.rinkLabel);
+  const cityParts = rinkLabel.split(/[•,]/).map(part => part.trim()).filter(Boolean);
+  const city = cityParts.length > 1 ? cityParts[cityParts.length - 2] : cityParts[0] || '';
+  const normalizedCity = normalizeHeader(city);
+  const matching = attendanceCells.filter(cell => {
+    const header = normalizeHeader(cell.label);
+    return month && header.includes(monthShort) && (!normalizedCity || header.includes(normalizedCity));
+  });
+  if (!matching.length) {
+    const available = [...new Set(attendanceCells.map(cell => cell.label))].join(', ');
+    return { error: `Could not match ${meet?.meetName || 'this meet'} to an attendance block on the ${label} tab. Expected ${month || 'the meet month'}${city ? ` and ${city}` : ''}; found ${available || 'no labeled meet blocks'}.` };
+  }
+
+  const attending = new Set();
+  for (const cell of matching) {
+    for (let rowIndex = Math.max(commonHeader + 1, cell.rowIndex + 1); rowIndex < rows.length; rowIndex += 1) {
+      const row = rows[rowIndex] || [];
+      const helmet = clean(row[helmetIndex]);
+      const name = clean(row[nameIndex]);
+      if (!helmet || !name || !selectedFlag(row[cell.columnIndex])) continue;
+      attending.add(`${normalizeHelmet(helmet)}\u0000${normalizeName(name)}`);
+    }
+  }
+  return { attending, labels: [...new Set(matching.map(cell => cell.label))] };
+}
+
+function combineTeamAndAttendance(teamText, attendanceByTab, meet) {
+  const rows = parseTsv(teamText);
+  const headerRowIndex = rows.findIndex(row =>
+    findHeaderIndex(row, ['helmet #', 'helmet number']) >= 0 &&
+    findHeaderIndex(row, ['name', 'skater name']) >= 0
+  );
+  if (headerRowIndex < 0) return { error: 'Could not find the Helmet # and NAME header row on the selected team tab.' };
+  const headers = rows[headerRowIndex];
+  const columns = {
+    helmet: findHeaderIndex(headers, ['helmet #', 'helmet number']),
+    name: findHeaderIndex(headers, ['name', 'skater name']),
+    age: findHeaderIndex(headers, ['race age']),
+    gender: findHeaderIndex(headers, ['gender']),
+    quad: findHeaderIndex(headers, ['quads', 'quad']),
+    novice: findHeaderIndex(headers, ['novice']),
+    elite: findHeaderIndex(headers, ['elite division', 'elite']),
+    challengeUp: findHeaderIndex(headers, ['elite challenge up', 'challenge up']),
+    open: findHeaderIndex(headers, ['open', 'open division']),
+  };
+  const missing = Object.entries(columns).filter(([key, index]) => index < 0 && key !== 'challengeUp').map(([key]) => key);
+  if (missing.length) return { error: `Missing required team roster columns: ${missing.join(', ')}.` };
+
+  const attendance = new Set();
+  const attendanceLabels = new Set();
+  for (const [tab, text] of Object.entries(attendanceByTab || {})) {
+    const parsed = parseMeetAttendance(text, meet, tab);
+    if (parsed.error) return parsed;
+    parsed.attending.forEach(key => attendance.add(key));
+    parsed.labels.forEach(value => attendanceLabels.add(value));
+  }
+  if (!Object.keys(attendanceByTab || {}).length) return { error: 'No MSSL Total Points attendance tabs were available.' };
+
+  const safeRows = [[
+    'Helmet #', 'NAME', 'Race Age', 'Gender', 'Quads', 'Novice', 'Elite Division', 'Elite Challenge Up', 'Open', 'Attendance Yes=1 No=0',
+  ]];
+  for (let index = headerRowIndex + 1; index < rows.length; index += 1) {
+    const row = rows[index] || [];
+    const helmet = clean(row[columns.helmet]);
+    const name = clean(row[columns.name]);
+    if (!helmet && !name) continue;
+    const key = `${normalizeHelmet(helmet)}\u0000${normalizeName(name)}`;
+    safeRows.push([
+      helmet, name, clean(row[columns.age]), clean(row[columns.gender]), clean(row[columns.quad]),
+      clean(row[columns.novice]), clean(row[columns.elite]), columns.challengeUp < 0 ? '' : clean(row[columns.challengeUp]),
+      clean(row[columns.open]), attendance.has(key) ? '1' : '0',
+    ]);
+  }
+  return { snapshot: safeRows.map(row => row.join('\t')).join('\n'), attendanceLabel: [...attendanceLabels].join(' · ') };
+}
+
 function parseMsslSnapshot(text, attendanceColumnIndex = '') {
   const rows = parseTsv(text);
   const headerRowIndex = rows.findIndex(row =>
@@ -43,7 +155,7 @@ function parseMsslSnapshot(text, attendanceColumnIndex = '') {
   if (missing.length) return { error: `Missing required columns: ${missing.join(', ')}.` };
 
   const attendanceColumns = headers.map((value, index) =>
-    /attendance\s+yes\s*=\s*1\s+no\s*=\s*0/i.test(clean(value)) ? {
+    attendanceHeader(value) ? {
       index,
       label: clean(rows[0]?.[index]) || `Attendance column ${index + 1}`,
     } : null
@@ -73,10 +185,7 @@ function parseMsslSnapshot(text, attendanceColumnIndex = '') {
     return { attendanceColumns: attendanceColumns.map((column, index) => ({ ...column, safeIndex: 9 + index })), safeSnapshot, needsAttendanceChoice: true };
   }
 
-  const isSelected = value => {
-    const flag = clean(value).toLowerCase();
-    return !!flag && !/^(0|no|n|false|off|-)$/i.test(flag);
-  };
+  const isSelected = selectedFlag;
   const output = [];
   const invalidRows = [];
   const lastRelevantIndex = Math.max(...Object.values(header), selectedAttendance);
@@ -249,4 +358,4 @@ function applyMsslSync(plans, meet) {
   return { added, updated };
 }
 
-module.exports = { parseMsslSnapshot, planMsslSync, applyMsslSync, normalizeHelmet, normalizeName };
+module.exports = { parseMsslSnapshot, parseMeetAttendance, combineTeamAndAttendance, planMsslSync, applyMsslSync, normalizeHelmet, normalizeName };

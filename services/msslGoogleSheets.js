@@ -112,7 +112,7 @@ function cellText(value) {
 }
 
 async function fetchTab(spreadsheetId, tabTitle, bearer, fetchImpl = fetch) {
-  const range = `'${String(tabTitle).replace(/'/g, "''")}'!A1:AZ500`;
+  const range = `'${String(tabTitle).replace(/'/g, "''")}'!A1:AZ1500`;
   const url = `${API_BASE}/${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(range)}?valueRenderOption=FORMATTED_VALUE`;
   const data = await googleGet(url, bearer, fetchImpl);
   if (!Array.isArray(data.values)) return '';
