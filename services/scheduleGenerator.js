@@ -283,7 +283,7 @@ function generateScheduleBlocks(meet, { mode = 'replace', style = 'league' } = {
     for (const b of meet.blocks || []) for (const id of b.raceIds || []) assigned.add(String(id));
   }
   // Time-trial queue events are left for the director to place, in both modes.
-  const pool = (meet.races || []).filter(r => !assigned.has(String(r.id)) && !r.isTimeTrial);
+  const pool = (meet.races || []).filter(r => !r.rollingStartSupersededBy && !assigned.has(String(r.id)) && !r.isTimeTrial);
 
   const useChampionship = style === 'championship' || (style === 'auto' && isChampionshipPool(pool));
   const units = useChampionship ? championshipUnits(pool) : leagueUnits(pool, meet);

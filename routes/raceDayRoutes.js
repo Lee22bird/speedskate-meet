@@ -17,6 +17,7 @@ const {
 } = require('../services/raceDay');
 const { fireRaceAlerts, fireResultAlerts } = require('../services/raceAlerts');
 const { raceHasProtest, protestsForMeet } = require('../services/protests');
+const { findRollingStartPlan, startRollingFinal, undoRollingFinal } = require('../services/rollingStart');
 
 // Protest notification for the two roles that rule on them (director + tabulator):
 // a banner (Review / Later — Later hides it but the sub-tab count stays) and a
@@ -1795,7 +1796,8 @@ router.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','j
           }
         </script>`;
       })():renderJudgeBoard({
-  meet, current, currentLanes, currentMerged, regMap, registrations: meet.registrations || [], user: req.user,
+  meet, current, currentLanes, currentMerged, regMap, registrations: meet.registrations || [],
+  rollingStartPlan: findRollingStartPlan(meet, current?.id), user: req.user,
   raceStatusOptionsHtml, dqMetadataFields, dqDialogHtml,
   skaterAvatarHtml, mergeGroupMembers, renderRelayEligibleSkatersHtml,
 })):`<div class="card"><div class="muted">No race selected yet.</div></div>`}`;
@@ -1892,6 +1894,20 @@ router.post('/portal/meet/:meetId/race-day/correction/save', requireRole('meet_d
   saveDb(req.db);
 
   return res.redirect(`/portal/meet/${encodeURIComponent(meet.id)}/race-day/correction?raceId=${encodeURIComponent(race.id)}&ok=${encodeURIComponent('Race correction saved. Later races were not rebuilt and current race was not changed.')}`);
+});
+
+router.post('/portal/meet/:meetId/race-day/judges/rolling-start', requireRole('judge','meet_director'), (req, res) => {
+  const meet=getMeetOr404(req.db,req.params.meetId);
+  if(!meet) return res.redirect('/portal');
+  if(!canJudgeMeet(req.user,meet)) return res.status(403).send('Forbidden');
+  const action=String(req.body.action||'start');
+  const result=action==='undo'
+    ? undoRollingFinal(meet,req.body.raceId)
+    : startRollingFinal(meet,req.body.raceId);
+  if(!result.ok) return res.status(400).send(result.error);
+  ensureCurrentRace(meet);
+  meet.updatedAt=nowIso(); saveDb(req.db);
+  return res.redirect(`/portal/meet/${encodeURIComponent(meet.id)}/race-day/judges`);
 });
 
 router.post('/portal/meet/:meetId/race-day/judges/save', requireRole('judge','meet_director'), (req, res) => {

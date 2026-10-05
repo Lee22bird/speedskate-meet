@@ -29,6 +29,7 @@ function computeMeetStandings(meet) {
   const regMap = new Map((meet.registrations || []).map(r => [Number(r.id), r]));
 
   for (const race of meet.races || []) {
+    if (race.rollingStartSupersededBy) continue;
     if (!raceCountsForUsarsStandardOverall(race)) continue;
 
     const bucketKey = `${race.groupId}|${race.division}`;

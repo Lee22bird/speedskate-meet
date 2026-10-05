@@ -40,7 +40,7 @@ function renderBlockBuilderView({ meet }) {
     for (const eid of block.timeTrialEventIds || []) assignedTimeTrialEvents.add(eid);
   }
 
-  const unassigned = (meet.races || []).filter(r => !assigned.has(r.id));
+  const unassigned = (meet.races || []).filter(r => !r.rollingStartSupersededBy && !assigned.has(r.id));
   const unassignedTimeTrialEvents = timeTrialEvent ? [timeTrialEvent].filter(e => !assignedTimeTrialEvents.has(e.id)) : [];
   const inlineRaceCount = (meet.races || []).filter(r => !r.isOpenRace && !r.isQuadRace && !r.isTimeTrial && !r.isRelayRace).length;
   const openRaceCount = (meet.races || []).filter(r => r.isOpenRace).length;
@@ -100,6 +100,7 @@ function renderBlockBuilderView({ meet }) {
   }
 
   function raceItemHtml(race, isCurrent, draggable = true) {
+    if (race.rollingStartSupersededBy) return '';
     const tag = race.isTimeTrial ? '⏱ ' : race.isRelayRace ? '🔄 ' : race.isOpenRace ? '🏁 ' : race.isQuadRace ? '🛼 ' : (race.isAdditionalRace ? '➕ ' : '');
     const cls = race.isTimeTrial ? 'tt-item' : race.isRelayRace ? 'relay-item' : race.isOpenRace ? 'open-item' : race.isQuadRace ? 'quad-item' : (race.isAdditionalRace ? 'additional-item' : '');
     const g = race.mergeGroupId ? mergeGroups.get(race.mergeGroupId) : null;

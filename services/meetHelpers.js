@@ -568,6 +568,10 @@ function migrateMeet(meet,fallbackOwnerId) {
     // mergeGroupId links the merged races; mergeLead marks the one that owns the
     // combined display/lane sheet. Empty mergeGroupId = not merged.
     mergeGroupId:String(r.mergeGroupId||''), mergeLead:!!r.mergeLead,
+    rollingStartFinal:!!r.rollingStartFinal,
+    rollingStartSupersededBy:String(r.rollingStartSupersededBy||''),
+    rollingStartSourceRaceIds:Array.isArray(r.rollingStartSourceRaceIds)?r.rollingStartSourceRaceIds.map(String):[],
+    rollingStartBackup:r.rollingStartBackup&&typeof r.rollingStartBackup==='object'?r.rollingStartBackup:null,
     countsForOverall:typeof r.countsForOverall==='boolean'?r.countsForOverall:(String(r.division||'')!=='open'),
     laneEntries:Array.isArray(r.laneEntries)?r.laneEntries:[],
     resultsMode:String(r.resultsMode||'places'), status:String(r.status||'open'),
@@ -1712,6 +1716,7 @@ function formatAuditPoints(points) {
 function heatRacesForFinal(meet, finalRace) {
   const key = finalRace.parentRaceKey || baseRaceKey(finalRace.groupId, finalRace.division, finalRace.dayIndex, finalRace.distanceLabel);
   return (meet?.races || [])
+    .filter(r => !r.rollingStartSupersededBy)
     .filter(r => ['heat', 'semi'].includes(String(r.stage || '')))
     .filter(r => (r.parentRaceKey || baseRaceKey(r.groupId, r.division, r.dayIndex, r.distanceLabel)) === key)
     .sort((a, b) => Number(a.heatNumber || 0) - Number(b.heatNumber || 0));

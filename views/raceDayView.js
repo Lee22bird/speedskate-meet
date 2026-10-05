@@ -25,6 +25,7 @@ function renderJudgeBoard({
   currentMerged = false,
   regMap = new Map(),
   registrations = [],
+  rollingStartPlan = null,
   user,
   raceStatusOptionsHtml,
   dqMetadataFields,
@@ -55,6 +56,18 @@ function renderJudgeBoard({
       <div>This race starts together as one pack with <strong>${esc(mergePartners)}</strong>.
       Enter places for <strong>${esc(current.groupLabel)}</strong> only — each division is scored
       separately. The full pack lane sheet is on the Director and Announcer tabs.</div>
+    </div>` : '';
+
+  const rollingStartControl = rollingStartPlan ? `
+    <form class="rd-rolling-start" method="POST" action="/portal/meet/${esc(meet.id)}/race-day/judges/rolling-start"
+      onsubmit="return confirm('Combine both heats into one rolling-start final? The full field will be shuffled into pace-lap order, and this distance will no longer have a separate final.')">
+      <input type="hidden" name="raceId" value="${esc(current.id)}" />
+      <div><strong>Rolling-start final</strong><span>Combine both heats; randomize the full field into pace-lap order. Placements are one shared final order.</span></div>
+      <button class="rd-btn rd-btn-save" type="submit" name="action" value="start">Set up rolling final</button>
+    </form>` : current.rollingStartFinal ? `
+    <div class="rd-rolling-start is-active">
+      <div><strong>Rolling-start final</strong><span>Lane numbers are randomized pace-lap order. Enter one shared finish order; only places 1–4 score.</span></div>
+      ${current.rollingStartBackup && current.status !== 'closed' ? `<form method="POST" action="/portal/meet/${esc(meet.id)}/race-day/judges/rolling-start" onsubmit="return confirm('Undo this setup? No saved results will be kept.')"><input type="hidden" name="raceId" value="${esc(current.id)}" /><button class="rd-btn rd-btn-save" type="submit" name="action" value="undo">Undo setup</button></form>` : ''}
     </div>` : '';
 
   // Finish-order tray: one chip per lane that has an entry. A relay places TEAMS,
@@ -116,6 +129,7 @@ function renderJudgeBoard({
       </div>
 
       ${mergeBanner}
+      ${rollingStartControl}
 
       <form id="judgeRaceForm" method="POST" action="/portal/meet/${esc(meet.id)}/race-day/judges/save">
         <input type="hidden" name="raceId" value="${esc(current.id)}" />
@@ -168,6 +182,9 @@ function renderJudgeBoard({
         box-shadow:0 16px 44px rgba(13,24,48,.28); color:#fff;
       }
       .rd-head{padding-bottom:16px;border-bottom:1px solid rgba(255,255,255,.10);margin-bottom:16px;}
+      .rd-rolling-start{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin:0 0 14px;padding:12px 14px;border:1px solid rgba(125,211,252,.38);border-radius:10px;background:rgba(14,116,144,.16)}
+      .rd-rolling-start>div{display:grid;gap:4px}.rd-rolling-start strong{color:#a5f3fc;font-size:13px}.rd-rolling-start span{color:rgba(255,255,255,.76);font-size:12px;line-height:1.4}
+      .rd-rolling-start form{margin:0}
       .rd-head-tags{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:9px;}
       .rd-live{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:999px;
         background:#F97316;color:#fff;font-size:11px;font-weight:800;letter-spacing:.08em;}
