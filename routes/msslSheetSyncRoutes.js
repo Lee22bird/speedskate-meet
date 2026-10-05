@@ -23,7 +23,7 @@ module.exports = function createMsslSheetSyncRoutes({ requireRole, pageShell, sa
     return meet.msslSheetConnection || null;
   }
 
-  function entryForm(meet, tabs = [], message = '') {
+  function entryForm(meet, tabs = [], message = '', selection = {}) {
     const configured = googleSheets.isConfigured();
     const connected = !!connection(meet)?.encryptedRefreshToken;
     const connectAction = configured
@@ -31,12 +31,13 @@ module.exports = function createMsslSheetSyncRoutes({ requireRole, pageShell, sa
         ? `<form method="POST" action="/portal/meet/${encodeURIComponent(meet.id)}/mssl-sheet-sync/disconnect" onsubmit="return confirm('Disconnect this Google account from SSM?')"><button class="btn2" type="submit">Disconnect Google</button></form>`
         : `<a class="btn-orange" href="/portal/meet/${encodeURIComponent(meet.id)}/mssl-sheet-sync/connect">Connect Google account</a>`
       : '<div class="notice">Google connection setup is not complete on the server yet. SSM needs a Google OAuth client ID/secret, a token encryption key, this workbook ID, and its OAuth callback URL configured on the hosting service.</div>';
-    const tabOptions = tabs.map(tab => `<option value="${esc(tab.title)}">${esc(tab.title)}</option>`).join('');
+    const selectedTabTitle = String(selection.tabTitle || '');
+    const tabOptions = tabs.map(tab => `<option value="${esc(tab.title)}" ${tab.title === selectedTabTitle ? 'selected' : ''}>${esc(tab.title)}</option>`).join('');
     const fetchForm = configured && connected
       ? `<form method="POST" action="/portal/meet/${encodeURIComponent(meet.id)}/mssl-sheet-sync/fetch-preview" class="stack">
           <div><label>MSSL team tab</label><select name="tabTitle" required>${tabOptions || '<option value="">No tabs available</option>'}</select></div>
-          <div><label>SSM team name</label><input name="team" required maxlength="120" placeholder="Team United - Wichita"></div>
-          <div class="note">Fetches the selected tab directly from Google, then shows a duplicate-safe preview. No data is applied until you confirm it.</div>
+          <div><label>SSM team name</label><input name="team" required maxlength="120" placeholder="Team United - Wichita" value="${esc(selection.team || '')}"></div>
+          <div class="note">Choose the matching team roster tab, not a schedule or points tab. Fetches that tab directly from Google for a duplicate-safe preview; nothing is applied until you confirm it.</div>
           <button class="btn-orange" type="submit" ${tabs.length ? '' : 'disabled'}>Fetch and Build Preview</button>
         </form>`
       : '';
@@ -107,15 +108,18 @@ module.exports = function createMsslSheetSyncRoutes({ requireRole, pageShell, sa
     return googleSheets.accessToken(refresh, c);
   }
 
+  async function tabsFor(meet) {
+    if (!googleSheets.isConfigured() || !connection(meet)?.encryptedRefreshToken) return [];
+    return googleSheets.listTabs(googleSheets.config().spreadsheetId, await bearerFor(meet));
+  }
+
   router.get('/portal/meet/:meetId/mssl-sheet-sync', requireRole('meet_director'), async (req, res) => {
     const meet = authorized(req, res);
     if (!meet) return;
     let tabs = [];
     let message = '';
-    if (googleSheets.isConfigured() && connection(meet)?.encryptedRefreshToken) {
-      try { tabs = await googleSheets.listTabs(googleSheets.config().spreadsheetId, await bearerFor(meet)); }
-      catch (err) { message = `Could not load Google tabs: ${err.message}`; }
-    }
+    try { tabs = await tabsFor(meet); }
+    catch (err) { message = `Could not load Google tabs: ${err.message}`; }
     return res.send(pageShell({ title: 'MSSL Sheet Sync', user: req.user, meet, activeTab: 'registered', bodyHtml: entryForm(meet, tabs, message) }));
   });
 
@@ -158,18 +162,25 @@ module.exports = function createMsslSheetSyncRoutes({ requireRole, pageShell, sa
   router.post('/portal/meet/:meetId/mssl-sheet-sync/fetch-preview', requireRole('meet_director'), async (req, res) => {
     const meet = authorized(req, res);
     if (!meet) return;
+    const tabTitle = String(req.body.tabTitle || '').trim();
+    const team = String(req.body.team || '').trim();
     try {
-      const tabTitle = String(req.body.tabTitle || '').trim();
-      const team = String(req.body.team || '').trim();
       if (!tabTitle || !team) throw new Error('Choose a team tab and enter the SSM team name.');
       const text = await googleSheets.fetchTab(googleSheets.config().spreadsheetId, tabTitle, await bearerFor(meet));
       const parsed = parseMsslSnapshot(text, '');
-      if (parsed.error) throw new Error(parsed.error);
+      if (parsed.error) {
+        const hint = parsed.error.includes('Attendance Yes=1 No=0')
+          ? ` The selected tab, “${tabTitle},” does not have the roster attendance columns. Choose the matching team roster tab instead of a schedule or points tab.`
+          : '';
+        throw new Error(`${parsed.error}${hint}`);
+      }
       if (parsed.needsAttendanceChoice) return res.send(pageShell({ title: 'MSSL Sheet Sync', user: req.user, meet, activeTab: 'registered', bodyHtml: previewPage(req, meet, team, parsed, [], tabTitle) }));
       const plans = plansFor(parsed, meet, team);
       return res.send(pageShell({ title: 'MSSL Sheet Import Preview', user: req.user, meet, activeTab: 'registered', bodyHtml: previewPage(req, meet, team, parsed, plans, tabTitle) }));
     } catch (err) {
-      return res.status(400).send(pageShell({ title: 'MSSL Sheet Sync', user: req.user, meet, activeTab: 'registered', bodyHtml: entryForm(meet, [], err.message) }));
+      let tabs = [];
+      try { tabs = await tabsFor(meet); } catch (_) { /* Keep the original fetch error visible. */ }
+      return res.status(400).send(pageShell({ title: 'MSSL Sheet Sync', user: req.user, meet, activeTab: 'registered', bodyHtml: entryForm(meet, tabs, err.message, { tabTitle, team }) }));
     }
   });
 

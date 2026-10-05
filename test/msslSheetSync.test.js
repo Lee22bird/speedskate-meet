@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const { makeMsslGroupsTemplate, migrateMeet } = require('../services/meetHelpers');
 const { parseMsslSnapshot, planMsslSync, applyMsslSync } = require('../services/msslSheetSync');
 const createMsslSheetSyncRoutes = require('../routes/msslSheetSyncRoutes');
+const googleSheets = require('../services/msslGoogleSheets');
 
 const snapshot = [
   '\t\t\t\t\t\t\t\t\t\t\t\tOctober - Wichita',
@@ -107,4 +108,62 @@ test('fetched-data preview strips DOB before returning the confirmation page', (
   assert.match(res.html, /MSSL Sheet Import Preview/);
   assert.match(res.html, /638B/);
   assert.equal(res.html.includes('2015-01-01'), false);
+});
+
+test('a bad tab selection keeps the team-tab choices and explains the roster-tab requirement', async () => {
+  const meet = meetFixture();
+  const oldEnv = Object.fromEntries([
+    'MSSL_SHEETS_CLIENT_ID', 'MSSL_SHEETS_CLIENT_SECRET', 'MSSL_SHEETS_TOKEN_ENCRYPTION_KEY',
+    'MSSL_SHEETS_SPREADSHEET_ID', 'MSSL_SHEETS_REDIRECT_URI',
+  ].map(key => [key, process.env[key]]));
+  const original = {
+    accessToken: googleSheets.accessToken,
+    listTabs: googleSheets.listTabs,
+    fetchTab: googleSheets.fetchTab,
+  };
+  try {
+    process.env.MSSL_SHEETS_CLIENT_ID = 'client';
+    process.env.MSSL_SHEETS_CLIENT_SECRET = 'secret';
+    process.env.MSSL_SHEETS_TOKEN_ENCRYPTION_KEY = 'test-encryption-key';
+    process.env.MSSL_SHEETS_SPREADSHEET_ID = 'spreadsheet';
+    process.env.MSSL_SHEETS_REDIRECT_URI = 'https://example.test/callback';
+    meet.msslSheetConnection = { encryptedRefreshToken: googleSheets.encryptToken('refresh', 'test-encryption-key') };
+    googleSheets.accessToken = async () => 'bearer';
+    googleSheets.listTabs = async () => [{ title: 'Team United - Wichita' }, { title: 'OCT SCHEDULE' }];
+    googleSheets.fetchTab = async () => [
+      'Helmet #\tNAME\tRace Age\tGender\tQuads\tNovice\tElite Division\tOpen',
+      '703\tKoralyne Hick\t12\tGirls\t\tYes\tYes\t',
+    ].join('\n');
+
+    const router = createMsslSheetSyncRoutes({
+      requireRole: () => (req, res, next) => next(),
+      pageShell: ({ bodyHtml }) => bodyHtml,
+      saveDb: () => {},
+    });
+    const layer = router.stack.find(item => item.route?.path === '/portal/meet/:meetId/mssl-sheet-sync/fetch-preview');
+    const handler = layer.route.stack.at(-1).handle;
+    const req = {
+      params: { meetId: meet.id },
+      body: { team: 'Team United - Wichita', tabTitle: 'OCT SCHEDULE' },
+      db: { meets: [meet] },
+      user: { roles: ['super_admin'] },
+    };
+    const res = {
+      send(html) { this.html = html; return this; },
+      status(code) { this.statusCode = code; return this; },
+    };
+    await handler(req, res);
+    assert.equal(res.statusCode, 400);
+    assert.match(res.html, /does not have the roster attendance columns/);
+    assert.match(res.html, /option value="Team United - Wichita"/);
+    assert.match(res.html, /name="team"[^>]*value="Team United - Wichita"/);
+    assert.match(res.html, /value="OCT SCHEDULE" selected/);
+    assert.match(res.html, /not a schedule or points tab/);
+  } finally {
+    Object.assign(googleSheets, original);
+    for (const [key, value] of Object.entries(oldEnv)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
 });
