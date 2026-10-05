@@ -124,7 +124,7 @@ public struct RaceDayProgress: Decodable {
 
 public struct LaneEntry: Decodable, Identifiable, Hashable {
     public let lane: Int
-    public let helmetNumber: Int?
+    public let helmetNumber: String?
     public let skaterName: String
     public let team: String
     public let sponsor: String?
@@ -136,6 +136,31 @@ public struct LaneEntry: Decodable, Identifiable, Hashable {
     public let division: String?
 
     public var id: Int { lane }
+
+    private enum CodingKeys: String, CodingKey {
+        case lane, helmetNumber, skaterName, team, sponsor, place, time, status, division
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        lane = try container.decode(Int.self, forKey: .lane)
+        if let value = try? container.decode(String.self, forKey: .helmetNumber) {
+            helmetNumber = value
+        } else if let value = try? container.decode(Int.self, forKey: .helmetNumber) {
+            helmetNumber = String(value)
+        } else if let value = try? container.decode(Double.self, forKey: .helmetNumber) {
+            helmetNumber = String(value)
+        } else {
+            helmetNumber = nil
+        }
+        skaterName = try container.decode(String.self, forKey: .skaterName)
+        team = try container.decode(String.self, forKey: .team)
+        sponsor = try container.decodeIfPresent(String.self, forKey: .sponsor)
+        place = try container.decodeIfPresent(String.self, forKey: .place)
+        time = try container.decodeIfPresent(String.self, forKey: .time)
+        status = try container.decodeIfPresent(String.self, forKey: .status)
+        division = try container.decodeIfPresent(String.self, forKey: .division)
+    }
 }
 
 public struct RaceDayItem: Decodable, Identifiable, Hashable {

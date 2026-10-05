@@ -24,6 +24,7 @@ function renderJudgeBoard({
   currentLanes = [],
   currentMerged = false,
   regMap = new Map(),
+  registrations = [],
   user,
   raceStatusOptionsHtml,
   dqMetadataFields,
@@ -68,14 +69,21 @@ function renderJudgeBoard({
 
   const laneRows = currentLanes.map(l => {
     const reg = regMap.get(Number(l.registrationId));
+    const rosterOptions = registrations.map(skater => {
+      const id = String(skater.id ?? '');
+      const label = [skater.name, skater.helmetNumber ? `#${skater.helmetNumber}` : '', skater.team]
+        .filter(Boolean).join(' · ');
+      return `<option value="${esc(id)}" data-name="${esc(skater.name || '')}" data-helmet="${esc(skater.helmetNumber || '')}" data-team="${esc(skater.team || '')}" ${id === String(l.registrationId || '') ? 'selected' : ''}>${esc(label || `Skater ${id}`)}</option>`;
+    }).join('');
     return `
       <div class="rd-row" data-lane="${esc(l.lane)}">
         <div class="rd-lane">${esc(l.lane)}</div>
-        <div class="rd-helmet">${isRelay ? '<span class="rd-relay-dash">—</span>' : esc(l.helmetNumber || '—')}</div>
+        <div>${isRelay ? '<span class="rd-relay-dash">—</span>' : `<input class="rd-helmet rd-helmet-input" name="helmetNumber_${esc(l.lane)}" value="${esc(l.helmetNumber || '')}" autocomplete="off" aria-label="Lane ${esc(l.lane)} helmet number" />`}</div>
         <div class="rd-skater">
           ${!isRelay && skaterAvatarHtml ? skaterAvatarHtml(l, reg, 'small') : ''}
           <div class="rd-skater-fields">
-            <input name="skaterName_${esc(l.lane)}" value="${esc(l.skaterName)}" autocomplete="off" placeholder="${isRelay ? 'Relay team' : ''}" />
+            ${!isRelay ? `<select class="rd-skater-picker" name="registrationId_${esc(l.lane)}" aria-label="Choose registered skater for lane ${esc(l.lane)}"><option value="">Manual entry / unassigned</option>${rosterOptions}</select>` : ''}
+            <input name="skaterName_${esc(l.lane)}" value="${esc(l.skaterName)}" autocomplete="off" placeholder="${isRelay ? 'Relay team' : 'Skater name'}" />
             ${reg?.sponsor ? `<div class="rd-sponsor">Sponsor: ${esc(reg.sponsor)}</div>` : ''}
           </div>
         </div>
@@ -143,7 +151,7 @@ function renderJudgeBoard({
         </div>
 
         <div class="rd-actions">
-          <span class="rd-actions-note">${isRelay ? 'Relays place by team — one row per team entry. Legs are listed below for reference. ' : ''}Save posts in place and does not advance the meet. Close Race does.</span>
+          <span class="rd-actions-note">${isRelay ? 'Relays place by team — one row per team entry. Legs are listed below for reference. ' : ''}Save keeps these entries and results. Close Race advances; for two heats, the top three from each closed heat fill the final.</span>
           <button class="rd-btn rd-btn-save" type="submit" name="action" value="save">Save</button>
           <button class="rd-btn rd-btn-close" type="submit" name="action" value="close">Close race &amp; advance →</button>
         </div>
@@ -225,8 +233,12 @@ function renderJudgeBoard({
       .rd-helmet{display:flex;align-items:center;justify-content:center;width:46px;height:40px;
         border-radius:10px;background:#13213a;border:1px solid rgba(255,255,255,.16);
         color:#fff;font-size:19px;font-weight:800;}
+      .rd-board .rd-helmet-input{padding:0 3px!important;text-align:center;}
       .rd-skater{display:flex;align-items:center;gap:10px;min-width:0;}
-      .rd-skater-fields{flex:1;min-width:0;}
+      .rd-skater-fields{flex:1;min-width:0;display:grid;gap:6px;}
+      .rd-board .rd-skater-picker{width:100%;min-height:36px;padding:0 8px;border-radius:8px;
+        background:#172744;border:1px solid rgba(255,255,255,.20);color:#fff;font-size:12px;font-weight:600;font-family:inherit;}
+      .rd-board .rd-skater-picker option{color:#13213a;background:#fff;}
       .rd-sponsor{font-size:11px;font-weight:600;color:#7DD3FC;margin-top:3px;}
       .rd-relay-dash{color:rgba(255,255,255,.32);font-size:16px;}
       .rd-board input[type=text],.rd-board input:not([type]),.rd-board textarea{
@@ -287,6 +299,26 @@ function renderJudgeBoard({
 
     <script>
       (function(){
+        document.querySelectorAll('.rd-row').forEach(function(row){
+          var picker=row.querySelector('.rd-skater-picker');
+          if(!picker)return;
+          var name=row.querySelector('[name^="skaterName_"]');
+          var helmet=row.querySelector('[name^="helmetNumber_"]');
+          var team=row.querySelector('[name^="team_"]');
+          picker.addEventListener('change',function(){
+            var option=picker.selectedOptions[0];
+            if(!option||!option.value)return;
+            name.value=option.dataset.name||'';
+            helmet.value=option.dataset.helmet||'';
+            team.value=option.dataset.team||'';
+          });
+          [name,helmet,team].forEach(function(input){
+            input.addEventListener('input',function(){
+              if(picker.value)picker.value='';
+            });
+          });
+        });
+
         // ── Finish-order tray → writes into the existing place_{lane} inputs ──
         var tray=document.querySelector('.rd-tray');
         if(tray){

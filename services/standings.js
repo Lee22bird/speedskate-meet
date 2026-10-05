@@ -223,8 +223,8 @@ function computeQuadStandings(meet) {
 
           // Simple quad tie fallback for now: better finish in the later/longer race wins.
           const lastRace = divRaces[divRaces.length - 1];
-          const aLast = a.raceScores.find(s => s.raceId === lastRace?.id)?.place || 999;
-          const bLast = b.raceScores.find(s => s.raceId === lastRace?.id)?.place || 999;
+          const aLast = raceScoreForRace(a, lastRace)?.place || 999;
+          const bLast = raceScoreForRace(b, lastRace)?.place || 999;
           if (aLast !== bLast) return aLast - bLast;
 
           return String(a.skaterName || '').localeCompare(String(b.skaterName || ''));
@@ -270,6 +270,18 @@ function computeOpenResults(meet) {
     }));
 }
 
+function raceScoreForRace(row, race) {
+  if (race?.id == null) return undefined;
+  return (row?.raceScores || []).find(score =>
+    score?.raceId != null && String(score.raceId) === String(race.id)
+  );
+}
+
+function formatPointsForDisplay(points) {
+  const value = Number(points || 0);
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
 module.exports = {
   STANDARD_POINTS,
   scoreRaceByStandardPoints,
@@ -277,4 +289,6 @@ module.exports = {
   computeMeetStandings,
   computeQuadStandings,
   computeOpenResults,
+  raceScoreForRace,
+  formatPointsForDisplay,
 };

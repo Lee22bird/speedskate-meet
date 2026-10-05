@@ -106,6 +106,46 @@ test('DQ entries do not advance from qualifying heats', () => {
   assert.deepEqual(final.laneEntries.slice(0, 3).map(entry => entry.registrationId), [2, 3, 4]);
 });
 
+test('closing a manually rearranged heat advances its saved skaters into the final', () => {
+  const registrations = [1, 2, 3, 4, 5, 6].map(id => ({
+    id, name: `Registered ${id}`, helmetNumber: String(100 + id), team: 'Team United',
+  }));
+  const heatOne = advancementRace({
+    id: 'h1', heatNumber: 1, status: 'open',
+    laneEntries: [1, 2, 3].map(lane => ({ lane, registrationId: `old-${lane}`, skaterName: `Old ${lane}` })),
+  });
+  const heatTwo = advancementRace({
+    id: 'h2', heatNumber: 2, status: 'closed',
+    laneEntries: [4, 5, 6].map((registrationId, index) => ({
+      lane: index + 1, registrationId, skaterName: `Registered ${registrationId}`,
+      place: String(index + 1), status: '',
+    })),
+  });
+  const final = advancementRace({ id: 'f1', stage: 'final', heatNumber: 0, isFinal: true, status: 'open', laneEntries: [] });
+  const meet = { id: 1, ownerUserId: 9, lanes: 3, registrations, races: [heatOne, heatTwo, final], blocks: [] };
+  const router = testRouter();
+  const handler = routeHandler(router, 'post', '/portal/meet/:meetId/race-day/judges/save');
+  const response = responseRecorder();
+  handler({
+    params: { meetId: '1' }, db: { meets: [meet] },
+    user: { id: 9, displayName: 'Meet Director', roles: ['super_admin'] },
+    body: {
+      raceId: 'h1', action: 'close', resultsMode: 'places',
+      registrationId_1: '3', helmetNumber_1: '103', skaterName_1: 'Registered 3', team_1: 'Team United', place_1: '2',
+      registrationId_2: '1', helmetNumber_2: '101', skaterName_2: 'Registered 1', team_2: 'Team United', place_2: '1',
+      registrationId_3: '', helmetNumber_3: 'HM-3', skaterName_3: 'Manual skater', team_3: 'Independent', place_3: '3',
+      status_1: '', status_2: '', status_3: '',
+    },
+    get: () => 'application/json', is: () => false,
+  }, response);
+
+  assert.equal(response.body.ok, true);
+  assert.deepEqual(heatOne.laneEntries.map(entry => entry.registrationId), ['3', '1', '']);
+  assert.equal(heatOne.laneEntries[2].helmetNumber, 'HM-3');
+  assert.deepEqual(final.laneEntries.slice(0, 3).map(entry => entry.registrationId), ['1', '3', '']);
+  assert.deepEqual(final.laneEntries.slice(0, 3).map(entry => entry.skaterName), ['Registered 1', 'Registered 3', 'Manual skater']);
+});
+
 test('public status output shows DQ reason but never official notes', () => {
   const meet = {
     races: [{
@@ -161,8 +201,8 @@ test('judge save records structured DQ audit fields on the race entry', () => {
 });
 
 test('judge screen includes every requested status and the DQ dialog', () => {
-  const race = advancementRace({ id: 'r1', stage: 'final', isFinal: true, status: 'open', laneEntries: [{ lane: 1, registrationId: 1, skaterName: 'Jane Skater' }] });
-  const meet = { id: 1, meetName: 'Test Meet', ownerUserId: 9, lanes: 1, races: [race], blocks: [{ id: 'b1', raceIds: ['r1'] }], registrations: [] };
+  const race = advancementRace({ id: 'r1', stage: 'final', isFinal: true, status: 'open', laneEntries: [{ lane: 1, registrationId: 1, helmetNumber: '638B', skaterName: 'Jane Skater' }] });
+  const meet = { id: 1, meetName: 'Test Meet', ownerUserId: 9, lanes: 1, races: [race], blocks: [{ id: 'b1', raceIds: ['r1'] }], registrations: [{ id: 1, name: 'Jane Skater', helmetNumber: '638B', team: 'Fast Wheels' }] };
   const router = testRouter();
   const handler = routeHandler(router, 'get', '/portal/meet/:meetId/race-day/:mode');
   const response = responseRecorder();
@@ -174,4 +214,8 @@ test('judge screen includes every requested status and the DQ dialog', () => {
   assert.match(html, /Optional Rule Reference/);
   assert.match(html, /Internal officials-only notes/);
   assert.match(html, /Recorded By/);
+  assert.match(html, /name="registrationId_1"/);
+  assert.match(html, /data-helmet="638B"/);
+  assert.match(html, /name="helmetNumber_1" value="638B"/);
+  assert.match(html, /Manual entry \/ unassigned/);
 });

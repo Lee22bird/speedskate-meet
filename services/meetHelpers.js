@@ -4,7 +4,7 @@ const { esc, cap } = require('../utils/html');
 const { hasRole, canEditMeet, ensureMeetOwnership, userSslId } = require('../utils/auth');
 const { calculateRegistrationTotal } = require('./pricing');
 const { buildCostWidget } = require('./pricingUi');
-const { computeMeetStandings } = require('./standings');
+const { computeMeetStandings, raceScoreForRace, formatPointsForDisplay } = require('./standings');
 const {
   generateBaseRacesForMeet,
   generateOpenRacesForMeet,
@@ -1753,7 +1753,7 @@ function heatAuditTableHtml(heatRace, options = {}) {
 function raceAuditTableHtml(race, standingsRows, options = {}) {
   const print = options.print === true;
   const rows = (standingsRows || [])
-    .map(row => ({ row, score: (row.raceScores || []).find(s => s.raceId === race.id) }))
+    .map(row => ({ row, score: raceScoreForRace(row, race) }))
     .filter(({ score }) => score && Number(score.place) > 0)
     .sort((a, b) => Number(a.score.place) - Number(b.score.place));
 
@@ -1811,7 +1811,7 @@ function resultsMatrixHtml(section, options = {}) {
 
   const bodyRows = (section.standings || []).map(row => {
     const cells = races.map(r => {
-      const sc = (row.raceScores || []).find(s => s.raceId === r.id);
+      const sc = raceScoreForRace(row, r);
       const place = sc && Number(sc.place) > 0 ? Number(sc.place) : null;
       if (place == null) return `<td style="text-align:center;color:var(--muted,#8a94a6)">—</td>`;
       const rec = recordByRace.get(r.id)?.has(String(row.registrationId))
@@ -1824,7 +1824,7 @@ function resultsMatrixHtml(section, options = {}) {
         <td style="text-align:center"><strong>${row.overallPlace}</strong></td>
         <td>${esc(row.skaterName || '')}${badges}<div class="note" style="margin:0">${esc(row.team || '')}</div>${print ? '' : sponsorLineHtml(row.sponsor)}</td>
         ${cells}
-        <td style="text-align:right;font-variant-numeric:tabular-nums"><strong>${Number(row.totalPoints || 0)}</strong></td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums"><strong>${formatPointsForDisplay(row.totalPoints)}</strong></td>
       </tr>`;
   }).join('');
 
@@ -1860,7 +1860,7 @@ function resultsSectionHtml(section, meet, options = {}) {
       <div class="podium-name">${esc(row.skaterName||'Unknown')}${row.tiebreakerUsed?`<span class="tb-badge">TB</span>`:''}${row.runoffNeeded?`<span class="tb-badge tb-runoff">Run-off</span>`:''}</div>
       <div class="podium-team">${esc(row.team||'')}</div>
       ${sponsorLineHtml(row.sponsor)}
-      <div class="podium-pts">${Number(row.totalPoints||0)} pts</div>
+      <div class="podium-pts">${formatPointsForDisplay(row.totalPoints)} pts</div>
     </div>`).join('');
   const standingsRows = section.standings.map(row=>`
     <tr${row.runoffNeeded?' class="runoff-row"':''}>
@@ -1872,7 +1872,7 @@ function resultsSectionHtml(section, meet, options = {}) {
         ${print ? '' : sponsorLineHtml(row.sponsor)}
       </td>
       <td>${esc(row.team||'')}</td>
-      <td><strong>${Number(row.totalPoints||0)}</strong>${row.tiebreakerScore!=null?`<div class="note">TB: ${row.tiebreakerScore.toFixed(2)}</div>`:''}
+      <td><strong>${formatPointsForDisplay(row.totalPoints)}</strong>${row.tiebreakerScore!=null?`<div class="note">TB: ${row.tiebreakerScore.toFixed(2)}</div>`:''}
       </td>
     </tr>`).join('');
 

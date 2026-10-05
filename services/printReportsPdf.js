@@ -10,7 +10,7 @@
 const { cap } = require('../utils/html');
 const { raceDisplayStage, laneRowsForRace } = require('./raceDay');
 const { meetRinkLabel, meetDateLabel } = require('./meetHelpers');
-const { computeMeetStandings, computeOpenResults, computeQuadStandings } = require('./standings');
+const { computeMeetStandings, computeOpenResults, computeQuadStandings, raceScoreForRace, formatPointsForDisplay } = require('./standings');
 const { statusRowsForMeet } = require('./raceStatus');
 const {
   timeTrialEventTitle, completedTimeTrialEvents, timeTrialResults,
@@ -275,10 +275,10 @@ function streamFinalResultsPdf(res, { db, meet }) {
         const out = {
           place: row.overallPlace == null ? '' : String(row.overallPlace),
           skater: [row.skaterName, row.team].filter(Boolean).join(' · '),
-          total: row.totalPoints == null ? '' : String(row.totalPoints),
+          total: row.totalPoints == null ? '' : formatPointsForDisplay(row.totalPoints),
         };
         races.forEach((race, i) => {
-          const hit = (row.raceScores || []).find(s => s.raceId === race.id);
+          const hit = raceScoreForRace(row, race);
           out[`r${i}`] = hit && Number(hit.place) > 0 ? String(hit.place) : '—';
         });
         return out;

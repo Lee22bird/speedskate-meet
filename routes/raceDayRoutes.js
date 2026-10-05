@@ -211,12 +211,18 @@ function dqDialogHtml(user) {
     </script>`;
 }
 
-function laneResultFromBody(existing, lane, body, user) {
+function laneResultFromBody(existing, lane, body, user, registrations = []) {
   const status = String(body[`status_${lane}`] ?? existing.status ?? '').trim();
+  const submittedRegId = body[`registrationId_${lane}`];
+  const registrationId = submittedRegId == null
+    ? (existing.registrationId || '')
+    : registrations.some(reg => String(reg.id) === String(submittedRegId))
+      ? String(submittedRegId)
+      : '';
   const result = {
     lane,
-    registrationId: existing.registrationId || '',
-    helmetNumber: existing.helmetNumber || '',
+    registrationId,
+    helmetNumber: String(body[`helmetNumber_${lane}`] ?? existing.helmetNumber ?? '').trim(),
     skaterName: String(body[`skaterName_${lane}`] ?? existing.skaterName ?? '').trim(),
     team: String(body[`team_${lane}`] ?? existing.team ?? '').trim(),
     place: String(body[`place_${lane}`] ?? existing.place ?? '').trim(),
@@ -1087,7 +1093,7 @@ function applyRaceCorrectionFromBody(meet, race, body, user) {
 
   for (let i = 1; i <= laneCount; i++) {
     const existing = existingLaneEntries.find(x => Number(x.lane) === i) || {};
-    nextLaneEntries.push(laneResultFromBody(existing, i, body, user));
+    nextLaneEntries.push(laneResultFromBody(existing, i, body, user, meet.registrations || []));
   }
 
   race.laneEntries = nextLaneEntries;
@@ -1789,7 +1795,7 @@ router.get('/portal/meet/:meetId/race-day/:mode', requireRole('meet_director','j
           }
         </script>`;
       })():renderJudgeBoard({
-  meet, current, currentLanes, currentMerged, regMap, user: req.user,
+  meet, current, currentLanes, currentMerged, regMap, registrations: meet.registrations || [], user: req.user,
   raceStatusOptionsHtml, dqMetadataFields, dqDialogHtml,
   skaterAvatarHtml, mergeGroupMembers, renderRelayEligibleSkatersHtml,
 })):`<div class="card"><div class="muted">No race selected yet.</div></div>`}`;
@@ -1924,7 +1930,7 @@ router.post('/portal/meet/:meetId/race-day/judges/save', requireRole('judge','me
   race.laneEntries=[];
   for(let i=1;i<=laneCount;i++) {
     const existing=existingLaneEntries.find(x=>Number(x.lane)===i)||{};
-    race.laneEntries.push(laneResultFromBody(existing, i, req.body, req.user));
+    race.laneEntries.push(laneResultFromBody(existing, i, req.body, req.user, meet.registrations || []));
   }
   race.resultsMode=String(req.body.resultsMode||'places')==='times'?'times':'places';
   race.notes=String(req.body.notes||''); race.status=req.body.action==='close'?'closed':'open';
