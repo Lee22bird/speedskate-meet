@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { makeMsslGroupsTemplate, migrateMeet } = require('../services/meetHelpers');
-const { parseMsslSnapshot, combineTeamAndAttendance, planMsslSync, applyMsslSync } = require('../services/msslSheetSync');
+const { parseMsslSnapshot, parseMeetAttendance, combineTeamAndAttendance, planMsslSync, applyMsslSync } = require('../services/msslSheetSync');
 const createMsslSheetSyncRoutes = require('../routes/msslSheetSyncRoutes');
 const googleSheets = require('../services/msslGoogleSheets');
 
@@ -55,6 +55,21 @@ test('joins team roster fields with attendance from the matching Total Points me
   assert.equal(parsed.rows[0].name, 'Skater One');
   assert.equal(parsed.rows[0].elite, true);
   assert.equal(combined.snapshot.includes('2015-01-01'), false);
+});
+
+test('accepts the Elite Total Points C$ helmet-number header', () => {
+  const elite = [
+    'C$\tNAME\tTEAM\tOctober - Wichita',
+    'Tiny Tot Girls\t\t\tAttendance Yes=1 No=0',
+    '638B\tSkater One\tTeam United\t1',
+    '700\tSkater Two\tTeam United\t0',
+  ].join('\n');
+  const parsed = parseMeetAttendance(elite, {
+    ...meetFixture(), rinkLabel: 'Roller City • Wichita • KS',
+  }, 'Elite Total Points');
+  assert.equal(parsed.error, undefined);
+  assert.equal(parsed.attending.has('638b\u0000skater one'), true);
+  assert.equal(parsed.attending.has('700\u0000skater two'), false);
 });
 
 test('does not mistake a different meet attendance block for the current meet', () => {

@@ -32,11 +32,11 @@ function selectedFlag(value) {
 function parseMeetAttendance(text, meet, label) {
   const rows = parseTsv(text);
   const commonHeader = rows.findIndex(row =>
-    findHeaderIndex(row, ['helmet #', 'helmet number']) >= 0 &&
+    findHeaderIndex(row, ['helmet #', 'helmet number', 'c$']) >= 0 &&
     findHeaderIndex(row, ['name', 'skater name']) >= 0
   );
   if (commonHeader < 0) return { error: `The ${label} tab has no Helmet # and NAME columns.` };
-  const helmetIndex = findHeaderIndex(rows[commonHeader], ['helmet #', 'helmet number']);
+  const helmetIndex = findHeaderIndex(rows[commonHeader], ['helmet #', 'helmet number', 'c$']);
   const nameIndex = findHeaderIndex(rows[commonHeader], ['name', 'skater name']);
   const meetDate = new Date(`${clean(meet?.date)}T12:00:00`);
   const month = Number.isNaN(meetDate.getTime()) ? '' : meetDate.toLocaleString('en-US', { month: 'long', timeZone: 'UTC' });
