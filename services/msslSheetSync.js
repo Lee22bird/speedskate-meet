@@ -243,29 +243,51 @@ function flagOptions(row) {
   };
 }
 
+function registrationAgeGroupId(registration, meet) {
+  return clean(registration?.originalDivisionGroupId) ||
+    clean(findAgeGroup(meet?.groups || [], registration?.age, registration?.gender)?.id);
+}
+
 function planMsslSync(rows, meet, team) {
   const source = Array.isArray(rows) ? rows : [];
   const existing = Array.isArray(meet?.registrations) ? meet.registrations : [];
-  const seenHelmets = new Set();
-  const seenNames = new Set();
+  const seenHelmetsByGroup = new Set();
+  const seenHelmetGroups = new Map();
+  const seenNamesByGroup = new Set();
   const plans = [];
   for (const row of source) {
     const helmetKey = normalizeHelmet(row.helmetNumber);
     const nameKey = normalizeName(row.name);
+    const baseGroup = findAgeGroup(meet.groups || [], row.age, row.gender);
+    const groupKey = clean(baseGroup?.id);
     const notes = [];
     let status = 'NEW';
     let reason = '';
-    if (seenHelmets.has(helmetKey) || seenNames.has(nameKey)) {
+    const sourceHelmetKey = helmetKey && groupKey ? `${helmetKey}\u0000${groupKey}` : '';
+    const sourceNameKey = nameKey && groupKey ? `${nameKey}\u0000${groupKey}` : '';
+    if ((sourceHelmetKey && seenHelmetsByGroup.has(sourceHelmetKey)) ||
+        (sourceNameKey && seenNamesByGroup.has(sourceNameKey))) {
       status = 'REVIEW';
-      reason = 'Duplicate helmet or name in the pasted MSSL rows.';
+      reason = 'Duplicate helmet or name in the same age division in the MSSL rows.';
     }
-    seenHelmets.add(helmetKey);
-    seenNames.add(nameKey);
+    if (sourceHelmetKey) seenHelmetsByGroup.add(sourceHelmetKey);
+    if (sourceNameKey) seenNamesByGroup.add(sourceNameKey);
+    const previouslySeenGroups = seenHelmetGroups.get(helmetKey) || new Set();
+    if (!reason && helmetKey && groupKey && previouslySeenGroups.size && !previouslySeenGroups.has(groupKey)) {
+      notes.push('Helmet number is also used in another age division; permitted by MSSL rule.');
+    }
+    if (helmetKey && groupKey) {
+      previouslySeenGroups.add(groupKey);
+      seenHelmetGroups.set(helmetKey, previouslySeenGroups);
+    }
 
-    const helmetMatches = existing.filter(reg => normalizeHelmet(reg.helmetNumber) === helmetKey);
-    const nameMatches = existing.filter(reg => normalizeName(reg.name) === nameKey);
+    const allHelmetMatches = helmetKey ? existing.filter(reg => normalizeHelmet(reg.helmetNumber) === helmetKey) : [];
+    const helmetMatches = allHelmetMatches.filter(reg => registrationAgeGroupId(reg, meet) === groupKey);
+    const nameMatches = existing.filter(reg => normalizeName(reg.name) === nameKey && registrationAgeGroupId(reg, meet) === groupKey);
     let target = null;
-    if (!reason && helmetMatches.length > 1) {
+    if (!reason && !baseGroup) {
+      status = 'REVIEW'; reason = 'Race Age and gender do not map to a division in this meet.';
+    } else if (!reason && helmetMatches.length > 1) {
       status = 'REVIEW'; reason = 'This helmet number already belongs to multiple SSM registrations.';
     } else if (!reason && helmetMatches.length === 1) {
       if (normalizeName(helmetMatches[0].name) !== nameKey) {
@@ -274,13 +296,18 @@ function planMsslSync(rows, meet, team) {
         target = helmetMatches[0];
         status = 'UPDATE';
       }
+    } else if (!reason && nameMatches.length > 1) {
+      status = 'REVIEW'; reason = 'This name already belongs to multiple SSM registrations in the same age division.';
     } else if (!reason && nameMatches.length) {
-      status = 'REVIEW'; reason = 'Name already exists with a different helmet number.';
+      if (normalizeHelmet(nameMatches[0].helmetNumber) !== helmetKey) {
+        status = 'REVIEW'; reason = 'Name already exists with a different helmet number.';
+      } else {
+        target = nameMatches[0];
+        status = 'UPDATE';
+      }
     }
-
-    const baseGroup = findAgeGroup(meet.groups || [], row.age, row.gender);
-    if (!reason && !baseGroup) {
-      status = 'REVIEW'; reason = 'Race Age and gender do not map to a division in this meet.';
+    if (!reason && allHelmetMatches.length && !helmetMatches.length && !notes.some(note => note.includes('permitted by MSSL rule'))) {
+      notes.push('Helmet number is also used in another age division; permitted by MSSL rule.');
     }
     const options = flagOptions(row);
     if (row.novice && row.challengeUp) notes.push('Challenge Up cleared: novice skaters are not eligible for Challenge Up.');

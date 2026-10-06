@@ -119,6 +119,33 @@ test('duplicate-safe planning adds new skaters, updates exact identities, and bl
   assert.match(conflict[0].reason, /different registered name/);
 });
 
+test('the same helmet number is allowed across different birth-age divisions', () => {
+  const meet = meetFixture();
+  meet.registrations.push({ id: 1, name: 'Greta Manchee', helmetNumber: '1172', age: 8, gender: 'female', options: { elite: true } });
+  const row = parseMsslSnapshot(snapshot).rows[0];
+  const mike = { ...row, helmetNumber: '1172', name: 'Mike Paeth', age: 47, gender: 'male' };
+  const plans = planMsslSync([mike], meet, 'Team Velocity');
+  assert.equal(plans[0].status, 'NEW');
+  assert.match(plans[0].notes.join(' '), /used in another age division/);
+});
+
+test('source helmet duplicates are allowed across divisions but blocked within one division', () => {
+  const meet = meetFixture();
+  const row = parseMsslSnapshot(snapshot).rows[0];
+  const older = { ...row, helmetNumber: '1170', name: 'James Ashley Rumfelt', age: 50, gender: 'male' };
+  const younger = { ...row, helmetNumber: '1170', name: 'Arabella Smith', age: 8, gender: 'female' };
+  const differentDivisions = planMsslSync([older, younger], meet, 'Team Velocity');
+  assert.deepEqual(differentDivisions.map(plan => plan.status), ['NEW', 'NEW']);
+  assert.match(differentDivisions[1].notes.join(' '), /used in another age division/);
+
+  const sameDivision = planMsslSync([
+    older,
+    { ...older, name: 'Another Veteran' },
+  ], meet, 'Team Velocity');
+  assert.deepEqual(sameDivision.map(plan => plan.status), ['NEW', 'REVIEW']);
+  assert.match(sameDivision[1].reason, /same age division/);
+});
+
 test('new registrations never retain DOB and alphanumeric helmets survive meet migration', () => {
   const meet = meetFixture();
   const plans = planMsslSync(parseMsslSnapshot(snapshot).rows, meet, 'Team United - Wichita');
