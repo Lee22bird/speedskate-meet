@@ -101,18 +101,26 @@ function combineTeamAndAttendance(teamText, attendanceByTab, meet) {
     challengeUp: findHeaderIndex(headers, ['elite challenge up', 'challenge up']),
     open: findHeaderIndex(headers, ['open', 'open division']),
   };
-  const missing = Object.entries(columns).filter(([key, index]) => index < 0 && key !== 'challengeUp').map(([key]) => key);
+  const optionalColumns = new Set(['challengeUp', 'quad', 'novice', 'elite', 'open']);
+  const missing = Object.entries(columns).filter(([key, index]) => index < 0 && !optionalColumns.has(key)).map(([key]) => key);
   if (missing.length) return { error: `Missing required team roster columns: ${missing.join(', ')}.` };
 
-  const attendance = new Set();
+  const categoryAttendance = new Map();
   const attendanceLabels = new Set();
   for (const [tab, text] of Object.entries(attendanceByTab || {})) {
     const parsed = parseMeetAttendance(text, meet, tab);
     if (parsed.error) return parsed;
-    parsed.attending.forEach(key => attendance.add(key));
+    categoryAttendance.set(tab.toLowerCase(), parsed.attending);
     parsed.labels.forEach(value => attendanceLabels.add(value));
   }
   if (!Object.keys(attendanceByTab || {}).length) return { error: 'No MSSL Total Points attendance tabs were available.' };
+  const categoryKey = {
+    quad: 'quad total points',
+    novice: 'novice total points',
+    elite: 'elite total points',
+    open: 'open total points',
+  };
+  const attended = Object.fromEntries(Object.entries(categoryKey).map(([key, tab]) => [key, categoryAttendance.get(tab) || new Set()]));
 
   const safeRows = [[
     'Helmet #', 'NAME', 'Race Age', 'Gender', 'Quads', 'Novice', 'Elite Division', 'Elite Challenge Up', 'Open', 'Attendance Yes=1 No=0',
@@ -123,10 +131,13 @@ function combineTeamAndAttendance(teamText, attendanceByTab, meet) {
     const name = clean(row[columns.name]);
     if (!helmet && !name) continue;
     const key = `${normalizeHelmet(helmet)}\u0000${normalizeName(name)}`;
+    const options = Object.fromEntries(Object.entries(attended).map(([category, skaters]) => [category, skaters.has(key)]));
+    const anyCategory = Object.values(options).some(Boolean);
     safeRows.push([
-      helmet, name, clean(row[columns.age]), clean(row[columns.gender]), clean(row[columns.quad]),
-      clean(row[columns.novice]), clean(row[columns.elite]), columns.challengeUp < 0 ? '' : clean(row[columns.challengeUp]),
-      clean(row[columns.open]), attendance.has(key) ? '1' : '0',
+      helmet, name, clean(row[columns.age]), clean(row[columns.gender]), options.quad ? '1' : '0',
+      options.novice ? '1' : '0', options.elite ? '1' : '0',
+      options.elite && columns.challengeUp >= 0 && selectedFlag(row[columns.challengeUp]) ? '1' : '0',
+      options.open ? '1' : '0', anyCategory ? '1' : '0',
     ]);
   }
   return { snapshot: safeRows.map(row => row.join('\t')).join('\n'), attendanceLabel: [...attendanceLabels].join(' · ') };

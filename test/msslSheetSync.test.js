@@ -57,6 +57,34 @@ test('joins team roster fields with attendance from the matching Total Points me
   assert.equal(combined.snapshot.includes('2015-01-01'), false);
 });
 
+test('sets each race category only from its matching points-tab attendance', () => {
+  const team = [
+    'Helmet #\tNAME\tDOB\tCurrent Age\tRace Age\tGender\tSkated LESS THAN 2 Years\tQuads\tNovice\tElite Division\tElite Challenge Up\tOpen',
+    '596\tSkater One\t2015-01-01\t11\t11\tGirls\tTRUE\tYes\tYes\tYes\tYes\tYes',
+    '597\tSkater Two\t2014-01-01\t12\t12\tGirls\tFALSE\tYes\tYes\tYes\tYes\tYes',
+  ].join('\n');
+  const makeTab = (first, second) => [
+    'Helmet #\tNAME\tTEAM\tOctober - Wichita, KS',
+    'Division\t\t\tAttendance Yes=1 No=0',
+    `596\tSkater One\tTeam United\t${first}`,
+    `597\tSkater Two\tTeam United\t${second}`,
+  ].join('\n');
+  const points = {
+    'Quad Total Points': makeTab('1', '0'),
+    'Novice Total Points': makeTab('0', '1'),
+    'Elite Total Points': makeTab('0', '0'),
+    'Open Total Points': makeTab('0', '0'),
+  };
+  const combined = combineTeamAndAttendance(team, points, { ...meetFixture(), rinkLabel: 'Roller City • Wichita • KS' });
+  const parsed = parseMsslSnapshot(combined.snapshot);
+  assert.deepEqual(parsed.rows.map(row => ({
+    name: row.name, quad: row.quad, novice: row.novice, elite: row.elite, open: row.open,
+  })), [
+    { name: 'Skater One', quad: true, novice: false, elite: false, open: false },
+    { name: 'Skater Two', quad: false, novice: true, elite: false, open: false },
+  ]);
+});
+
 test('accepts the Elite Total Points C$ helmet-number header', () => {
   const elite = [
     'C$\tNAME\tTEAM\tOctober - Wichita',
