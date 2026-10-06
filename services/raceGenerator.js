@@ -243,7 +243,7 @@ function buildRaceSetForEntries(baseRace, regs, laneCount, { allowHeats = true }
       isFinal: true,
       startType: 'rolling',
       countsForOverall: false,
-      laneEntries: assignRandomLaneEntries(sorted),
+      laneEntries: assignRandomLaneEntries(sorted, laneCount),
     }];
   }
 
@@ -255,7 +255,7 @@ function buildRaceSetForEntries(baseRace, regs, laneCount, { allowHeats = true }
       isFinal: true,
       startType: 'standing',
       countsForOverall: true,
-      laneEntries: assignRandomLaneEntries(sorted),
+      laneEntries: assignRandomLaneEntries(sorted, laneCount),
     }];
   }
 
@@ -267,7 +267,7 @@ function buildRaceSetForEntries(baseRace, regs, laneCount, { allowHeats = true }
     const heatRace = buildHeatRaceShell(baseRace, 'heat', idx + 1, idx + 1);
     heatRace.startType = 'standing';
     heatRace.countsForOverall = false;
-    heatRace.laneEntries = assignRandomLaneEntries(bucket);
+    heatRace.laneEntries = assignRandomLaneEntries(bucket, laneCount);
 
     raceSet.push(heatRace);
   });
@@ -524,7 +524,7 @@ function generateQuadRacesForMeet(meet) {
 function rebuildRaceAssignments(meet) {
   ensureRegistrationTotalsAndNumbers(meet);
 
-  const laneCount = Math.max(1, Number(meet.lanes) || 4);
+  const laneCount = Math.max(1, Number(meet.lanes) || 7);
   const originalBlocks = (meet.blocks || []).map(block => ({
     ...block,
     raceIds: [...(block.raceIds || [])],

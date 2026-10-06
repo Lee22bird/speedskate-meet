@@ -7,6 +7,7 @@ const {
 } = require('../services/meetHelpers');
 const { laneRowsForRace } = require('../services/raceDay');
 const { rebuildRaceAssignmentsSafe } = require('../services/ttHelpers');
+const { assignRandomLaneEntries, reRandomizeLaneEntries } = require('../services/laneAssignment');
 
 function baseRace(overrides = {}) {
   return {
@@ -156,6 +157,19 @@ test('lane assignment is a random permutation, not registration order', () => {
   // strict registration order — this would only fail by astronomical chance
   // if shuffling were broken (e.g. accidentally returning the input order).
   assert.ok(samples.some(sample => sample.join(',') !== sequential.join(',')));
+});
+
+test('sparse races draw distinct lanes from the full track, not only lanes 1 through N', () => {
+  const regs = registrations(3);
+  const alwaysPickFirst = () => 0;
+  const entries = assignRandomLaneEntries(regs, 7, alwaysPickFirst);
+
+  assert.deepEqual(entries.map(entry => entry.lane), [2, 3, 4]);
+  assert.deepEqual(entries.map(entry => entry.registrationId).sort(), regs.map(reg => reg.id).sort());
+
+  const redrawn = reRandomizeLaneEntries(entries, 7, alwaysPickFirst);
+  assert.deepEqual(redrawn.map(entry => entry.lane), [2, 3, 4]);
+  assert.deepEqual(redrawn.map(entry => entry.registrationId).sort(), regs.map(reg => reg.id).sort());
 });
 
 // ── Pre-created semifinals (SR505.4) ─────────────────────────────────────────

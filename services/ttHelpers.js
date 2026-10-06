@@ -176,8 +176,8 @@ function raceMatchesRegAgeGender(race, reg, meet) {
 
 // Kept as a named export for backward compatibility — now assigns lanes via a
 // random shuffle (see services/laneAssignment.js) rather than registration order.
-function assignSequentialLaneEntries(regs) {
-  return assignRandomLaneEntries(regs);
+function assignSequentialLaneEntries(regs, laneCount = 7) {
+  return assignRandomLaneEntries(regs, laneCount);
 }
 
 function restoreBlockAssignmentsBySignature(meet, previousBlocks, previousRaces) {
@@ -228,14 +228,14 @@ function reRandomizeRaceLanes(meet, raceId) {
   if (!race) return { ok: false, error: 'Race not found.' };
   if (race.isRelayRace) return { ok: false, error: 'Relay lane assignments are not randomized.' };
   if (race.isTimeTrial) return { ok: false, error: 'Time trial entries do not use fixed lanes.' };
-  race.laneEntries = reRandomizeLaneEntries(race.laneEntries);
+  race.laneEntries = reRandomizeLaneEntries(race.laneEntries, Math.max(1, Number(meet.lanes) || 7));
   meet.updatedAt = nowIso();
   return { ok: true, race };
 }
 
 function rebuildRaceAssignmentsSafe(meet) {
   ensureRegistrationTotalsAndNumbers(meet);
-  const laneCount=Math.max(1,Number(meet.lanes)||4);
+  const laneCount=Math.max(1,Number(meet.lanes)||7);
   const previousBlocks=JSON.parse(JSON.stringify(meet.blocks||[]));
   const previousRaces=JSON.parse(JSON.stringify(meet.races||[]));
   const newRaces=[];const seenBaseKeys=new Set();
@@ -259,13 +259,13 @@ function rebuildRaceAssignmentsSafe(meet) {
   for(const race of meet.races||[]){
     if(!race.isOpenRace||race.isTimeTrial)continue;
     const matchingRegs=(meet.registrations||[]).filter(reg=>!!reg.options?.open&&raceMatchesRegAgeGender(race,reg,meet));
-    newRaces.push({...race,stage:'final',heatNumber:0,isFinal:true,startType:race.startType||'rolling',countsForOverall:false,laneEntries:assignSequentialLaneEntries(matchingRegs)});
+    newRaces.push({...race,stage:'final',heatNumber:0,isFinal:true,startType:race.startType||'rolling',countsForOverall:false,laneEntries:assignSequentialLaneEntries(matchingRegs,laneCount)});
   }
   for(const race of meet.races||[]){
     const isAdditional=race.isAdditionalRace||race.isSkateabilityRace||String(race.division||'')==='additional'||String(race.division||'')==='skateability';
     if(!isAdditional)continue;
     const matchingRegs=(meet.registrations||[]).filter(reg=>{const selected=!!(reg.options?.additional||reg.options?.skateability);const selectedGroup=String(reg.options?.additionalGroupId||reg.options?.skateabilityGroupId||'');return selected&&(!selectedGroup||selectedGroup===String(race.groupId||''));});
-    newRaces.push({...race,division:'additional',isAdditionalRace:true,isSkateabilityRace:false,countsForOverall:false,laneEntries:assignSequentialLaneEntries(matchingRegs)});
+    newRaces.push({...race,division:'additional',isAdditionalRace:true,isSkateabilityRace:false,countsForOverall:false,laneEntries:assignSequentialLaneEntries(matchingRegs,laneCount)});
   }
   for(const race of meet.races||[]){if(race.isRelayRace)newRaces.push(race);}
   meet.races=newRaces;
