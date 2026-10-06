@@ -903,13 +903,19 @@ const CHALLENGE_TOWARD_SENIOR = {
   primary_girls: 'juvenile_girls',
   juvenile_girls: 'elementary_girls',
   elementary_girls: 'freshman_girls',
-  freshman_girls: 'sophomore_ladies',
-  sophomore_ladies: 'junior_ladies',
-  junior_ladies: 'senior_ladies',
-  senior_ladies: 'classic_ladies',
-  classic_ladies: 'masters_ladies',
-  masters_ladies: 'grand_masters_ladies',
-  veteran_ladies: 'grand_veteran_ladies',
+  freshman_girls: ['sophomore_ladies', 'sophomore_girls'],
+  sophomore_ladies: ['junior_ladies', 'junior_women'],
+  sophomore_girls: ['junior_women', 'junior_ladies'],
+  junior_ladies: ['senior_ladies', 'senior_women'],
+  junior_women: ['senior_women', 'senior_ladies'],
+  senior_ladies: ['classic_ladies', 'classic_women'],
+  senior_women: ['classic_women', 'classic_ladies'],
+  classic_ladies: ['masters_ladies', 'master_women'],
+  classic_women: ['master_women', 'masters_ladies'],
+  masters_ladies: ['grand_masters_ladies', 'veteran_women'],
+  master_women: ['veteran_women', 'grand_masters_ladies'],
+  veteran_ladies: ['grand_veteran_ladies', 'esquire_women'],
+  veteran_women: ['esquire_women', 'grand_veteran_ladies'],
   esquire_ladies: 'grand_esquire_ladies',
 
   tiny_tot_boys: 'primary_boys',
@@ -926,9 +932,10 @@ const CHALLENGE_TOWARD_SENIOR = {
 };
 
 function findChallengeUpGroup(groups,currentGroupId) {
-  const nextId = CHALLENGE_TOWARD_SENIOR[String(currentGroupId || '')];
-  if (!nextId) return null;
-  return (groups || []).find(g => String(g.id) === String(nextId)) || null;
+  const nextIds = CHALLENGE_TOWARD_SENIOR[String(currentGroupId || '')];
+  if (!nextIds) return null;
+  const candidates = Array.isArray(nextIds) ? nextIds : [nextIds];
+  return (groups || []).find(g => candidates.includes(String(g.id))) || null;
 }
 
 function challengeAdjustedGroup(meet,baseGroup,challengeUp) {
