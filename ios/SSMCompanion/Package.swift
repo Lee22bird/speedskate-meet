@@ -16,5 +16,9 @@ let package = Package(
             name: "SSMCompanion",
             resources: [.process("Resources")]
         ),
+        .testTarget(
+            name: "SSMCompanionTests",
+            dependencies: ["SSMCompanion"]
+        ),
     ]
 )

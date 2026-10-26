@@ -127,11 +127,11 @@ public final class FrontDeskViewModel: ObservableObject {
         if reg.options["quad"] == true { chips.append("Quad") }
         if reg.options["additional"] == true { chips.append("Additional") }
         if reg.timeTrials { chips.append("Time Trials") }
-        if reg.options["relay2Person"] == true { chips.append("2 Person Relay") }
-        if reg.options["relay3Person"] == true { chips.append("3 Person Relay") }
+        // Relays are grouped by team size (registrationRoutes.js
+        // registrationOptionLabels): a size counts once, inline or quad.
+        if reg.options["relay2Person"] == true || reg.options["quadRelay2Person"] == true { chips.append("2 Person Relay") }
+        if reg.options["relay3Person"] == true || reg.options["quadRelay3Person"] == true { chips.append("3 Person Relay") }
         if reg.options["relay4Person"] == true { chips.append("4 Person Relay") }
-        if reg.options["quadRelay2Person"] == true { chips.append("Quad 2 Person") }
-        if reg.options["quadRelay3Person"] == true { chips.append("Quad 3 Person") }
         return chips
     }
 
@@ -368,14 +368,12 @@ public struct RegistrationFormState {
     public var timeTrials = false
     public var additional = false
     public var additionalGroupId = ""
-    public var relayEventIds: Set<String> = []
-    public var quadRelayEventIds: Set<String> = []
-    // Legacy plain relay flags — only used when the meet has no templates.
+    // Relay entry is by team size, like the website's form. The server turns
+    // each size into the matching inline + quad relay events and ignores any
+    // relay event ids a client sends.
     public var relay2Person = false
     public var relay3Person = false
     public var relay4Person = false
-    public var quadRelay2Person = false
-    public var quadRelay3Person = false
 
     /// Blank add-form defaults (the website pre-checks Elite).
     public static func blank() -> RegistrationFormState {
@@ -404,13 +402,9 @@ public struct RegistrationFormState {
         timeTrials = reg.timeTrials
         additional = reg.options["additional"] ?? false
         additionalGroupId = reg.additionalGroupId
-        relayEventIds = Set(reg.relayEventIds)
-        quadRelayEventIds = Set(reg.quadRelayEventIds)
-        relay2Person = reg.options["relay2Person"] ?? false
-        relay3Person = reg.options["relay3Person"] ?? false
+        relay2Person = (reg.options["relay2Person"] ?? false) || (reg.options["quadRelay2Person"] ?? false)
+        relay3Person = (reg.options["relay3Person"] ?? false) || (reg.options["quadRelay3Person"] ?? false)
         relay4Person = reg.options["relay4Person"] ?? false
-        quadRelay2Person = reg.options["quadRelay2Person"] ?? false
-        quadRelay3Person = reg.options["quadRelay3Person"] ?? false
     }
 
     public func jsonBody() -> [String: Any] {
@@ -431,13 +425,9 @@ public struct RegistrationFormState {
             "timeTrials": timeTrials,
             "additional": additional,
             "additionalGroupId": additionalGroupId,
-            "relayEventIds": Array(relayEventIds),
-            "quadRelayEventIds": Array(quadRelayEventIds),
             "relay2Person": relay2Person,
             "relay3Person": relay3Person,
             "relay4Person": relay4Person,
-            "quadRelay2Person": quadRelay2Person,
-            "quadRelay3Person": quadRelay3Person,
         ]
         if !helmetNumber.trimmingCharacters(in: .whitespaces).isEmpty {
             body["helmetNumber"] = helmetNumber.trimmingCharacters(in: .whitespaces)
@@ -445,26 +435,35 @@ public struct RegistrationFormState {
         return body
     }
 
-    /// The website's live cost preview (services/pricingUi.js): base + each
-    /// selected category beyond the first × additional fee, capped. Each
-    /// selected relay id is its own category; the legacy flags fall back
-    /// PER DISCIPLINE (inline flags count only when relayEventIds is empty,
-    /// quad flags only when quadRelayEventIds is empty — the server treats
-    /// them independently).
-    public func costPreview(for meet: ExportMeet) -> (total: Double, uncapped: Double, categories: Int, capped: Bool) {
+    /// Number of billable event categories the SERVER will keep for this
+    /// form — services/pricing.js countSelectedEventCategories applied to the
+    /// options routes/registrationRoutes.js registrationOptionsFromBody builds.
+    /// Categories the meet doesn't offer are dropped by the server, so they
+    /// aren't counted; Challenge Up counts as one extra event; relays count
+    /// once per team size that has an enabled relay event.
+    public func billableCategories(for meet: ExportMeet) -> Int {
+        let available = meet.registrationAvailability
         var categories = 0
-        for flag in [novice, elite, open, quad, timeTrials, additional] where flag { categories += 1 }
-        if relayEventIds.isEmpty {
-            for flag in [relay2Person, relay3Person, relay4Person] where flag { categories += 1 }
-        } else {
-            categories += relayEventIds.count
+        if novice && available.novice { categories += 1 }
+        if elite && available.elite { categories += 1 }
+        if challengeUp && available.challengeUp { categories += 1 }
+        if open && available.open { categories += 1 }
+        if quad && available.quad { categories += 1 }
+        if timeTrials { categories += 1 }
+        if additional, meet.additionalGroups.contains(where: { $0.id == additionalGroupId }) { categories += 1 }
+        let sizes = Set(meet.registrationRelaySizes)
+        for (size, on) in [(2, relay2Person), (3, relay3Person), (4, relay4Person)] where on && sizes.contains(size) {
+            categories += 1
         }
-        if quadRelayEventIds.isEmpty {
-            for flag in [quadRelay2Person, quadRelay3Person] where flag { categories += 1 }
-        } else {
-            categories += quadRelayEventIds.count
-        }
-        let raw = meet.baseEntryFee + Double(max(0, categories - 1)) * meet.additionalRaceFee
+        return categories
+    }
+
+    /// The website's cost (services/pricing.js calcRegistrationCost): base
+    /// covers the first category, each extra one is the additional fee,
+    /// capped at the meet maximum.
+    public func costPreview(for meet: ExportMeet) -> (total: Double, uncapped: Double, categories: Int, capped: Bool) {
+        let categories = billableCategories(for: meet)
+        let raw = max(0, meet.baseEntryFee) + Double(max(0, categories - 1)) * max(0, meet.additionalRaceFee)
         if meet.maxRegistrationFee > 0, raw > meet.maxRegistrationFee {
             return (meet.maxRegistrationFee, raw, categories, true)
         }

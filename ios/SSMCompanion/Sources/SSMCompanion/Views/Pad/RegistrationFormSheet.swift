@@ -138,42 +138,33 @@ struct RegistrationFormSheet: View {
 
     private var eventsSection: some View {
         formCard("EVENTS") {
-            Toggle("Challenge Up", isOn: $form.challengeUp)
-            Toggle("Novice", isOn: $form.novice)
-            Toggle("Elite", isOn: $form.elite)
-            Toggle("Open", isOn: $form.open)
-            if meet?.quadEnabled == true {
-                Toggle("Quad", isOn: $form.quad)
-            }
+            // Only the categories this meet offers — the website's form shows
+            // exactly these (registrationAvailability) and the server drops
+            // anything else on save.
+            let available = meet?.registrationAvailability
+            if available?.challengeUp == true { Toggle("Challenge Up", isOn: $form.challengeUp) }
+            if available?.novice == true { Toggle("Novice", isOn: $form.novice) }
+            if available?.elite == true { Toggle("Elite", isOn: $form.elite) }
+            if available?.open == true { Toggle("Open", isOn: $form.open) }
+            if available?.quad == true { Toggle("Quad", isOn: $form.quad) }
             if showTimeTrials {
                 Toggle("Time Trials", isOn: $form.timeTrials)
             }
 
-            let inlineRelays = enabledRelays(discipline: "inline")
-            if !inlineRelays.isEmpty {
-                relayPicker("RELAY EVENTS", rows: inlineRelays, selection: $form.relayEventIds)
-            }
-            let quadRelaysAvailable = meet?.quadEnabled == true
-            let quadRelays = quadRelaysAvailable ? enabledRelays(discipline: "quad") : []
-            if !quadRelays.isEmpty {
-                relayPicker("QUAD RELAY EVENTS", rows: quadRelays, selection: $form.quadRelayEventIds)
-            }
-            // Legacy plain flags only when the meet HAS relay events but no
-            // usable templates (the website's hasRelayEvents gate — a meet
-            // with no relay configuration shows no relay UI at all), or when
-            // the racer already carries a legacy flag that must stay
-            // clearable.
-            let hasLegacyFlags = form.relay2Person || form.relay3Person || form.relay4Person
-                || form.quadRelay2Person || form.quadRelay3Person
-            if inlineRelays.isEmpty, quadRelays.isEmpty,
-               (meet?.hasRelayEvents == true || hasLegacyFlags) {
-                Toggle("2 Person Relay", isOn: $form.relay2Person)
-                Toggle("3 Person Relay", isOn: $form.relay3Person)
-                Toggle("4 Person Relay", isOn: $form.relay4Person)
-                if quadRelaysAvailable || form.quadRelay2Person || form.quadRelay3Person {
-                    Toggle("🛼 Quad 2 Person Relay", isOn: $form.quadRelay2Person)
-                    Toggle("🛼 Quad 3 Person Relay", isOn: $form.quadRelay3Person)
+            // Relays by team size, one toggle per size the meet has an enabled
+            // relay event for. Each size is one event; the server attaches the
+            // matching inline and quad relay events.
+            let relaySizes = meet?.registrationRelaySizes ?? []
+            if !relaySizes.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("RELAY EVENTS")
+                        .font(.ssmRounded(11, weight: .heavy))
+                        .foregroundStyle(SSMTheme.muted)
+                    if relaySizes.contains(2) { Toggle("2 Person Relay", isOn: $form.relay2Person) }
+                    if relaySizes.contains(3) { Toggle("3 Person Relay", isOn: $form.relay3Person) }
+                    if relaySizes.contains(4) { Toggle("4 Person Relay", isOn: $form.relay4Person) }
                 }
+                .padding(.top, 4)
             }
 
             if let groups = meet?.additionalGroups, !groups.isEmpty {
@@ -204,42 +195,6 @@ struct RegistrationFormSheet: View {
         // Offer the toggle when the meet has a TT event, or the racer already
         // has TT set (so an edit can't silently clear it out of sight).
         (meet?.timeTrialEvents.isEmpty == false) || form.timeTrials
-    }
-
-    private func enabledRelays(discipline: String) -> [ExportRelayTemplate] {
-        (meet?.relayTemplates ?? []).filter {
-            $0.enabled && $0.discipline == discipline && !$0.divisionId.isEmpty
-        }
-    }
-
-    private func relayPicker(_ label: String, rows: [ExportRelayTemplate],
-                             selection: Binding<Set<String>>) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(label)
-                .font(.ssmRounded(11, weight: .heavy))
-                .foregroundStyle(SSMTheme.muted)
-            Text("Each selected relay division counts as one event.")
-                .font(.ssmRounded(11, weight: .medium))
-                .foregroundStyle(SSMTheme.muted)
-            ForEach(rows) { row in
-                Toggle(isOn: Binding(
-                    get: { selection.wrappedValue.contains(row.id) },
-                    set: { on in
-                        if on { selection.wrappedValue.insert(row.id) }
-                        else { selection.wrappedValue.remove(row.id) }
-                    }
-                )) {
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(row.displayLabel)
-                            .font(.ssmRounded(14, weight: .semibold))
-                        Text("\(row.type)\(row.discipline == "quad" ? " · Quad" : "")")
-                            .font(.ssmRounded(11, weight: .medium))
-                            .foregroundStyle(SSMTheme.muted)
-                    }
-                }
-            }
-        }
-        .padding(.top, 4)
     }
 
     // ── Cost preview ─────────────────────────────────────────────────────

@@ -50,6 +50,15 @@ extension KeyedDecodingContainer {
 
 // ── Export payload ───────────────────────────────────────────────────────
 
+/// Registration event categories a meet offers (services/registrationAvailability.js).
+public struct RegistrationAvailability: Equatable {
+    public let challengeUp: Bool
+    public let novice: Bool
+    public let elite: Bool
+    public let open: Bool
+    public let quad: Bool
+}
+
 public struct DesktopExportResponse: Decodable {
     public let ok: Bool
     public let exportedAt: String?
@@ -78,11 +87,41 @@ public struct ExportMeet: Decodable {
     public let baseEntryFee: Double
     public let additionalRaceFee: Double
     public let maxRegistrationFee: Double
+    /// Which registration event categories this meet actually offers —
+    /// mirrors services/registrationAvailability.js. The website hides (and
+    /// the server silently drops) any category that isn't configured.
+    public let registrationAvailability: RegistrationAvailability
 
     private enum CodingKeys: String, CodingKey {
         case id, meetName, status, lanes, date, endDate, startTime, currentRaceId, raceDayPaused, races, blocks, timeTrialEvents, registrations
         case relayTemplates, additionalGroups, additionalRaceGroups, additionalRaces, skateabilityGroups, quadGroups, relayEnabled
         case baseEntryFee, additionalRaceFee, maxRegistrationFee
+        case groups, openGroups, allowChallengeUp
+    }
+
+    /// One age group's division switches — only the enabled flags matter here.
+    private struct GroupLite: Decodable {
+        let novice: Bool
+        let elite: Bool
+        private enum CodingKeys: String, CodingKey { case divisions }
+        private enum DivisionKeys: String, CodingKey { case novice, elite }
+        private struct Toggle: Decodable {
+            let enabled: Bool
+            private enum CodingKeys: String, CodingKey { case enabled }
+            init(from decoder: Decoder) throws {
+                enabled = (try decoder.container(keyedBy: CodingKeys.self)).flexBool(.enabled) ?? false
+            }
+        }
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            guard let d = try? c.nestedContainer(keyedBy: DivisionKeys.self, forKey: .divisions) else {
+                novice = false
+                elite = false
+                return
+            }
+            novice = (try? d.decodeIfPresent(Toggle.self, forKey: .novice))?.enabled ?? false
+            elite = (try? d.decodeIfPresent(Toggle.self, forKey: .elite))?.enabled ?? false
+        }
     }
 
     private struct QuadGroupLite: Decodable {
@@ -105,7 +144,14 @@ public struct ExportMeet: Decodable {
         startTime = c.flexString(.startTime) ?? ""
         currentRaceId = c.flexString(.currentRaceId)
         raceDayPaused = c.flexBool(.raceDayPaused) ?? false
-        races = (try? c.decodeIfPresent([ExportRace].self, forKey: .races)) ?? []
+        // Heats folded into a rolling-start final stay in the store (so the
+        // final can be undone) but are out of the meet everywhere the website
+        // looks: race order, block builder pool, unassigned list, standings
+        // (services/raceDay.js orderedRaces, scheduleGenerator, blockBuilderView).
+        // Dropping them here keeps every iPad screen numbering races the same
+        // way as the web, the announcer board, and the printed reports.
+        let allRaces = (try? c.decodeIfPresent([ExportRace].self, forKey: .races)) ?? []
+        races = allRaces.filter { $0.rollingStartSupersededBy == nil }
         blocks = (try? c.decodeIfPresent([ExportBlock].self, forKey: .blocks)) ?? []
         timeTrialEvents = (try? c.decodeIfPresent([ExportTimeTrialEvent].self, forKey: .timeTrialEvents)) ?? []
         registrations = (try? c.decodeIfPresent([ExportRegistration].self, forKey: .registrations)) ?? []
@@ -122,6 +168,17 @@ public struct ExportMeet: Decodable {
         additionalGroups = groups
         let quadGroups = (try? c.decodeIfPresent([QuadGroupLite].self, forKey: .quadGroups)) ?? []
         quadEnabled = quadGroups.contains { $0.enabled }
+        let groupFlags = (try? c.decodeIfPresent([GroupLite].self, forKey: .groups)) ?? []
+        let openGroups = (try? c.decodeIfPresent([QuadGroupLite].self, forKey: .openGroups)) ?? []
+        let noviceOn = groupFlags.contains { $0.novice }
+        let eliteOn = groupFlags.contains { $0.elite }
+        registrationAvailability = RegistrationAvailability(
+            challengeUp: (c.flexBool(.allowChallengeUp) ?? false) && (noviceOn || eliteOn),
+            novice: noviceOn,
+            elite: eliteOn,
+            open: openGroups.contains { $0.enabled },
+            quad: quadEnabled
+        )
         relayEnabled = c.flexBool(.relayEnabled) ?? false
         baseEntryFee = (try? c.decodeIfPresent(Double.self, forKey: .baseEntryFee)) ?? Double(c.flexInt(.baseEntryFee) ?? 0)
         additionalRaceFee = (try? c.decodeIfPresent(Double.self, forKey: .additionalRaceFee)) ?? Double(c.flexInt(.additionalRaceFee) ?? 0)
@@ -135,6 +192,19 @@ public struct ExportMeet: Decodable {
         relayEnabled
             || relayTemplates.contains(where: \.enabled)
             || races.contains(where: \.isRelayRace)
+    }
+
+    /// Relay team sizes a skater can register for — one "N Person Relay"
+    /// toggle per size that has at least one enabled relay event (inline or
+    /// quad), exactly like the website's registration form since relays were
+    /// grouped by team size. The server derives the actual relay events from
+    /// these size flags and ignores any submitted relay event ids.
+    public var registrationRelaySizes: [Int] {
+        let sizes = relayTemplates
+            .filter { $0.enabled && !$0.divisionId.isEmpty }
+            .map(\.size)
+            .filter { (2...4).contains($0) }
+        return Array(Set(sizes)).sorted()
     }
 
     /// Race ids that no block claims — the website's "Unassigned" pool.
@@ -203,11 +273,17 @@ public struct ExportRace: Decodable, Identifiable, Hashable {
     public let mergeGroupId: String?
     public let mergeLead: Bool
     public let laneEntries: [ExportLane]
+    /// Set on a heat that has been folded into a rolling-start final (the
+    /// final's id). Such heats are hidden — see ExportMeet.init.
+    public let rollingStartSupersededBy: String?
+    /// This race is a rolling-start final built from two elite heats.
+    public let rollingStartFinal: Bool
 
     private enum CodingKeys: String, CodingKey {
         case id, groupLabel, division, distanceLabel, stage, heatNumber, dayIndex, startType, status
         case resultsMode, notes, closedAt, isOpenRace, isQuadRace, isTimeTrial, isRelayRace
         case isAdditionalRace, isSkateabilityRace, mergeGroupId, mergeLead, laneEntries
+        case rollingStartSupersededBy, rollingStartFinal
     }
 
     public init(from decoder: Decoder) throws {
@@ -233,6 +309,8 @@ public struct ExportRace: Decodable, Identifiable, Hashable {
         mergeGroupId = c.flexString(.mergeGroupId).flatMap { $0.isEmpty ? nil : $0 }
         mergeLead = c.flexBool(.mergeLead) ?? false
         laneEntries = (try? c.decodeIfPresent([ExportLane].self, forKey: .laneEntries)) ?? []
+        rollingStartSupersededBy = c.flexString(.rollingStartSupersededBy).flatMap { $0.isEmpty ? nil : $0 }
+        rollingStartFinal = c.flexBool(.rollingStartFinal) ?? false
     }
 
     /// Whether merge-races would even consider this race — mirrors the
@@ -260,7 +338,7 @@ public struct ExportRace: Decodable, Identifiable, Hashable {
         switch stage {
         case "heat": return heatNumber.map { "Heat \($0)" } ?? "Heat"
         case "semi": return heatNumber.map { "Semi \($0)" } ?? "Semi"
-        case "final": return "Final"
+        case "final": return rollingStartFinal ? "Rolling Final" : "Final"
         default: return "Race"
         }
     }
@@ -331,8 +409,8 @@ public struct ExportRegistration: Decodable, Identifiable, Hashable {
     /// Truthy option flags (novice/elite/open/quad/timeTrials/additional/
     /// relay2Person/… — keys vary by meet config).
     public let options: [String: Bool]
-    /// Selected relay division ids — must round-trip on edit (the edit POST
-    /// wholly replaces options).
+    /// Selected relay division ids, as stored. Display/legacy only — the
+    /// server rebuilds these from the relay2Person/3/4 size flags on save.
     public let relayEventIds: [String]
     public let quadRelayEventIds: [String]
     public let specialRaceIds: [String]
@@ -439,10 +517,15 @@ public struct ExportRelayTemplate: Decodable, Identifiable {
     public let ageRange: String
     public let distance: String
     public let discipline: String
+    /// Team size (2/3/4). Mirrors routes/registrationRoutes.js
+    /// relayTemplateSize: explicit size, else the digit in the type
+    /// ("3 Person"), else the size encoded in the division id ("r3_…",
+    /// "mssl_r3_…"). 0 when unknown.
+    public let size: Int
 
     public var id: String { divisionId }
 
-    private enum CodingKeys: String, CodingKey { case divisionId, enabled, type, age, ageRange, distance, discipline }
+    private enum CodingKeys: String, CodingKey { case divisionId, enabled, type, age, ageRange, distance, discipline, size }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -453,6 +536,15 @@ public struct ExportRelayTemplate: Decodable, Identifiable {
         ageRange = c.flexString(.ageRange) ?? ""
         distance = c.flexString(.distance) ?? ""
         discipline = c.flexString(.discipline) ?? "inline"
+        size = Self.teamSize(explicit: c.flexInt(.size), type: type, divisionId: divisionId)
+    }
+
+    static func teamSize(explicit: Int?, type: String, divisionId: String) -> Int {
+        if let explicit, explicit > 0 { return explicit }
+        if let digit = type.first(where: \.isNumber), let n = Int(String(digit)) { return n }
+        if let range = divisionId.range(of: #"(?:^|_)r(\d)_"#, options: .regularExpression),
+           let digit = divisionId[range].first(where: \.isNumber), let n = Int(String(digit)) { return n }
+        return 0
     }
 
     public var displayLabel: String {
