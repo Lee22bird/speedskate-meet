@@ -66,9 +66,13 @@ function registrationMatchesStandardRace(reg, race, meet) {
     const genderMatches = !simpleGender(race.gender) || simpleGender(race.gender) === simpleGender(reg.gender);
     if (!genderMatches) return false;
 
-    if (raceGroupId === baseGroupId && simpleAgeMatch(race.ages, reg.age)) {
-      if (opts[div]) return true;
-      return div === 'elite' && noviceChallengeCreatesOwnElite(reg);
+    if (div === 'novice' && simpleAgeMatch(race.ages, reg.age)) {
+      return !!opts.novice;
+    }
+
+    if (div === 'elite' && raceGroupId === baseGroupId && simpleAgeMatch(race.ages, reg.age)) {
+      if (opts.elite) return true;
+      return noviceChallengeCreatesOwnElite(reg);
     }
 
     if (div === 'elite' && eliteChallengeCreatesAgeGroup(reg)) {

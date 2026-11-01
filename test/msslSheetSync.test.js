@@ -147,6 +147,21 @@ test('duplicate-safe planning adds new skaters, updates exact identities, and bl
   assert.match(conflict[0].reason, /different registered name/);
 });
 
+test('MSSL novice sync includes own-age elite and never retains Challenge Up', () => {
+  const meet = meetFixture();
+  const [plan] = planMsslSync([{
+    sourceRow: 3, helmetNumber: '1172', name: 'Novice Skater', age: 11, gender: 'female',
+    novice: true, elite: false, challengeUp: true, quad: false, open: false,
+  }], meet, 'Team United');
+
+  assert.equal(plan.status, 'NEW');
+  assert.equal(plan.candidate.originalDivisionGroupId, 'elementary_girls');
+  assert.equal(plan.candidate.divisionGroupId, 'elementary_girls');
+  assert.equal(plan.candidate.options.novice, true);
+  assert.equal(plan.candidate.options.elite, true);
+  assert.equal(plan.candidate.options.challengeUp, false);
+});
+
 test('the same helmet number is allowed across different birth-age divisions', () => {
   const meet = meetFixture();
   meet.registrations.push({ id: 1, name: 'Greta Manchee', helmetNumber: '1172', age: 8, gender: 'female', options: { elite: true } });

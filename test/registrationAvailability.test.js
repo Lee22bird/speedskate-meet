@@ -128,6 +128,41 @@ test('registration submission discards event choices that the director did not e
   assert.equal(meet.registrations[0].options.quadRelay3Person, false);
 });
 
+test('MSSL novice registration includes novice and own-age elite but clears Challenge Up', () => {
+  const meet = defaultMeet('owner');
+  meet.id = 12;
+  meet.date = '2026-10-04';
+  meet.status = 'published';
+  meet.allowChallengeUp = true;
+  applyDivisionScheme(meet, 'mssl');
+  const { generateConfiguredRacesForMeet } = require('../services/meetHelpers');
+  generateConfiguredRacesForMeet(meet);
+  const db = { meets: [meet], rinks: [], users: [] };
+  const router = registrationRouterFor(db);
+
+  routeHandler(router, '/meet/:meetId/register', 'post')({
+    params: { meetId: '12' },
+    body: {
+      name: 'Novice Freshman', birthdate: '2013-05-10', gender: 'female',
+      novice: 'on', challengeUp: 'on',
+    },
+  }, { redirect() {}, status() { return this; }, send() {} });
+
+  const [registration] = meet.registrations;
+  assert.equal(registration.options.novice, true);
+  assert.equal(registration.options.elite, true);
+  assert.equal(registration.options.challengeUp, false);
+  assert.equal(registration.divisionGroupId, registration.originalDivisionGroupId);
+  const enteredRaces = meet.races.filter(race =>
+    (race.laneEntries || []).some(entry => String(entry.registrationId) === String(registration.id))
+  );
+  assert.ok(enteredRaces.some(race => race.division === 'novice'));
+  assert.ok(enteredRaces.some(race => race.division === 'elite' &&
+    race.groupId === registration.originalDivisionGroupId));
+  assert.ok(enteredRaces.every(race => race.groupId === registration.originalDivisionGroupId ||
+    race.division === 'novice'));
+});
+
 test('registration groups enabled relay-builder rows by team size', () => {
   const meet = defaultMeet('owner');
   meet.id = 11;

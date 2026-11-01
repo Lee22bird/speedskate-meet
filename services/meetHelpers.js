@@ -976,9 +976,13 @@ function registrationMatchesStandardRace(reg, race, meet) {
     const genderMatches = !wanted || wanted === normalizeSkaterGender(reg.gender);
     if (!genderMatches) return false;
 
-    if (raceGroupId === baseGroupId && ageMatch(race.ages, age)) {
-      if (opts[div]) return true;
-      return div === 'elite' && noviceChallengeCreatesOwnElite(reg);
+    if (div === 'novice' && ageMatch(race.ages, age)) {
+      return !!opts.novice;
+    }
+
+    if (div === 'elite' && raceGroupId === baseGroupId && ageMatch(race.ages, age)) {
+      if (opts.elite) return true;
+      return noviceChallengeCreatesOwnElite(reg);
     }
 
     if (div === 'elite' && eliteChallengeCreatesAgeGroup(reg)) {

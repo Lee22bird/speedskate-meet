@@ -285,6 +285,8 @@ function registrationOptionLabels(meet, opts = {}) {
 
 function registrationOptionsFromBody(meet, body = {}) {
   const available = registrationAvailability(meet);
+  const novice = available.novice && !!body.novice;
+  const msslNovice = String(meet.divisionScheme || '').toLowerCase() === 'mssl' && novice;
   const tt = registrationTimeTrialSelection(meet, body);
   const relayRows = registrationRelayTemplates(meet);
   const inlineById = new Map(relayRows.filter(row => row.discipline === 'inline').map(row => [row.id, row]));
@@ -304,9 +306,9 @@ function registrationOptionsFromBody(meet, body = {}) {
   const additionalGroupId = String(body.additionalGroupId || body.skateabilityGroupId || '');
   const additional = !!(body.additional || body.skateability) && available.additionalGroups.some(group => String(group.id || '') === additionalGroupId);
   return {
-    challengeUp: available.challengeUp && !!body.challengeUp,
-    novice: available.novice && !!body.novice,
-    elite: available.elite && !!body.elite,
+    challengeUp: available.challengeUp && !!body.challengeUp && !msslNovice,
+    novice,
+    elite: available.elite && (msslNovice || !!body.elite),
     open: available.open && !!body.open,
     quad: available.quad && !!body.quad,
     additional,

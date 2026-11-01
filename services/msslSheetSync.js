@@ -248,7 +248,7 @@ function flagOptions(row) {
   return {
     quad: !!row.quad,
     novice,
-    elite: !!row.elite,
+    elite: novice || !!row.elite,
     challengeUp: !novice && !!row.challengeUp,
     open: !!row.open,
   };

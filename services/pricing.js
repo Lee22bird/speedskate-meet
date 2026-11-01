@@ -31,32 +31,20 @@ function countSelectedEventCategories(options = {}) {
   if (opts.additional || opts.skateability || opts.additionalRace) count += 1;
   if (Array.isArray(opts.specialRaceIds)) count += opts.specialRaceIds.length;
 
-  const selectedRelaySizes = new Set();
-  if (opts.relay2Person || opts.quadRelay2Person) selectedRelaySizes.add(2);
-  if (opts.relay3Person || opts.quadRelay3Person) selectedRelaySizes.add(3);
-  if (opts.relay4Person) selectedRelaySizes.add(4);
+  const inlineRelaySizes = new Set();
+  if (opts.relay2Person) inlineRelaySizes.add(2);
+  if (opts.relay3Person) inlineRelaySizes.add(3);
+  if (opts.relay4Person) inlineRelaySizes.add(4);
+  count += relayEventIds.length || inlineRelaySizes.size;
 
-  if (selectedRelaySizes.size) {
-    count += selectedRelaySizes.size;
-  } else if (relayEventIds.length) {
-    count += relayEventIds.length;
-  } else {
-    if (opts.relay2Person) count += 1;
-    if (opts.relay3Person) count += 1;
-    if (opts.relay4Person) count += 1;
-  }
-
-  if (!selectedRelaySizes.size) {
-    if (quadRelayEventIds.length) {
-      count += quadRelayEventIds.length;
-    } else {
-      if (opts.quadRelay2Person) count += 1;
-      if (opts.quadRelay3Person) count += 1;
-    }
-  }
+  const quadRelaySizes = new Set();
+  if (opts.quadRelay2Person) quadRelaySizes.add(2);
+  if (opts.quadRelay3Person) quadRelaySizes.add(3);
+  count += quadRelayEventIds.length || quadRelaySizes.size;
 
   // Backward compatibility for older registrations that only had a generic relays flag.
-  if (opts.relays && !relayEventIds.length && !opts.relay2Person && !opts.relay3Person && !opts.relay4Person) {
+  if (opts.relays && !relayEventIds.length && !inlineRelaySizes.size &&
+      !quadRelayEventIds.length && !quadRelaySizes.size) {
     count += 1;
   }
 

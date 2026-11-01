@@ -181,6 +181,8 @@ function selectedEventSet(row) {
 
 function regOptionsFromSslRow(row, meet) {
   const opts = selectedEventSet(row);
+  const novice = opts.has('novice');
+  const msslNovice = String(meet?.divisionScheme || '').toLowerCase() === 'mssl' && novice;
   const firstAdditional = (meet.additionalGroups || meet.additionalRaceGroups || meet.additionalRaces || meet.skateabilityGroups || []).find(g => g && g.enabled);
   const wantsRelays = opts.has('relays') || opts.has('relay') || opts.has('relay2person') || opts.has('relay3person') || opts.has('relay4person');
   const wantsAdditional = opts.has('additional') || opts.has('skateability') || opts.has('diaperdash') || opts.has('diaper_dash');
@@ -199,9 +201,9 @@ function regOptionsFromSslRow(row, meet) {
   }));
 
   return {
-    challengeUp: opts.has('challengeup') || opts.has('challenge_up'),
-    novice: opts.has('novice'),
-    elite: opts.has('elite') || (!opts.has('novice') && !opts.has('open') && !opts.has('quad') && !wantsAdditional),
+    challengeUp: !msslNovice && (opts.has('challengeup') || opts.has('challenge_up')),
+    novice,
+    elite: msslNovice || opts.has('elite') || (!novice && !opts.has('open') && !opts.has('quad') && !wantsAdditional),
     open: opts.has('open'),
     quad: opts.has('quad'),
     timeTrials: opts.has('timetrials') || opts.has('time_trials') || opts.has('time trial'),

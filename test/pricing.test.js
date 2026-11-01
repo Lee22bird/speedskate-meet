@@ -72,6 +72,18 @@ test('specific quad relay event ids count every selected quad relay division', (
   assert.strictEqual(countSelectedEventCategories(options), 2);
 });
 
+test('inline and quad relay categories both count when selected together', () => {
+  const options = {
+    relayEventIds: ['r2_freshman_boys'],
+    quadRelayEventIds: ['q2_freshman_boys'],
+    relay2Person: true,
+    quadRelay2Person: true,
+    relays: true,
+  };
+
+  assert.strictEqual(countSelectedEventCategories(options), 2);
+});
+
 test('registration preview includes all server-side toggle categories and explicit arithmetic', () => {
   const html = buildCostWidget(40, 10, 0);
   assert.match(html, /quadRelay2Person/);
