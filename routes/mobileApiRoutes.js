@@ -30,6 +30,7 @@ const {
 } = require('../services/meetStaffPins');
 const { createBackup: createDesktopBackup } = require('../services/desktopBackupService');
 const { normalizeTimeTrialSettings, ensureTimeTrialEvent } = require('../services/timeTrialEvents');
+const { findRollingStartPlan } = require('../services/rollingStart');
 const {
   relayTemplateRowsForRuleset, normalizeRelayTemplates, normalizeRelayAgeRange, makeRelayRace,
 } = require('../services/relayHelpers');
@@ -190,6 +191,28 @@ function raceDayItemToJson(item, meet, regMap) {
 // Resolves which staff role (if any) the logged-in user holds for this
 // specific meet — same trust model as canEditMeet/canJudgeMeet, just
 // surfaced as a role string so the iOS app knows which controls to show.
+// Same conditions the judges board (views/raceDayView.js) uses to show the
+// rolling-start Set up / Undo controls.
+function rollingStartStateJson(meet, current) {
+  if (!current || isTimeTrialItem(current)) return null;
+  const plan = findRollingStartPlan(meet, current.id);
+  if (plan) {
+    const skaters = [plan.firstHeat, plan.secondHeat].reduce((n, race) => n + (race.laneEntries || [])
+      .filter(e => String(e?.registrationId ?? '').trim() !== '' || String(e?.skaterName || '').trim() !== '').length, 0);
+    return { raceId: String(current.id), canStart: true, isRollingFinal: false, canUndo: false, skaters };
+  }
+  if (current.rollingStartFinal) {
+    return {
+      raceId: String(current.id),
+      canStart: false,
+      isRollingFinal: true,
+      canUndo: !!current.rollingStartBackup && String(current.status || '') !== 'closed',
+      skaters: (current.laneEntries || []).length,
+    };
+  }
+  return null;
+}
+
 function resolveStaffRole(user, meet) {
   if (!user || !meet) return null;
   if (hasRole(user, 'super_admin')) return 'director';
@@ -441,6 +464,10 @@ module.exports = function createMobileApiRoutes(deps = {}) {
       protestUnresolvedCount: unresolvedProtestCount(meet),
       current: raceDayItemToJson(info.current, meet, regMap),
       next: raceDayItemToJson(info.next, meet, regMap),
+      // The judges board's rolling-start control for the current race, so the
+      // iPad can offer the same Set up / Undo buttons. Both post to the
+      // website's /race-day/judges/rolling-start form route.
+      rollingStart: rollingStartStateJson(meet, info.current),
       orderedRaces: info.ordered.map((item, idx) => ({
         id: item.id,
         index: idx,
