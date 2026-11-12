@@ -35,12 +35,16 @@ function countSelectedEventCategories(options = {}) {
   if (opts.relay2Person) inlineRelaySizes.add(2);
   if (opts.relay3Person) inlineRelaySizes.add(3);
   if (opts.relay4Person) inlineRelaySizes.add(4);
-  count += relayEventIds.length || inlineRelaySizes.size;
+  // Registration groups relays by team size: one "N Person Relay" toggle is one
+  // event, even though the stored relayEventIds list every enabled division of
+  // that size (the relay builder picks the skater's actual age/gender team).
+  // Division ids only drive the count for legacy records with no size flags.
+  count += inlineRelaySizes.size || relayEventIds.length;
 
   const quadRelaySizes = new Set();
   if (opts.quadRelay2Person) quadRelaySizes.add(2);
   if (opts.quadRelay3Person) quadRelaySizes.add(3);
-  count += quadRelayEventIds.length || quadRelaySizes.size;
+  count += quadRelaySizes.size || quadRelayEventIds.length;
 
   // Backward compatibility for older registrations that only had a generic relays flag.
   if (opts.relays && !relayEventIds.length && !inlineRelaySizes.size &&

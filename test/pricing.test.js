@@ -53,23 +53,31 @@ test('specific relay event ids count every selected relay division', () => {
   assert.strictEqual(calcRegistrationCost(meet, options), 50);
 });
 
-test('specific relay event ids do not double-count broad compatibility flags', () => {
+test('a relay size toggle is one event however many divisions of that size are stored', () => {
   const options = {
     relayEventIds: ['r2_freshman_boys', 'r2_freshman_mixed'],
     relay2Person: true,
     relays: true,
   };
 
+  assert.strictEqual(countSelectedEventCategories(options), 1);
+});
+
+test('legacy quad relay event ids without size flags count every selected division', () => {
+  const options = {
+    quadRelayEventIds: ['q2_freshman_boys', 'q2_freshman_mixed'],
+  };
+
   assert.strictEqual(countSelectedEventCategories(options), 2);
 });
 
-test('specific quad relay event ids count every selected quad relay division', () => {
+test('one quad relay size toggle is one event', () => {
   const options = {
     quadRelayEventIds: ['q2_freshman_boys', 'q2_freshman_mixed'],
     quadRelay2Person: true,
   };
 
-  assert.strictEqual(countSelectedEventCategories(options), 2);
+  assert.strictEqual(countSelectedEventCategories(options), 1);
 });
 
 test('inline and quad relay categories both count when selected together', () => {
