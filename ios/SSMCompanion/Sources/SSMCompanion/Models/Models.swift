@@ -390,6 +390,24 @@ public struct RaceDayStateResponse: Decodable {
     public let current: RaceDayItem?
     public let next: RaceDayItem?
     public let orderedRaces: [OrderedRaceOption]
+    /// The judges board's rolling-start control for the current race.
+    /// nil when it doesn't apply (or on servers without the field).
+    public let rollingStart: RollingStartState?
+}
+
+/// Mirrors rollingStartStateJson in routes/mobileApiRoutes.js — the same
+/// conditions the website uses to show "Set up rolling final" / "Undo setup".
+public struct RollingStartState: Decodable, Hashable {
+    public let raceId: String
+    /// Current race is heat 1 of an eligible, unstarted two-heat final.
+    public let canStart: Bool
+    /// Current race is a rolling-start final.
+    public let isRollingFinal: Bool
+    /// …and it can still be reverted (not closed; the server also refuses
+    /// once results are saved).
+    public let canUndo: Bool
+    /// Skaters across both heats (setup) or in the final.
+    public let skaters: Int
 }
 
 public struct SimpleOKResponse: Decodable {

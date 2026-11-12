@@ -286,6 +286,17 @@ public final class APIClient {
                                        method: "POST", formFields: fields)
     }
 
+    /// Rolling-start final setup / undo via the website's judges form route
+    /// (routes/raceDayRoutes.js /race-day/judges/rolling-start). Success is a
+    /// 302 back to the judges board; ineligible races come back as 400 text.
+    public func rollingStart(meetID: String, raceID: String, action: String) async throws {
+        let _: SimpleOKResponse = try await portalRequest("/portal/meet/\(meetID)/race-day/judges/rolling-start",
+                                                          method: "POST",
+                                                          formFields: [("raceId", raceID), ("action", action)],
+                                                          treatRedirectAsSuccess: true,
+                                                          expectedRedirectPrefix: "/portal/meet/\(meetID)/")
+    }
+
     /// Posts a correction to a closed race via the website's existing
     /// correction/save endpoint. Success is a 302 back to race day (browser
     /// semantics); validation failures come back as JSON errors.

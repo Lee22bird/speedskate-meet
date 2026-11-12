@@ -15,6 +15,8 @@ struct PadTabulatorView: View {
     @ObservedObject private var connectivity = ConnectivityMonitor.shared
     @State private var dqEditLane: DQLaneSelection?
     @State private var confirmClose = false
+    @State private var confirmRollingStart = false
+    @State private var confirmRollingUndo = false
 
     @State private var showTTEvent = false
 
@@ -61,6 +63,76 @@ struct PadTabulatorView: View {
             }
         } message: {
             Text("Results lock in, progression runs, and the meet moves to the next race.")
+        }
+        // Same confirmations as the website's judges board.
+        .confirmationDialog("Set up rolling-start final?",
+                            isPresented: $confirmRollingStart, titleVisibility: .visible) {
+            Button("Set Up Rolling Final") { runRollingStart("start") }
+        } message: {
+            Text("Combine both heats into one rolling-start final? The full field will be shuffled into pace-lap order, and this distance will no longer have a separate final.")
+        }
+        .confirmationDialog("Undo rolling-start setup?",
+                            isPresented: $confirmRollingUndo, titleVisibility: .visible) {
+            Button("Undo Setup", role: .destructive) { runRollingStart("undo") }
+        } message: {
+            Text("Undo this setup? No saved results will be kept.")
+        }
+    }
+
+    private func runRollingStart(_ action: String) {
+        Task {
+            guard await model.rollingStart(meetID: meetID, action: action) else { return }
+            // The server moved the meet pointer (to the final, or back to
+            // heat 1); pick up the new current race.
+            await session.refreshState()
+            await model.loadCurrentRace(meetID: meetID,
+                                        currentRaceID: session.state?.current?.id.stringValue)
+            model.seedFinishOrderFromPlaces()
+        }
+    }
+
+    /// The website's judges-board rolling-start control (views/raceDayView.js
+    /// rollingStartControl), for the race actually on screen.
+    @ViewBuilder
+    private func rollingStartCard(_ race: ExportRace) -> some View {
+        let canControl = session.role == .director || session.role == .tabulator
+        if canControl, let rolling = session.state?.rollingStart, rolling.raceId == race.id,
+           rolling.canStart || rolling.isRollingFinal {
+            SSMCard {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(alignment: .center, spacing: 14) {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundStyle(SSMTheme.orange)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Rolling-start final")
+                                .font(.ssmRounded(16, weight: .heavy))
+                                .foregroundStyle(SSMTheme.textPrimary)
+                            Text(rolling.canStart
+                                 ? "Combine both heats (\(rolling.skaters) skaters); randomize the full field into pace-lap order. Placements are one shared final order."
+                                 : "Lane numbers are randomized pace-lap order. Enter one shared finish order; only places 1–4 score.")
+                                .font(.ssmRounded(13, weight: .medium))
+                                .foregroundStyle(SSMTheme.muted)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer(minLength: 8)
+                        if rolling.canStart {
+                            Button("Set Up Rolling Final") { confirmRollingStart = true }
+                                .buttonStyle(.ssmPill)
+                                .disabled(model.isSaving)
+                        } else if rolling.canUndo {
+                            Button("Undo Setup") { confirmRollingUndo = true }
+                                .buttonStyle(.ssmSoftPill)
+                                .disabled(model.isSaving)
+                        }
+                    }
+                    if let message = model.rollingStartError {
+                        Text(message)
+                            .font(.ssmRounded(13, weight: .semibold))
+                            .foregroundStyle(SSMTheme.danger)
+                    }
+                }
+            }
         }
     }
 
@@ -335,6 +407,7 @@ struct PadTabulatorView: View {
                     restoredBanner
                 }
                 raceHeader(race)
+                rollingStartCard(race)
                 if race.mergeGroupId != nil {
                     mergedBanner
                 }

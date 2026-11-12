@@ -66,6 +66,8 @@ public final class TabulatorViewModel: ObservableObject {
     @Published public private(set) var isDirty = false
     @Published public var errorMessage: String?
     @Published public var savedFlash = false
+    /// Last rolling-start setup/undo failure, shown on the rolling-start card.
+    @Published public var rollingStartError: String?
     /// Set when the meet's current race moved while this screen had unsaved
     /// edits — the view shows a banner instead of clobbering the entry.
     @Published public var pointerMovedAway = false
@@ -354,6 +356,36 @@ public final class TabulatorViewModel: ObservableObject {
         let raceID = race?.id
         loadedRaceID = nil
         await loadCurrentRace(meetID: meetID, currentRaceID: raceID)
+    }
+
+    // ── Rolling-start final ──────────────────────────────────────────────
+
+    /// "start" folds heats 1 + 2 into one shuffled rolling-start final (the
+    /// meet pointer moves to the final); "undo" restores the heats. The
+    /// server owns all of it — the iPad only posts the website's form.
+    public func rollingStart(meetID: String, action: String) async -> Bool {
+        guard let race, !isSaving else { return false }
+        isSaving = true
+        defer { isSaving = false }
+        do {
+            try await api.rollingStart(meetID: meetID, raceID: race.id, action: action)
+            // Entries typed on this race no longer apply to anything.
+            clearDraft()
+            isDirty = false
+            restoredDraft = false
+            finishOrder = []
+            loadedRaceID = nil
+            self.race = nil
+            lanes = []
+            rollingStartError = nil
+            return true
+        } catch APIError.unauthorized {
+            rollingStartError = "Your session expired — open Staff Log In again, then retry."
+            return false
+        } catch {
+            rollingStartError = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            return false
+        }
     }
 
     // ── Save / Close ─────────────────────────────────────────────────────

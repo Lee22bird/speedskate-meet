@@ -102,6 +102,23 @@ final class ServerParityTests: XCTestCase {
         XCTAssertFalse(form.relay3Person)
     }
 
+    // ── Rolling-start control (race-day-state rollingStart) ──────────────
+
+    private func raceDayState(_ extra: String) throws -> RaceDayStateResponse {
+        let json = #"{"ok":true,"role":"tabulator","canControlRaceDay":true,"paused":false,"progress":{"total":3,"completed":0},"current":null,"next":null,"orderedRaces":[]"# + extra + "}"
+        return try JSONDecoder().decode(RaceDayStateResponse.self, from: Data(json.utf8))
+    }
+
+    func testRollingStartStateDecodes() throws {
+        let state = try raceDayState(#","rollingStart":{"raceId":"h1","canStart":true,"isRollingFinal":false,"canUndo":false,"skaters":12}"#)
+        XCTAssertEqual(state.rollingStart, RollingStartState(raceId: "h1", canStart: true, isRollingFinal: false, canUndo: false, skaters: 12))
+    }
+
+    func testRollingStartAbsentOrNullDecodesAsNil() throws {
+        XCTAssertNil(try raceDayState("").rollingStart)          // older server
+        XCTAssertNil(try raceDayState(#","rollingStart":null"#).rollingStart)
+    }
+
     // ── Pricing (services/pricing.js) ────────────────────────────────────
 
     private func pricedMeet() throws -> ExportMeet {
