@@ -84,6 +84,12 @@ public struct ExportMeet: Decodable {
     public let additionalGroups: [ExportAdditionalGroup]
     public let quadEnabled: Bool
     public let relayEnabled: Bool
+    /// meet.divisionScheme ("mssl", "usars", …), lowercased.
+    public let divisionScheme: String
+    /// MSSL novice rule (routes/registrationRoutes.js registrationOptionsFromBody):
+    /// an MSSL novice skater is always entered in their own-age Elite too and
+    /// can never Challenge Up.
+    public var isMsslScheme: Bool { divisionScheme == "mssl" }
     public let baseEntryFee: Double
     public let additionalRaceFee: Double
     public let maxRegistrationFee: Double
@@ -96,7 +102,7 @@ public struct ExportMeet: Decodable {
         case id, meetName, status, lanes, date, endDate, startTime, currentRaceId, raceDayPaused, races, blocks, timeTrialEvents, registrations
         case relayTemplates, additionalGroups, additionalRaceGroups, additionalRaces, skateabilityGroups, quadGroups, relayEnabled
         case baseEntryFee, additionalRaceFee, maxRegistrationFee
-        case groups, openGroups, allowChallengeUp
+        case groups, openGroups, allowChallengeUp, divisionScheme
     }
 
     /// One age group's division switches — only the enabled flags matter here.
@@ -180,6 +186,7 @@ public struct ExportMeet: Decodable {
             quad: quadEnabled
         )
         relayEnabled = c.flexBool(.relayEnabled) ?? false
+        divisionScheme = (c.flexString(.divisionScheme) ?? "").lowercased()
         baseEntryFee = (try? c.decodeIfPresent(Double.self, forKey: .baseEntryFee)) ?? Double(c.flexInt(.baseEntryFee) ?? 0)
         additionalRaceFee = (try? c.decodeIfPresent(Double.self, forKey: .additionalRaceFee)) ?? Double(c.flexInt(.additionalRaceFee) ?? 0)
         maxRegistrationFee = (try? c.decodeIfPresent(Double.self, forKey: .maxRegistrationFee)) ?? Double(c.flexInt(.maxRegistrationFee) ?? 0)
@@ -205,6 +212,15 @@ public struct ExportMeet: Decodable {
             .map(\.size)
             .filter { (2...4).contains($0) }
         return Array(Set(sizes)).sorted()
+    }
+
+    /// Enabled registration relay events of one discipline and size (same
+    /// filter as registrationRelayTemplates on the server).
+    public func hasRegistrationRelay(size: Int, quad: Bool? = nil) -> Bool {
+        relayTemplates.contains {
+            $0.enabled && !$0.divisionId.isEmpty && $0.size == size
+                && (quad == nil || $0.isQuad == quad)
+        }
     }
 
     /// Race ids that no block claims — the website's "Unassigned" pool.
@@ -524,6 +540,7 @@ public struct ExportRelayTemplate: Decodable, Identifiable {
     public let size: Int
 
     public var id: String { divisionId }
+    public var isQuad: Bool { discipline == "quad" }
 
     private enum CodingKeys: String, CodingKey { case divisionId, enabled, type, age, ageRange, distance, discipline, size }
 
@@ -535,14 +552,21 @@ public struct ExportRelayTemplate: Decodable, Identifiable {
         age = c.flexString(.age) ?? ""
         ageRange = c.flexString(.ageRange) ?? ""
         distance = c.flexString(.distance) ?? ""
-        discipline = c.flexString(.discipline) ?? "inline"
+        // Server relayTemplateDiscipline: the row's discipline, else the
+        // catalog's (quad catalog ids are "q2_…"/"q3_…"), else inline.
+        let rawDiscipline = (c.flexString(.discipline) ?? "").lowercased()
+        if !rawDiscipline.isEmpty {
+            discipline = rawDiscipline == "quad" ? "quad" : "inline"
+        } else {
+            discipline = divisionId.range(of: #"^q\d_"#, options: .regularExpression) != nil ? "quad" : "inline"
+        }
         size = Self.teamSize(explicit: c.flexInt(.size), type: type, divisionId: divisionId)
     }
 
     static func teamSize(explicit: Int?, type: String, divisionId: String) -> Int {
         if let explicit, explicit > 0 { return explicit }
         if let digit = type.first(where: \.isNumber), let n = Int(String(digit)) { return n }
-        if let range = divisionId.range(of: #"(?:^|_)r(\d)_"#, options: .regularExpression),
+        if let range = divisionId.range(of: #"(?:^|_)[rq](\d)_"#, options: .regularExpression),
            let digit = divisionId[range].first(where: \.isNumber), let n = Int(String(digit)) { return n }
         return 0
     }

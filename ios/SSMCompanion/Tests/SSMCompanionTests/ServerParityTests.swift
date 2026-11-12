@@ -133,15 +133,53 @@ final class ServerParityTests: XCTestCase {
         XCTAssertEqual(p.total, 40)
     }
 
-    func testRelaySizeCountsOnceEvenWithInlineAndQuadEvents() throws {
+    func testRelaySizeChargesInlineAndQuadSeparately() throws {
         var form = RegistrationFormState()
         form.elite = true
-        form.relay2Person = true   // one inline + one quad 2-person event → one category
-        form.relay3Person = true
+        form.relay2Person = true   // inline + quad 2-person events → two categories
+        form.relay3Person = true   // inline only → one
         form.relay4Person = true   // no 4-person event at this meet → not charged
         let p = form.costPreview(for: try pricedMeet())
-        XCTAssertEqual(p.categories, 3)
-        XCTAssertEqual(p.total, 60)
+        XCTAssertEqual(p.categories, 4)
+        XCTAssertEqual(p.total, 70)
+    }
+
+    /// The server stores every enabled division of a ticked size; one tick is
+    /// still one event (the dbeded3 over-charge fix).
+    func testOneRelayTickIsOneEventHoweverManyDivisions() throws {
+        let m = try meet("""
+        {"id":"m1","baseEntryFee":40,"additionalRaceFee":10,
+         "groups":[{"divisions":{"elite":{"enabled":true}}}],
+         "relayTemplates":[{"divisionId":"r2_a","type":"2 Person","enabled":true},
+                           {"divisionId":"r2_b","type":"2 Person","enabled":true},
+                           {"divisionId":"r2_c","type":"2 Person","enabled":true}]}
+        """)
+        var form = RegistrationFormState()
+        form.elite = true
+        form.relay2Person = true
+        XCTAssertEqual(form.costPreview(for: m).total, 50)
+    }
+
+    func testQuadDisciplineAndSizeFromCatalogId() throws {
+        let m = try meet("""
+        {"id":"m1","relayTemplates":[{"divisionId":"q3_freshman_girls","enabled":true}]}
+        """)
+        XCTAssertEqual(m.relayTemplates.first?.size, 3)
+        XCTAssertTrue(m.relayTemplates.first?.isQuad == true)
+        XCTAssertTrue(m.hasRegistrationRelay(size: 3, quad: true))
+    }
+
+    func testMsslNoviceIsEnteredInEliteAndCannotChallengeUp() throws {
+        let m = try meet("""
+        {"id":"m1","divisionScheme":"MSSL","baseEntryFee":40,"additionalRaceFee":10,"allowChallengeUp":true,
+         "groups":[{"divisions":{"novice":{"enabled":true},"elite":{"enabled":true}}}]}
+        """)
+        var form = RegistrationFormState()
+        form.novice = true
+        form.challengeUp = true
+        let p = form.costPreview(for: m)
+        XCTAssertEqual(p.categories, 2)   // novice + forced elite, no challenge up
+        XCTAssertEqual(p.total, 50)
     }
 
     func testMaximumFeeCap() throws {

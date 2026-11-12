@@ -440,20 +440,25 @@ public struct RegistrationFormState {
     /// options routes/registrationRoutes.js registrationOptionsFromBody builds.
     /// Categories the meet doesn't offer are dropped by the server, so they
     /// aren't counted; Challenge Up counts as one extra event; relays count
-    /// once per team size that has an enabled relay event.
+    /// once per ticked team size, plus once more when that size also has a
+    /// quad relay event (services/pricing.js since dbeded3). MSSL novices are
+    /// entered in Elite too and never Challenge Up.
     public func billableCategories(for meet: ExportMeet) -> Int {
         let available = meet.registrationAvailability
+        let msslNovice = meet.isMsslScheme && novice && available.novice
         var categories = 0
         if novice && available.novice { categories += 1 }
-        if elite && available.elite { categories += 1 }
-        if challengeUp && available.challengeUp { categories += 1 }
+        if (elite || msslNovice) && available.elite { categories += 1 }
+        if challengeUp && available.challengeUp && !msslNovice { categories += 1 }
         if open && available.open { categories += 1 }
         if quad && available.quad { categories += 1 }
         if timeTrials { categories += 1 }
         if additional, meet.additionalGroups.contains(where: { $0.id == additionalGroupId }) { categories += 1 }
-        let sizes = Set(meet.registrationRelaySizes)
-        for (size, on) in [(2, relay2Person), (3, relay3Person), (4, relay4Person)] where on && sizes.contains(size) {
-            categories += 1
+        for (size, on) in [(2, relay2Person), (3, relay3Person), (4, relay4Person)] where on {
+            // relayNPerson survives when any relay event of that size exists…
+            if meet.hasRegistrationRelay(size: size) { categories += 1 }
+            // …and quadRelayNPerson (2/3 only) is set too when a quad one does.
+            if size < 4, meet.hasRegistrationRelay(size: size, quad: true) { categories += 1 }
         }
         return categories
     }

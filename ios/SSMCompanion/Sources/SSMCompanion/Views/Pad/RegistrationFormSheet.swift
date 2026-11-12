@@ -142,9 +142,18 @@ struct RegistrationFormSheet: View {
             // exactly these (registrationAvailability) and the server drops
             // anything else on save.
             let available = meet?.registrationAvailability
-            if available?.challengeUp == true { Toggle("Challenge Up", isOn: $form.challengeUp) }
+            // MSSL: a novice is always in their own-age Elite too and can't
+            // Challenge Up — the server enforces it, so show it that way.
+            let msslNovice = meet?.isMsslScheme == true && form.novice && available?.novice == true
+            if available?.challengeUp == true && !msslNovice { Toggle("Challenge Up", isOn: $form.challengeUp) }
             if available?.novice == true { Toggle("Novice", isOn: $form.novice) }
-            if available?.elite == true { Toggle("Elite", isOn: $form.elite) }
+            if available?.elite == true {
+                if msslNovice {
+                    Toggle("Elite (included with MSSL Novice)", isOn: .constant(true)).disabled(true)
+                } else {
+                    Toggle("Elite", isOn: $form.elite)
+                }
+            }
             if available?.open == true { Toggle("Open", isOn: $form.open) }
             if available?.quad == true { Toggle("Quad", isOn: $form.quad) }
             if showTimeTrials {
